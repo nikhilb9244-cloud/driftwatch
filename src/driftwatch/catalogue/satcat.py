@@ -67,7 +67,7 @@ def fetch_satcat(
     try:
         log.info("Downloading SATCAT")
         try:
-            response = client.get(config.CELESTRAK_SATCAT_URL, headers={"Accept": "text/csv"})
+            response = client.get(config.CELESTRAK_SATCAT_URL, headers={"Accept": "*/*"})
             response.raise_for_status()
         except httpx.HTTPError as exc:
             if path.exists():
