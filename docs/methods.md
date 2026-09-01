@@ -49,8 +49,39 @@ they enter the chain; each states what is assumed, why, and what it costs.
   approach directions, and ZACube-1's 10 m wire antenna sets a radius seventeen times
   that of its bus. Every value and its provenance is in `fleets/demo.yaml`.
 - **Manoeuvres.** Not modelled. SGP4 cannot predict a burn; the fleet file flags objects
-  that manoeuvre and Step 2 flags every pair that involves one. An element set issued
-  before a burn is wrong after it by the size of the burn, and the error grows with time.
+  that manoeuvre and every event carries a flag for each side. For secondaries "known to
+  manoeuvre" is a category rule (Starlink, OneWeb, the other constellations, stations);
+  an active payload outside those categories may manoeuvre too and is not flagged. An
+  element set issued before a burn is wrong after it by the size of the burn, and the
+  error grows with time.
+- **Miss distances are between SGP4 trajectories.** Stage C finds the closest approach
+  of two propagated element sets to microseconds and metres, which says nothing about
+  how close the two spacecraft come: the element sets themselves are good to hundreds of
+  metres to kilometres. Step 3 attaches the uncertainty; until then a 50 m miss and a
+  500 m miss are the same event.
+- **Stage A uses mean apogee and perigee with a 50 km pad.** Brouwer mean values differ
+  from the osculating orbit by several kilometres, and drag lowers an orbit by a few
+  kilometres a week (more for an object about to decay, and in a storm); the pad, which
+  also has to cover the 35 km screening radius, absorbs both. A secondary whose
+  perigee rises or falls by more than the pad's slack inside the window (a manoeuvre, or
+  the last days of a decay) can be missed by Stage A. Objects with a mean perigee below
+  120 km are dropped outright.
+- **Stage B's no-miss guarantee rests on a speed bound.** The relative speed of a pair
+  is bounded by the sum of the two-body perigee speeds from mean elements, times a 2 %
+  margin for SGP4's departures from Keplerian motion. The bound is derived and tested in
+  `docs/screening.md`; it fails only if an SGP4 trajectory moves more than 2 % faster
+  than its two-body perigee speed, which does not happen above 120 km.
+- **A maximum and a minimum inside one step** (30 s) would defeat the sign-change
+  candidate rule. That needs a relative speed of metres per second (co-orbital objects),
+  for which the sampled separation is already within metres of the true minimum; the
+  sampled-minimum fallback catches it. Never triggered on the 2026-09-01 catalogue.
+- **Supplemental Starlink sets are fits to predictions.** CelesTrak fits SGP4 to SpaceX's
+  published ephemerides, which include planned manoeuvres. The fit residuals CelesTrak
+  publishes were 0.1 to 5 km per satellite on 2026-09-02, and the ephemeris is revised
+  as plans change. Used for 10,728 of the 11,094 Starlink objects on the first run;
+  `secondary_ephemeris` says which set an event used.
+- **Events are geometry only.** Kept when the miss vector lies inside the 2 x 25 x 25 km
+  box or within the 25 km watch radius. No probability, no ranking by risk, until Step 3.
 
 ## Propagation
 
@@ -103,7 +134,7 @@ they enter the chain; each states what is assumed, why, and what it costs.
 
 ## Not yet modelled (later phases)
 
-- Covariance or any per-object uncertainty (Phase 2, from consecutive element sets).
-- Manoeuvres.
+- Covariance or any per-object uncertainty (Phase 2 Step 3, from consecutive element
+  sets), and therefore probability of collision.
+- Manoeuvres, beyond the flags and the Starlink supplemental sets.
 - Atmospheric density beyond SGP4's built-in power law; storms (Phase 3).
-- The Starlink supplemental ephemerides, which are more accurate than the GP data.

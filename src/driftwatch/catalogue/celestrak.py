@@ -80,22 +80,97 @@ def _atomic_write_text(path: Path, text: str) -> None:
     os.replace(tmp, path)
 
 
-def download_group(group: str, client: httpx.Client) -> list[dict[str, Any]]:
-    """Download one group as a list of OMM records. One request, no retries in a loop.
+def download_records(client: httpx.Client, url: str, params: dict[str, str], what: str) -> list[dict[str, Any]]:
+    """Download one OMM record list. One request, no retries in a loop.
 
-    CelesTrak answers unknown or empty groups with a plain-text message and HTTP 200,
+    CelesTrak answers unknown or empty queries with a plain-text message and HTTP 200,
     so the body is checked before it is parsed.
     """
-    log.info("Downloading CelesTrak group %r", group)
-    response = client.get(config.CELESTRAK_GP_URL, params={"GROUP": group, "FORMAT": "json"})
+    log.info("Downloading CelesTrak %s", what)
+    response = client.get(url, params=params)
     response.raise_for_status()
     text = response.text
     if not text.lstrip().startswith("["):
-        raise CelesTrakError(f"CelesTrak returned no GP data for group {group!r}: {text[:120]!r}")
+        raise CelesTrakError(f"CelesTrak returned no GP data for {what}: {text[:120]!r}")
     records = json.loads(text)
     if not isinstance(records, list):
-        raise CelesTrakError(f"Unexpected JSON shape for group {group!r}")
+        raise CelesTrakError(f"Unexpected JSON shape for {what}")
     return records
+
+
+def download_group(group: str, client: httpx.Client) -> list[dict[str, Any]]:
+    """Download one group as a list of OMM records."""
+    return download_records(client, config.CELESTRAK_GP_URL, {"GROUP": group, "FORMAT": "json"}, f"group {group!r}")
+
+
+def fetch_cached(
+    name: str,
+    *,
+    url: str,
+    params: dict[str, str],
+    json_path: Path,
+    min_interval: timedelta = config.MIN_GROUP_FETCH_INTERVAL,
+    client: httpx.Client | None = None,
+    now: datetime | None = None,
+    offline: bool = False,
+) -> GroupFetch:
+    """Return cached OMM records for one CelesTrak query, downloading only when the cache is stale.
+
+    ``name`` labels the query in logs and metadata (a group name, or a supplemental file
+    name). ``min_interval`` below the CelesTrak floor of two hours is raised to it.
+    ``offline`` never touches the network and raises if nothing is cached.
+    """
+    min_interval = max(min_interval, config.MIN_GROUP_FETCH_INTERVAL)
+    now = now or datetime.now(UTC)
+    meta_path = _meta_path(json_path)
+    meta = None
+    if json_path.exists() and meta_path.exists():
+        with meta_path.open(encoding="utf-8") as fh:
+            meta = json.load(fh)
+
+    if meta is not None:
+        fetched_at = datetime.fromisoformat(meta["fetched_at"])
+        age = now - fetched_at
+        if offline or age < min_interval:
+            log.info("Using cached %r (age %s)", name, _fmt_age(age))
+            return GroupFetch(name, json_path, fetched_at, True, int(meta["n_objects"]))
+
+    if offline:
+        raise FileNotFoundError(f"No cached data for {name!r} and offline=True")
+
+    own_client = client is None
+    client = client or make_client()
+    try:
+        try:
+            records = download_records(client, url, params, repr(name))
+        except (httpx.HTTPError, CelesTrakError) as exc:
+            if meta is not None:
+                fetched_at = datetime.fromisoformat(meta["fetched_at"])
+                log.warning("Fetch of %r failed (%s); keeping stale cache from %s", name, exc, fetched_at)
+                return GroupFetch(name, json_path, fetched_at, True, int(meta["n_objects"]))
+            raise
+    finally:
+        if own_client:
+            client.close()
+
+    fetched_at = now
+    _atomic_write_text(json_path, json.dumps(records, separators=(",", ":")))
+    _atomic_write_text(
+        _meta_path(json_path),
+        json.dumps(
+            {
+                "group": name,
+                "url": url,
+                "params": params,
+                "fetched_at": fetched_at.isoformat(),
+                "n_objects": len(records),
+                "user_agent": config.USER_AGENT,
+            },
+            indent=2,
+        ),
+    )
+    log.info("Cached %d records for %r", len(records), name)
+    return GroupFetch(name, json_path, fetched_at, False, len(records))
 
 
 def fetch_group(
@@ -119,53 +194,16 @@ def fetch_group(
     offline:
         Never touch the network; raise if nothing is cached.
     """
-    min_interval = max(min_interval, config.MIN_GROUP_FETCH_INTERVAL)
-    now = now or datetime.now(UTC)
-    json_path = _json_path(group, cache_dir)
-    meta = read_meta(group, cache_dir)
-
-    if meta is not None:
-        fetched_at = datetime.fromisoformat(meta["fetched_at"])
-        age = now - fetched_at
-        if offline or age < min_interval:
-            log.info("Using cached %r (age %s)", group, _fmt_age(age))
-            return GroupFetch(group, json_path, fetched_at, True, int(meta["n_objects"]))
-
-    if offline:
-        raise FileNotFoundError(f"No cached data for group {group!r} and offline=True")
-
-    own_client = client is None
-    client = client or make_client()
-    try:
-        try:
-            records = download_group(group, client)
-        except (httpx.HTTPError, CelesTrakError) as exc:
-            if meta is not None:
-                fetched_at = datetime.fromisoformat(meta["fetched_at"])
-                log.warning("Fetch of %r failed (%s); keeping stale cache from %s", group, exc, fetched_at)
-                return GroupFetch(group, json_path, fetched_at, True, int(meta["n_objects"]))
-            raise
-    finally:
-        if own_client:
-            client.close()
-
-    fetched_at = now
-    _atomic_write_text(json_path, json.dumps(records, separators=(",", ":")))
-    _atomic_write_text(
-        _meta_path(json_path),
-        json.dumps(
-            {
-                "group": group,
-                "url": config.CELESTRAK_GP_URL,
-                "fetched_at": fetched_at.isoformat(),
-                "n_objects": len(records),
-                "user_agent": config.USER_AGENT,
-            },
-            indent=2,
-        ),
+    return fetch_cached(
+        group,
+        url=config.CELESTRAK_GP_URL,
+        params={"GROUP": group, "FORMAT": "json"},
+        json_path=_json_path(group, cache_dir),
+        min_interval=min_interval,
+        client=client,
+        now=now,
+        offline=offline,
     )
-    log.info("Cached %d records for %r", len(records), group)
-    return GroupFetch(group, json_path, fetched_at, False, len(records))
 
 
 def fetch_groups(

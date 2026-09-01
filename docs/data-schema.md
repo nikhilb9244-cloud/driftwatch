@@ -10,9 +10,13 @@ Raw downloads, kept verbatim so a snapshot can be rebuilt offline.
 - `gp/<group>.json`: the OMM record list exactly as CelesTrak returned it.
 - `gp/<group>.meta.json`: `fetched_at`, `n_objects`, URL and the User-Agent used.
 - `satcat.csv` and `satcat.meta.json`: CelesTrak's satellite catalogue metadata.
+- `supplemental/<file>.json` and its `.meta.json`: CelesTrak's supplemental GP data
+  (`sup-gp.php?FILE=starlink`), element sets fitted to operator ephemerides, in the same
+  OMM shape. Records for satellites not yet catalogued carry placeholder ids of 100000
+  and above.
 
-The fetcher refuses to re-download a group younger than two hours (CelesTrak's rule) or
-SATCAT younger than a day.
+The fetcher refuses to re-download a group or a supplemental file younger than two hours
+(CelesTrak's rule) or SATCAT younger than a day.
 
 ## Cache: `data/cache/spacetrack/`
 
@@ -135,6 +139,33 @@ the earlier one.
 snapshots (which carry the same columns) and keeps one row per (`norad_id`, `epoch`), so
 the snapshots taken by the daily fetch and the backfilled history form one table. Step 3
 fits per-object covariance from that table; Phase 3 replays storms from it.
+
+## Conjunctions: `data/conjunctions/<fleet>_<YYYYMMDDTHHMMSSZ>.parquet`
+
+One file per `driftwatch screen` run, named by the fleet and the window start, one row
+per close-approach event between a fleet member (the primary) and a catalogue object
+(the secondary). An event is kept when its miss vector lies inside the RIC box or its
+miss distance is inside the watch radius. The parquet metadata records the snapshot
+(`driftwatch_snapshot`), the fleet file, the screening configuration as JSON
+(`driftwatch_screening_config`, including the step, pad, box, watch radius and the
+derived screening radius) and the run summary with per-stage timings. These are the
+Step 2 columns; Step 3 adds the uncertainty and probability columns and Step 4 the run
+identity, as decided at the Step 0 review (see `docs/phase2-plan.md`).
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `primary_norad_id`, `primary_name`, `primary_category` | int64, string, string | The fleet member; the name is the fleet file's. |
+| `secondary_norad_id`, `secondary_name`, `secondary_category` | int64, string, string | The catalogue object, as the snapshot names and classifies it. |
+| `tca` | timestamp[us, UTC] | Time of closest approach between the two SGP4 trajectories. |
+| `miss_km` | float64 | Separation at `tca`. |
+| `rel_speed_kms` | float64 | Relative speed at `tca`. |
+| `miss_r_km`, `miss_i_km`, `miss_c_km` | float64 | The miss vector (secondary minus primary) in the primary's radial, in-track, cross-track frame at `tca`. |
+| `in_box` | bool | Inside the box: radial within 2 km, in-track and cross-track within 25 km, by default. |
+| `within_watch_radius` | bool | `miss_km` at or under the watch radius (25 km by default). |
+| `stale_primary`, `stale_secondary` | bool | Element set older than five days at the window start. |
+| `manoeuvrable_primary`, `manoeuvrable_secondary` | bool | Known to manoeuvre: the fleet file's flag for members; the `starlink`, `oneweb`, `constellation` and `station` categories for other secondaries. A warning, not a model. |
+| `secondary_ephemeris` | string | `gp` or `supplemental`: which element set the secondary was propagated from. |
+| `refine_method` | string | `root` (range-rate root inside a sign-change bracket) or `minimum` (golden-section fallback). |
 
 ## Propagated state: `data/propagated/state_<YYYYMMDDTHHMMSSZ>.parquet`
 

@@ -7,8 +7,10 @@ and update the date here when you do.
 ## CelesTrak (celestrak.org)
 
 **Used for.** GP element sets (OMM JSON) by group, the SATCAT metadata table and, from
-Step 2 of Phase 2, the supplemental Starlink ephemerides. Phase 3 adds the `SW-All.csv`
-space-weather file.
+Step 2 of Phase 2, the supplemental Starlink element sets (`sup-gp.php?FILE=starlink`,
+SGP4 fits CelesTrak makes to SpaceX's published ephemerides; the fit residuals are
+published alongside as `starlink.rms.txt`). Phase 3 adds the `SW-All.csv` space-weather
+file.
 
 **Rules (read 2026-09-01).** No account. At most one request per group every two hours,
 a descriptive `User-Agent`, and the JSON endpoints rather than scraping. The fetcher

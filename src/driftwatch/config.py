@@ -19,6 +19,7 @@ CACHE_DIR = DATA_DIR / "cache"
 SNAPSHOT_DIR = DATA_DIR / "snapshots"
 PROPAGATED_DIR = DATA_DIR / "propagated"
 HISTORY_DIR = DATA_DIR / "history"
+CONJUNCTION_DIR = DATA_DIR / "conjunctions"
 VIEWER_DATA_DIR = Path(os.environ.get("DRIFTWATCH_VIEWER_DATA_DIR", PROJECT_ROOT / "web" / "public" / "data"))
 
 # CelesTrak asks for a descriptive User-Agent so they can tell polite tools from
@@ -32,6 +33,14 @@ USER_AGENT = (
 
 CELESTRAK_GP_URL = "https://celestrak.org/NORAD/elements/gp.php"
 CELESTRAK_SATCAT_URL = "https://celestrak.org/pub/satcat.csv"
+# Supplemental GP data: element sets CelesTrak fits to operator-supplied ephemerides. The
+# Starlink file comes from SpaceX's published ephemerides, which include planned manoeuvres
+# that the standard element sets cannot know about. Same politeness rules as gp.php.
+CELESTRAK_SUPPLEMENTAL_URL = "https://celestrak.org/NORAD/elements/supplemental/sup-gp.php"
+SUPPLEMENTAL_FILES: tuple[str, ...] = ("starlink",)
+# A supplemental set older than the GP set by more than this is treated as abandoned and
+# the GP set is used instead.
+SUPPLEMENTAL_MAX_LAG_DAYS = 1.0
 
 # Space-Track.org: the full public catalogue and element-set history. Needs a free account;
 # credentials are read from the environment only (see catalogue/spacetrack.py).

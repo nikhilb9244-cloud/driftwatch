@@ -1,13 +1,15 @@
-"""Command-line interface: ``driftwatch fetch``, ``propagate``, ``snapshots``, ``history`` and ``fleet``."""
+"""Command-line interface: ``driftwatch fetch``, ``propagate``, ``snapshots``, ``history``, ``fleet`` and ``screen``."""
 
 from __future__ import annotations
 
 import argparse
+import json
 import logging
 import sys
 from datetime import UTC, date, datetime
 from pathlib import Path
 
+import httpx
 import numpy as np
 import pandas as pd
 import pyarrow as pa
@@ -19,6 +21,8 @@ from driftwatch.export.viewer import export_viewer_bundle
 from driftwatch.fleet import FleetError, load_fleet, resolve_fleet
 from driftwatch.orbit import frames, propagator
 from driftwatch.orbit.time import parse_utc, stamp
+from driftwatch.screening import ScreeningConfig, ScreeningError, screen_fleet
+from driftwatch.screening import supplemental as supplemental_mod
 
 log = logging.getLogger("driftwatch")
 
@@ -248,6 +252,104 @@ def cmd_fleet(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_screen(args: argparse.Namespace) -> int:
+    """Screen a fleet against the latest (or given) snapshot and write the conjunction parquet."""
+    try:
+        fleet = load_fleet(args.fleet)
+    except FleetError as exc:
+        log.error("%s", exc)
+        return 2
+    try:
+        path = Path(args.snapshot) if args.snapshot else snapshot.latest_snapshot(config.SNAPSHOT_DIR)
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    df = snapshot.read_snapshot(path)
+    now = datetime.now(UTC)
+    resolved = resolve_fleet(fleet, df, now=now)
+    missing = resolved.loc[~resolved["in_catalogue"], "norad_id"].tolist()
+    if missing:
+        log.error("Refusing to screen: %d fleet member(s) are not in %s: %s", len(missing), path.name, missing)
+        return 1
+
+    df["ephemeris"] = "gp"
+    if not args.no_supplemental:
+        for name in config.SUPPLEMENTAL_FILES:
+            try:
+                res = supplemental_mod.fetch_supplemental(
+                    name, cache_dir=config.CACHE_DIR, now=now, offline=args.offline
+                )
+            except (httpx.HTTPError, celestrak.CelesTrakError, FileNotFoundError) as exc:
+                log.warning(
+                    "Supplemental %s unavailable (%s); Starlink secondaries use their GP element sets", name, exc
+                )
+                continue
+            log.info(
+                "%-22s %6d records  %s",
+                f"supplemental {name}",
+                res.n_objects,
+                "cache" if res.from_cache else "downloaded",
+            )
+            records = supplemental_mod.load_supplemental_records(name, config.CACHE_DIR)
+            df, _ = supplemental_mod.apply_supplemental(df, records, name=name)
+
+    cfg = ScreeningConfig(days=args.days, step_s=args.step, pad_km=args.pad, watch_radius_km=args.watch_radius)
+    try:
+        result = screen_fleet(df, fleet, config=cfg, start=args.start)
+    except ScreeningError as exc:
+        log.error("%s", exc)
+        return 1
+
+    summary = result.summary()
+    log.info("Summary: %s", json.dumps(summary))
+    out_dir = Path(args.out_dir) if args.out_dir else config.CONJUNCTION_DIR
+    out_dir.mkdir(parents=True, exist_ok=True)
+    out_path = out_dir / f"{fleet.name}_{stamp(result.start)}.parquet"
+    table = pa.Table.from_pandas(result.events, preserve_index=False)
+    table = table.replace_schema_metadata(
+        {
+            **(table.schema.metadata or {}),
+            b"driftwatch_snapshot": path.name.encode(),
+            b"driftwatch_version": __version__.encode(),
+            b"driftwatch_fleet": str(fleet.path or fleet.name).encode(),
+            b"driftwatch_screening_config": json.dumps(cfg.to_dict()).encode(),
+            b"driftwatch_screening_summary": json.dumps(summary).encode(),
+        }
+    )
+    pq.write_table(table, out_path, compression="zstd")
+    log.info("Wrote %d events to %s", len(result.events), out_path)
+
+    ev = result.events
+    if len(ev):
+        shown = ev.sort_values("miss_km").head(args.show)
+        cols = [
+            "primary_name",
+            "secondary_norad_id",
+            "secondary_name",
+            "secondary_category",
+            "tca",
+            "miss_km",
+            "rel_speed_kms",
+            "miss_r_km",
+            "miss_i_km",
+            "miss_c_km",
+            "in_box",
+            "manoeuvrable_secondary",
+            "secondary_ephemeris",
+        ]
+        print(f"Closest {len(shown)} of {len(ev)} events, {result.start.isoformat()} + {cfg.days:g} days")
+        with pd.option_context("display.width", 220, "display.max_columns", 30, "display.precision", 3):
+            print(shown[cols].to_string(index=False))
+        per_primary = ev.groupby("primary_name").agg(
+            events=("miss_km", "size"), in_box=("in_box", "sum"), closest_km=("miss_km", "min")
+        )
+        print(per_primary.to_string())
+    else:
+        print("No events inside the watch radius or the box.")
+    print(out_path)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The argparse parser for the ``driftwatch`` command."""
     parser = argparse.ArgumentParser(
@@ -300,6 +402,22 @@ def build_parser() -> argparse.ArgumentParser:
     fleet.add_argument("fleet", help="fleet file, e.g. fleets/demo.yaml")
     fleet.add_argument("--snapshot", help="snapshot parquet path (default: latest)")
     fleet.set_defaults(func=cmd_fleet)
+
+    screen = sub.add_parser("screen", help="screen a fleet against the latest snapshot and write data/conjunctions/")
+    screen.add_argument("--fleet", required=True, help="fleet file, e.g. fleets/demo.yaml")
+    screen.add_argument("--snapshot", help="snapshot parquet path (default: latest)")
+    screen.add_argument("--days", type=float, default=7.0, help="window length in days from the start (default: 7)")
+    screen.add_argument("--start", help="window start, UTC ISO 8601 (default: the snapshot's fetch time)")
+    screen.add_argument("--step", type=float, default=30.0, help="Stage B step in seconds (default: 30)")
+    screen.add_argument("--pad", type=float, default=50.0, help="Stage A apogee/perigee pad in km (default: 50)")
+    screen.add_argument("--watch-radius", type=float, default=25.0, help="watch radius in km (default: 25)")
+    screen.add_argument(
+        "--no-supplemental", action="store_true", help="do not use CelesTrak's supplemental Starlink sets"
+    )
+    screen.add_argument("--offline", action="store_true", help="use only cached supplemental data")
+    screen.add_argument("--out-dir", help="output directory (default: data/conjunctions)")
+    screen.add_argument("--show", type=int, default=20, help="events to print, closest first (default: 20)")
+    screen.set_defaults(func=cmd_screen)
     return parser
 
 

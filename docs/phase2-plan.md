@@ -297,16 +297,113 @@ Two follow-ups:
   from the SWPC feeds Phase 3 already pulls, and a May 2024 replay overlay of Starlink
   round-trip times from public RIPE Atlas probes against the Kp bar.
 
+## Step 2 decisions (screening, built 2026-09-02)
+
+The method, the derivation of the step and the threshold, and the tests are in
+`docs/screening.md`; the output columns are in `docs/data-schema.md`. What was decided:
+
+- **Screening radius 35.4 km, not 25.** The box's corner at (2, 25, 25) km lies 35.4 km
+  from the primary, outside the 25 km watch sphere, so the sphere Stage B must not miss
+  is the box's circumscribing sphere. Both flags are recorded on every event and an
+  event is kept if either holds; on the first run 133 events were in the box but outside
+  the sphere and 4,872 inside the sphere but outside the box.
+- **Speed bound per pair, not a flat 15 km/s.** The relative speed of a pair is bounded
+  by the sum of the two objects' two-body perigee speeds from their mean elements, times
+  a 2 % margin for SGP4's departure from Keplerian motion. For LEO pairs that is 15.5 to
+  15.7 km/s, which is where the prompt's "about 15 km/s" comes from; for an eccentric
+  secondary dipping through LEO (a transfer-orbit rocket body at 10 km/s at perigee) it
+  is 18 km/s, and a flat 15 km/s would not have been a bound. The bound is attached to
+  each pair by Stage A and Stage B derives its threshold from it.
+- **Step 30 s.** The threshold is then 35.4 + v_bound x 15 s, about 270 km for LEO
+  pairs. At 0.22 microseconds per propagation the week costs about three minutes; 60 s
+  would halve that and double the candidates for Stage C, which is cheap either way. The
+  step is `--step` on the command line and the threshold follows.
+- **Candidate rule.** A sign change of the range rate (approaching to receding) between
+  consecutive samples with either sample under the threshold, bracket one step wide;
+  plus a sampled local minimum under the threshold with no sign change beside it,
+  bracket two steps wide, minimised rather than root-found. The fallback never fired on
+  the real catalogue.
+- **Stage C without scipy.** A vectorised regula falsi with the Illinois modification and
+  Dekker's bisection safeguard, converging in eight to twelve evaluations per candidate
+  to 10 microseconds, and a vectorised golden section for the fallback. About 80 lines;
+  scipy joins in Step 3 if Foster's integration wants it.
+- **Window and staleness.** The window starts at the snapshot's fetch time floored to
+  the minute (`--start` overrides) and stale is measured from there.
+- **Supplemental Starlink sets** are substituted into the snapshot before Stage A, with
+  apogee and perigee recomputed. Placeholder ids (100000 and above, satellites not yet
+  catalogued) are skipped; a supplemental set more than a day older than the GP set is
+  treated as abandoned. Every event records which set its secondary used.
+- **Manoeuvre flag.** The fleet's own flag for members; for other secondaries the
+  `starlink`, `oneweb`, `constellation` and `station` categories. Active payloads outside
+  those categories are not flagged (see the questions below).
+- **Fleet members screen against each other.** A member is a catalogue object too, so
+  ZACube-1 and UWE-3 are each other's secondaries; a member's fleet flag is used when it
+  appears as a secondary.
+- **Output.** One parquet per run, `data/conjunctions/<fleet>_<start>.parquet`, with the
+  Step 2 columns and the configuration and summary in the metadata. The Step 0 review's
+  schema (run id, scenario, uncertainty, probability) is completed by Steps 3 and 4.
+- **Test scaffolding.** `tests/synthetic.py` builds conjunctions with a designed time
+  and miss by choosing the secondary's osculating state at the encounter and converting
+  it to SGP4 mean elements by fixed-point iteration (sub-millimetre). Step 3's tests can
+  reuse it for encounters with a designed geometry.
+
+### First run (2026-09-02; snapshot of 2026-09-01 20:48 UTC; 7 days from 20:48 UTC)
+
+| Stage | Count | Time |
+| --- | --- | --- |
+| Supplemental Starlink | 11,093 records; 10,728 applied (365 placeholder ids; median epoch lag +0.40 days) | |
+| A | 47,908 pairs over 6 primaries; 22,628 distinct objects propagated; 5 dropped as decaying; 1,178 element sets stale | 0.02 s |
+| B | 20,163 samples x 22,628 objects = 4.6 x 10^8 propagations; 169,899 candidates, all sign changes | 184 s |
+| C | 169,899 refined, none unconverged; 6,016 events (1,144 in the box, 5,883 inside the watch radius) | 2.4 s |
+| Total | | 187 s (with the test suite running for part of it) |
+
+| Primary | Stage A pairs | Events | In box | Distinct in-box secondaries | Closest |
+| --- | --- | --- | --- | --- | --- |
+| ISS | 7,315 | 104 | 11 | 7 | 1.82 km, a rocket body (OBJECT A), 2026-09-02 23:01 UTC |
+| Sentinel-1C | 5,065 | 276 | 30 | 22 | 0.53 km, Fengyun-1C fragment, 2026-09-04 05:01 UTC |
+| XI-IV | 7,540 | 461 | 60 | 40 | 1.05 km |
+| UWE-3 | 6,683 | 605 | 43 | 40 | 0.77 km, SL-14 rocket body at 15.1 km/s, 2026-09-06 01:08 UTC |
+| ZACube-1 | 9,580 | 543 | 80 | 61 | 1.61 km |
+| EOS SAT-1 | 11,725 | 4,027 | 920 | 332 | 0.049 km, STARLINK-4722 at 13.1 km/s, 2026-09-03 08:57 UTC |
+
+By secondary category: Starlink 4,273; debris 797; payload 649; other constellations
+133; rocket bodies 122; unknown 42. 4,249 events used a supplemental set, 64 involve a
+stale secondary, 73 % a manoeuvrable one. Relative speed: median 13.3 km/s, 95th
+percentile 15.0, maximum 15.8. Miss distance: median 16.7 km.
+
+What the first run says:
+
+- **EOS SAT-1 dominates**, with two thirds of the events (575 a day). Its 454 x 466 km
+  orbit sits just below the Starlink shells at 462 to 486 km (the median Starlink
+  secondary has a mean perigee of 484 km), and 1,485 of its 1,616 distinct secondaries
+  are Starlink satellites. Several are near-co-planar pairs that return every orbit:
+  STARLINK-35774 130 times in the week, STARLINK-31598 every 94 minutes at 0.4 to
+  1.7 km. These are the pairs where the supplemental sets matter most, and where Step
+  3's probability will decide what is worth reporting.
+- **The closest approach of the week is 49 m**, EOS SAT-1 and STARLINK-4722 at 13.1 km/s
+  on the supplemental set. A 49 m miss between two trajectories each uncertain by
+  hundreds of metres or more is not a 49 m miss between two spacecraft; until Step 3 it
+  is the same kind of event as a 500 m miss.
+- **The ISS is quiet** at 420 km: 104 events, 7 distinct objects in the box, nothing
+  under 1.8 km.
+- **The performance target is met** with a factor of three to spare, and Stage B is the
+  whole cost. Nothing has been parallelised; the SatrecArray loop is single-threaded.
+
+### Questions for the Step 2 review
+
+1. The manoeuvre rule for secondaries: categories only (as built), or also flag every
+   payload in CelesTrak's `active` group as "may manoeuvre"? The wider rule flags
+   cubesats that cannot manoeuvre; the narrower one misses operational satellites that
+   can.
+2. The default step: 30 s (three minutes, 170,000 candidates) or 60 s (about half the
+   time, twice the candidates). Both satisfy the guarantee.
+3. Repeated encounters of one co-orbital pair (STARLINK-35774 130 times): keep every
+   event as a row, as now, or collapse repeats of the same pair in the Step 4 report to
+   the closest one with a count?
+
 ## Later steps in one paragraph each
 
-**Step 2.** Stage A on mean-element apogee and perigee with a 50 km pad, dropping
-perigee below 120 km (flagged decaying) and flagging element sets older than five days.
-Stage B steps relative distance with SatrecArray; the step and threshold are derived
-together from a 15 km/s maximum relative speed in `docs/screening.md` and proved by a
-brute-force test. Stage C brackets each candidate and root-finds the relative range rate
-with SGP4 inside the bracket. Output in the primary's RIC frame; box 2 by 25 by 25 km
-and watch radius 25 km. Supplemental Starlink ephemerides where available; manoeuvre flag
-on every pair with a manoeuvring member. Timings per stage; target under ten minutes.
+**Step 2.** Built 2026-09-02; see "Step 2 decisions" above and `docs/screening.md`.
 
 **Step 3.** Empirical RIC error growth from consecutive element sets, pooled fallback by
 category and band, the interface above, Foster polar-grid integration cross-checked by
@@ -321,6 +418,6 @@ from Python's numbers.
 ## Review points
 
 One commit per step, stopping after each: Step 0 (Space-Track and history, reviewed
-2026-09-01), Step 1 (fleets), Step 2 (screening), Step 3 (covariance and probability),
-Step 4 (outputs and viewer). The **ask** items were raised at the Step 0 review and are
+2026-09-01), Step 1 (fleets, reviewed 2026-09-02), Step 2 (screening, built 2026-09-02,
+awaiting review), Step 3 (covariance and probability), Step 4 (outputs and viewer). The **ask** items were raised at the Step 0 review and are
 now recorded as decisions above.

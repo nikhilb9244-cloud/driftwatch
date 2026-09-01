@@ -7,8 +7,9 @@ the moment it matters most. driftwatch will screen a chosen fleet against the wh
 catalogue and show how miss distances and probabilities move under quiet and stormy
 conditions, live and in replay of past storms.
 
-**Status: Phase 2 of 5 in progress** (conjunction screening; Space-Track merged in and
-the demo fleet defined, screening next). Phase 1 (catalogue and globe) is complete. See
+**Status: Phase 2 of 5 in progress** (conjunction screening; Space-Track merged in, the
+demo fleet defined and the three-stage screening running; uncertainty and probability
+next). Phase 1 (catalogue and globe) is complete. See
 `ROADMAP.md` for the full plan, `docs/phase1-plan.md` for what Phase 1 built and why, and
 `docs/phase2-plan.md` for the Phase 2 plan and the decisions taken so far.
 
@@ -28,9 +29,18 @@ What works today:
   radii with their provenance, manoeuvre flags) and shows each member as the latest
   snapshot knows it. The demo fleet is the ISS, Sentinel-1C, two university cubesats and
   the two active South African objects.
+- `driftwatch screen --fleet fleets/demo.yaml --days 7` screens the fleet against the
+  whole catalogue in three stages (apogee/perigee overlap, coarse time stepping with a
+  step and threshold chosen so nothing inside the screening volume can be missed, and
+  root-finding on the range rate), using CelesTrak's supplemental Starlink sets for
+  Starlink secondaries, and writes every close approach with its time, miss distance,
+  relative speed, radial/in-track/cross-track components and flags to
+  `data/conjunctions/`. The demo fleet's week takes about three minutes on a laptop.
 - Tests cover the official SGP4 verification cases, frame conversions against skyfield,
   a real ISS pass over Durban, the cache rules, the snapshot schema, the export, the
-  Space-Track client and the fleet files.
+  Space-Track client, the fleet files, and the screening: synthetic conjunctions with a
+  designed time and miss distance recovered to a millisecond and a metre, and the coarse
+  step checked against one-second brute force.
 
 ## Quick start
 
@@ -45,6 +55,8 @@ uv run driftwatch propagate --at 2026-09-01T12:00:00Z
                                           # ~3 s; writes data/propagated/state_<stamp>.parquet
                                           # and web/public/data/{manifest.json,objects.json,elements.bin,reference.bin}
 uv run driftwatch fleet fleets/demo.yaml  # check the demo fleet against the snapshot
+uv run driftwatch screen --fleet fleets/demo.yaml --days 7
+                                          # ~3 min; writes data/conjunctions/demo_<stamp>.parquet
 cd web && npm install && npm run dev      # open the printed URL
 ```
 
@@ -80,6 +92,7 @@ its freshest element set and records which source it came from.
 src/driftwatch/         Python package (CLI: driftwatch)
   catalogue/            CelesTrak and Space-Track fetch, SATCAT, classification, parquet snapshots, history
   orbit/                time, SGP4 propagation, frame conversions
+  screening/            three-stage conjunction screening, RIC frame, supplemental Starlink sets
   export/               viewer bundle
 fleets/                 YAML fleet definitions (the primaries to screen)
 tests/                  pytest
@@ -94,7 +107,9 @@ data/                   cache, snapshots, history, propagated states (git-ignore
   does, and the accuracy limits of the public catalogue.
 - `docs/frames-and-time.md`: TEME, ITRS, GMST, UT1 and polar motion, and the measured
   cost of the browser's shortcut.
-- `docs/data-schema.md`: every column in the snapshot, state and viewer files.
+- `docs/data-schema.md`: every column in the snapshot, state, conjunction and viewer files.
+- `docs/screening.md`: the three screening stages, the step-and-threshold derivation
+  with its brute-force proof, and what an event's numbers mean.
 - `docs/methods.md`: the running list of approximations.
 - `docs/data-sources.md`: each data provider's terms, the Space-Track redistribution
   clause as checked, and the citation format.
