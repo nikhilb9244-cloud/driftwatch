@@ -1,0 +1,45 @@
+[project]
+name = "driftwatch"
+version = "0.1.0"
+description = "Screens satellite conjunctions in low Earth orbit and shows how geomagnetic storms change collision risk."
+authors = [
+    { name = "Nikhil Pather", email = "deadarby555@gmail.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "astropy>=8.0.1",
+    "httpx>=0.28.1",
+    "numpy>=2.4.6",
+    "pandas>=3.0.5",
+    "pyarrow>=25.0.1",
+    "sgp4>=2.27",
+    "skyfield>=1.55",
+]
+
+[project.scripts]
+driftwatch = "driftwatch.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.8,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.1.1",
+    "ruff>=0.16.5",
+]
+
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"
+filterwarnings = [
+    "ignore::DeprecationWarning:skyfield",
+]
+
+[tool.ruff]
+line-length = 120
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B"]
