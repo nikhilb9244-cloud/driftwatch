@@ -1,0 +1,78 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>driftwatch · catalogue globe</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <div id="globe"></div>
+
+    <aside id="panel">
+      <header>
+        <h1>driftwatch</h1>
+        <p class="sub">Every tracked object in the public catalogue, propagated with SGP4.</p>
+      </header>
+
+      <section id="time">
+        <div class="clock"><span id="clock-utc">—</span><span id="clock-offset"></span></div>
+        <input id="slider" type="range" min="0" max="2880" step="1" value="1440" aria-label="Time" />
+        <div class="row">
+          <button id="play" class="btn" aria-label="Play or pause">⏸</button>
+          <label class="speed">speed
+            <select id="speed">
+              <option value="1">1×</option>
+              <option value="10">10×</option>
+              <option value="60" selected>60×</option>
+              <option value="300">300×</option>
+              <option value="1000">1000×</option>
+            </select>
+          </label>
+          <button id="now" class="btn small" title="Jump to the reference time">t₀</button>
+          <button id="live" class="btn small" title="Jump to the current UTC time">now</button>
+        </div>
+      </section>
+
+      <section id="filters">
+        <h2>Category</h2>
+        <div id="categories" class="checks"></div>
+        <h2>Altitude band</h2>
+        <div id="bands" class="checks"></div>
+      </section>
+
+      <section id="search">
+        <input id="find" type="search" placeholder="Find by name or NORAD id" aria-label="Find object" />
+      </section>
+
+      <section id="selected" hidden>
+        <h2>Selected</h2>
+        <dl id="selected-body"></dl>
+        <button id="clear" class="btn small">clear</button>
+      </section>
+
+      <section id="stats">
+        <h2>Status</h2>
+        <dl>
+          <dt>Objects shown</dt><dd id="stat-visible">—</dd>
+          <dt>Snapshot</dt><dd id="stat-snapshot">—</dd>
+          <dt>Reference time</dt><dd id="stat-t0">—</dd>
+          <dt>Element-set age</dt><dd id="stat-age">—</dd>
+          <dt>Propagator</dt><dd id="stat-engine">—</dd>
+          <dt>Frame compute</dt><dd id="stat-frame">—</dd>
+          <dt>JS vs Python at t₀</dt><dd id="stat-check">—</dd>
+        </dl>
+        <p class="caveat">
+          Positions come from public two-line elements and are good to hundreds of metres
+          to kilometres, worse days after epoch and during storms. Earth-fixed positions
+          here ignore UT1 and polar motion (under a pixel). See the docs.
+        </p>
+      </section>
+    </aside>
+
+    <div id="tooltip" hidden></div>
+    <div id="loading">Loading catalogue…</div>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>
