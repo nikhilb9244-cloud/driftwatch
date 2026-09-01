@@ -26,6 +26,10 @@ export interface Manifest {
   bands: string[];
   files: { objects: string; elements: BinaryFileSpec; reference: BinaryFileSpec };
   notes: string[];
+  /** Object count per element-set source (`celestrak`, `spacetrack`). Absent in bundles older than Phase 2. */
+  sources?: Record<string, number>;
+  /** Credit lines the data providers require; shown in the panel. */
+  attribution?: string[];
 }
 
 export interface Objects {

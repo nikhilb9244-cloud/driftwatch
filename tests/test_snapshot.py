@@ -3,6 +3,7 @@ from datetime import UTC, date, datetime
 import numpy as np
 import pandas as pd
 import pyarrow.parquet as pq
+import pytest
 
 from driftwatch.catalogue.snapshot import (
     SNAPSHOT_SCHEMA,
@@ -87,6 +88,48 @@ def test_build_snapshot_dedupes_and_joins(omm_records, tmp_path):
 
     summary = snapshot_summary(back)
     assert summary["n_objects"] == len(df)
+
+
+def test_build_snapshot_merges_second_source(omm_records, tmp_path):
+    records = list({r["NORAD_CAT_ID"]: r for r in omm_records}.values())
+    ids = [r["NORAD_CAT_ID"] for r in records]
+
+    def spacetrack(r, epoch=None):
+        rec = {k: str(v) for k, v in r.items()}
+        if epoch:
+            rec["EPOCH"] = epoch
+        return rec
+
+    extra = [
+        spacetrack(records[0], "2000-01-01T00:00:00.000000"),  # older: CelesTrak wins
+        spacetrack(records[1]),  # equal epoch: CelesTrak wins the tie
+        spacetrack(records[2], "2030-01-01T00:00:00.000000"),  # newer: Space-Track wins, groups kept
+        *[spacetrack(r) for r in records[6:9]],  # only Space-Track holds these
+    ]
+    fetched_at = datetime(2026, 9, 1, 12, tzinfo=UTC)
+    df = build_snapshot({"active": records[:6]}, None, fetched_at=fetched_at, extra_sources={"spacetrack": extra})
+
+    assert len(df) == 9 and df["norad_id"].is_unique
+    assert list(df.columns) == [f.name for f in SNAPSHOT_SCHEMA]
+    by_id = df.set_index("norad_id")
+    assert by_id.loc[ids[0], "source"] == "celestrak" and by_id.loc[ids[0], "groups"] == ["active"]
+    assert by_id.loc[ids[1], "source"] == "celestrak"
+    assert by_id.loc[ids[2], "source"] == "spacetrack" and by_id.loc[ids[2], "groups"] == ["active"]
+    assert pd.Timestamp(by_id.loc[ids[2], "epoch"]).year == 2030
+    for i in ids[6:9]:
+        assert by_id.loc[i, "source"] == "spacetrack" and by_id.loc[i, "groups"] == []
+    assert snapshot_summary(df)["by_source"] == {"celestrak": 5, "spacetrack": 4}
+
+    back = read_snapshot(write_snapshot(df, snapshot_path(fetched_at, tmp_path)))
+    assert back["source"].tolist() == df["source"].tolist()
+    assert [list(g) for g in back["groups"]] == [list(g) for g in df["groups"]]
+
+    # Nothing but empty groups is an error; an empty extra source is ignored.
+    with pytest.raises(ValueError):
+        build_snapshot({"active": []}, None, fetched_at=fetched_at)
+    assert (
+        len(build_snapshot({"active": records[:2]}, None, fetched_at=fetched_at, extra_sources={"spacetrack": []})) == 2
+    )
 
 
 def test_build_snapshot_without_satcat(omm_records):

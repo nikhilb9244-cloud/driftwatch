@@ -128,25 +128,44 @@ def build_snapshot(
     *,
     fetched_at: datetime,
     source: str = "celestrak",
+    extra_sources: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
 ) -> pd.DataFrame:
-    """Merge per-group OMM records into one classified snapshot frame.
+    """Merge OMM records from CelesTrak groups and any other sources into one classified snapshot.
 
-    Objects present in several groups are kept once, with the newest epoch, and the
-    ``groups`` column lists every group they appeared in.
+    ``records_by_group`` holds the CelesTrak groups (labelled ``source``); ``extra_sources``
+    maps another source name, ``"spacetrack"``, to its records. Every object is kept once
+    with its newest epoch, and ``source`` records where that element set came from. At
+    equal epoch the CelesTrak record wins the tie: CelesTrak redistributes Space-Track's
+    data, so equal epochs are the same element set and the tie only decides the label.
+    ``groups`` lists the CelesTrak groups an object appeared in and is empty for objects
+    that only another source holds.
     """
     frames = []
     for group, records in records_by_group.items():
         frame = records_to_frame(records)
+        if frame.empty:
+            continue
         frame["group"] = group
+        frame["source"] = source
+        frame["_tiebreak"] = 1
+        frames.append(frame)
+    for name, records in (extra_sources or {}).items():
+        frame = records_to_frame(records)
+        if frame.empty:
+            continue
+        frame["group"] = None
+        frame["source"] = name
+        frame["_tiebreak"] = 0
         frames.append(frame)
     if not frames:
-        raise ValueError("No groups to merge")
+        raise ValueError("No records to merge")
     df = pd.concat(frames, ignore_index=True)
 
-    groups = df.groupby("norad_id")["group"].agg(lambda g: sorted(set(g)))
-    df = df.sort_values(["norad_id", "epoch"]).drop_duplicates("norad_id", keep="last")
-    df = df.drop(columns=["group"]).set_index("norad_id")
-    df["groups"] = groups
+    in_group = df["group"].notna()
+    groups = df[in_group].groupby("norad_id")["group"].agg(lambda g: sorted(set(g)))
+    df = df.sort_values(["norad_id", "epoch", "_tiebreak"]).drop_duplicates("norad_id", keep="last")
+    df = df.drop(columns=["group", "_tiebreak"]).set_index("norad_id")
+    df["groups"] = [g if isinstance(g, list) else [] for g in groups.reindex(df.index)]
     df = df.reset_index()
 
     if satcat is not None:
@@ -172,7 +191,6 @@ def build_snapshot(
         altitude_bands(df["perigee_km"].to_numpy(), df["apogee_km"].to_numpy(), df["eccentricity"].to_numpy()),
         dtype="string",
     )
-    df["source"] = source
     df["fetched_at"] = (
         pd.Timestamp(fetched_at).tz_convert("UTC")
         if pd.Timestamp(fetched_at).tzinfo
@@ -237,6 +255,7 @@ def snapshot_summary(df: pd.DataFrame) -> dict[str, Any]:
         "n_objects": int(len(df)),
         "by_category": {k: int(v) for k, v in df["category"].value_counts().sort_index().items()},
         "by_band": {k: int(v) for k, v in df["altitude_band"].value_counts().sort_index().items()},
+        "by_source": {k: int(v) for k, v in df["source"].value_counts().sort_index().items()},
         "epoch_age_days": {
             "median": float(age_days.median()),
             "p90": float(age_days.quantile(0.9)),

@@ -3,6 +3,7 @@ from datetime import UTC, datetime
 
 import numpy as np
 
+from driftwatch import config
 from driftwatch.catalogue.snapshot import build_snapshot
 from driftwatch.export.viewer import ELEMENTS_PER_OBJECT, REFERENCE_PER_OBJECT, export_viewer_bundle
 from driftwatch.orbit.propagator import propagate_snapshot
@@ -18,6 +19,8 @@ def test_bundle_roundtrip(omm_records, tmp_path):
     n = len(df)
     assert manifest["n_objects"] == n
     assert manifest["reference_time"] == "2006-06-25T12:00:00.000000Z"
+    assert manifest["sources"] == {"celestrak": n}
+    assert manifest["attribution"] == [config.CELESTRAK_CITATION]
     assert (tmp_path / "manifest.json").exists()
 
     elements = np.frombuffer((tmp_path / "elements.bin").read_bytes(), dtype="<f8").reshape(n, ELEMENTS_PER_OBJECT)
@@ -37,3 +40,16 @@ def test_bundle_roundtrip(omm_records, tmp_path):
     assert len(objects["name"]) == n
     assert objects["category"][0] < len(manifest["categories"])
     assert objects["sgp4_error"] == [int(e) for e in error]
+
+
+def test_bundle_credits_spacetrack_when_present(omm_records, tmp_path):
+    records = list({r["NORAD_CAT_ID"]: r for r in omm_records}.values())
+    spacetrack = [{k: str(v) for k, v in r.items()} for r in records[4:6]]
+    df = build_snapshot(
+        {"active": records[:4]}, None, fetched_at=datetime.now(UTC), extra_sources={"spacetrack": spacetrack}
+    )
+    state = propagate_snapshot(df, [datetime(2006, 6, 25, 12, tzinfo=UTC)])
+    manifest = export_viewer_bundle(df, state, out_dir=tmp_path)
+    assert manifest["sources"] == {"celestrak": 4, "spacetrack": 2}
+    assert manifest["attribution"] == [config.CELESTRAK_CITATION, config.SPACETRACK_CITATION]
+    assert np.frombuffer((tmp_path / "elements.bin").read_bytes(), dtype="<f8").size == 6 * ELEMENTS_PER_OBJECT

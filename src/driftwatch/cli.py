@@ -1,11 +1,11 @@
-"""Command-line interface: ``driftwatch fetch``, ``driftwatch propagate``, ``driftwatch snapshots``."""
+"""Command-line interface: ``driftwatch fetch``, ``propagate``, ``snapshots`` and ``history``."""
 
 from __future__ import annotations
 
 import argparse
 import logging
 import sys
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import numpy as np
@@ -14,7 +14,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from driftwatch import __version__, config
-from driftwatch.catalogue import celestrak, satcat, snapshot
+from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
 from driftwatch.export.viewer import export_viewer_bundle
 from driftwatch.orbit import frames, propagator
 from driftwatch.orbit.time import parse_utc, stamp
@@ -39,13 +39,38 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         except FileNotFoundError as exc:
             log.warning("SATCAT unavailable (%s); object types will be UNK", exc)
 
+    extra_sources: dict[str, list] = {}
+    if args.spacetrack != "off":
+        try:
+            st = spacetrack.fetch_gp_catalogue(cache_dir=config.CACHE_DIR, now=now, offline=args.offline)
+        except (spacetrack.SpaceTrackAuthError, FileNotFoundError) as exc:
+            if args.spacetrack == "on":
+                log.error("Space-Track required (--spacetrack on) but unavailable: %s", exc)
+                return 2
+            log.warning("Space-Track skipped (%s); the snapshot is CelesTrak only", exc)
+        else:
+            log.info("%-22s %6d objects  %s", "spacetrack gp", st.n_objects, "cache" if st.from_cache else "downloaded")
+            extra_sources["spacetrack"] = spacetrack.load_gp_records(config.CACHE_DIR)
+
     records = {res.group: celestrak.load_group_records(res.group, config.CACHE_DIR) for res in results}
-    df = snapshot.build_snapshot(records, satcat_df, fetched_at=now)
+    df = snapshot.build_snapshot(records, satcat_df, fetched_at=now, extra_sources=extra_sources)
     path = snapshot.write_snapshot(df, snapshot.snapshot_path(now, config.SNAPSHOT_DIR), groups=groups)
     summary = snapshot.snapshot_summary(df)
     log.info("Snapshot %s: %d objects", path.name, summary["n_objects"])
     log.info("By category: %s", summary["by_category"])
     log.info("By band: %s", summary["by_band"])
+    log.info("By source: %s", summary["by_source"])
+    if extra_sources:
+        in_celestrak = df["groups"].map(len) > 0
+        added = df[~in_celestrak]
+        log.info(
+            "Space-Track adds %d objects in no CelesTrak group; by category %s; by band %s",
+            len(added),
+            {k: int(v) for k, v in added["category"].value_counts().sort_index().items()},
+            {k: int(v) for k, v in added["altitude_band"].value_counts().sort_index().items()},
+        )
+        fresher = int(((df["source"] == "spacetrack") & in_celestrak).sum())
+        log.info("%d objects also in CelesTrak took a fresher Space-Track element set", fresher)
     log.info(
         "Element-set age (days): median %.2f, p90 %.2f, max %.1f",
         summary["epoch_age_days"]["median"],
@@ -139,6 +164,34 @@ def cmd_snapshots(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_history(args: argparse.Namespace) -> int:
+    """Fetch Space-Track gp_history for a list of NORAD ids and write a history parquet."""
+    ids = sorted({int(x) for x in args.ids.split(",") if x.strip()})
+    start = date.fromisoformat(args.start)
+    end = date.fromisoformat(args.end)
+    now = datetime.now(UTC)
+    try:
+        records = spacetrack.fetch_gp_history(
+            ids, start, end, cache_dir=config.CACHE_DIR, now=now, offline=args.offline
+        )
+    except (spacetrack.SpaceTrackAuthError, FileNotFoundError) as exc:
+        log.error("Cannot fetch history: %s", exc)
+        return 2
+    df = history.frame_from_records(records, fetched_at=now)
+    path = history.write_history(
+        df,
+        history.history_path(now, config.HISTORY_DIR),
+        metadata={"norad_ids": ",".join(map(str, ids)), "start": start.isoformat(), "end": end.isoformat()},
+    )
+    summary = history.history_summary(df)
+    log.info("History: %s", summary)
+    missing = sorted(set(ids) - set(df["norad_id"].tolist()))
+    if missing:
+        log.warning("No element sets in range for %d ids: %s", len(missing), missing[:20])
+    print(path)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The argparse parser for the ``driftwatch`` command."""
     parser = argparse.ArgumentParser(
@@ -156,6 +209,16 @@ def build_parser() -> argparse.ArgumentParser:
         "--offline", action="store_true", help="rebuild the snapshot from cache without any network access"
     )
     fetch.add_argument("--no-satcat", action="store_true", help="skip the SATCAT join (object types become UNK)")
+    fetch.add_argument(
+        "--spacetrack",
+        choices=("auto", "on", "off"),
+        default="auto",
+        help=(
+            "merge the Space-Track gp catalogue (cached, at most every 2 h and 4 times a day): "
+            "auto uses it when SPACETRACK_USER and SPACETRACK_PASS are set or a cache exists, "
+            "on fails without it, off skips it (default: auto)"
+        ),
+    )
     fetch.set_defaults(func=cmd_fetch)
 
     prop = sub.add_parser("propagate", help="propagate the latest snapshot to a time and export the viewer bundle")
@@ -167,6 +230,15 @@ def build_parser() -> argparse.ArgumentParser:
 
     snaps = sub.add_parser("snapshots", help="list stored snapshots")
     snaps.set_defaults(func=cmd_snapshots)
+
+    hist = sub.add_parser(
+        "history", help="fetch Space-Track gp_history for NORAD ids over a date range into data/history/"
+    )
+    hist.add_argument("--ids", required=True, help="comma-separated NORAD ids, e.g. 25544,39634")
+    hist.add_argument("--start", required=True, help="first epoch day (UTC), YYYY-MM-DD")
+    hist.add_argument("--end", required=True, help="last epoch day inclusive (UTC), YYYY-MM-DD")
+    hist.add_argument("--offline", action="store_true", help="use only cached gp_history responses")
+    hist.set_defaults(func=cmd_history)
     return parser
 
 
@@ -180,7 +252,10 @@ def main(argv: list[str] | None = None) -> int:
         datefmt="%H:%M:%S",
         stream=sys.stderr,
     )
+    # httpx/httpcore debug logs would print request lines; keep them quiet even with -v so the
+    # Space-Track login request never shows up in a log.
     logging.getLogger("httpx").setLevel(logging.WARNING)
+    logging.getLogger("httpcore").setLevel(logging.WARNING)
     return int(args.func(args))
 
 

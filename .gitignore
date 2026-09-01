@@ -11,6 +11,8 @@ __pycache__/
 data/cache/
 data/snapshots/
 data/propagated/
+data/history/
+data/conjunctions/
 web/public/data/*
 !web/public/data/.gitkeep
 

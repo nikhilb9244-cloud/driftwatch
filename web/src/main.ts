@@ -79,6 +79,7 @@ async function main(): Promise<void> {
   el("stat-snapshot").textContent = bundle.manifest.snapshot.replace(/^gp_/, "").replace(/\.parquet$/, "");
   el("stat-t0").textContent = bundle.manifest.reference_time.replace("T", " ").replace(/\.\d+Z$/, "Z");
   el("stat-age").textContent = describeAges(bundle);
+  el("credit").textContent = (bundle.manifest.attribution ?? []).join(" ");
 
   let selected = -1;
   let hovered = -1;

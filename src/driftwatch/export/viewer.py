@@ -144,6 +144,11 @@ def export_viewer_bundle(
     }
     (out_dir / "objects.json").write_text(json.dumps(objects, separators=(",", ":")), encoding="utf-8")
 
+    sources = {str(k): int(v) for k, v in snapshot["source"].value_counts().sort_index().items()}
+    attribution = [config.CELESTRAK_CITATION]
+    if sources.get("spacetrack"):
+        attribution.append(config.SPACETRACK_CITATION)
+
     manifest = {
         "bundle_version": BUNDLE_VERSION,
         "generator": f"driftwatch {__version__}",
@@ -153,6 +158,8 @@ def export_viewer_bundle(
         "window_hours": window_hours,
         "n_objects": n,
         "n_sgp4_errors": int((error != 0).sum()),
+        "sources": sources,
+        "attribution": attribution,
         "categories": list(CATEGORIES),
         "bands": list(ALTITUDE_BANDS),
         "files": {

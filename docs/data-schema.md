@@ -14,6 +14,20 @@ Raw downloads, kept verbatim so a snapshot can be rebuilt offline.
 The fetcher refuses to re-download a group younger than two hours (CelesTrak's rule) or
 SATCAT younger than a day.
 
+## Cache: `data/cache/spacetrack/`
+
+Raw Space-Track downloads. Nothing here ever contains the credentials; the metadata
+records the query URL, the fetch time and the count only.
+
+- `gp.json` and `gp.meta.json`: the current catalogue from the `gp` class (no decay
+  date, epoch within 30 days), as Space-Track returned it (every value is a string). The
+  metadata keeps the times of the last day's pulls so the fetcher can enforce a two-hour
+  floor and at most four pulls per rolling 24 hours.
+- `gp_history/<start>_<end>_<n>ids_<digest>.json` and its `.meta.json`: one file per
+  `gp_history` request, keyed by the date range and a digest of the sorted NORAD ids.
+  Space-Track asks for history to be requested once and kept, so these are never
+  re-fetched.
+
 ## Snapshot: `data/snapshots/gp_<YYYYMMDDTHHMMSSZ>.parquet`
 
 One row per object, one file per fetch, zstd-compressed, schema version recorded in the
@@ -42,11 +56,14 @@ parquet metadata as `driftwatch_schema_version`. Column order is fixed by
 | `rcs_m2` | float64 | SATCAT radar cross-section in square metres, NaN if unpublished. |
 | `owner` | string | SATCAT owner code, e.g. `US`, `PRC`, `ESA`. |
 | `launch_date` | date32 | From SATCAT, null if unknown. |
-| `groups` | list<string> | Every CelesTrak group the object appeared in. |
-| `source` | string | `celestrak`. Reserved for `spacetrack` later. |
+| `groups` | list<string> | Every CelesTrak group the object appeared in. Empty for objects that only Space-Track holds. |
+| `source` | string | Where the winning element set came from: `celestrak` or `spacetrack`. |
 | `fetched_at` | timestamp[us, UTC] | When the snapshot was built. |
 
-An object present in several groups is kept once, with the newest epoch.
+An object present in several groups or sources is kept once, with the newest epoch. At
+equal epoch the CelesTrak record wins the tie; CelesTrak redistributes Space-Track's
+element sets, so equal epochs are the same element set and the tie only decides the
+`source` label. The parquet metadata records the CelesTrak `groups` fetched.
 
 ### Category rules (in order)
 
@@ -70,6 +87,20 @@ From mean-element apogee and perigee:
 - `meo`: perigee at or above 2,000 km and apogee below 35,586 km.
 - `other`: everything else (graveyard orbits, LEO-to-MEO ellipses, cislunar).
 
+## History: `data/history/gph_<YYYYMMDDTHHMMSSZ>.parquet`
+
+One file per `driftwatch history` run, holding every element set Space-Track's
+`gp_history` returned for the requested NORAD ids and date range. Columns are the
+element-set columns of the snapshot (`norad_id` through `rev_at_epoch`) plus `source`
+(`spacetrack`) and `fetched_at`; the parquet metadata records the ids and the range.
+One row per (`norad_id`, `epoch`); a re-issued element set with the same epoch replaces
+the earlier one.
+
+`driftwatch.catalogue.history.load_history()` concatenates these files with the
+snapshots (which carry the same columns) and keeps one row per (`norad_id`, `epoch`), so
+the snapshots taken by the daily fetch and the backfilled history form one table. Step 3
+fits per-object covariance from that table; Phase 3 replays storms from it.
+
 ## Propagated state: `data/propagated/state_<YYYYMMDDTHHMMSSZ>.parquet`
 
 One row per object of the snapshot named in the parquet metadata
@@ -88,7 +119,7 @@ One row per object of the snapshot named in the parquet metadata
 
 | File | Content |
 | --- | --- |
-| `manifest.json` | Reference time, counts, category and band legends, file descriptions, caveats. |
+| `manifest.json` | Reference time, counts (total and per `source`), category and band legends, file descriptions, caveats, and the `attribution` lines the data providers require. |
 | `objects.json` | Column-oriented arrays: `norad_id`, `name`, `category` (index into legend), `band`, `object_type`, `perigee_km`, `apogee_km`, `period_min`, `inclination_deg`, `epoch_age_days`, `sgp4_error`. |
 | `elements.bin` | Little-endian float64, 11 values per object: `norad_id`, `epoch_unix_ms`, `mean_motion`, `eccentricity`, `inclination_deg`, `raan_deg`, `arg_perigee_deg`, `mean_anomaly_deg`, `bstar`, `mean_motion_dot`, `mean_motion_ddot`. |
 | `reference.bin` | Little-endian float32, 6 values per object: TEME position (km) and velocity (km/s) at the reference time from the Python sgp4 library, NaN where SGP4 reported an error. |

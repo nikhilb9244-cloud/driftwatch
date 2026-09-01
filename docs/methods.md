@@ -7,10 +7,22 @@ they enter the chain; each states what is assumed, why, and what it costs.
 ## Catalogue
 
 - **Coverage.** CelesTrak groups `active`, `stations`, `starlink`, `oneweb`,
-  `last-30-days` and the Fengyun-1C, Iridium 33 and Cosmos 2251 debris clouds. This is
-  roughly the operational population plus the three largest fragmentation clouds, not the
-  full 30,000-object public catalogue; the rest (older rocket bodies, most debris) comes
-  from Space-Track in a later phase. The snapshot schema already has a `source` column.
+  `last-30-days` and the Fengyun-1C, Iridium 33 and Cosmos 2251 debris clouds, merged
+  with Space-Track's `gp` class (every object with no decay date and an element set from
+  the last 30 days) when credentials are available. Space-Track supplies the older
+  rocket bodies and the debris that belongs to no CelesTrak group, which are the dominant
+  secondaries in screening. Without credentials the snapshot is CelesTrak only, and the
+  fetch log says so. Objects with no element set in 30 days are absent from both sources.
+- **Two sources, one element set per object.** The newest epoch wins per NORAD id; at
+  equal epoch CelesTrak wins the tie. CelesTrak redistributes Space-Track's element sets,
+  so the two sources never disagree about an object at the same epoch; the only effect of
+  the merge is more objects and, for a fraction of the CelesTrak ones, a fresher element
+  set. The `source` column records which.
+- **Redistribution.** Space-Track's user agreement (read 2026-09-01, quoted in
+  `docs/phase2-plan.md`) grants blanket approval to redistribute TLEs and OMMs, SATCAT and
+  decay data with citation. The viewer bundle therefore carries Space-Track-sourced
+  elements and the manifest and the viewer show the attribution. Conjunction Data
+  Messages are not covered and are never fetched.
 - **Element-set age.** Whatever CelesTrak holds at fetch time. The age distribution is
   logged for every snapshot and exported to the viewer per object.
 - **Object type and category.** SATCAT object type is authoritative for debris and

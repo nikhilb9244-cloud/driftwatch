@@ -31,7 +31,9 @@ Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), Node 20+.
 
 ```bash
 uv sync                                   # Python environment
-uv run driftwatch fetch                   # ~10 s; downloads ~20 MB, writes data/snapshots/gp_<stamp>.parquet
+export SPACETRACK_USER=you@example.org    # optional: Space-Track login for the full catalogue
+export SPACETRACK_PASS=...                #   (PowerShell: $env:SPACETRACK_USER = "..."). Never put these in a file.
+uv run driftwatch fetch                   # ~30 s; CelesTrak groups + Space-Track gp, writes data/snapshots/gp_<stamp>.parquet
 uv run driftwatch propagate --at 2026-09-01T12:00:00Z
                                           # ~3 s; writes data/propagated/state_<stamp>.parquet
                                           # and web/public/data/{manifest.json,objects.json,elements.bin,reference.bin}
@@ -39,8 +41,12 @@ cd web && npm install && npm run dev      # open the printed URL
 ```
 
 `uv run driftwatch snapshots` lists what has been fetched. `--offline` on `fetch`
-rebuilds the snapshot from cache without touching the network. Run `uv run pytest` for
-the tests (the first run downloads IERS Earth-orientation data for astropy, about 3 MB).
+rebuilds the snapshot from cache without touching the network; `--spacetrack off` skips
+Space-Track and `--spacetrack on` fails without it (the default uses it when the
+credentials or a cache are present). `uv run driftwatch history --ids 25544,39634
+--start 2024-05-01 --end 2024-05-20` pulls every element set for those objects from
+Space-Track's `gp_history` into `data/history/`. Run `uv run pytest` for the tests (the
+first run downloads IERS Earth-orientation data for astropy, about 3 MB).
 
 ## What you are looking at
 
@@ -54,22 +60,23 @@ hundreds of metres to a few kilometres near the element-set epoch and drift by k
 per day, more in a storm. The viewer's Earth-fixed frame ignores UT1 and polar motion,
 which costs under a pixel. Everything approximate is listed in `docs/methods.md`.
 
-Coverage in Phase 1 is the CelesTrak groups (operational payloads, stations, the
-Starlink and OneWeb constellations, recent launches and the three largest debris clouds),
-roughly 19,000 objects. The remaining rocket bodies and debris that make up the ~30,000
-tracked public objects come from Space-Track in a later phase.
+Coverage is the CelesTrak groups (operational payloads, stations, the Starlink and
+OneWeb constellations, recent launches and the three largest debris clouds), roughly
+19,000 objects, merged with Space-Track's full `gp` catalogue when a login is available,
+which adds the older rocket bodies and the rest of the tracked debris. Each object keeps
+its freshest element set and records which source it came from.
 
 ## Layout
 
 ```
 src/driftwatch/         Python package (CLI: driftwatch)
-  catalogue/            CelesTrak fetch, SATCAT, classification, parquet snapshots
+  catalogue/            CelesTrak and Space-Track fetch, SATCAT, classification, parquet snapshots, history
   orbit/                time, SGP4 propagation, frame conversions
   export/               viewer bundle
 tests/                  pytest
 docs/                   physics background, frames and time, data schema, methods, plan
 web/                    Vite + TypeScript + globe.gl + satellite.js viewer
-data/                   cache, snapshots, propagated states (git-ignored)
+data/                   cache, snapshots, history, propagated states (git-ignored)
 ```
 
 ## Docs
@@ -87,7 +94,13 @@ data/                   cache, snapshots, propagated states (git-ignored)
   is one fetch per group per two hours with a descriptive User-Agent; the fetcher
   enforces both and caches everything. Set `DRIFTWATCH_CONTACT` to add a contact
   address to the User-Agent.
-- Space-Track (later phases) requires registration and has its own user agreement.
+- [Space-Track](https://www.space-track.org) `gp` catalogue and `gp_history`. Free
+  registration. Credentials are read from `SPACETRACK_USER` and `SPACETRACK_PASS` and
+  never written to disk or logs. The client stays under Space-Track's limits (fewer than
+  30 requests a minute and 300 an hour), pulls the catalogue at most every two hours and
+  four times a day, and never repeats a history request. Their user agreement grants
+  blanket approval to redistribute element sets, SATCAT and decay data with citation,
+  which the viewer bundle carries; see `docs/phase2-plan.md` for the quoted text.
 
 ## Licence
 
