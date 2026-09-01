@@ -15,6 +15,10 @@
 # dimensions it was built from; where a deployed dimension is not published the note says
 # what was assumed. Radii are rounded up, never down.
 #
+# Sentinel-1A (39634) was the Sentinel in the first draft of this file. ESA ended its
+# operations on 29 June 2026, so it was swapped for Sentinel-1C on 2026-09-02: a retired
+# satellite being lowered for re-entry is not a manoeuvring, station-kept primary.
+#
 # SAFR objects checked and left out (SATCAT, 2026-09-01): SUNSAT (25636, status "-",
 # Stellenbosch University, 1999) is in orbit but not operational; ZACube-2 (43907) and
 # MDASat-1a/b/c (50995, 51038, 51050) have decayed, as have SumbandilaSat (35870) and
@@ -22,7 +26,7 @@
 schema_version: 1
 name: demo
 description: >
-  ISS, Sentinel-1A, two university cubesats (XI-IV and UWE-3) and the two active South
+  ISS, Sentinel-1C, two university cubesats (XI-IV and UWE-3) and the two active South
   African objects (ZACube-1 and EOS SAT-1).
 members:
   - norad_id: 25544
@@ -41,23 +45,25 @@ members:
       The 1e-4 (red) and 1e-5 (yellow) probability thresholds used in Step 3 are the ones
       NASA applies to this object.
 
-  - norad_id: 39634
-    name: Sentinel-1A
+  - norad_id: 62261
+    name: Sentinel-1C
     role: sentinel
     hard_body_radius_m: 13
     radius_source: >
-      ESA facts and figures: 21 m long, 2.5 m wide, 4 m high with two 10 m solar arrays
-      and a 12 m radar antenna (12.3 m by 0.82 m on the detailed sheet), 2185 kg, 693 km
-      orbit. Deployed envelope taken as 21 x 12.3 x 4 m; half the diagonal is 12.3 m,
-      rounded up to 13 m.
+      Same bus and C-band radar as Sentinel-1A (ESA facts and figures: 21 m long, 2.5 m
+      wide, 4 m high with two 10 m solar arrays and a 12.3 m by 0.82 m radar antenna,
+      about 2300 kg), plus a small AIS receiver antenna. Deployed envelope taken as 21 x
+      12.3 x 4 m; half the diagonal is 12.3 m, rounded up to 13 m.
     manoeuvres: true
     notes: >
-      Station-kept in a tight 693 km sun-synchronous orbit with regular collision-avoidance
-      manoeuvres run by ESA's Space Debris Office; its element set is still at the
-      operational altitude in the 2026-09-01 snapshot. Chosen over the newer 1C and 1D
-      because it has the longest element-set history for the Step 3 covariance fit and a
-      documented in-orbit debris strike (August 2016, solar array). Swapping in another
-      Sentinel is a one-entry change.
+      Launched 5 December 2024 (2024-235A) to replace the failed Sentinel-1B; operational
+      since early 2025, station-kept in the 693 km sun-synchronous Sentinel-1 orbit with
+      regular collision-avoidance manoeuvres run by ESA's Space Debris Office. Takes the
+      place of Sentinel-1A, whose operations ended on 29 June 2026 (ESA, "Time to say
+      goodbye to Sentinel-1A", 30 June 2026); 1A's orbit is to be lowered for re-entry, so
+      its element sets no longer describe a station-kept mission. Sentinel-1C's history
+      runs from December 2024, which covers the 45-day window the Step 3 covariance fit
+      uses. SATCAT status "+", owner ESA, in CelesTrak's active group.
 
   - norad_id: 27848
     name: CubeSat XI-IV (CO-57)

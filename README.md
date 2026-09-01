@@ -26,7 +26,7 @@ What works today:
   between its own SGP4 and the Python reference state at the reference time.
 - `driftwatch fleet fleets/demo.yaml` validates a fleet definition (NORAD ids, hard-body
   radii with their provenance, manoeuvre flags) and shows each member as the latest
-  snapshot knows it. The demo fleet is the ISS, Sentinel-1A, two university cubesats and
+  snapshot knows it. The demo fleet is the ISS, Sentinel-1C, two university cubesats and
   the two active South African objects.
 - Tests cover the official SGP4 verification cases, frame conversions against skyfield,
   a real ISS pass over Durban, the cache rules, the snapshot schema, the export, the

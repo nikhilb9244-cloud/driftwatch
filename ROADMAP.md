@@ -97,6 +97,11 @@ Write. A short paper or a long blog post covering the problem, the method, the t
 
 Milestone. Site live, repository public, write-up published, five pieces of outside feedback received.
 
+Parked for this phase (added 2026-09-02 at the Phase 2 Step 1 review; not to be built before Phase 4):
+
+- A live impacts panel in the viewer driven by NOAA's R (radio blackout), S (solar radiation storm) and G (geomagnetic storm) scales, read from the SWPC JSON feeds that Phase 3 already pulls for Kp, so a visitor sees the current and forecast scale levels next to the conjunction list.
+- An overlay for the May 2024 storm replay showing Starlink round-trip times from public RIPE Atlas probes on Starlink connections, plotted against the Kp bar, so the replay shows what the storm did to a user-facing service alongside what it did to the orbits.
+
 ## Phase 5. Money probes (ongoing)
 
 Goal. Find out what, if anything, someone will pay for.

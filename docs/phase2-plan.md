@@ -208,7 +208,7 @@ repeated runs hit the same cached requests.
 | NORAD | Member | Role | Radius (m) | Manoeuvres | Orbit (2026-09-01) |
 | --- | --- | --- | --- | --- | --- |
 | 25544 | ISS (Zarya) | station | 70 | yes | 417 x 424 km, 51.6 deg |
-| 39634 | Sentinel-1A (ESA) | sentinel | 13 | yes | 690 x 692 km, sun-synchronous |
+| 62261 | Sentinel-1C (ESA) | sentinel | 13 | yes | 692 x 694 km, sun-synchronous |
 | 27848 | CubeSat XI-IV (University of Tokyo) | university_cubesat | 0.4 | no | 804 x 817 km, sun-synchronous |
 | 39446 | UWE-3 (University of Würzburg) | university_cubesat | 0.25 | no | 537 x 606 km, sun-synchronous |
 | 39417 | ZACube-1 / TshepisoSat (CPUT) | safr | 5.1 | no | 530 x 587 km, sun-synchronous |
@@ -217,11 +217,13 @@ repeated runs hit the same cached requests.
 "Active SAFR object" is read as SATCAT operational status `+` plus membership of
 CelesTrak's `active` group. On the 2026-09-01 SATCAT that is exactly ZACube-1 and
 EOS SAT-1. SUNSAT (25636) is still in orbit but marked `-`; every other SAFR entry has
-decayed (ZACube-2, the three MDASat-1s, SumbandilaSat). Sentinel-1A was chosen over 1C
-and 1D for its long element-set history (Step 3 fits from it) and because it is still
-station-kept at the operational altitude. XI-IV sits in the 800 km band where the
-Fengyun-1C and Iridium 33 / Cosmos 2251 fragments are densest; UWE-3 shares ZACube-1's
-launch and orbit, so the two make a natural pair in the report.
+decayed (ZACube-2, the three MDASat-1s, SumbandilaSat). Sentinel-1A was the first choice,
+for its long element-set history and because its element set was still at the operational
+altitude; the Step 1 review asked for its status to be confirmed, and ESA had ended its
+operations on 29 June 2026 (see the Step 1 review below), so the fleet carries Sentinel-1C
+instead. XI-IV sits in the 800 km band where the Fengyun-1C and Iridium 33 / Cosmos 2251
+fragments are densest; UWE-3 shares ZACube-1's launch and orbit, so the two make a
+natural pair in the report.
 
 ### Hard-body radius rule
 
@@ -276,6 +278,24 @@ and asserts the same Stage A survivors. An analyst object with no SATCAT type is
 hazard on an orbit; the only consequences of having no type are that its radar
 cross-section is unknown (Step 3 uses the category default hard-body radius) and that the
 pooled covariance comes from the `unknown` pool for its band.
+
+## Step 1 review (2026-09-02)
+
+Approved: the fleet, the radii and the handling of the `unknown` and `other` objects.
+Two follow-ups:
+
+- **Sentinel-1A is retired.** ESA's "Time to say goodbye to Sentinel-1A" (30 June 2026)
+  records that its operational duties ended on 29 June 2026 after Sentinel-1C and 1D took
+  over, and that its orbit will be lowered over the coming months for re-entry within a
+  few years. Its 2026-09-01 element set still shows 690 x 692 km, but a retired satellite
+  does not manoeuvre to avoid anything, so `manoeuvres: true` would have been wrong.
+  Swapped for Sentinel-1C (62261, 2024-235A, launched 5 December 2024, SATCAT `+`, in the
+  `active` group, 692 x 694 km): the same bus and radar, so the 13 m radius carries over,
+  and its element-set history runs from December 2024, which covers the Step 3 fit window.
+- **Two items parked for Phase 4**, recorded in `ROADMAP.md` under Phase 4 and not to be
+  built before then: a live impacts panel in the viewer driven by NOAA's R, S and G scales
+  from the SWPC feeds Phase 3 already pulls, and a May 2024 replay overlay of Starlink
+  round-trip times from public RIPE Atlas probes against the Kp bar.
 
 ## Later steps in one paragraph each
 
