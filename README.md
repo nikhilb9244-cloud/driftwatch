@@ -87,6 +87,8 @@ data/                   cache, snapshots, history, propagated states (git-ignore
   cost of the browser's shortcut.
 - `docs/data-schema.md`: every column in the snapshot, state and viewer files.
 - `docs/methods.md`: the running list of approximations.
+- `docs/data-sources.md`: each data provider's terms, the Space-Track redistribution
+  clause as checked, and the citation format.
 
 ## Data sources and their rules
 
@@ -99,8 +101,10 @@ data/                   cache, snapshots, history, propagated states (git-ignore
   never written to disk or logs. The client stays under Space-Track's limits (fewer than
   30 requests a minute and 300 an hour), pulls the catalogue at most every two hours and
   four times a day, and never repeats a history request. Their user agreement grants
-  blanket approval to redistribute element sets, SATCAT and decay data with citation,
-  which the viewer bundle carries; see `docs/phase2-plan.md` for the quoted text.
+  blanket approval to redistribute basic SSA data (element sets, SATCAT and decay data)
+  with citation, which the viewer bundle carries; conjunction messages and the emergency
+  and advanced tiers are not covered and are never fetched. See `docs/data-sources.md`
+  for the quoted text, the date it was checked and the citation format.
 
 ## Licence
 

@@ -24,6 +24,7 @@ src/driftwatch/
   catalogue/
     spacetrack.py         Space-Track client: login, rate limiting, gp catalogue, gp_history   (step 0)
     history.py            element-set history store: history parquet files + snapshots       (step 0)
+                          + consolidated index keyed by (NORAD id, epoch); batched backfill  (step 3)
     snapshot.py           build_snapshot() now merges a second source by NORAD id            (step 0)
   fleet.py                fleets/*.yaml loading and validation                                (step 1)
   screening/
@@ -99,38 +100,80 @@ NORAD ids per request, caches each chunk, and writes one `data/history/gph_<stam
 with the element columns of the snapshot schema plus `source` and `fetched_at`.
 `history.load_history()` concatenates the history files with the snapshots and
 de-duplicates on (NORAD id, epoch). Step 3 fits covariance from that table; Phase 3
-replays storms from it. **Ask:** this per-fetch-file layout mirrors the snapshots and
-never rewrites a file; the alternative is one partitioned dataset keyed by NORAD id,
-which is faster to query per object but needs a rewrite on every append. Cheap to
-change later, so it is flagged rather than blocking.
+replays storms from it. The per-fetch-file layout was put to review (the alternative was
+one partitioned dataset keyed by NORAD id); the decision is recorded below.
 
-## Decisions to put to review before Step 3 (constrain Phase 3)
+## Step 0 review (2026-09-01)
 
-### Covariance model interface (**ask**)
+Approved. The redistribution reading was confirmed, and `docs/data-sources.md` now quotes
+the blanket-approval clause, records the date it was checked, states that the approval
+covers basic SSA data only (GP element sets, SATCAT and decay data, not conjunction
+messages nor the emergency and advanced tiers) and gives the citation format. The first
+live pull ran at 2026-09-01 20:48 UTC:
 
-Proposed:
+| Count | |
+| --- | --- |
+| Space-Track `gp` records cached | 32,357 |
+| Objects in the merged snapshot | 32,361 |
+| Objects in no CelesTrak group (Space-Track only) | 13,178 |
+| CelesTrak objects that took a fresher Space-Track element set | 46 |
+
+By category: constellation 1,300; debris 10,232; oneweb 654; payload 6,243; rocket_body
+2,200; starlink 11,094; station 20; unknown 618. By band: geo 870; heo 1,765; leo 27,843;
+meo 625; other 1,258. Space-Track's additions are mostly debris (7,589), payloads (2,639)
+and rocket bodies (2,187), with 9,485 of them in LEO. Element-set age: median 0.43 days,
+p90 1.72 days, max 29.9 days.
+
+## Decisions taken at the Step 0 review (these constrain Phase 3)
+
+### Covariance model interface (decided)
+
+The screener asks for one object's covariance at absolute times, not at intervals,
+because Phase 3 has to look up Kp and density along the real path. The model gets the
+object's identity with its category and band, the epoch of the element set the state
+was propagated from, and the UTC times the covariance is wanted at:
 
 ```python
+@dataclass(frozen=True)
+class ObjectRef:
+    norad_id: int
+    category: str  # snapshot category
+    altitude_band: str  # snapshot altitude band
+
+
+@dataclass(frozen=True)
+class RicCovariance:
+    cov_km2: np.ndarray  # (n, 3, 3) position covariance in the object's own RIC frame
+    source: str  # 'empirical', 'pooled:<category>/<band>', 'default', 'storm:<model>'
+
+
 class CovarianceModel(Protocol):
-    def covariance_ric(self, norad_id: int, dt_s: np.ndarray) -> np.ndarray:
-        """(len(dt_s), 3, 3) position covariance in km^2 in the object's own RIC frame
-        at propagation time dt_s seconds after the element-set epoch."""
-    def source(self, norad_id: int) -> str:
-        """'empirical', 'pooled:<category>/<band>' or 'default'."""
+    def covariance_ric(self, obj: ObjectRef, epoch: datetime, at: np.ndarray) -> RicCovariance:
+        """Covariance of ``obj`` at the absolute UTC times ``at`` (datetime64[us]), given
+        that its state was propagated from the element set with epoch ``epoch``."""
 ```
 
-The screening function takes `covariance: CovarianceModel` as an argument. Phase 3 wraps
-a base model in a `StormCovariance` that adds a variance term to the in-track element
-`[1, 1]` from the drag-driven along-track uncertainty, so the interface returns full
-3-by-3 matrices rather than three sigmas even though the Phase 2 fit is diagonal.
+The model returns a full 3-by-3 matrix per time (the Phase 2 fit is diagonal, Phase 3's is
+not) plus the source label. The screener does the rotation into the encounter plane and
+the combination of the two objects; a model never sees the other object. Phase 3's
+`StormCovariance` wraps a base model, integrates the drag-driven along-track variance
+from `epoch` to each `at` along the object's path, adds it to element `[1, 1]`, and
+labels the result `storm:<model>`.
 
-### Conjunction export schema (**ask**)
+### Conjunction export schema (decided)
 
-Proposed columns for `data/conjunctions/<fleet>_<stamp>.parquet` and the JSON:
+As proposed, plus a run id, the snapshot the run was built from, and a model version,
+with one row per event per scenario so a quiet row and a storm row for the same event
+are directly comparable and reproducible. Columns of
+`data/conjunctions/<fleet>_<stamp>.parquet` and the JSON:
 
-- identity: `event_id`, `scenario` (`quiet` in Phase 2; Phase 3 adds `storm` and
-  `replay:<name>` so several scenarios can share one table), `snapshot`, `primary_norad_id`,
-  `secondary_norad_id`, names and categories of both;
+- run: `run_id` (UTC stamp of the screening run plus a short suffix), `snapshot` (the
+  snapshot file name), `model_version` (driftwatch version plus the covariance model's
+  version string), `scenario` (`quiet` in Phase 2; Phase 3 adds `storm` and
+  `replay:<name>`); (`event_id`, `scenario`) is unique within a run;
+- identity: `event_id` (the same across scenarios: primary, secondary, snapshot and TCA
+  rounded to the minute), `primary_norad_id`, `secondary_norad_id`, names and categories
+  of both;
 - geometry: `tca` (UTC, microseconds), `miss_km`, `rel_speed_kms`, `miss_r_km`,
   `miss_i_km`, `miss_c_km`, `in_box`, `within_watch_radius`;
 - uncertainty: `sigma_r/i/c_primary_km`, `sigma_r/i/c_secondary_km`, `cov_source_primary`,
@@ -140,6 +183,23 @@ Proposed columns for `data/conjunctions/<fleet>_<stamp>.parquet` and the JSON:
 - quality flags: `stale_primary`, `stale_secondary`, `decaying_secondary`,
   `manoeuvrable_primary`, `manoeuvrable_secondary`, `secondary_ephemeris`
   (`gp` or `supplemental`).
+
+### History storage (decided)
+
+One parquet per pull stays. Step 3 adds a consolidated index, `data/history/index.parquet`,
+keyed by (`norad_id`, `epoch`) and recording which file holds each element set, so a
+lookup by object opens only the files that hold it instead of scanning every file. The
+index is derived data: it is updated after every history write and can be rebuilt from
+the files at any time.
+
+### History fetching (decided)
+
+Space-Track accepts comma-separated NORAD ids in one request, so the Step 3 backfill
+batches the fleet members and the Stage A survivors into a few large requests over a
+bounded window of about 45 days ending at the snapshot epoch, rather than one request per
+object. The chunk size rises from 200 ids to as many as fit a URL of about 8,000
+characters; ids are sorted within a chunk and the window is aligned to whole days so
+repeated runs hit the same cached requests.
 
 ## Later steps in one paragraph each
 
@@ -168,7 +228,7 @@ from Python's numbers.
 
 ## Review points
 
-One commit per step, stopping after each: Step 0 (Space-Track and history), Step 1
-(fleets), Step 2 (screening), Step 3 (covariance and probability), Step 4 (outputs and
-viewer). The **ask** items above are raised at the review before the step that builds
-them.
+One commit per step, stopping after each: Step 0 (Space-Track and history, reviewed
+2026-09-01), Step 1 (fleets), Step 2 (screening), Step 3 (covariance and probability),
+Step 4 (outputs and viewer). The **ask** items were raised at the Step 0 review and are
+now recorded as decisions above.

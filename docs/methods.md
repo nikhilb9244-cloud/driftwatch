@@ -19,10 +19,10 @@ they enter the chain; each states what is assumed, why, and what it costs.
   the merge is more objects and, for a fraction of the CelesTrak ones, a fresher element
   set. The `source` column records which.
 - **Redistribution.** Space-Track's user agreement (read 2026-09-01, quoted in
-  `docs/phase2-plan.md`) grants blanket approval to redistribute TLEs and OMMs, SATCAT and
+  `docs/data-sources.md`) grants blanket approval to redistribute TLEs and OMMs, SATCAT and
   decay data with citation. The viewer bundle therefore carries Space-Track-sourced
   elements and the manifest and the viewer show the attribution. Conjunction Data
-  Messages are not covered and are never fetched.
+  Messages and the emergency and advanced tiers are not covered and are never fetched.
 - **Element-set age.** Whatever CelesTrak holds at fetch time. The age distribution is
   logged for every snapshot and exported to the viewer per object.
 - **Object type and category.** SATCAT object type is authoritative for debris and
