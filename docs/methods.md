@@ -31,6 +31,26 @@ they enter the chain; each states what is assumed, why, and what it costs.
 - **Apogee, perigee, period.** Mean-element values from the sgp4 library's
   initialisation (Brouwer mean semi-major axis). They differ from osculating values by
   up to several kilometres. Used only for filtering and the altitude bands.
+- **Category and altitude band are labels, not filters.** Screening candidates are
+  chosen from mean-element apogee and perigee alone (Phase 2, Stage A). `unknown`
+  (objects with no SATCAT type, mostly analyst objects Space-Track has not yet correlated
+  to a launch) and `other` (orbits that straddle the 2,000 km LEO ceiling or sit near or
+  above GEO) stay in the pool. The labels colour the viewer, group the report and choose
+  the pooled covariance fallback.
+
+## Screening (Phase 2)
+
+- **Hard-body radius.** Each fleet member carries the radius of the sphere that encloses
+  its deployed envelope, half the diagonal of the bounding box, rounded up (the
+  "circumscribing sphere" of NASA CARA's guidance). Secondaries get a category default
+  in Step 3. The probability of collision scales with the square of the combined radius,
+  so this is a first-order choice, and the sphere overstates the cross-section of flat or
+  long bodies: the ISS's 70 m sphere is several times its projected area for most
+  approach directions, and ZACube-1's 10 m wire antenna sets a radius seventeen times
+  that of its bus. Every value and its provenance is in `fleets/demo.yaml`.
+- **Manoeuvres.** Not modelled. SGP4 cannot predict a burn; the fleet file flags objects
+  that manoeuvre and Step 2 flags every pair that involves one. An element set issued
+  before a burn is wrong after it by the size of the burn, and the error grows with time.
 
 ## Propagation
 

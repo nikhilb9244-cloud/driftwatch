@@ -1,4 +1,4 @@
-"""Command-line interface: ``driftwatch fetch``, ``propagate``, ``snapshots`` and ``history``."""
+"""Command-line interface: ``driftwatch fetch``, ``propagate``, ``snapshots``, ``history`` and ``fleet``."""
 
 from __future__ import annotations
 
@@ -16,6 +16,7 @@ import pyarrow.parquet as pq
 from driftwatch import __version__, config
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
 from driftwatch.export.viewer import export_viewer_bundle
+from driftwatch.fleet import FleetError, load_fleet, resolve_fleet
 from driftwatch.orbit import frames, propagator
 from driftwatch.orbit.time import parse_utc, stamp
 
@@ -192,6 +193,61 @@ def cmd_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_fleet(args: argparse.Namespace) -> int:
+    """Validate a fleet file and show each member as the latest (or given) snapshot knows it."""
+    try:
+        fleet = load_fleet(args.fleet)
+    except FleetError as exc:
+        log.error("%s", exc)
+        return 2
+    try:
+        path = Path(args.snapshot) if args.snapshot else snapshot.latest_snapshot(config.SNAPSHOT_DIR)
+    except FileNotFoundError as exc:
+        log.warning("%s; showing the fleet file only", exc)
+        for m in fleet:
+            print(f"{m.norad_id:>9d}  {m.name:<28s} r={m.hard_body_radius_m:g} m  manoeuvres={m.manoeuvres}")
+        return 0
+    df = snapshot.read_snapshot(path)
+    now = datetime.now(UTC)
+    resolved = resolve_fleet(fleet, df, now=now)
+    print(f"Fleet {fleet.name!r} ({len(fleet)} members) against {path.name}")
+    shown = resolved.assign(
+        hbr_m=resolved["hard_body_radius_m"],
+        age_d=resolved["epoch_age_days"].round(2),
+        active=resolved["in_active_group"],
+    )[
+        [
+            "norad_id",
+            "name",
+            "role",
+            "hbr_m",
+            "manoeuvres",
+            "in_catalogue",
+            "active",
+            "category",
+            "altitude_band",
+            "perigee_km",
+            "apogee_km",
+            "inclination_deg",
+            "age_d",
+            "source",
+        ]
+    ]
+    with pd.option_context("display.width", 200, "display.max_columns", 30, "display.precision", 2):
+        print(shown.to_string(index=False))
+    missing = resolved.loc[~resolved["in_catalogue"], "norad_id"].tolist()
+    if missing:
+        log.error("%d fleet member(s) are not in the snapshot: %s", len(missing), missing)
+        return 1
+    stale = resolved.loc[resolved["epoch_age_days"] > 5.0, "norad_id"].tolist()
+    if stale:
+        log.warning("Element sets older than five days for %s", stale)
+    inactive = resolved.loc[~resolved["in_active_group"], "norad_id"].tolist()
+    if inactive:
+        log.warning("Not in CelesTrak's active group: %s", inactive)
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The argparse parser for the ``driftwatch`` command."""
     parser = argparse.ArgumentParser(
@@ -239,6 +295,11 @@ def build_parser() -> argparse.ArgumentParser:
     hist.add_argument("--end", required=True, help="last epoch day inclusive (UTC), YYYY-MM-DD")
     hist.add_argument("--offline", action="store_true", help="use only cached gp_history responses")
     hist.set_defaults(func=cmd_history)
+
+    fleet = sub.add_parser("fleet", help="validate a fleet YAML file and show its members in the latest snapshot")
+    fleet.add_argument("fleet", help="fleet file, e.g. fleets/demo.yaml")
+    fleet.add_argument("--snapshot", help="snapshot parquet path (default: latest)")
+    fleet.set_defaults(func=cmd_fleet)
     return parser
 
 

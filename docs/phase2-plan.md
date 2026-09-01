@@ -26,7 +26,7 @@ src/driftwatch/
     history.py            element-set history store: history parquet files + snapshots       (step 0)
                           + consolidated index keyed by (NORAD id, epoch); batched backfill  (step 3)
     snapshot.py           build_snapshot() now merges a second source by NORAD id            (step 0)
-  fleet.py                fleets/*.yaml loading and validation                                (step 1)
+  fleet.py                fleets/*.yaml loading, validation, join to a snapshot               (step 1)
   screening/
     stages.py             Stage A (geometry), Stage B (coarse stepping), Stage C (refine)    (step 2)
     ric.py                RIC frame from a TEME state; relative vectors                       (step 2)
@@ -201,11 +201,83 @@ object. The chunk size rises from 200 ids to as many as fit a URL of about 8,000
 characters; ids are sorted within a chunk and the window is aligned to whole days so
 repeated runs hit the same cached requests.
 
-## Later steps in one paragraph each
+## Step 1 decisions (fleets)
 
-**Step 1.** `fleets/demo.yaml` with NORAD id, display name, hard-body radius in metres
-with its provenance, and a `manoeuvres` flag. Radii from public dimensions, justified in
-the file.
+### `fleets/demo.yaml`
+
+| NORAD | Member | Role | Radius (m) | Manoeuvres | Orbit (2026-09-01) |
+| --- | --- | --- | --- | --- | --- |
+| 25544 | ISS (Zarya) | station | 70 | yes | 417 x 424 km, 51.6 deg |
+| 39634 | Sentinel-1A (ESA) | sentinel | 13 | yes | 690 x 692 km, sun-synchronous |
+| 27848 | CubeSat XI-IV (University of Tokyo) | university_cubesat | 0.4 | no | 804 x 817 km, sun-synchronous |
+| 39446 | UWE-3 (University of Würzburg) | university_cubesat | 0.25 | no | 537 x 606 km, sun-synchronous |
+| 39417 | ZACube-1 / TshepisoSat (CPUT) | safr | 5.1 | no | 530 x 587 km, sun-synchronous |
+| 55053 | EOS SAT-1 (Dragonfly Aerospace) | safr | 1.5 | yes | 454 x 466 km, sun-synchronous |
+
+"Active SAFR object" is read as SATCAT operational status `+` plus membership of
+CelesTrak's `active` group. On the 2026-09-01 SATCAT that is exactly ZACube-1 and
+EOS SAT-1. SUNSAT (25636) is still in orbit but marked `-`; every other SAFR entry has
+decayed (ZACube-2, the three MDASat-1s, SumbandilaSat). Sentinel-1A was chosen over 1C
+and 1D for its long element-set history (Step 3 fits from it) and because it is still
+station-kept at the operational altitude. XI-IV sits in the 800 km band where the
+Fengyun-1C and Iridium 33 / Cosmos 2251 fragments are densest; UWE-3 shares ZACube-1's
+launch and orbit, so the two make a natural pair in the report.
+
+### Hard-body radius rule
+
+The radius of the sphere that encloses the deployed spacecraft, half the diagonal of its
+bounding box, rounded up: the "circumscribing 3D sphere" of NASA's CARA guidance
+(Mashiku and Hejduk, AAS 19-702, 2019). Each entry records the dimensions it was built
+from; where a deployed dimension is not published (EOS SAT-1's panels, UWE-3's antennas)
+the file says what was assumed. Two judgement calls are recorded in the file so a
+reviewer can flip them: the ISS's flat 109 x 73 x 20 m envelope gives 66 m, rounded to
+70 m, which overstates the cross-section for most approach directions; ZACube-1's 10 m
+HF wire antenna sets its radius at 5.1 m, against 0.3 m for the bus and short antennas.
+
+### File format and code
+
+`schema_version`, `name`, `description` and a `members` list; each member has
+`norad_id`, `name`, `hard_body_radius_m`, `radius_source` (mandatory, a sentence),
+`manoeuvres` (a real boolean) and optional `role` and `notes`. Unknown keys are errors so a
+misspelt `manoeuvres` cannot default silently; radii must lie in (0, 1000] m. `fleet.py`
+loads and validates, and `resolve_fleet()` joins the members to a snapshot, reporting
+`in_catalogue`, `in_active_group`, orbit, source and element-set age. `driftwatch fleet
+fleets/demo.yaml` prints that table and exits non-zero when a member is missing from the
+snapshot; Step 2 refuses to screen in that case rather than silently dropping a primary.
+
+### What is in `unknown` and `other`, and why neither matters for screening
+
+Asked at the Step 0 review, on the 2026-09-01 snapshot.
+
+`unknown` (618 objects) is everything with no usable SATCAT type. 568 are named
+`TBA - TO BE ASSIGNED` with no SATCAT row at all: analyst objects that Space-Track tracks
+but has not yet correlated to a launch, 220 in the 80000 series and 348 in the 270000
+series, 508 of them in LEO (median perigee 826 km), 37 in `other` and 23 in `heo`, with
+element sets a median 1.6 days old. The other 50 have SATCAT rows typed `UNK`: 42 pieces
+of launches from 2018 to 2026 still called `OBJECT B` and so on (owner `TBD`, `PRC`,
+`CIS`), and 8 objects from CelesTrak's `last-30-days` group known only by their
+international designator (`2026-188A` to `G`). Classification is by rule 5 of the
+category rules: no debris or rocket-body type, no station or constellation match, no
+`PAY` type, so `unknown`.
+
+`other` (1,258 objects) is every orbit outside the four bands. 429 straddle the 2,000 km
+LEO ceiling with eccentricity at or below 0.25: perigee below 2,000 km and apogee above
+it, 308 of them debris, 47 rocket bodies, 37 payloads, 35 analyst objects. 107 of these
+have a perigee under 600 km and 43 dip below the ISS. The other 829 sit near or above
+GEO but outside the 200 km ring on at least one side: 514 in graveyard orbits (perigee
+above 35,986 km) and 315 old geostationary satellites and Transtage rocket bodies
+drifting on slightly eccentric orbits (perigee 25,870 to 35,984 km).
+
+Neither label removes an object from the screening candidate pool. Stage A (Step 2)
+selects on `perigee_km` and `apogee_km` alone, with the 120 km decay cut; `category` and
+`altitude_band` colour the viewer, group the report and choose the pooled covariance
+fallback in Step 3. Step 2 ships a test that permutes both labels across the catalogue
+and asserts the same Stage A survivors. An analyst object with no SATCAT type is still a
+hazard on an orbit; the only consequences of having no type are that its radar
+cross-section is unknown (Step 3 uses the category default hard-body radius) and that the
+pooled covariance comes from the `unknown` pool for its band.
+
+## Later steps in one paragraph each
 
 **Step 2.** Stage A on mean-element apogee and perigee with a 50 km pad, dropping
 perigee below 120 km (flagged decaying) and flagging element sets older than five days.

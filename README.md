@@ -7,8 +7,10 @@ the moment it matters most. driftwatch will screen a chosen fleet against the wh
 catalogue and show how miss distances and probabilities move under quiet and stormy
 conditions, live and in replay of past storms.
 
-**Status: Phase 1 of 5** (catalogue and globe). See `ROADMAP.md` for the full plan and
-`docs/phase1-plan.md` for what was built, and why, in this phase.
+**Status: Phase 2 of 5 in progress** (conjunction screening; Space-Track merged in and
+the demo fleet defined, screening next). Phase 1 (catalogue and globe) is complete. See
+`ROADMAP.md` for the full plan, `docs/phase1-plan.md` for what Phase 1 built and why, and
+`docs/phase2-plan.md` for the Phase 2 plan and the decisions taken so far.
 
 What works today:
 
@@ -22,8 +24,13 @@ What works today:
   Worker (satellite.js, WebAssembly) so a 48-hour window can be scrubbed and played, filters
   by category and altitude band, and shows details on hover. It reports the disagreement
   between its own SGP4 and the Python reference state at the reference time.
+- `driftwatch fleet fleets/demo.yaml` validates a fleet definition (NORAD ids, hard-body
+  radii with their provenance, manoeuvre flags) and shows each member as the latest
+  snapshot knows it. The demo fleet is the ISS, Sentinel-1A, two university cubesats and
+  the two active South African objects.
 - Tests cover the official SGP4 verification cases, frame conversions against skyfield,
-  a real ISS pass over Durban, the cache rules, the snapshot schema and the export.
+  a real ISS pass over Durban, the cache rules, the snapshot schema, the export, the
+  Space-Track client and the fleet files.
 
 ## Quick start
 
@@ -37,6 +44,7 @@ uv run driftwatch fetch                   # ~30 s; CelesTrak groups + Space-Trac
 uv run driftwatch propagate --at 2026-09-01T12:00:00Z
                                           # ~3 s; writes data/propagated/state_<stamp>.parquet
                                           # and web/public/data/{manifest.json,objects.json,elements.bin,reference.bin}
+uv run driftwatch fleet fleets/demo.yaml  # check the demo fleet against the snapshot
 cd web && npm install && npm run dev      # open the printed URL
 ```
 
@@ -73,8 +81,9 @@ src/driftwatch/         Python package (CLI: driftwatch)
   catalogue/            CelesTrak and Space-Track fetch, SATCAT, classification, parquet snapshots, history
   orbit/                time, SGP4 propagation, frame conversions
   export/               viewer bundle
+fleets/                 YAML fleet definitions (the primaries to screen)
 tests/                  pytest
-docs/                   physics background, frames and time, data schema, methods, plan
+docs/                   physics background, frames and time, data schema, methods, data sources, plans
 web/                    Vite + TypeScript + globe.gl + satellite.js viewer
 data/                   cache, snapshots, history, propagated states (git-ignored)
 ```
@@ -89,6 +98,7 @@ data/                   cache, snapshots, history, propagated states (git-ignore
 - `docs/methods.md`: the running list of approximations.
 - `docs/data-sources.md`: each data provider's terms, the Space-Track redistribution
   clause as checked, and the citation format.
+- `docs/phase2-plan.md`: the Phase 2 plan, the review decisions and the demo fleet.
 
 ## Data sources and their rules
 

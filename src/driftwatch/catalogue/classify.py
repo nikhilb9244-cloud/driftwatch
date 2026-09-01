@@ -11,6 +11,12 @@ Two labels are attached to every object:
 ``altitude_band``
     Where it lives, from mean-element apogee and perigee. Mean elements are not
     osculating ones, so the boundaries are soft by a few kilometres.
+
+Both labels describe; neither selects. Conjunction screening chooses its candidates from
+apogee and perigee alone, so an object labelled ``unknown`` (no SATCAT type, typically an
+analyst object not yet correlated to a launch) or ``other`` (an orbit outside the four
+bands) is screened like any other. The labels colour the viewer, group the report and
+pick the pooled covariance fallback.
 """
 
 from __future__ import annotations

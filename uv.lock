@@ -88,6 +88,7 @@ dependencies = [
     { name = "numpy", version = "2.5.2", source = { registry = "https://pypi.org/simple" }, marker = "python_full_version >= '3.12'" },
     { name = "pandas" },
     { name = "pyarrow" },
+    { name = "pyyaml" },
     { name = "sgp4" },
     { name = "skyfield" },
 ]
@@ -105,6 +106,7 @@ requires-dist = [
     { name = "numpy", specifier = ">=2.4.6" },
     { name = "pandas", specifier = ">=3.0.5" },
     { name = "pyarrow", specifier = ">=25.0.1" },
+    { name = "pyyaml", specifier = ">=6.0" },
     { name = "sgp4", specifier = ">=2.27" },
     { name = "skyfield", specifier = ">=1.55" },
 ]

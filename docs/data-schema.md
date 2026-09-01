@@ -87,6 +87,41 @@ From mean-element apogee and perigee:
 - `meo`: perigee at or above 2,000 km and apogee below 35,586 km.
 - `other`: everything else (graveyard orbits, LEO-to-MEO ellipses, cislunar).
 
+Both labels describe; neither selects. Screening (Phase 2) picks candidates from
+`perigee_km` and `apogee_km` alone, so an object in `unknown` or `other` is screened like
+any other. On the 2026-09-01 snapshot `unknown` (618) was 568 uncatalogued
+`TBA - TO BE ASSIGNED` analyst objects with no SATCAT row and 50 recently launched pieces
+that SATCAT still types `UNK`; `other` (1,258) was 429 orbits straddling the 2,000 km LEO
+ceiling (mostly debris) and 829 orbits near or above GEO but outside the 200 km ring (514
+of them graveyard orbits). The breakdown is in `docs/phase2-plan.md`.
+
+## Fleet definitions: `fleets/<name>.yaml`
+
+The primaries for screening. These are committed to the repository, not generated. One
+YAML document per fleet:
+
+| Key | Type | Meaning |
+| --- | --- | --- |
+| `schema_version` | int | 1. |
+| `name` | string | Short fleet name, used in output file names. |
+| `description` | string | Optional. |
+| `members` | list | One entry per primary, keys below. |
+
+| Member key | Type | Meaning |
+| --- | --- | --- |
+| `norad_id` | int | Catalogue number, unique within the fleet. |
+| `name` | string | Display name. |
+| `hard_body_radius_m` | number | Radius of the sphere that encloses the deployed spacecraft, in metres, in (0, 1000]. |
+| `radius_source` | string | Required. The dimensions the radius came from and what was assumed. |
+| `manoeuvres` | bool | Whether the object performs orbit manoeuvres. Step 2 flags every pair that involves one. |
+| `role` | string | Optional tag: `station`, `sentinel`, `university_cubesat`, `safr`, or anything else. |
+| `notes` | string | Optional. |
+
+Unknown keys are errors, so a misspelt `manoeuvres` cannot silently default.
+`driftwatch fleet fleets/demo.yaml` validates the file and shows each member as the
+latest snapshot knows it (`resolve_fleet()` in `driftwatch.fleet`), flagging members the
+snapshot does not hold.
+
 ## History: `data/history/gph_<YYYYMMDDTHHMMSSZ>.parquet`
 
 One file per `driftwatch history` run, holding every element set Space-Track's
