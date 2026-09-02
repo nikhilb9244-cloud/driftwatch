@@ -16,7 +16,26 @@ Raw downloads, kept verbatim so a snapshot can be rebuilt offline.
   and above.
 
 The fetcher refuses to re-download a group or a supplemental file younger than two hours
-(CelesTrak's rule) or SATCAT younger than a day.
+(CelesTrak's rule) or SATCAT younger than a day. The supplemental cache holds one version
+and overwrites it, which is why every fetch is also stored under `data/supplemental/`
+(below): a run is only reproducible if the element sets it used are still on disk.
+
+## Supplemental versions: `data/supplemental/<name>_<YYYYMMDDTHHMMSSZ>.parquet`
+
+One file per fetched version of a supplemental file, named by the fetch time, which is
+the version stamp a run records. Columns are the element-set columns of the snapshot
+(`norad_id` through `rev_at_epoch`) plus:
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `rms_km` | float64 | CelesTrak's published RMS of the fit of this element set to the operator's ephemeris, in km. The floor under the supplemental covariance. |
+| `fetched_at` | timestamp[us, UTC] | When this version was downloaded; the version stamp comes from it. |
+
+`load_supplemental_history()` concatenates the versions and keeps one row per
+(`norad_id`, `epoch`), so a satellite CelesTrak has not refitted between two fetches
+contributes one row, not two. Step 3 fits the covariance of supplemental-screened objects
+from that table; `driftwatch report` and `driftwatch risk` rebuild a run's element sets
+from its snapshot plus the versions it recorded.
 
 ## Cache: `data/cache/spacetrack/`
 
@@ -164,12 +183,13 @@ events. `driftwatch risk <run> --scenario <name>` adds a scenario without rescre
 
 | File | Content |
 | --- | --- |
-| `run.json` | The run id, snapshot, fleet file, window, screening configuration, per-stage summary and timings, the history backfill result, the covariance fit summary, the scenarios present and one record per scoring (scenario, time, model version, flag counts). |
+| `run.json` | The run id, snapshot, fleet file, window, screening configuration, per-stage summary and timings, the history backfill result, the covariance fit summary, the supplemental versions used and their covariance fit, the scenarios present and one record per scoring (scenario, time, model version, flag counts). |
 | `events.parquet` | Stages A to C: one row per event, the geometry and both TEME states at the time of closest approach (below). Metadata: the snapshot, the run id, the fleet, the configuration and the summary. |
 | `objects.parquet` | One row per object that takes part in any event, plus every fleet member (below). |
 | `covariance.parquet` | The fitted covariance model: one row per object analysed (every Stage A survivor), per (category, band) pool and per default band (below). Rebuilding the model from this table gives the same covariances. |
 | `risk_<scenario>.parquet` | One row per event for that scenario: the sigmas, their sources, the hard-body radius, the encounter-plane covariance, the probabilities, the flag (below). A `replay:may2024` scenario is `risk_replay-may2024.parquet`; the metadata carries the exact name. |
 | `conjunctions.parquet` | The export decided at the Step 0 review: `events` joined with the manoeuvre levels and every risk file, one row per event per scenario (below). Rebuilt whenever a risk file is written. |
+| `report.md` | The weekly report for one scenario: the flagged pairs split by region, the top twenty by probability and by closest approach, a table per fleet member, and how to read the numbers. Repeated encounters of a pair are collapsed to one row with the events underneath. |
 
 An event is kept when its miss vector lies inside the RIC box or its miss distance is
 inside the watch radius.
@@ -214,12 +234,13 @@ inside the watch radius.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
-| `kind` | string | `object`, `pool` or `default`. |
+| `kind` | string | `object`, `pool`, `default`, or `supplemental` for an object screened on an operator ephemeris. |
 | `norad_id`, `category`, `altitude_band` | int64, string, string | The object (with its labels), the pool's labels, or the default's band. |
 | `source` | string | For an object row, the label the model uses for it (empirical, pooled or default); for a pool or default row, its own label; empty for a pool with too few pairs. |
 | `n_objects`, `n_fitted`, `n_sets`, `n_pairs`, `dt_min_days`, `dt_max_days` | int64, float64 | What the fit saw: objects in the pool and how many of them have their own fit, element sets, residual pairs and their propagation-time range. |
 | `sigma_r_1d_km`, `p_r`, `sigma_i_1d_km`, `p_i`, `sigma_c_1d_km`, `p_c` | float64 | The power law per RIC component, `sigma(dt) = sigma_1d * dt^p` with `dt` in days; empty where there is no fit. |
 | `n_jumps`, `n_bad_sets` | int64 | Burns detected and outlier sets dropped for the object. |
+| `rms_km` | float64 | Supplemental rows only: the published fit residual used as the floor under the growth. |
 
 The parquet metadata records the model version (`driftwatch_model_version`) and the
 run id.
@@ -238,7 +259,9 @@ run id.
 | `pc` | float64 | Probability of collision, Foster's integration. |
 | `pc_alfano`, `pc_chan` | float64 | The same integral by Alfano's one-dimensional form (the cross-check) and Chan's series. |
 | `pc_max`, `pc_max_scale` | float64 | The maximum probability over covariance scale factors 0.1 to 10, and the factor at which it occurs. NaN when the sweep was skipped. |
+| `region` | string | `dilution` when `pc_max_scale` is below one (shrinking the covariance would raise the probability), `robust` at or above one, `unknown` when the sweep did not run. |
 | `flag` | string | `red` (`pc >= 1e-4`), `yellow` (`>= 1e-5`) or `none`. |
+| `confidence` | string | `standard` in the robust region, `low` elsewhere. A red or yellow flag with `low` confidence is not actionable; see `docs/screening.md`. |
 | `computed_at` | timestamp[us, UTC] | When this scenario was scored. |
 
 ### `conjunctions.parquet`
@@ -277,3 +300,28 @@ One row per object of the snapshot named in the parquet metadata
 
 The viewer rebuilds OMM records from `elements.bin`, initialises satellite.js with them,
 and reports the largest disagreement with `reference.bin` at the reference time.
+
+### The conjunctions bundle
+
+Written by `driftwatch report` (and by `driftwatch screen` at the end of a run) into the
+same directory. Both files are optional: the globe works without them, and the viewer
+ignores a bundle whose `bundle_version` it does not know.
+
+| File | Content |
+| --- | --- |
+| `conjunctions.json` | The run's identity (run id, snapshot, fleet, model version, scenario, window, supplemental versions), the flag thresholds, every collapsed pair, the events of the pairs a reader can act on, a track index per event and the caveats the panel shows. |
+| `conjunction-tracks.bin` | Little-endian float32 TEME positions in km, ordered event, object (primary then secondary), sample, xyz. `conjunctions.json`'s `tracks` block gives the counts, the 20 s step and the 600 s half-window. |
+
+A pair row carries the event count, the number inside the box, the first time of closest
+approach, the closest miss, the highest probability, the cumulative probability (an upper
+bound; the events are not independent), the maximum probability, the region, the flag,
+the confidence, the manoeuvre level, the ephemeris source and the covariance source. An
+event row carries the geometry, the encounter-plane covariance (`enc_cov_*`), the
+probabilities, the region, the flag and the confidence, plus the index of its track or
+null. Every pair is listed; events are carried for the flagged pairs, the pairs with an
+event inside the notification box and the highest-probability pairs, and the run
+directory holds the rest.
+
+Positions are TEME because that is what SGP4 produces and what the viewer's own
+propagator returns; the browser rotates each sample to the Earth-fixed frame with the
+GMST of that sample's own time, the same way the propagation worker does.

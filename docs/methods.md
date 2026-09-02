@@ -80,8 +80,8 @@ they enter the chain; each states what is assumed, why, and what it costs.
   sampled-minimum fallback catches it. Never triggered on the 2026-09-01 catalogue.
 - **Supplemental Starlink sets are fits to predictions.** CelesTrak fits SGP4 to SpaceX's
   published ephemerides, which include planned manoeuvres. The fit residuals CelesTrak
-  publishes were 0.1 to 5 km per satellite on 2026-09-02, and the ephemeris is revised
-  as plans change. Used for 10,728 of the 11,094 Starlink objects on the first run;
+  publishes with every set (a median of 0.20 km, a 90th percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02) are the floor on how well the set represents
+  that ephemeris, and the ephemeris itself is a prediction revised as plans change. Used for 10,728 of the 11,094 Starlink objects on the first run;
   `secondary_ephemeris` says which set an event used.
 - **Events are geometry; probability is a separate layer.** An event is kept when the
   miss vector lies inside the 2 x 25 x 25 km box or within the 25 km watch radius, and
@@ -112,13 +112,23 @@ they enter the chain; each states what is assumed, why, and what it costs.
   least 30 pairs); an empty pool takes a per-band prior from published TLE-accuracy
   studies. The label travels with every number (`empirical`, `pooled:<category>/<band>`,
   `default:<band>`), so the reader can tell a measured covariance from a borrowed one.
-- **A Starlink secondary's covariance comes from its GP history, its geometry from the
-  supplemental set.** The GP sets of a manoeuvring satellite disagree by about 10 km
-  after a day (the first run's median for Starlink), which measures the manoeuvring
-  rather than the tracking and overstates the supplemental set's error (CelesTrak's
-  published residuals are 0.1 to 5 km). Until a supplemental-set covariance exists,
-  Starlink probabilities are diluted by that sigma; the `cov_source` column and the
-  ephemeris flag say which set fed which number.
+- **An object screened on an operator ephemeris has its covariance fitted from
+  successive supplemental versions, not from its GP history.** Its GP sets disagree by
+  about 10 km a day, which measures its station keeping rather than its tracking and has
+  nothing to do with the set actually propagated. The supplemental fit has its own
+  limits: the versions are hours to days apart, so a power law fitted to them is
+  extrapolated to the seven-day end of the window; no object yet has enough versions of
+  its own, so the growth is pooled across all of them and only the floor is per object;
+  and when the publication gaps span less than a factor of three the exponent is not
+  fitted at all but fixed at one. The label on every covariance says which case applied.
+- **The floor under a supplemental covariance is CelesTrak's published fit residual**
+  (`RMS` in the supplemental file, a median of 0.20 km on 2026-09-02), added in
+  quadrature and split across the RIC components in the proportions of the fitted
+  growth. It measures the element set against the ephemeris it was fitted to, not the
+  ephemeris against reality: an operator's published plan can be revised or abandoned,
+  and nothing here sees that until the next version is published. With only one stored
+  version the floor is the whole covariance, which is a lower bound and is labelled
+  `supplemental:rms` so it can be recognised.
 - **Secondary hard-body radii are category defaults or radar-derived spheres.** 30 m
   station, 10 m Starlink, 3 m OneWeb / constellation / payload, 5 m rocket body, 0.5 m
   debris, 1 m untyped; for payloads, rocket bodies, debris and untyped objects a
@@ -142,11 +152,33 @@ they enter the chain; each states what is assumed, why, and what it costs.
 - **Flags use NASA's ISS thresholds on `pc`.** Red at 1e-4, yellow at 1e-5, on the Foster
   value under the fitted covariance; a different operator's thresholds, or a rule on
   `pc_max`, can be applied to the same rows.
+- **A flag in the dilution region is not actionable.** When the maximum of the
+  probability over covariance scale factors lies below the covariance used
+  (`pc_max_scale` under one), shrinking the uncertainty would raise the probability: the
+  number is held up by the size of the covariance rather than by the geometry. Those
+  events are labelled `region = dilution` and `confidence = low`, and the report and the
+  viewer present them as statements about the uncertainty rather than about the
+  encounter. The first live run's largest probability, the ISS against YAM-3 at 11.5 km
+  seven days out, is one of these: the encounter-plane uncertainty is 13.9 by 0.50 km
+  against an 11.5 km miss, and shrinking the covariance tenfold drops the probability
+  from 1.6e-4 to 7.1e-7. Better data would clear it rather than confirm it.
+  `docs/screening.md` works that example through.
+- **A pair's cumulative probability is an upper bound.** One minus the product of the
+  complements over the pair's events assumes the events are independent. They are
+  repeated passes of the same two objects propagated from the same two element sets, so
+  an error that puts them close on one pass puts them close on the next; the true
+  combined probability is lower. It is labelled as such everywhere it appears.
 - **The Kelvins reconstruction makes two approximations.** The chaser's RTN frame is
   built from the target's with the target's velocity taken as circular, and the
   covariances are used as position-only matrices. The hard-body radius ESA used is
-  fitted, not known. The dataset had not been downloaded when this was written; the
-  reproduction test is skipped until it is.
+  fitted, not known: 9.0 m best reproduces the whole tail, with a median residual of
+  +0.22 in log10 (a factor of 1.7 high) and 43 % of rows within a factor of two. The
+  spread is dominated by ESA having used a radius per object: fitting one radius per
+  quintile of the target's radar cross-section gives 2, 4, 7, 11 and 13 m with the
+  agreement inside each quintile rising to 54 to 66 %, and the dataset gives no size for
+  the chaser at all. Our covariance-scale sweep matches ESA's `max_risk_scaling` exactly
+  as a factor on the covariance (median ratio 0.9999). See `docs/screening.md` and
+  `docs/kelvins-reproduction.md`.
 
 ## Propagation
 
@@ -179,6 +211,20 @@ they enter the chain; each states what is assumed, why, and what it costs.
 
 ## Viewer
 
+- **The conjunctions panel draws Python's numbers and computes nothing.** The pairs, the
+  events, the probabilities, the covariance ellipse and the tracks all come from the
+  exported bundle. The tracks are TEME positions sampled every 20 seconds from the same
+  element sets the screening used, rotated to Earth-fixed in the browser with the GMST
+  of each sample's own time, the same approximation the propagation worker makes (UTC
+  standing in for UT1, no polar motion, under a pixel).
+- **The encounter-plane inset is not to scale in one respect.** The hard-body disc is
+  routinely thousands of times smaller than the covariance, so it is drawn at a minimum
+  size and the caption states the magnification; the ellipse's minor axis has the same
+  floor. The numbers beside the picture are exact.
+- **The panel carries a subset of the events.** Every collapsed pair is listed, but the
+  individual events only for the flagged pairs, the pairs with an event inside the
+  notification box and the highest-probability pairs, with tracks for at most 300 of
+  them. The run directory holds every event.
 - **SGP4 in the browser.** satellite.js 7 (a port of the same Vallado code, tested
   against the same verification cases), run through its WebAssembly bulk propagator in a
   Web Worker. The Python reference state at the reference time is shipped with the bundle

@@ -6,7 +6,8 @@ page, Step 2 of Phase 2); then how an uncertainty is put on every position, how 
 probability of collision is computed on the encounter plane, what the maximum
 probability and the flags mean, and how the probability layer is kept separate from
 the geometry so that a scenario can be rescored without rescreening (the second half,
-Step 3).
+Step 3); then what the weekly report and the viewer's conjunctions panel show, and why
+they collapse repeated encounters (Step 4).
 
 ## The problem
 
@@ -193,7 +194,7 @@ than the GP set is treated as abandoned and the GP set is kept. Every event reco
 which set the secondary carried (`secondary_ephemeris`).
 
 The supplemental sets are better, not true. CelesTrak's published fit residuals
-(`starlink.rms.txt`, 0.1 to 5 km per satellite on 2026-09-02) are the floor on their
+(the ``RMS`` field of every supplemental record: a median of 0.20 km, a 90th percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02) are the floor on their
 error, and the ephemerides are predictions that SpaceX revises. Manoeuvres by anything
 else are not modelled at all; the `manoeuvre_*` columns say, for each side of a pair,
 whether the object is known to manoeuvre, might, or has been seen to (the three-valued
@@ -287,6 +288,46 @@ floored at half a day of propagation time (the fit does not extrapolate below th
 shortest pairs). It is a full 3 x 3 matrix in the interface, because Phase 3's storm
 model will add an in-track term and the interface should not change when it does.
 
+### Objects screened on an operator ephemeris
+
+A Starlink secondary is screened on CelesTrak's supplemental set, a fit to SpaceX's
+published ephemeris, not on its GP element sets. Its GP history is then the wrong thing
+to measure: it records how far the satellite moved from where the tracking-based fits
+said it would go, which is mostly its own station keeping. On the first live run that
+came out at about 10 km a day in-track for the median Starlink satellite, against a few
+hundred metres a day for debris, and it was the manoeuvring being measured, not the
+tracking.
+
+So an object whose geometry comes from a supplemental set gets its covariance from the
+consistency of *successive supplemental versions* instead. Every fetch is stored under
+`data/supplemental/<name>_<stamp>.parquet`, and the fit takes the same form as before:
+propagate an older published set to a newer one's epoch, difference in RIC, and fit a
+power law to the scatter. Two differences from the GP fit:
+
+- **Pairs that span a detected burn are kept.** A supplemental set is fitted to an
+  ephemeris that already contains the planned manoeuvres, so the difference between two
+  versions is a revision of the plan, which is exactly the error being measured.
+- **The window starts much lower.** CelesTrak republishes several times a day, so the
+  pairs are hours to days apart rather than half a day to seven days. No object has
+  enough versions of its own yet, so the residuals are pooled across every supplemental
+  object; because their publication gaps differ, the pool still spans a range of
+  propagation times and the exponent can be fitted. When it does not span a factor of
+  three the exponent is fixed at one and only the scale is fitted, and the label says so.
+
+Under the fitted growth sits a floor: CelesTrak publishes the RMS of each fit to the
+operator's ephemeris in the supplemental file itself (a median of 0.20 km, a 90th
+percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02). That
+disagreement between the element set and the trajectory it was fitted to is invisible to
+any comparison between versions, so it is added in quadrature, split across the RIC
+components in the proportions of the fitted growth. The sources are labelled
+`supplemental:consistency` (or `supplemental:consistency-p1` when the exponent was
+fixed) and `supplemental:rms` when there is only one stored version and the floor is all
+there is.
+
+The floor alone is a lower bound and is treated as one: an event scored on it lands in
+the robust region below, where the maximum-probability sweep shows what a larger
+uncertainty would give.
+
 **History for the fit.** `driftwatch screen` backfills 45 days of `gp_history` before
 the window start for every fleet member and every Stage A survivor, batched into as
 many NORAD ids as fit a 3,500-character request URL (about 450; Space-Track's front end
@@ -296,6 +337,15 @@ every id and day a cached request already covers. A
 consolidated index, `data/history/index.parquet`, records which history file holds each
 (NORAD id, epoch) so that a lookup opens only the files it needs. The fit takes every
 element set in the history store for those objects, the snapshots included.
+
+The backfill is a one-off. Every later run asks only for the days after each object's
+newest stored element set: the index gives that date per object, ids that share one are
+batched into the same request, and an object whose newest set is already past the window
+end is not requested at all. A daily run of the same fleet therefore costs one day of
+history rather than forty-five, and an object that joins the fleet later still gets the
+whole window. The day of the newest set is asked for again rather than skipped, because
+more sets can be published later on the same day; the cached-request chain drops it when
+a previous request already covered it.
 
 ## Manoeuvres: known, possible, observed, none
 
@@ -341,6 +391,15 @@ which average 13 jumps in 45 days, one every three and a half days of station ke
 A robust rule (five median absolute deviations about the median) was tried on the same
 sample and changed the debris rate by a fraction of a percent while halving the Starlink
 count; the simpler rule stays.
+
+**The intervals a burn spans do not reach the covariance fit.** Every pair of element
+sets whose propagation window contains a detected jump is dropped before the residuals
+are formed, along with every pair involving an element set the detector judged an
+outlier. Measured on four heavily manoeuvring Starlink satellites from the first live
+run, between 19 % and 75 % of the pairs inside the fit window were discarded for that
+reason. The check is in `analyse_object`, and `exclude_jumps=False` exists only for the
+supplemental fit above, where a jump is the quantity being measured rather than a
+contaminant.
 
 ## The encounter plane
 
@@ -408,12 +467,60 @@ more consistent than they are accurate, which is the usual case; a scale below o
 the uncertainty already dilutes the probability and a better orbit would raise it.
 This is Alfano's dilution, and it is what the Phase 3 storm term will move.
 
+## The two regions, and what a flag is worth in each
+
+That scale classifies every event, and the classification is the difference between a
+number worth acting on and a number that only describes the uncertainty:
+
+- **Robust** (`pc_max_scale` at or above one). The probability is limited by the
+  geometry. Shrinking the covariance would lower it, so the value in hand is not being
+  propped up by the size of the uncertainty.
+- **Dilution** (`pc_max_scale` below one). Shrinking the covariance would *raise* the
+  probability: the event sits on the falling side of Alfano's curve, where the
+  uncertainty is already large enough to spread the distribution thin. The number says
+  the trajectories are uncertain, not that the objects are likely to meet.
+
+Every event carries `region`, and the flag carries a `confidence`: `standard` in the
+robust region, `low` everywhere else. **A red or yellow flag with low confidence is
+never actionable**, and the report and the viewer say so wherever it appears. This is
+not a way of dismissing awkward results; it is the honest reading of a probability whose
+maximum lies below the covariance that produced it.
+
+### Why the ISS red at 11.5 km is a dilution-region flag
+
+The first live run's largest probability was the ISS against YAM-3, an active payload,
+at a miss of 11.47 km seven days into the window, `pc` 1.6e-4. Seven days out the ISS's
+own element sets disagree by 35 km in-track and YAM-3's by 30 km. Most of that lies
+along the relative velocity and projects out of the encounter plane, leaving a combined
+uncertainty of 13.9 km by 0.50 km in the plane, against a miss of 11.5 km and a combined
+hard-body radius of 73 m. The miss is inside one sigma of the larger axis: the two
+trajectories are, as far as the catalogue can tell, in the same place.
+
+`pc_max_scale` is 0.88, so the covariance is already a little past the peak. Shrinking
+it shows what the flag is worth:
+
+| Covariance scale | `pc` |
+| --- | ---: |
+| 1 (as fitted) | 1.6e-4 |
+| 0.5 | 1.3e-4 |
+| 0.1 | 7.1e-7 |
+| 0.01 | 3.6e-36 |
+
+A tenfold better orbit for either object takes the probability down by a factor of two
+hundred; a hundredfold better one, which is what an operational ephemeris would give for
+the ISS, extinguishes it. The flag is a statement about the public catalogue seven days
+ahead, not about the encounter, and better data would almost certainly clear it rather
+than confirm it. That is why the report puts it under a heading that says so and never
+counts it as actionable. The ISS programme screens its own conjunctions against an
+operational ephemeris and covariance for exactly this reason.
+
 ## Flags
 
 Red at a probability of `1e-4` or above, yellow at `1e-5`, the thresholds the ISS
 programme uses (a yellow starts the planning of an avoidance manoeuvre, a red calls for
 one unless the risk is refined away). The flag is set on `pc`, not on `pc_max`, and
-every row carries both so the reader can apply either rule.
+every row carries both so the reader can apply either rule, together with the region and
+the confidence above.
 
 ## Scenarios: geometry once, probability per scenario
 
@@ -445,10 +552,107 @@ built from the target's with the target's velocity taken as circular, and the
 covariances are used as position-only matrices.
 
 The dataset is not redistributed with driftwatch and has to be downloaded from the
-Kelvins site (registration required) into `data/external/kelvins/`. At the time of
-writing it was not present, so the reproduction test is skipped with a message saying
-so and the command explains where to put the file; the numbers will be added here
-when it has run.
+Kelvins site (registration required) into `data/external/kelvins/`; without it the
+reproduction test is skipped with a message saying where to put the file.
+
+### What it gives
+
+Run on `train_data.csv` (162,634 conjunction messages, 10,183 of them in the tail),
+`driftwatch kelvins` writes `docs/kelvins-reproduction.md`. The headline:
+
+| | |
+| --- | --- |
+| Best single hard-body radius | **9.0 m** |
+| Median residual, log10 of ours over ESA's | **+0.22** (a factor of 1.7 high) |
+| Within a factor of two | 43 % |
+| Within a factor of ten | 80 % |
+| Best-reproduced bin | risk -4 to -3: median -0.17, 58 % within a factor of two |
+| Worst-reproduced bin | risk -6 to -5: median +0.39, 37 % within a factor of two |
+
+The median meets the target of a factor of two across the tail, and the agreement is
+best in the bins where an operator would act. The spread of individual rows does not
+meet it, and the reason is worth stating rather than tuning away.
+
+### Where the disagreement comes from
+
+The residual's strongest correlation in the whole dataset is with the target's radar
+cross-section (Spearman -0.63), far ahead of the time to closest approach (-0.02, so the
+reconstruction is not drifting with propagation), the miss distance (-0.41) or the
+covariance shape (-0.26). A negative correlation with size is what a single fitted
+radius would produce if ESA had used a radius per object: our 9 m is too small for big
+targets, making us under-report, and too large for small ones, making us over-report.
+
+Fitting a radius separately in each quintile of the target's radar cross-section says so
+directly:
+
+| Radar cross-section (m^2) | Rows | Best radius | Median residual | Within x2 |
+| --- | ---: | ---: | ---: | ---: |
+| 0.01 to 2.35 | 2,020 | 2 m | +0.25 | 59 % |
+| 2.35 to 3.23 | 1,981 | 4 m | -0.28 | 54 % |
+| 3.23 to 4.32 | 1,985 | 7 m | 0.00 | 59 % |
+| 4.32 to 4.98 | 2,001 | 11 m | -0.02 | 66 % |
+| 4.98 to 28.0 | 1,975 | 13 m | +0.11 | 60 % |
+
+The fitted radius rises monotonically with object size, from 2 m to 13 m, and the
+agreement inside each quintile is markedly better than the 43 % over the pooled tail.
+ESA used a hard-body radius that scaled with the objects; the dataset publishes the
+target's radar cross-section but nothing at all about the chaser's size, so a
+reproduction from its own columns cannot do better than a population compromise. The
+9 m headline stays as the single-radius answer to the question the prompt asked; the
+table above is the explanation of its spread, not a replacement for it.
+
+One result comes out exactly. Comparing our covariance-scale sweep with ESA's own
+`max_risk_scaling` column, the ratio of the two has a median of 0.9999 when ESA's is
+read as a factor on the covariance, and 0.82 when read as a factor on the standard
+deviation. ESA's scaling is a factor on the covariance, as ours is, and the maximum
+probabilities agree to a median of +0.22 in log10, the same offset as the probabilities
+themselves.
+
+## The report and the viewer
+
+`driftwatch screen` finishes by writing `report.md` in the run directory and the
+viewer's `conjunctions.json` and `conjunction-tracks.bin`; `driftwatch report <run>`
+rewrites both without rescreening.
+
+**Repeated encounters are collapsed.** Two objects in nearby orbits meet every time
+their planes cross, which for a co-orbital pair is every orbit: on the first live run one
+Starlink satellite came back 130 times in a week. Listing all 130 buries the pairs a
+reader should look at, so the report and the panel show one row per pair with the number
+of events, the closest miss, the highest probability and the first time of closest
+approach, and the individual events underneath on demand. The parquet and the JSON keep
+every event, as decided at the Step 2 review.
+
+**A pair also gets a cumulative probability**, one minus the product of the complements
+over its events. It is an upper bound, not a probability: the events of one pair are
+repeated passes of the same two objects propagated from the same two element sets, so a
+position error that puts them close on one pass puts them close on the next. Their
+errors are strongly correlated and the true combined probability is lower than the
+product formula gives. It is reported because a reader comparing a pair seen 130 times
+with a pair seen once needs some measure of the difference, and it is labelled as not
+independent wherever it appears.
+
+**The report** leads with the flagged pairs, split by region: the robust ones first, as
+the pairs worth a second look, then the dilution-region ones under a heading that says
+they are not actionable and why. Then the top twenty pairs by probability, the top twenty
+by closest approach, a table per fleet member, and a section on how to read the numbers
+that names the covariance sources actually used and the supplemental version each run
+screened on.
+
+**The viewer's conjunctions panel** lists the same collapsed pairs with a filter and a
+flagged-only switch. Expanding a pair lists its events; selecting one pauses the clock,
+jumps it to the time of closest approach, highlights both objects in the point cloud,
+draws ten minutes of each object's track either side of the encounter, and opens an inset
+of the encounter plane showing the hard-body disc, the one and three sigma contours of
+the combined covariance and the miss vector, with the probability, the maximum
+probability, its scale, the region and the confidence beside it.
+
+Every number in the panel is Python's. The tracks are exported as TEME positions sampled
+every 20 seconds and rotated to the Earth-fixed frame in the browser with the same GMST
+the propagation worker uses, so a drawn track sits on its moving dot; the browser
+computes no screening result of its own. The bundle carries every pair but the individual
+events only for the flagged pairs, the pairs with an event inside the notification box
+and the highest-probability pairs, which keeps it to a couple of megabytes; the run
+directory holds the rest.
 
 ## References
 

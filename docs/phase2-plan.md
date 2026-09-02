@@ -554,8 +554,9 @@ that set the default priors. Starlink is the outlier: its GP element sets disagr
 10 km after a day because the satellites manoeuvre between fits, so the GP history
 measures the manoeuvring, not the tracking. The events use the supplemental set for a
 Starlink's geometry but the GP history for its covariance, which overstates the
-supplemental set's error (CelesTrak's own residuals are 0.1 to 5 km); a covariance for
-the supplemental sets is a refinement for Step 4 or Phase 3.
+supplemental set's error (CelesTrak's published residuals have a median of 0.20 km); a
+covariance for the supplemental sets is the obvious next refinement, and the Step 3
+review took it.
 
 The pools, after the change to the median of the members' fits (the summed residuals
 had given 48 km for Starlink and 37 km for LEO rocket bodies, both set by a handful of
@@ -644,24 +645,160 @@ What the first run says:
   and Chan drifts only where the docs say it will.
 
 
+## Step 3 review (2026-09-02)
+
+Approved, with four corrections taken before the viewer work.
+
+### 1. Dilution labelling
+
+The scale at which the maximum probability occurs now classifies every event. Below one,
+the event is in the **dilution region**: shrinking the covariance would raise the
+probability, so the number is held up by the size of the uncertainty rather than by the
+geometry and cannot support a judgement. At or above one it is **robust**. Every risk row
+carries `region` and a `confidence` (`low` outside the robust region, `standard` inside),
+the report splits the flagged pairs into two sections with the dilution ones marked not
+actionable, and the viewer's chips read `red · low`.
+
+The ISS red at 11.5 km is worked through in `docs/screening.md` and summarised in
+`docs/methods.md`: seven days out the encounter-plane uncertainty is 13.9 by 0.50 km
+against an 11.5 km miss and a 73 m disc, `pc_max_scale` is 0.88, and shrinking the
+covariance tenfold drops the probability from 1.6e-4 to 7.1e-7 while a hundredfold
+extinguishes it. Better data clears that flag rather than confirming it.
+
+### 2. Supplemental covariance
+
+An object whose geometry comes from a supplemental set is now fitted from the consistency
+of successive stored supplemental versions, never from its GP history, with CelesTrak's
+published fit residual (`RMS` in the file, median 0.20 km) as a floor in quadrature and
+the source labelled `supplemental:consistency`, `supplemental:consistency-p1` (exponent
+fixed because the publication gaps span less than a factor of three) or
+`supplemental:rms` (only one stored version, so the floor is all there is). Pairs that
+span a detected burn are kept for this fit: a supplemental set already contains the
+planned manoeuvres, so the difference between two versions is the revision of the plan,
+which is the error being measured.
+
+**The rescore.** Two versions were stored (the 06:48 UTC fetch the first run used and an
+08:49 UTC one, taken after CelesTrak's two-hour floor had passed), and every one of the
+11,092 satellites had been refitted between them. Of the 1,744 supplemental-screened
+objects in the run's events, 1,742 had a usable pair. The published epochs were 0.02 to
+0.16 days apart, a span of 7.1, enough for the exponent to be fitted rather than fixed:
+
+| | R | I | C |
+| --- | ---: | ---: | ---: |
+| sigma at one day (km) | 0.51 | 2.18 | 0.28 |
+| exponent | 0.85 | 0.55 | 0.85 |
+
+with a median RMS floor of 0.197 km under it. Rescoring the same 5,704 stored events with
+`driftwatch risk --refit` (no rescreening, and no Space-Track requests, since the
+incremental history found everything already held):
+
+| | GP history | Successive supplemental versions |
+| --- | ---: | ---: |
+| Median in-track sigma of a secondary at TCA | 18.4 km | 3.9 km |
+| Red | 2 | 1 |
+| Yellow | 12 | 36 |
+| Flagged pairs in the dilution region | 7 of 14 | 31 of 37 |
+
+**ZACube-1 versus STARLINK-6053 does not survive.** Its probability falls from 1.02e-4 to
+2.46e-5, out of red and into yellow, and its scale of 0.76 puts it in the dilution region,
+so it is now reported at low confidence and is not actionable. The one remaining red is
+the ISS against YAM-3, which is an active payload on GP element sets, not a supplemental
+object, and is unchanged at 1.58e-4 in the dilution region.
+
+The yellows tripled, which is the expected direction and not a regression: a Starlink
+covariance an order of magnitude tighter stops diluting sub-kilometre approaches into
+insignificance, so EOS SAT-1's close passes through the Starlink shell now produce
+probabilities near 1e-5 where before they were smeared away. Most of them are still in the
+dilution region.
+
+Two things to keep in view. The two versions are hours apart, so a power law fitted to
+them and evaluated at seven days is a forty-fold extrapolation, and the in-track exponent
+of 0.55 is measured over that short baseline alone; it should be refitted as versions
+accumulate. And the floor measures the element set against the ephemeris it was fitted to,
+never the ephemeris against reality: an operator's published plan can be revised or
+abandoned, and nothing here sees that until the next version is published.
+
+### 3. Reproducibility
+
+**Why the Step 2 run had 6,016 events and the Step 3 run 5,704, on the same snapshot.**
+The supplemental Starlink sets changed between the two days: the Step 2 run applied
+10,728 of them at a median epoch lag of +0.40 days, the Step 3 run 10,727 at +0.70 days.
+CelesTrak's cache holds one version and overwrites it, so the older sets were gone and
+the difference could not be demonstrated directly. It can now be demonstrated by
+elimination: running the Step 2 commit (`6bab1ee`) and the current code over the same
+snapshot with `--no-supplemental` gives **5,923 events from both, with every time of
+closest approach identical to the microsecond and every miss distance identical to the
+bit**. The geometry code did not change; the operator ephemerides did.
+
+So that a run is reproducible from what it records, every supplemental fetch is now
+stored as `data/supplemental/<name>_<stamp>.parquet` with the published RMS, `run.json`
+and the events parquet record the version used, and `driftwatch report` and
+`driftwatch risk` rebuild a run's element sets from its snapshot plus those stored
+versions rather than from whatever CelesTrak is serving now.
+
+### 4. History
+
+The backfill is a one-off. `history.backfill()` now reads the newest stored epoch per
+object out of the index and asks only for the days after it, batching the ids that share
+a start day; an object already held past the window end is not requested at all, and an
+object new to the fleet still gets the whole window. A daily rerun of the demo fleet
+costs one day of history rather than forty-five.
+
+**Manoeuvre intervals were already excluded from the covariance fit**, as designed: every
+pair of element sets whose propagation window contains a detected jump is dropped, along
+with every pair involving an outlier set. Measured on four heavily manoeuvring Starlink
+satellites from the first run, 19 % to 75 % of the pairs inside the fit window were
+discarded for that reason. No fix was needed; the check is now stated in
+`docs/screening.md` and covered by a test.
+
+## Step 4 decisions (outputs and viewer, built 2026-09-02)
+
+- **Repeated encounters collapse in the report and the viewer, never in the data.** One
+  row per pair with the event count, the closest miss, the highest probability and the
+  first TCA, the individual events underneath on demand (a `<details>` block in the
+  markdown, an expanding row in the panel). The parquet and the JSON keep every event.
+- **A pair's cumulative probability** is one minus the product of the complements over
+  its events, reported beside the highest single probability and labelled an upper bound
+  wherever it appears: the events are repeated passes of the same two objects from the
+  same two element sets, so they are not independent.
+- **The report** (`report.md` in the run directory) leads with the flagged pairs split by
+  region, then the top twenty by probability and by closest approach, a table per fleet
+  member, and a "how to read this" section naming the covariance sources and the
+  supplemental version the run used.
+- **The viewer bundle** is `conjunctions.json` plus `conjunction-tracks.bin` in the
+  viewer's data directory. Every pair is listed; individual events are carried for the
+  flagged pairs, the pairs with an event in the box and the highest-probability pairs
+  (2.6 MB and 0.4 MB for the demo run). Tracks are TEME positions every 20 s over ten
+  minutes either side of the TCA for up to 300 events, rotated to Earth-fixed in the
+  browser with the same GMST the propagation worker uses.
+- **The panel** jumps the clock to the TCA (the clock's window was widened to cover the
+  screening window, which is longer than the propagated one), highlights both objects,
+  draws both tracks and opens the encounter-plane inset with the covariance ellipse, the
+  hard-body disc, the miss vector, the probability, the maximum probability and its
+  scale. The disc is drawn at a minimum size with the magnification stated, because it
+  is routinely thousands of times smaller than the covariance.
+- **The Kelvins reproduction** ran on the full training set: best single hard-body radius
+  9.0 m, median residual +0.22 in log10, 43 % of rows within a factor of two, best in the
+  bins an operator acts on. The spread is explained, not tuned away: the residual
+  correlates with the target's radar cross-section at -0.63, and fitting a radius per
+  quintile of that gives 2, 4, 7, 11 and 13 m with 54 to 66 % within a factor of two
+  inside each. ESA used a radius per object; the dataset gives no size for the chaser.
+  Our covariance-scale sweep matches ESA's `max_risk_scaling` as a factor on the
+  covariance to a median ratio of 0.9999.
+
 ## Later steps in one paragraph each
 
-**Step 2.** Built 2026-09-02, reviewed 2026-09-02; see "Step 2 decisions" above and
-`docs/screening.md`.
+**Step 2.** Built and reviewed 2026-09-02; see "Step 2 decisions" and `docs/screening.md`.
 
-**Step 3.** Built 2026-09-02; see "Step 3 decisions" above and the second half of
-`docs/screening.md`. Outstanding: the Kelvins reproduction once the dataset is in place.
+**Step 3.** Built and reviewed 2026-09-02; see "Step 3 decisions", the Step 3 review
+above and the second half of `docs/screening.md`.
 
-**Step 4.** The JSON export and the weekly markdown report beside the run directory
-(repeated encounters of one pair collapsed to one line with the count, the closest miss,
-the highest probability and the first TCA, expanding on demand), and the viewer's
-conjunctions panel with the encounter-plane inset fed from Python's numbers (the
-`enc_cov_*` columns and the states in `events.parquet` are what it needs).
+**Step 4.** Built 2026-09-02; see "Step 4 decisions" above. Phase 2 is complete.
 
 ## Review points
 
 One commit per step, stopping after each: Step 0 (Space-Track and history, reviewed
 2026-09-01), Step 1 (fleets, reviewed 2026-09-02), Step 2 (screening, reviewed
-2026-09-02), Step 3 (covariance and probability, built 2026-09-02, awaiting review),
-Step 4 (outputs and viewer). The **ask** items were raised at the Step 0 review and are
-now recorded as decisions above.
+2026-09-02), Step 3 (covariance and probability, reviewed 2026-09-02), Step 4 (outputs
+and viewer, built 2026-09-02, awaiting review). The **ask** items were raised at the
+Step 0 review and are recorded as decisions above.

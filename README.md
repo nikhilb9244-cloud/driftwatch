@@ -7,12 +7,12 @@ the moment it matters most. driftwatch will screen a chosen fleet against the wh
 catalogue and show how miss distances and probabilities move under quiet and stormy
 conditions, live and in replay of past storms.
 
-**Status: Phase 2 of 5 in progress** (conjunction screening; Space-Track merged in, the
-demo fleet defined, the three-stage screening running, and every event now carries an
-empirical covariance, a probability of collision and a flag; the report and the viewer
-panel are next). Phase 1 (catalogue and globe) is complete. See `ROADMAP.md` for the
-full plan, `docs/phase1-plan.md` for what Phase 1 built and why, and
-`docs/phase2-plan.md` for the Phase 2 plan and the decisions taken so far.
+**Status: Phase 2 of 5 complete** (conjunction screening: Space-Track merged in, the demo
+fleet defined, three-stage screening, an empirical covariance and a probability of
+collision on every event, a weekly report and a conjunctions panel in the viewer). Phase 1
+(catalogue and globe) is complete. Phase 3 adds the storm layer. See `ROADMAP.md` for the
+full plan, `docs/phase1-plan.md` for what Phase 1 built and why, and `docs/phase2-plan.md`
+for the Phase 2 plan and every decision taken along the way.
 
 What works today:
 
@@ -44,13 +44,28 @@ What works today:
   into a run directory under `data/conjunctions/`: the geometry, the objects, the
   covariance model, one risk file per scenario and the joined export. The demo fleet's
   week takes about four minutes plus the history backfill on a laptop.
+  Every event is labelled `robust` or `dilution` by where the maximum probability sits:
+  a flag in the dilution region is reported at low confidence and never as actionable,
+  because shrinking the covariance would raise it.
 - `driftwatch risk <run> --scenario <name>` rescores a stored run's events with another
   covariance model without rescreening (today a scale factor; Phase 3's storm model
   uses the same interface), so a quiet row and a storm row for the same event sit side
   by side in the export.
+- `driftwatch report <run>` writes the weekly markdown report and the viewer's
+  conjunction bundle. Repeated encounters of one pair are collapsed to a single row with
+  the event count, the closest miss, the highest probability and the first time of
+  closest approach, expanding to the individual events on demand, with a cumulative
+  probability per pair labelled as the upper bound it is.
+- The viewer's conjunctions panel lists those pairs. Selecting an event jumps the clock
+  to the time of closest approach, highlights both objects, draws ten minutes of each
+  track either side and opens an inset of the encounter plane with the covariance
+  ellipse, the hard-body disc, the miss vector and the probabilities. Every number is
+  Python's; the browser computes no screening result.
 - `driftwatch kelvins` reproduces the risk column of ESA's Kelvins Collision Avoidance
-  Challenge data from its own inputs, fitting the hard-body radius, once the dataset is
-  downloaded into `data/external/kelvins/`.
+  Challenge data from its own inputs, fitting the hard-body radius. On the 162,634-row
+  training set the best single radius is 9.0 m and the median residual is a factor of
+  1.7; the spread is explained by ESA having used a radius per object
+  (`docs/kelvins-reproduction.md`).
 - Tests cover the official SGP4 verification cases, frame conversions against skyfield,
   a real ISS pass over Durban, the cache rules, the snapshot schema, the export, the
   Space-Track client, the fleet files, the screening (synthetic conjunctions with a
@@ -78,6 +93,7 @@ uv run driftwatch screen --fleet fleets/demo.yaml --days 7
                                           # ~4 min + the history backfill; writes data/conjunctions/demo_<stamp>/
 uv run driftwatch risk latest --scenario test --scale 3
                                           # rescore the same events with every covariance tripled
+uv run driftwatch report latest           # weekly report + the viewer's conjunctions bundle
 cd web && npm install && npm run dev      # open the printed URL
 ```
 
@@ -117,12 +133,12 @@ src/driftwatch/         Python package (CLI: driftwatch)
   orbit/                time, SGP4 propagation, frame conversions
   screening/            three-stage conjunction screening, RIC frame, supplemental Starlink sets
   risk/                 covariance model and fit, manoeuvre flag, probability of collision, scenarios, Kelvins
-  export/               viewer bundle, conjunction run directory
+  export/               viewer bundle, conjunction run directory, weekly report
 fleets/                 YAML fleet definitions (the primaries to screen)
 tests/                  pytest
 docs/                   physics background, frames and time, data schema, methods, data sources, plans
 web/                    Vite + TypeScript + globe.gl + satellite.js viewer
-data/                   cache, snapshots, history, propagated states (git-ignored)
+data/                   cache, snapshots, history, supplemental versions, conjunction runs (git-ignored)
 ```
 
 ## Docs
@@ -137,6 +153,7 @@ data/                   cache, snapshots, history, propagated states (git-ignore
   element-set consistency and why it is a floor, the manoeuvre flag, the encounter
   plane, the three probability integrators, the dilution maximum and the flags.
 - `docs/methods.md`: the running list of approximations.
+- `docs/kelvins-reproduction.md`: the ESA Kelvins reproduction as the command writes it.
 - `docs/data-sources.md`: each data provider's terms, the Space-Track redistribution
   clause as checked, and the citation format.
 - `docs/phase2-plan.md`: the Phase 2 plan, the review decisions and the demo fleet.
