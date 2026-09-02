@@ -24,12 +24,14 @@ from driftwatch.orbit.time import stamp
 from driftwatch.risk.covariance import CovarianceModel, ObjectRef
 from driftwatch.risk.manoeuvre import manoeuvre_prior
 from driftwatch.risk.pc import (
+    confidences,
     encounter_plane,
     flags,
     max_pc_sweep,
     pc_alfano,
     pc_chan,
     pc_foster,
+    regions,
     rotate_ric_to_teme,
 )
 from driftwatch.screening.ric import ric_basis
@@ -196,7 +198,9 @@ RISK_COLUMNS: tuple[str, ...] = (
     "pc_chan",
     "pc_max",
     "pc_max_scale",
+    "region",
     "flag",
+    "confidence",
     "computed_at",
 )
 __all__ = ["OBJECT_COLUMNS", "RISK_COLUMNS", "STATE_COLUMNS", "apply_history", "objects_from_snapshot", "run_risk"]
@@ -281,6 +285,8 @@ def run_risk(
 
     sig = np.sqrt(np.stack([cov_p[:, 0, 0], cov_p[:, 1, 1], cov_p[:, 2, 2]], axis=1))
     sig_s = np.sqrt(np.stack([cov_s[:, 0, 0], cov_s[:, 1, 1], cov_s[:, 2, 2]], axis=1))
+    region = regions(scale)
+    flag = flags(pc)
     out = pd.DataFrame(
         {
             "run_id": run_id,
@@ -305,20 +311,26 @@ def run_risk(
             "pc_chan": pc_c,
             "pc_max": pc_max,
             "pc_max_scale": scale,
-            "flag": flags(pc).astype(str),
+            "region": region.astype(str),
+            "flag": flag.astype(str),
+            "confidence": confidences(region).astype(str),
             "computed_at": pd.Timestamp(now).tz_convert("UTC"),
         }
     )[list(RISK_COLUMNS)]
     with np.errstate(invalid="ignore", divide="ignore"):
         disagreement = np.abs(pc_a / pc - 1.0)
     meaningful = np.isfinite(disagreement) & (pc > 1e-12)
+    flagged = out["flag"] != "none"
     log.info(
-        "Risk (%s): %d events; %d red, %d yellow; max pc %.2e; "
+        "Risk (%s): %d events; %d red, %d yellow (%d of the %d flagged are in the dilution region, "
+        "reported at low confidence); max pc %.2e; "
         "Foster/Alfano disagreement max %.2e over %d events with pc > 1e-12",
         scenario,
         n,
         int((out["flag"] == "red").sum()),
         int((out["flag"] == "yellow").sum()),
+        int((flagged & (out["region"] == "dilution")).sum()),
+        int(flagged.sum()),
         float(np.nanmax(pc)) if n else float("nan"),
         float(disagreement[meaningful].max()) if meaningful.any() else 0.0,
         int(meaningful.sum()),

@@ -9,15 +9,26 @@ SGP4 element sets to them (its "supplemental" GP data) so that ordinary SGP4 too
 use them.
 
 The fit is not perfect and the ephemeris is a prediction. CelesTrak publishes the RMS of
-each fit (``starlink.rms.txt``): 0.1 to 5 km per satellite when read on 2026-09-02. So a
-supplemental set is better than the GP set for a Starlink secondary, and is still not the
-truth; the output records which set was used (``secondary_ephemeris`` in the events).
+each fit in the ``RMS`` field of every record: a median of 0.20 km, a 90th percentile of
+0.27 km and a worst case of 10.8 km when read on 2026-09-02. Step 3 uses that as the floor
+under a supplemental object's covariance. So a supplemental set is better than the GP set
+for a Starlink secondary, and is still not the truth; the output records which set was
+used (``secondary_ephemeris`` in the events).
 
 This module fetches the file with the same cache and two-hour floor as the GP groups,
 matches its records to a snapshot by NORAD id, and returns a copy of the snapshot with
 the matched objects' elements replaced and an ``ephemeris`` column that says which set
 each object carries. Records for satellites not yet in the public catalogue carry
 placeholder ids above 100000 and match nothing; they are counted and skipped.
+
+Every fetch is also written to ``data/supplemental/<name>_<stamp>.parquet``, one file per
+version, keeping the published RMS of each fit. Two things need that. A run is only
+reproducible if the supplemental sets it used are still on disk: CelesTrak's cache holds
+one version and overwrites it, and the sets change several times a day, so two runs
+against the same catalogue snapshot but different supplemental versions give different
+events (see ``docs/phase2-plan.md``). And the covariance of an object screened on a
+supplemental set has to come from the consistency of successive supplemental sets, not
+from its GP history, which measures its manoeuvring rather than its tracking.
 """
 
 from __future__ import annotations
@@ -33,11 +44,14 @@ from typing import Any
 import httpx
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from driftwatch import config
 from driftwatch.catalogue.celestrak import GroupFetch, fetch_cached
-from driftwatch.catalogue.snapshot import OMM_FIELDS, records_to_frame
+from driftwatch.catalogue.snapshot import OMM_FIELDS, SNAPSHOT_SCHEMA, records_to_frame
 from driftwatch.orbit.propagator import build_satrecs, mean_orbit_geometry
+from driftwatch.orbit.time import parse_utc, stamp
 
 log = logging.getLogger(__name__)
 
@@ -59,6 +73,18 @@ ELEMENT_COLUMNS: tuple[str, ...] = (
 )
 # CelesTrak gives satellites that are not yet in the public catalogue placeholder ids.
 PLACEHOLDER_ID_FLOOR = 100_000
+
+# The element-set columns of the snapshot schema that a stored supplemental version keeps,
+# plus CelesTrak's published RMS of the fit to the operator ephemeris (km) and the fetch time.
+SUPPLEMENTAL_ELEMENT_COLUMNS: tuple[str, ...] = tuple(OMM_FIELDS.values())
+SUPPLEMENTAL_COLUMNS: tuple[str, ...] = (*SUPPLEMENTAL_ELEMENT_COLUMNS, "rms_km", "fetched_at")
+SUPPLEMENTAL_SCHEMA = pa.schema(
+    [
+        *(SNAPSHOT_SCHEMA.field(name) for name in SUPPLEMENTAL_ELEMENT_COLUMNS),
+        pa.field("rms_km", pa.float64()),
+        pa.field("fetched_at", pa.timestamp("us", tz="UTC")),
+    ]
+)
 
 # Fields the supplemental JSON may omit, with the value used when it does.
 _OPTIONAL_FIELDS: dict[str, Any] = {
@@ -118,6 +144,118 @@ def supplemental_frame(records: Sequence[dict[str, Any]]) -> pd.DataFrame:
     return df.sort_values(["norad_id", "epoch"]).drop_duplicates("norad_id", keep="last").reset_index(drop=True)
 
 
+def supplemental_path(name: str, fetched_at: datetime, out_dir: Path = config.SUPPLEMENTAL_DIR) -> Path:
+    """``data/supplemental/<name>_<YYYYMMDDTHHMMSSZ>.parquet``: one file per fetched version."""
+    return Path(out_dir) / f"{name}_{stamp(fetched_at)}.parquet"
+
+
+def version_of(path: Path) -> str:
+    """The version stamp in a stored supplemental file name, e.g. ``20260902T064855Z``."""
+    return path.stem.split("_")[-1]
+
+
+def records_with_rms(records: Sequence[dict[str, Any]], *, fetched_at: datetime) -> pd.DataFrame:
+    """Supplemental records as a stored version: element columns, the published RMS, the fetch time."""
+    df = supplemental_frame(records)
+    if df.empty:
+        return pd.DataFrame({c: pd.Series(dtype="float64") for c in SUPPLEMENTAL_COLUMNS})
+    rms = {int(r["NORAD_CAT_ID"]): r.get("RMS") for r in records}
+    df = df[list(SUPPLEMENTAL_ELEMENT_COLUMNS)].copy()
+    df["rms_km"] = [float(rms[i]) if rms.get(i) not in (None, "") else np.nan for i in df["norad_id"]]
+    df["fetched_at"] = pd.Timestamp(parse_utc(fetched_at))
+    return df
+
+
+def write_supplemental(df: pd.DataFrame, path: Path, *, metadata: dict[str, str] | None = None) -> Path:
+    """Write one supplemental version to parquet, sorted by object."""
+    path.parent.mkdir(parents=True, exist_ok=True)
+    df = df.sort_values("norad_id").reset_index(drop=True)
+    table = pa.Table.from_pandas(df[list(SUPPLEMENTAL_COLUMNS)], schema=SUPPLEMENTAL_SCHEMA, preserve_index=False)
+    meta = {k.encode(): v.encode() for k, v in (metadata or {}).items()}
+    table = table.replace_schema_metadata({**(table.schema.metadata or {}), **meta})
+    pq.write_table(table, path, compression="zstd")
+    log.info("Stored %d supplemental sets as %s", len(df), path.name)
+    return path
+
+
+def store_supplemental(
+    records: Sequence[dict[str, Any]],
+    *,
+    name: str = "starlink",
+    fetched_at: datetime,
+    out_dir: Path = config.SUPPLEMENTAL_DIR,
+) -> tuple[Path, bool]:
+    """Store one fetched version if it is not already on disk; returns the path and whether it was written."""
+    path = supplemental_path(name, fetched_at, out_dir)
+    if path.exists():
+        return path, False
+    df = records_with_rms(records, fetched_at=fetched_at)
+    if df.empty:
+        return path, False
+    write_supplemental(df, path, metadata={"driftwatch_supplemental": name})
+    return path, True
+
+
+def list_supplemental(name: str = "starlink", out_dir: Path = config.SUPPLEMENTAL_DIR) -> list[Path]:
+    """Stored versions of one supplemental file, oldest first."""
+    out_dir = Path(out_dir)
+    if not out_dir.exists():
+        return []
+    return sorted(out_dir.glob(f"{name}_*.parquet"))
+
+
+def read_supplemental(path: Path) -> pd.DataFrame:
+    """Read one stored supplemental version."""
+    df = pq.read_table(path).to_pandas()
+    df["epoch"] = pd.to_datetime(df["epoch"], utc=True)
+    return df
+
+
+def load_supplemental_history(
+    name: str = "starlink",
+    *,
+    norad_ids: Sequence[int] | None = None,
+    out_dir: Path = config.SUPPLEMENTAL_DIR,
+) -> pd.DataFrame:
+    """Every stored supplemental set for ``norad_ids``, one row per (NORAD id, epoch), oldest first.
+
+    Successive versions repeat a set whose epoch has not changed; those collapse to one row,
+    so an object only has several rows once CelesTrak has actually refitted it.
+    """
+    frames = []
+    ids = {int(i) for i in norad_ids} if norad_ids is not None else None
+    for path in list_supplemental(name, out_dir):
+        df = read_supplemental(path)
+        frames.append(df[df["norad_id"].isin(ids)] if ids is not None else df)
+    if not frames:
+        return pd.DataFrame({c: pd.Series(dtype="float64") for c in SUPPLEMENTAL_COLUMNS})
+    out = pd.concat(frames, ignore_index=True)
+    out = out.sort_values(["norad_id", "epoch", "fetched_at"]).drop_duplicates(["norad_id", "epoch"], keep="last")
+    return out.reset_index(drop=True)
+
+
+def supplemental_summary(df: pd.DataFrame) -> dict[str, Any]:
+    """Counts for the log: versions, objects, sets per object, the published RMS."""
+    if df.empty:
+        return {"n_records": 0, "n_objects": 0}
+    per_object = df.groupby("norad_id")["epoch"].size()
+    rms = df["rms_km"].dropna()
+    return {
+        "n_records": int(len(df)),
+        "n_objects": int(df["norad_id"].nunique()),
+        "sets_per_object": {
+            "min": int(per_object.min()),
+            "median": float(per_object.median()),
+            "max": int(per_object.max()),
+        },
+        "rms_km": {
+            "median": round(float(rms.median()), 4) if len(rms) else None,
+            "p90": round(float(rms.quantile(0.9)), 4) if len(rms) else None,
+            "max": round(float(rms.max()), 4) if len(rms) else None,
+        },
+    }
+
+
 @dataclass(frozen=True)
 class SupplementalMatch:
     """What happened when a supplemental file was applied to a snapshot."""
@@ -129,6 +267,8 @@ class SupplementalMatch:
     n_too_old: int  # older than the GP set by more than the allowed lag
     n_applied: int
     epoch_lag_days_median: float  # supplemental epoch minus GP epoch, over the applied rows
+    version: str = ""  # the stored version's stamp, when the records came from one
+    applied_ids: tuple[int, ...] = ()  # the objects whose elements were replaced
 
 
 def apply_supplemental(
@@ -137,6 +277,21 @@ def apply_supplemental(
     *,
     name: str = "starlink",
     max_lag_days: float = config.SUPPLEMENTAL_MAX_LAG_DAYS,
+    version: str = "",
+) -> tuple[pd.DataFrame, SupplementalMatch]:
+    """Substitute supplemental elements from raw records; see :func:`apply_supplemental_frame`."""
+    return apply_supplemental_frame(
+        snapshot, supplemental_frame(records), name=name, max_lag_days=max_lag_days, version=version
+    )
+
+
+def apply_supplemental_frame(
+    snapshot: pd.DataFrame,
+    sup: pd.DataFrame,
+    *,
+    name: str = "starlink",
+    max_lag_days: float = config.SUPPLEMENTAL_MAX_LAG_DAYS,
+    version: str = "",
 ) -> tuple[pd.DataFrame, SupplementalMatch]:
     """Return a copy of ``snapshot`` with supplemental elements substituted where they match.
 
@@ -150,10 +305,10 @@ def apply_supplemental(
     out = snapshot.copy()
     if "ephemeris" not in out.columns:
         out["ephemeris"] = "gp"
-    sup = supplemental_frame(records)
+    sup = sup.sort_values(["norad_id", "epoch"]).drop_duplicates("norad_id", keep="last").reset_index(drop=True)
     n_records = int(len(sup))
     if n_records == 0:
-        match = SupplementalMatch(name, 0, 0, 0, 0, 0, float("nan"))
+        match = SupplementalMatch(name, 0, 0, 0, 0, 0, float("nan"), version)
         log.info("Supplemental %s: no records", name)
         return out, match
 
@@ -168,7 +323,7 @@ def apply_supplemental(
     sup = sup[present]
 
     if sup.empty:
-        match = SupplementalMatch(name, n_records, n_placeholder, n_unmatched, 0, 0, float("nan"))
+        match = SupplementalMatch(name, n_records, n_placeholder, n_unmatched, 0, 0, float("nan"), version)
         log.info(
             "Supplemental %s: nothing applied (%d placeholder ids, %d not in snapshot)",
             name,
@@ -206,6 +361,8 @@ def apply_supplemental(
         n_too_old,
         int(len(rows)),
         float(np.median(lag_days[fresh])) if len(rows) else float("nan"),
+        version,
+        tuple(int(i) for i in out.loc[out.index[rows], "norad_id"]) if len(rows) else (),
     )
     log.info(
         "Supplemental %s: %d records, %d applied, %d placeholder ids, %d not in snapshot, %d too old; "

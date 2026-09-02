@@ -296,10 +296,33 @@ def backfill_window(end: datetime, days: int = config.HISTORY_BACKFILL_DAYS) -> 
     return end_day - timedelta(days=int(days) - 1), end_day
 
 
+def stored_through(norad_ids: Iterable[int], history_dir: Path = config.HISTORY_DIR) -> dict[int, date]:
+    """The day of the newest stored element set for each of ``norad_ids``, from the index."""
+    ids = {int(i) for i in norad_ids}
+    index = load_index(history_dir, rebuild=False)
+    if index.empty or not ids:
+        return {}
+    sub = index[index["norad_id"].isin(ids)]
+    if sub.empty:
+        return {}
+    newest = sub.groupby("norad_id")["epoch"].max()
+    return {int(k): v.date() for k, v in newest.items()}
+
+
 def _needed_ranges(
-    coverage: pd.DataFrame, ids: Sequence[int], start: date, end: date
+    coverage: pd.DataFrame,
+    ids: Sequence[int],
+    start: date,
+    end: date,
+    stored: Mapping[int, date] | None = None,
 ) -> dict[tuple[date, date], list[int]]:
-    """Group ids by the part of ``[start, end]`` that no cached request covers yet.
+    """Group ids by the part of ``[start, end]`` that neither the store nor a cached request covers.
+
+    ``stored`` gives the day of each object's newest stored element set: an object already
+    held through that day only needs the days from it onwards, which is what makes a
+    repeat run an update rather than another backfill. The day itself is asked for again
+    because more sets can be published later the same day; the cached-request chain below
+    then drops it when a previous request already covered it.
 
     For each id the cached requests that include it are walked in order of their start
     day: every request that touches the covered run so far (starts on or before the day
@@ -308,9 +331,13 @@ def _needed_ranges(
     runs therefore ask for one new day per id rather than the whole window again, and a
     window that starts before any coverage is fetched whole (conservative).
     """
+    stored = stored or {}
     groups: dict[tuple[date, date], list[int]] = {}
     if coverage.empty:
-        groups[(start, end)] = [int(i) for i in ids]
+        for i in ids:
+            first = max(start, stored.get(int(i), start))
+            if first <= end:
+                groups.setdefault((first, end), []).append(int(i))
         return groups
     sub = coverage[coverage["norad_id"].isin(ids)]
     intervals = {
@@ -318,7 +345,7 @@ def _needed_ranges(
     }
     one_day = timedelta(days=1)
     for i in ids:
-        cursor = start
+        cursor = max(start, stored.get(int(i), start))
         for s, e in intervals.get(int(i), []):
             if s > cursor:
                 break
@@ -355,25 +382,31 @@ def backfill(
 ) -> BackfillResult:
     """Pull gp_history for ``norad_ids`` over the ``days`` ending on the day of ``end``, in few large requests.
 
-    Ids already covered by cached requests are skipped and partly covered ids ask only
-    for the missing days; the rest are sorted and batched by URL length. Everything
-    fetched is written to one history parquet and added to the index. With ``offline``
-    only cached requests are used and nothing new is asked for.
+    An object that the store already holds is only asked for from its newest stored
+    element set onwards, so the first call for a fleet is a backfill of the whole window
+    and every later call is an update of the days since. Ids already covered by cached
+    requests are skipped and partly covered ids ask only for the missing days; the rest
+    are sorted and batched by URL length. Everything fetched is written to one history
+    parquet and added to the index. With ``offline`` only cached requests are used and
+    nothing new is asked for.
     """
     ids = sorted({int(i) for i in norad_ids})
     start_day, end_day = backfill_window(end, days)
     now = now or datetime.now(UTC)
     coverage = spacetrack.history_coverage(cache_dir)
-    groups = _needed_ranges(coverage, ids, start_day, end_day)
+    stored = stored_through(ids, history_dir)
+    groups = _needed_ranges(coverage, ids, start_day, end_day, stored)
     n_todo = sum(len(v) for v in groups.values())
     log.info(
-        "Backfill %s to %s: %d ids asked for, %d already covered, %d to fetch in %d date range(s)",
+        "History %s to %s: %d ids asked for, %d already held or covered, %d to fetch in %d date range(s) "
+        "(%d ids already in the store)",
         start_day,
         end_day,
         len(ids),
         len(ids) - n_todo,
         n_todo,
         len(groups),
+        len(stored),
     )
     if n_todo == 0:
         return BackfillResult(start_day, end_day, len(ids), len(ids), 0, 0, 0, 0, None)

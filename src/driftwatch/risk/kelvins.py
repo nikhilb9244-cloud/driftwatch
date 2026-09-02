@@ -74,13 +74,19 @@ DEFAULT_RADII_M: np.ndarray = np.arange(1.0, 50.01, 0.5)
 
 
 def find_dataset(kelvins_dir: Path = config.KELVINS_DIR) -> Path | None:
-    """The first CSV that looks like the challenge data under ``kelvins_dir``, or None."""
+    """The challenge CSV under ``kelvins_dir``, or None.
+
+    ``train_data.csv`` is preferred over ``test_data.csv`` (it is the larger half and the
+    one the challenge scored against), and both are looked for one directory down as well,
+    since the download unpacks into a folder of its own.
+    """
     if not kelvins_dir.exists():
         return None
     for name in ("train_data.csv", "test_data.csv"):
-        if (kelvins_dir / name).exists():
-            return kelvins_dir / name
-    csvs = sorted(kelvins_dir.glob("*.csv"))
+        for candidate in (kelvins_dir / name, *sorted(kelvins_dir.glob(f"*/{name}"))):
+            if candidate.exists():
+                return candidate
+    csvs = sorted(kelvins_dir.glob("*.csv")) or sorted(kelvins_dir.glob("*/*.csv"))
     return csvs[0] if csvs else None
 
 
@@ -243,15 +249,25 @@ def compare_max_risk(df: pd.DataFrame, hbr_m: float, *, limit: int | None = 2000
 
 
 def to_markdown(fit: HbrFit, dataset: Path, extra: dict[str, Any] | None = None) -> str:
-    """The reproduction as a short markdown section for the docs."""
+    """The reproduction as a short markdown section for the docs.
+
+    Residuals are ``log10(ours) - log10(ESA's)``, so a factor of two either way is 0.30 and
+    a positive number means driftwatch says the encounter is riskier than ESA did.
+    """
+    overall = fit.report["overall"]
     lines = [
-        f"Dataset: `{dataset.name}`, {fit.n_tail} rows in the tail (risk >= {TAIL_RISK:g}).",
-        f"Best hard-body radius: **{fit.hbr_m:.1f} m** (median absolute residual "
-        f"{fit.report['overall']['median']:+.3f} in log10; {fit.report['overall']['within_factor_two']:.0%} "
-        "within a factor of two).",
+        f"Dataset: `{dataset.name}`, {fit.n_tail} rows in the high-risk tail (risk >= {TAIL_RISK:g}).",
+        "",
+        f"Best hard-body radius: **{fit.hbr_m:.1f} m**, the single radius that best reproduces the whole tail.",
+        "",
+        f"Residual (log10 of ours over ESA's): median **{overall['median']:+.3f}** "
+        f"(a factor of {10 ** abs(overall['median']):.2f} {'high' if overall['median'] > 0 else 'low'}), "
+        f"quartiles {overall['p25']:+.2f} to {overall['p75']:+.2f}, "
+        f"{overall['within_factor_two']:.0%} within a factor of two and "
+        f"{overall['within_factor_ten']:.0%} within a factor of ten.",
         "",
         "| Risk bin | n | median | p05 | p95 | within x2 |",
-        "| --- | --- | --- | --- | --- | --- |",
+        "| --- | ---: | ---: | ---: | ---: | ---: |",
     ]
     for name, st in fit.report["by_risk_bin"].items():
         if st.get("n", 0) == 0:
@@ -262,6 +278,16 @@ def to_markdown(fit: HbrFit, dataset: Path, extra: dict[str, Any] | None = None)
                 f"{st['within_factor_two']:.0%} |"
             )
     if extra:
-        lines.append("")
-        lines.append("Maximum-risk check: " + ", ".join(f"{k} = {v}" for k, v in extra.items()))
+        lines += [
+            "",
+            "Maximum probability and its scaling, against ESA's own columns:",
+            "",
+            f"- {extra['n']} rows compared; the residual of the maximum has median "
+            f"{extra['max_risk_residual_median']:+.3f} and {extra['max_risk_within_factor_two']:.0%} within a "
+            "factor of two.",
+            f"- Our scale factor over ESA's `max_risk_scaling`: median "
+            f"{extra['scale_ratio_median_if_covariance_factor']:.4f} read as a factor on the covariance, "
+            f"{extra['scale_ratio_median_if_sigma_factor']:.4f} read as a factor on the standard deviation. "
+            "The first is one, so ESA's scaling is a factor on the covariance, as ours is.",
+        ]
     return "\n".join(lines)

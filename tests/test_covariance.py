@@ -25,13 +25,17 @@ from driftwatch.risk.covariance import (
     ObjectRef,
     PowerLawGrowth,
     ScaledCovariance,
+    SupplementalCovariance,
     analyse_object,
     fit_covariance,
+    fit_supplemental_covariance,
+    label_cov_sources,
     median_growth,
     sigma_table,
     sufficient_stats,
 )
 from driftwatch.risk.manoeuvre import detect_jumps, manoeuvre_prior, promote
+from driftwatch.screening import supplemental as sup_mod
 
 T0 = datetime(2026, 7, 20, tzinfo=UTC)
 BASE_ID = 90100
@@ -302,3 +306,138 @@ def test_models_satisfy_the_protocol_and_scaling_wraps_a_base_model():
     with pytest.raises(ValueError):
         ScaledCovariance(model, 0.0)
     assert PowerLawGrowth.from_row(DEFAULT_GROWTH["leo"].as_dict()) == DEFAULT_GROWTH["leo"]
+
+
+# --------------------------------------------------------------------------------------
+# The supplemental layer: objects screened on an operator ephemeris get their own uncertainty
+
+
+def supplemental_history_frame(records: list[dict], fetched_at: datetime, rms_km: float = 0.2) -> pd.DataFrame:
+    """The stored-version shape: element columns plus the published RMS and the fetch time."""
+    df = history_frame(records)[list(sup_mod.SUPPLEMENTAL_ELEMENT_COLUMNS)].copy()
+    df["rms_km"] = rms_km
+    df["fetched_at"] = pd.Timestamp(fetched_at)
+    return df
+
+
+def test_supplemental_covariance_is_fitted_from_successive_versions_not_from_gp_history():
+    """Two stored versions per object, published hours apart, give the growth of the operator's plan."""
+    rng = np.random.default_rng(11)
+    # A drag-free truth, so the only difference between the two versions is the designed revision:
+    # with drag on, a set refitted at a later epoch also carries SGP4's own re-initialisation drift.
+    base = base_orbit(bstar=0.0)
+    ids = list(range(90601, 90901))
+    v1_epochs = {i: T0 + timedelta(hours=float(rng.uniform(0, 12))) for i in ids}
+    gaps = {i: float(rng.uniform(0.2, 3.0)) for i in ids}  # days between the two published epochs
+    sigma_per_day = 0.4  # km of in-track drift per day of separation, by construction
+    v1, v2 = [], []
+    for i in ids:
+        v1.extend(history_records(i, lambda t: base, [v1_epochs[i]], rng, bstar=0.0, name=f"SUP {i}"))
+        later = v1_epochs[i] + timedelta(days=gaps[i])
+        # Version two is the same trajectory at the later epoch, displaced in-track by an amount
+        # proportional to the gap: a revision of the plan that grows with how long ago it was published.
+        shift = sigma_per_day * gaps[i] * rng.normal()
+        record = history_records(i, lambda t: base, [later], rng, bstar=0.0, name=f"SUP {i}")[0]
+        record["MEAN_ANOMALY"] = (record["MEAN_ANOMALY"] + np.degrees(shift / semi_major_axis_km())) % 360.0
+        v2.append(record)
+    history = pd.concat(
+        [supplemental_history_frame(v1, T0), supplemental_history_frame(v2, T0 + timedelta(hours=8))],
+        ignore_index=True,
+    )
+
+    fit = fit_supplemental_covariance(EmpiricalCovariance(), history, ids)
+    assert fit.summary["n_versions"] == 2
+    assert fit.summary["n_objects_with_pairs"] == len(ids)
+    assert fit.summary["n_pairs"] == len(ids)
+    assert fit.summary["exponent_fitted"] is True  # the gaps span more than a factor of three
+    assert fit.summary["by_source"] == {"supplemental:consistency": len(ids)}
+    growth = fit.summary["growth"]
+    assert abs(growth["p_i"] - 1.0) <= 0.35  # a drift proportional to the gap
+    assert 0.5 * sigma_per_day < growth["sigma_i_1d_km"] < 2.0 * sigma_per_day
+
+    model = fit.model
+    ref = ObjectRef(ids[0], "starlink", "leo")
+    epoch = T0 + timedelta(days=1)
+    at = np.array([np.datetime64((epoch + timedelta(days=3)).replace(tzinfo=None), "us")])
+    cov = model.covariance_ric(ref, epoch, at)
+    assert cov.source == "supplemental:consistency"
+    sigma_i = float(np.sqrt(cov.cov_km2[0, 1, 1]))
+    assert 0.6 < sigma_i < 3.0  # about three days of drift, not the GP history's tens of kilometres
+    other = model.covariance_ric(ObjectRef(4242, "debris", "leo"), epoch, at)
+    assert other.source == "default:leo"  # anything outside the supplemental set falls through
+    assert isinstance(model, CovarianceModel)
+
+
+def test_supplemental_covariance_without_a_second_version_is_the_published_rms():
+    """One stored version cannot show any growth, so the floor stands alone and says so."""
+    rng = np.random.default_rng(12)
+    base = base_orbit(bstar=0.0)
+    ids = [90701, 90702]
+    records = []
+    for i in ids:
+        records.extend(history_records(i, lambda t: base, [T0], rng, bstar=0.0, name=f"SUP {i}"))
+    history = supplemental_history_frame(records, T0, rms_km=0.25)
+    fit = fit_supplemental_covariance(EmpiricalCovariance(), history, ids)
+    assert fit.summary["n_pairs"] == 0 and fit.summary["growth"] is None
+    assert fit.summary["by_source"] == {"supplemental:rms": 2}
+    at = np.array([np.datetime64((T0 + timedelta(days=5)).replace(tzinfo=None), "us")])
+    cov = fit.model.covariance_ric(ObjectRef(ids[0], "starlink", "leo"), T0, at)
+    assert cov.source == "supplemental:rms"
+    sigma = np.sqrt(np.diag(cov.cov_km2[0]))
+    np.testing.assert_allclose(sigma, 0.25 / np.sqrt(3.0), rtol=1e-9)  # isotropic, flat, the RMS alone
+
+
+def test_the_supplemental_fit_keeps_pairs_that_span_a_burn():
+    """A supplemental set already contains the planned burn, so a jump between versions is the error."""
+    rng = np.random.default_rng(13)
+    base = base_orbit()
+    epochs = epochs_every(12.0, 10.0)
+    t_burn = T0 + timedelta(days=5)
+    after = raised_copy(base, t_burn, 1.0)
+    frame = history_frame(
+        history_records(BASE_ID, lambda t: base if t < t_burn else after, epochs, rng, sigma_n_rel=1e-7)
+    )
+    with_exclusion = analyse_object(frame)
+    without = analyse_object(frame, exclude_jumps=False)
+    assert with_exclusion.jumps.n_jumps == 1
+    assert without.n_pairs > with_exclusion.n_pairs
+    assert without.growth is not None and with_exclusion.growth is not None
+    assert without.growth.sigma_1d_km[1] > with_exclusion.growth.sigma_1d_km[1]
+
+
+def test_the_supplemental_table_round_trips_through_the_covariance_file():
+    rng = np.random.default_rng(14)
+    base = base_orbit(bstar=0.0)
+    ids = [90801, 90802]
+    records = []
+    for k, i in enumerate(ids):
+        for hours in (0.0, 18.0):
+            records.extend(
+                history_records(i, lambda t: base, [T0 + timedelta(hours=hours)], rng, bstar=0.0, name=f"S{k}")
+            )
+    history = supplemental_history_frame(records, T0, rms_km=0.3)
+    fit = fit_supplemental_covariance(EmpiricalCovariance(), history, ids)
+    table = fit.model.to_frame()
+    assert set(table.loc[table["kind"] == "supplemental", "norad_id"]) == set(ids)
+    rebuilt = SupplementalCovariance.from_frame(EmpiricalCovariance(), table)
+    at = np.array([np.datetime64((T0 + timedelta(days=2)).replace(tzinfo=None), "us")])
+    for i in ids:
+        ref = ObjectRef(i, "starlink", "leo")
+        before = fit.model.covariance_ric(ref, T0, at)
+        after = rebuilt.covariance_ric(ref, T0, at)
+        np.testing.assert_allclose(after.cov_km2, before.cov_km2, rtol=1e-9)
+        assert after.source == before.source
+
+
+def test_label_cov_sources_uses_the_model_that_will_serve_each_object():
+    objects = pd.DataFrame(
+        {"norad_id": [90901, 90902], "category": ["starlink", "debris"], "altitude_band": ["leo", "leo"]}
+    )
+    history = supplemental_history_frame(
+        history_records(90901, lambda t: base_orbit(bstar=0.0), [T0], np.random.default_rng(0), bstar=0.0),
+        T0,
+        rms_km=0.1,
+    )
+    model = fit_supplemental_covariance(EmpiricalCovariance(), history, [90901]).model
+    labelled = label_cov_sources(objects, model)
+    assert labelled["cov_source"].tolist() == ["supplemental:rms", "default:leo"]

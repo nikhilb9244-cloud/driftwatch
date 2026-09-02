@@ -32,6 +32,14 @@ the maximum is the honest upper bound.
 
 Flags follow NASA's practice for the ISS: red at a probability of 1e-4 or above, yellow
 at 1e-5 (the level at which the ISS programme starts planning an avoidance manoeuvre).
+
+The scale at which the maximum occurs classifies the event. Below one, the probability
+would rise if the covariance shrank: the uncertainty is already past the peak, the
+probability is being held up by the size of the covariance rather than by the geometry,
+and no judgement about the encounter can rest on it. That is the dilution region, and a
+flag raised there is reported with low confidence and is never actionable. At or above
+one the probability is limited by the geometry rather than by the uncertainty, which is
+the regime the thresholds were written for.
 """
 
 from __future__ import annotations
@@ -297,3 +305,29 @@ def flags(pc: np.ndarray, *, red: float = RED_PC, yellow: float = YELLOW_PC) -> 
         out[pc >= yellow] = "yellow"
         out[pc >= red] = "red"
     return out
+
+
+def regions(scale_at_max: np.ndarray) -> np.ndarray:
+    """``'dilution'`` where the maximum probability lies below the current covariance, else ``'robust'``.
+
+    ``'unknown'`` when the sweep did not run. A scale below one means shrinking the
+    covariance would raise the probability: the event sits on the falling side of
+    Alfano's curve, where a larger uncertainty gives a smaller number and the
+    probability says more about the covariance than about the encounter.
+    """
+    scale = np.asarray(scale_at_max, dtype=float)
+    out = np.full(scale.shape, "unknown", dtype=object)
+    with np.errstate(invalid="ignore"):
+        out[scale >= 1.0] = "robust"
+        out[scale < 1.0] = "dilution"
+    return out
+
+
+def confidences(region: np.ndarray) -> np.ndarray:
+    """``'standard'`` in the robust region, ``'low'`` everywhere else.
+
+    A red or yellow flag with ``'low'`` confidence is a statement about the uncertainty,
+    not about the encounter: it must be reported as such and never acted on.
+    """
+    region = np.asarray(region, dtype=object)
+    return np.where(region == "robust", "standard", "low").astype(object)

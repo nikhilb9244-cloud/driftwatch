@@ -9,6 +9,7 @@ from scipy.integrate import dblquad
 from scipy.stats import ncx2
 
 from driftwatch.risk.pc import (
+    confidences,
     encounter_plane,
     flags,
     max_pc_sweep,
@@ -16,6 +17,7 @@ from driftwatch.risk.pc import (
     pc_chan,
     pc_foster,
     principal_axes,
+    regions,
     rotate_ric_to_teme,
 )
 from driftwatch.screening.ric import ric_basis
@@ -182,6 +184,26 @@ def test_scale_sweep_when_the_uncertainty_is_already_too_large_or_too_small():
 def test_flags_use_the_iss_thresholds():
     pc = np.array([2e-4, 1e-4, 5e-5, 1e-5, 1e-6, np.nan])
     assert flags(pc).tolist() == ["red", "red", "yellow", "yellow", "none", "none"]
+
+
+def test_region_is_dilution_below_a_scale_of_one_and_carries_the_confidence():
+    scale = np.array([0.1, 0.5, 0.999, 1.0, 1.5, 10.0, np.nan])
+    region = regions(scale)
+    assert region.tolist() == ["dilution"] * 3 + ["robust"] * 3 + ["unknown"]
+    assert confidences(region).tolist() == ["low"] * 3 + ["standard"] * 3 + ["low"]
+
+
+def test_the_dilution_region_is_where_shrinking_the_covariance_would_raise_the_probability():
+    """The label has to mean what it says, so check it against the curve rather than the number."""
+    radius = 0.005
+    for sigma, expected in ((0.5, "dilution"), (0.01, "robust")):
+        miss = np.array([[0.3, 0.0]])
+        cov = isotropic(sigma)
+        pc_max, scale, _ = max_pc_sweep(miss, cov, radius)
+        assert regions(scale)[0] == expected
+        smaller = pc_foster(miss, cov * 0.5, radius)[0]
+        here = pc_foster(miss, cov, radius)[0]
+        assert (smaller > here) == (expected == "dilution")
 
 
 # --------------------------------------------------------------------------------------

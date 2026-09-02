@@ -28,6 +28,13 @@ a fit of the same form to the pool's residuals added together; and if even that 
 empty, to a default prior per band taken from the published assessments of TLE
 accuracy. Every covariance reports which was used.
 
+Objects screened on a supplemental set are a special case. Their GP history measures
+how much the satellite manoeuvred between fits, not how well it is tracked, so it says
+nothing about the set actually used. :func:`fit_supplemental_covariance` fits those
+objects from the consistency of successive stored supplemental versions instead, with
+CelesTrak's published fit residual as a floor, and :class:`SupplementalCovariance`
+wraps a base model to serve them.
+
 The covariance is diagonal in the object's own RIC frame in Phase 2. Phase 3 will wrap
 this model and add a storm term to the in-track variance, which is why the interface
 returns a full matrix per time and a source label rather than three numbers.
@@ -65,6 +72,15 @@ MIN_DT_SPAN_RATIO = 3.0
 # below that, a joint fit of the members' residuals with at least this many pairs.
 MIN_FITTED_POOLED = 5
 MIN_PAIRS_POOLED = 30
+# Supplemental versions are published several times a day, so their consistency pairs are
+# hours apart rather than days; the fit window and the floor move down to match.
+SUPPLEMENTAL_DT_MIN_DAYS = 0.02
+SUPPLEMENTAL_DT_FLOOR_DAYS = 0.05
+# A power law fitted over a narrow range of propagation times cannot determine its own
+# exponent; below this span ratio the exponent is fixed at :data:`SUPPLEMENTAL_DEFAULT_P`
+# and only the scale is fitted. One is the shape of a plan revised at a steady rate.
+SUPPLEMENTAL_MIN_SPAN_RATIO = 3.0
+SUPPLEMENTAL_DEFAULT_P = 1.0
 # Pairs per object are capped (random subsample) so that objects with several element sets
 # a day do not dominate the pooled fit and the residual arrays stay small.
 MAX_PAIRS_PER_OBJECT = 600
@@ -181,11 +197,24 @@ class SufficientStats:
         self.dt_min = min(self.dt_min, other.dt_min)
         self.dt_max = max(self.dt_max, other.dt_max)
 
-    def fit(self) -> PowerLawGrowth | None:
-        """The maximum-likelihood power law, or None with no residuals."""
+    @property
+    def span_ratio(self) -> float:
+        """Longest propagation time over shortest: how much of a power law the residuals can see."""
+        return float(self.dt_max / self.dt_min) if self.n and self.dt_min > 0 else 1.0
+
+    def fit(self, *, fixed_p: float | None = None) -> PowerLawGrowth | None:
+        """The maximum-likelihood power law, or None with no residuals.
+
+        With ``fixed_p`` the exponent is not fitted (the residuals span too narrow a range
+        of propagation times to determine one) and only the scale is maximised.
+        """
         if self.n == 0:
             return None
         s = np.maximum(self.s, 1e-30)
+        if fixed_p is not None:
+            k = int(np.argmin(np.abs(P_GRID - fixed_p)))
+            sigma1 = np.sqrt(s[k] / self.n)
+            return PowerLawGrowth(tuple(float(x) for x in sigma1), (float(P_GRID[k]),) * 3)  # type: ignore[arg-type]
         ll = -0.5 * self.n * np.log(s / self.n) - P_GRID[:, None] * self.log_dt_sum
         best = np.argmax(ll, axis=0)
         sigma1 = np.sqrt(s[best, [0, 1, 2]] / self.n)
@@ -250,6 +279,7 @@ def analyse_object(
     min_sets: int = MIN_SETS_EMPIRICAL,
     min_pairs: int = MIN_PAIRS_EMPIRICAL,
     min_span_ratio: float = MIN_DT_SPAN_RATIO,
+    exclude_jumps: bool = True,
 ) -> ObjectHistoryFit:
     """Detect manoeuvres and measure consistency residuals for one object's element sets.
 
@@ -259,6 +289,11 @@ def analyse_object(
     propagation), and the residual pairs are every ``(older, newer)`` pair with a
     propagation time inside ``[dt_min, dt_max]`` days that spans no detected burn and
     involves no outlier set, subsampled to ``max_pairs``.
+
+    ``exclude_jumps=False`` keeps the pairs that span a detected burn. Supplemental sets
+    are fitted to an ephemeris that already contains the planned manoeuvres, so a jump
+    between two of them is a revision of the plan, which is the error being measured
+    rather than something to drop.
     """
     rng = rng or np.random.default_rng(0)
     sets = sets.sort_values("epoch").drop_duplicates("epoch", keep="last").reset_index(drop=True)
@@ -294,8 +329,10 @@ def analyse_object(
     i, j = np.triu_indices(n, 1)
     dt = (t64[j] - t64[i]) / day
     spans_burn = np.concatenate([[0], np.cumsum(jump)])
-    keep = (dt >= dt_min) & (dt <= dt_max) & ok[i, j] & ok[j, j] & ~bad_set[i] & ~bad_set[j]
-    keep &= (spans_burn[j] - spans_burn[i]) == 0
+    keep = (dt >= dt_min) & (dt <= dt_max) & ok[i, j] & ok[j, j]
+    if exclude_jumps:
+        keep &= ~bad_set[i] & ~bad_set[j]
+        keep &= (spans_burn[j] - spans_burn[i]) == 0
     i, j, dt = i[keep], j[keep], dt[keep]
     if len(i) > max_pairs:
         pick = np.sort(rng.choice(len(i), max_pairs, replace=False))
@@ -399,6 +436,113 @@ class EmpiricalCovariance:
         return cls(objects, pools, defaults or None, table=df, **kwargs)
 
 
+@dataclass(frozen=True)
+class FlooredGrowth:
+    """A power law over a floor: ``sigma_k(dt)^2 = (share_k * floor)^2 + (s_k dt^p_k)^2``.
+
+    The floor is CelesTrak's published RMS of the fit of a supplemental element set to
+    the operator ephemeris: the disagreement between the set and the trajectory it was
+    fitted to, which no amount of consistency between versions can see. ``share`` splits
+    that scalar across the RIC components; it is the shape of the fitted growth, or an
+    equal split when there is no growth to take a shape from.
+    """
+
+    growth: PowerLawGrowth
+    floor_km: float
+    share: tuple[float, float, float]
+
+    def sigma_km(self, dt_days: np.ndarray, *, dt_floor_days: float = SUPPLEMENTAL_DT_FLOOR_DAYS) -> np.ndarray:
+        grown = self.growth.sigma_km(dt_days, dt_floor_days=dt_floor_days)
+        floor = np.asarray(self.share, dtype=float)[None, :] * self.floor_km
+        return np.sqrt(grown**2 + floor**2)
+
+    def covariance_km2(self, dt_days: np.ndarray, *, dt_floor_days: float = SUPPLEMENTAL_DT_FLOOR_DAYS) -> np.ndarray:
+        sigma = self.sigma_km(dt_days, dt_floor_days=dt_floor_days)
+        out = np.zeros((len(sigma), 3, 3))
+        out[:, [0, 1, 2], [0, 1, 2]] = sigma**2
+        return out
+
+    def as_dict(self) -> dict[str, float]:
+        return {**self.growth.as_dict(), "rms_km": float(self.floor_km)}
+
+
+class SupplementalCovariance:
+    """A base model with the supplemental-set objects served from their own fit.
+
+    An object screened on a supplemental set is propagated from a fit to the operator's
+    published ephemeris, so its uncertainty is the uncertainty of that ephemeris, not of
+    the GP element sets the catalogue holds for it. Only the objects in ``models`` are
+    treated this way; everything else falls through to ``base``.
+    """
+
+    def __init__(
+        self,
+        base: CovarianceModel,
+        models: Mapping[int, FlooredGrowth] | None = None,
+        sources: Mapping[int, str] | None = None,
+        *,
+        dt_floor_days: float = SUPPLEMENTAL_DT_FLOOR_DAYS,
+        table: pd.DataFrame | None = None,
+    ) -> None:
+        self.base = base
+        self.models = dict(models or {})
+        self.sources = dict(sources or {})
+        self.supplemental_dt_floor_days = float(dt_floor_days)
+        self.table = table
+        self.version = f"{base.version}+supplemental/1"
+
+    @property
+    def dt_floor_days(self) -> float:
+        return getattr(self.base, "dt_floor_days", DT_FLOOR_DAYS)
+
+    def growth_for(self, obj: ObjectRef) -> tuple[Any, str]:
+        """The growth used for ``obj`` and its source label, supplemental objects first."""
+        model = self.models.get(int(obj.norad_id))
+        if model is not None:
+            return model, self.sources.get(int(obj.norad_id), "supplemental")
+        return self.base.growth_for(obj)  # type: ignore[attr-defined]
+
+    def covariance_ric(self, obj: ObjectRef, epoch: datetime, at: np.ndarray) -> RicCovariance:
+        model = self.models.get(int(obj.norad_id))
+        if model is None:
+            return self.base.covariance_ric(obj, epoch, at)
+        at64 = np.asarray(at, dtype="datetime64[us]")
+        epoch_ts = pd.Timestamp(epoch)
+        epoch_ts = epoch_ts.tz_convert(None) if epoch_ts.tzinfo else epoch_ts
+        dt_days = (at64 - np.datetime64(epoch_ts.to_datetime64(), "us")) / np.timedelta64(86_400_000_000, "us")
+        cov = model.covariance_km2(dt_days, dt_floor_days=self.supplemental_dt_floor_days)
+        return RicCovariance(cov, self.sources.get(int(obj.norad_id), "supplemental"))
+
+    def to_frame(self) -> pd.DataFrame:
+        """The base model's table with the supplemental rows appended."""
+        base_table = self.base.to_frame() if hasattr(self.base, "to_frame") else pd.DataFrame()
+        if self.table is None:
+            return base_table
+        return pd.concat([base_table, self.table], ignore_index=True)
+
+    @classmethod
+    def from_frame(cls, base: CovarianceModel, df: pd.DataFrame, **kwargs: Any) -> SupplementalCovariance:
+        """Rebuild the supplemental layer from the rows of :meth:`to_frame` with ``kind == 'supplemental'``."""
+        rows = df[(df["kind"] == "supplemental") & df["sigma_i_1d_km"].notna()]
+        models: dict[int, FlooredGrowth] = {}
+        sources: dict[int, str] = {}
+        for _, row in rows.iterrows():
+            norad_id = int(row["norad_id"])
+            share = _share_from(PowerLawGrowth.from_row(row))
+            models[norad_id] = FlooredGrowth(PowerLawGrowth.from_row(row), float(row.get("rms_km") or 0.0), share)
+            sources[norad_id] = str(row["source"])
+        return cls(base, models, sources, table=rows.reset_index(drop=True), **kwargs)
+
+
+def _share_from(growth: PowerLawGrowth) -> tuple[float, float, float]:
+    """Split a scalar floor across R, I and C in the proportions of a growth law at one day."""
+    s = np.asarray(growth.sigma_1d_km, dtype=float)
+    total = float(np.linalg.norm(s))
+    if not np.isfinite(total) or total <= 0:
+        return (1.0 / np.sqrt(3.0),) * 3  # type: ignore[return-value]
+    return tuple(float(x) for x in s / total)  # type: ignore[return-value]
+
+
 class ScaledCovariance:
     """A base model with every covariance multiplied by a factor: the simplest possible scenario wrapper.
 
@@ -440,6 +584,7 @@ COVARIANCE_TABLE_COLUMNS: tuple[str, ...] = (
     "p_c",
     "n_jumps",
     "n_bad_sets",
+    "rms_km",
 )
 
 
@@ -566,6 +711,121 @@ def fit_covariance(
     }
     log.info("Covariance fit: %s", summary)
     return CovarianceFit(model, table, jumps, summary)
+
+
+@dataclass
+class SupplementalFit:
+    """A fitted supplemental layer, its table and a summary for the log."""
+
+    model: SupplementalCovariance
+    table: pd.DataFrame
+    summary: dict[str, Any]
+
+
+def fit_supplemental_covariance(
+    base: CovarianceModel,
+    history: pd.DataFrame,
+    norad_ids: Iterable[int],
+    *,
+    dt_min: float = SUPPLEMENTAL_DT_MIN_DAYS,
+    dt_max: float = DT_MAX_DAYS,
+    seed: int = 0,
+    default_p: float = SUPPLEMENTAL_DEFAULT_P,
+) -> SupplementalFit:
+    """Fit the objects in ``norad_ids`` from the consistency of successive supplemental versions.
+
+    ``history`` is the stored supplemental history (see
+    :func:`driftwatch.screening.supplemental.load_supplemental_history`): the element
+    columns of the snapshot plus the published ``rms_km``. Every object with two or more
+    stored sets contributes its residuals to one pool, since no object has enough
+    versions of its own yet; the pool's power law is fitted with a free exponent when the
+    propagation times span a factor of :data:`SUPPLEMENTAL_MIN_SPAN_RATIO`, and with the
+    exponent fixed at ``default_p`` when they do not. Every object then gets that growth
+    over its own published RMS as a floor. Objects with no stored history at all get the
+    floor alone, which is a lower bound and is labelled so.
+
+    Pairs that span a detected manoeuvre are kept here, unlike the GP fit: a supplemental
+    set is fitted to an ephemeris that already contains the planned burns, so the
+    difference between two versions is the revision of the plan, which is the error being
+    measured.
+    """
+    rng = np.random.default_rng(seed)
+    ids = sorted({int(i) for i in norad_ids})
+    hist = history[history["norad_id"].isin(ids)] if len(history) else history
+    rms_by_id: dict[int, float] = {}
+    if len(hist):
+        for norad_id, group in hist.groupby("norad_id"):
+            values = group["rms_km"].dropna()
+            if len(values):
+                rms_by_id[int(norad_id)] = float(values.iloc[-1])
+    median_rms = float(np.median(list(rms_by_id.values()))) if rms_by_id else 0.0
+
+    stats = SufficientStats()
+    n_objects_with_pairs = 0
+    by_object = {int(k): g for k, g in hist.groupby("norad_id", sort=False)} if len(hist) else {}
+    for norad_id in ids:
+        sets = by_object.get(norad_id)
+        if sets is None or len(sets) < 2:
+            continue
+        fit = analyse_object(sets, dt_min=dt_min, dt_max=dt_max, rng=rng, exclude_jumps=False)
+        if fit.n_pairs:
+            stats.add(fit.stats)
+            n_objects_with_pairs += 1
+
+    span = stats.span_ratio
+    fixed_p = None if span >= SUPPLEMENTAL_MIN_SPAN_RATIO else default_p
+    growth = stats.fit(fixed_p=fixed_p) if stats.n >= MIN_PAIRS_POOLED else None
+    share = _share_from(growth) if growth is not None else (1.0 / np.sqrt(3.0),) * 3
+    zero = PowerLawGrowth((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
+
+    models: dict[int, FlooredGrowth] = {}
+    sources: dict[int, str] = {}
+    rows: list[dict[str, Any]] = []
+    for norad_id in ids:
+        floor = rms_by_id.get(norad_id, median_rms)
+        if growth is not None:
+            models[norad_id] = FlooredGrowth(growth, floor, share)  # type: ignore[arg-type]
+            label = "supplemental:consistency" if fixed_p is None else f"supplemental:consistency-p{default_p:g}"
+        else:
+            models[norad_id] = FlooredGrowth(zero, floor, share)  # type: ignore[arg-type]
+            label = "supplemental:rms"
+        sources[norad_id] = label
+        rows.append(
+            {
+                "kind": "supplemental",
+                "norad_id": norad_id,
+                "source": label,
+                "n_sets": len(by_object.get(norad_id, [])),
+                **models[norad_id].as_dict(),
+            }
+        )
+
+    table = pd.DataFrame(rows, columns=COVARIANCE_TABLE_COLUMNS)
+    model = SupplementalCovariance(base, models, sources, table=table)
+    summary = {
+        "n_objects": len(ids),
+        "n_versions": int(hist["fetched_at"].nunique()) if len(hist) else 0,
+        "n_objects_with_pairs": n_objects_with_pairs,
+        "n_pairs": int(stats.n),
+        "dt_days": [round(float(stats.dt_min), 3), round(float(stats.dt_max), 3)] if stats.n else None,
+        "span_ratio": round(span, 2) if stats.n else None,
+        "exponent_fitted": fixed_p is None,
+        "growth": growth.as_dict() if growth is not None else None,
+        "rms_km_median": round(median_rms, 4),
+        "by_source": {k: sum(1 for v in sources.values() if v == k) for k in sorted(set(sources.values()))},
+    }
+    log.info("Supplemental covariance: %s", summary)
+    return SupplementalFit(model, table, summary)
+
+
+def label_cov_sources(objects: pd.DataFrame, model: CovarianceModel) -> pd.DataFrame:
+    """Set each object's ``cov_source`` from the model that will actually serve it."""
+    out = objects.copy()
+    out["cov_source"] = [
+        model.growth_for(ObjectRef(int(r.norad_id), str(r.category), str(r.altitude_band)))[1]  # type: ignore[attr-defined]
+        for r in out.itertuples()
+    ]
+    return out
 
 
 def sigma_table(

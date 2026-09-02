@@ -2,6 +2,7 @@
 finds the files that hold an object; the backfill batches, skips what is covered and never re-requests."""
 
 from datetime import UTC, date, datetime, timedelta
+from pathlib import Path
 
 import pandas as pd
 from test_spacetrack import FakeSpaceTrack, spacetrack_records
@@ -155,3 +156,48 @@ def test_backfill_batches_skips_covered_ids_and_asks_only_for_missing_days(omm_r
     assert groups == {(date(2026, 9, 4), date(2026, 9, 5)): ids}
     offline = history.backfill(ids, end=end, days=3, cache_dir=tmp_path, history_dir=hist_dir, offline=True, now=end)
     assert offline.n_requests == 0
+
+
+def test_history_updates_are_incremental_after_the_first_backfill(omm_records, tmp_path):
+    """The backfill is a one-off: later runs ask only for the days after each object's newest stored set."""
+    server = FakeSpaceTrack(spacetrack_records(omm_records[:8]))
+    ids = sorted(int(r["NORAD_CAT_ID"]) for r in server.records[:4])
+    hist_dir = tmp_path / "history"
+    end = datetime(2026, 9, 1, 15, tzinfo=UTC)
+
+    with server.client() as client:
+        kw = dict(cache_dir=tmp_path, history_dir=hist_dir, client=client)
+        first = history.backfill(ids, end=end, days=10, now=end, **kw)
+        assert first.n_requests == 1 and first.n_records == 4
+        stored = history.stored_through(ids, hist_dir)
+        assert set(stored) == set(ids)
+        newest = history.load_history(norad_ids=ids, history_dir=hist_dir, snapshot_dir=tmp_path / "none")
+        for norad_id, day in stored.items():
+            assert day == newest.loc[newest["norad_id"] == norad_id, "epoch"].max().date()
+
+        # A day later: the window start moves back ten days, but the store already holds those
+        # element sets, so only the new day is requested.
+        later = end + timedelta(days=1)
+        update = history.backfill(ids, end=later, days=10, now=later, **kw)
+    paths = server.query_paths()
+    assert update.n_requests == 1 and len(paths) == 2
+    first_start, first_end = paths[0].split("/EPOCH/")[1].split("/")[0].split("--")
+    second_start, second_end = paths[1].split("/EPOCH/")[1].split("/")[0].split("--")
+    assert (first_start, first_end) == ("2026-08-23", "2026-09-02")  # ten days, the whole window
+    assert second_start > first_start and second_end == "2026-09-03"  # only what the store lacks
+    assert (later.date() - date.fromisoformat(second_start)).days <= 30
+
+
+def test_needed_ranges_starts_from_the_newest_stored_set_per_object():
+    coverage = pd.DataFrame({"norad_id": pd.Series(dtype="int64"), "start": [], "end": []})
+    ids = [1, 2, 3]
+    stored = {1: date(2026, 8, 30), 2: date(2026, 9, 3)}
+    groups = history._needed_ranges(coverage, ids, date(2026, 8, 20), date(2026, 9, 2), stored)
+    # Object 1 needs the days from its newest set; object 2 is already past the window end and is
+    # skipped; object 3 has nothing stored and needs the whole window.
+    assert groups == {(date(2026, 8, 30), date(2026, 9, 2)): [1], (date(2026, 8, 20), date(2026, 9, 2)): [3]}
+    assert history._needed_ranges(coverage, ids, date(2026, 8, 20), date(2026, 9, 2), {}) == {
+        (date(2026, 8, 20), date(2026, 9, 2)): [1, 2, 3]
+    }
+    assert history.stored_through([1, 2], tmp_history_dir := Path("data/history-does-not-exist")) == {}
+    assert not tmp_history_dir.exists()

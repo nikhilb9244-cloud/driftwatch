@@ -19,6 +19,7 @@ CACHE_DIR = DATA_DIR / "cache"
 SNAPSHOT_DIR = DATA_DIR / "snapshots"
 PROPAGATED_DIR = DATA_DIR / "propagated"
 HISTORY_DIR = DATA_DIR / "history"
+SUPPLEMENTAL_DIR = DATA_DIR / "supplemental"
 CONJUNCTION_DIR = DATA_DIR / "conjunctions"
 EXTERNAL_DIR = DATA_DIR / "external"
 # ESA's Kelvins Collision Avoidance Challenge data, if downloaded (see risk/kelvins.py).

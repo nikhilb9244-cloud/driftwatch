@@ -13,6 +13,8 @@ data/snapshots/
 data/propagated/
 data/history/
 data/conjunctions/
+data/supplemental/
+data/external/
 web/public/data/*
 !web/public/data/.gitkeep
 

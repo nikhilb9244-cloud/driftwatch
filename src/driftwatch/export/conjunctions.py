@@ -68,7 +68,9 @@ EXPORT_COLUMNS: tuple[str, ...] = (
     "pc_chan",
     "pc_max",
     "pc_max_scale",
+    "region",
     "flag",
+    "confidence",
     "stale_primary",
     "stale_secondary",
     "manoeuvre_primary",
@@ -109,8 +111,8 @@ class RunDirectory:
         self.path = Path(path)
 
     @classmethod
-    def for_run(cls, fleet_name: str, start: datetime, out_dir: Path = config.CONJUNCTION_DIR) -> RunDirectory:
-        return cls(Path(out_dir) / f"{fleet_name}_{stamp(start)}")
+    def for_run(cls, fleet_name: str, start: datetime, out_dir: Path | None = None) -> RunDirectory:
+        return cls(Path(out_dir or config.CONJUNCTION_DIR) / f"{fleet_name}_{stamp(start)}")
 
     @property
     def name(self) -> str:

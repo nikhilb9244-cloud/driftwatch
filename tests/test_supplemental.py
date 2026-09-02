@@ -115,3 +115,61 @@ def test_apply_with_nothing_matching_is_a_no_op(omm_records):
     out2, match2 = apply_supplemental(snap, [])
     assert match2.n_records == 0 and (out2["ephemeris"] == "gp").all()
     pd.testing.assert_frame_equal(out2.drop(columns="ephemeris"), snap)
+
+
+# --------------------------------------------------------------------------------------
+# The version store (Step 4): a run is only reproducible if the sets it used are kept
+
+
+def _with_rms(records, rms=0.2):
+    return [{**r, "RMS": rms + 0.01 * k} for k, r in enumerate(records)]
+
+
+def test_every_fetched_version_is_stored_once_and_reads_back(omm_records, tmp_path):
+    records = _with_rms(omm_records[:5])
+    t1 = datetime(2026, 9, 2, 6, 48, 55, tzinfo=UTC)
+    path, written = supplemental.store_supplemental(records, name="starlink", fetched_at=t1, out_dir=tmp_path)
+    assert written and path.name == "starlink_20260902T064855Z.parquet"
+    assert supplemental.version_of(path) == "20260902T064855Z"
+    again = supplemental.store_supplemental(records, name="starlink", fetched_at=t1, out_dir=tmp_path)
+    assert again == (path, False)  # the same fetch is not stored twice
+
+    back = supplemental.read_supplemental(path)
+    assert list(back.columns) == list(supplemental.SUPPLEMENTAL_COLUMNS)
+    assert len(back) == 5 and back["norad_id"].is_monotonic_increasing
+    assert back["rms_km"].iloc[0] == pytest.approx(0.2)
+    assert str(back["epoch"].dtype).endswith("UTC]")
+
+    # A later version whose sets have moved on adds rows; an unchanged set collapses.
+    moved = [{**r, "EPOCH": "2026-09-03T00:00:00.000000"} for r in records[:3]]
+    t2 = t1 + timedelta(hours=8)
+    supplemental.store_supplemental(_with_rms(moved) + records[3:], name="starlink", fetched_at=t2, out_dir=tmp_path)
+    assert len(supplemental.list_supplemental("starlink", tmp_path)) == 2
+    history = supplemental.load_supplemental_history("starlink", out_dir=tmp_path)
+    assert len(history) == 8  # three objects have two epochs each, two are unchanged
+    per_object = history.groupby("norad_id")["epoch"].size()
+    assert sorted(per_object.tolist()) == [1, 1, 2, 2, 2]
+    summary = supplemental.supplemental_summary(history)
+    assert summary["n_objects"] == 5 and summary["sets_per_object"]["max"] == 2
+    assert summary["rms_km"]["median"] == pytest.approx(0.22, abs=0.02)
+
+    one = supplemental.load_supplemental_history("starlink", norad_ids=[history["norad_id"].iloc[0]], out_dir=tmp_path)
+    assert one["norad_id"].nunique() == 1
+    assert supplemental.load_supplemental_history("starlink", out_dir=tmp_path / "none").empty
+
+
+def test_a_stored_version_substitutes_the_same_way_a_fresh_fetch_does(omm_records, tmp_path):
+    """Rebuilding a run's elements from the store must reproduce what the run screened."""
+    records = _with_rms(omm_records[:6])
+    snap = build_snapshot({"active": omm_records[:6]}, None, fetched_at=datetime(2026, 9, 2, tzinfo=UTC))
+    snap["epoch"] = snap["epoch"] - pd.Timedelta(hours=6)
+    fresh, match_fresh = apply_supplemental(snap, records, name="starlink", version="v1")
+    path, _ = supplemental.store_supplemental(
+        records, name="starlink", fetched_at=datetime(2026, 9, 2, 6, tzinfo=UTC), out_dir=tmp_path
+    )
+    stored = supplemental.read_supplemental(path)
+    rebuilt, match_stored = supplemental.apply_supplemental_frame(snap, stored, name="starlink", version="v1")
+    assert match_fresh.n_applied == match_stored.n_applied == 6
+    assert match_fresh.version == "v1" and sorted(match_fresh.applied_ids) == sorted(match_stored.applied_ids)
+    for col in ("epoch", "mean_motion", "eccentricity", "bstar", "perigee_km", "apogee_km", "ephemeris"):
+        pd.testing.assert_series_equal(fresh[col], rebuilt[col], check_dtype=False)
