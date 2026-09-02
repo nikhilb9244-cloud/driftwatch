@@ -22,6 +22,8 @@ import pyarrow.parquet as pq
 
 from driftwatch import __version__, config
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
+from driftwatch.drag import ballistic as ballistic_mod
+from driftwatch.drag import density as density_mod
 from driftwatch.ephemeris import spacex
 from driftwatch.export.audit import audit_bundle
 from driftwatch.export.conjunctions import RunDirectory
@@ -1004,6 +1006,123 @@ def cmd_weather(args: argparse.Namespace) -> int:
     return 0
 
 
+def weather_for_density(now: datetime, start: datetime, end: datetime, *, offline: bool) -> pd.DataFrame:
+    """A space weather table covering the window plus the history NRLMSIS needs behind it."""
+    table_start, table_end = density_mod.weather_window(start, end)
+    sources, used = weather_sources(now=now, offline=offline)
+    table = weather_table.weather_table(table_start, table_end, sources, now=now)
+    summary = weather_table.table_summary(table)
+    log.info("Space weather for the density model: %s", {k: summary[k] for k in ("range", "by_skill", "n_missing")})
+    if summary["n_missing"]:
+        log.warning("%d intervals have no space weather at all; density there will be NaN", summary["n_missing"])
+    table.attrs["sources_used"] = used
+    return table
+
+
+def cmd_density(args: argparse.Namespace) -> int:
+    """The density sanity checks: quiet profile, storm ratios, and the sampling-step convergence."""
+    now = parse_utc(args.at) if args.at else datetime.now(UTC)
+    table = weather_for_density(now, now, now + timedelta(days=1), offline=args.offline)
+
+    profile = density_mod.quiet_density_profile(table, at=now)
+    print(f"NRLMSIS {config.MSIS_VERSION} at {now.isoformat(timespec='minutes')}, averaged over 24 local times")
+    print(
+        f"drivers: F10.7 (previous day) {profile.attrs['f107']:.1f}, 81-day centred "
+        f"{profile.attrs['f107a']:.1f}, daily Ap {profile.attrs['ap_daily']:.1f}"
+    )
+    shown = profile.copy()
+    for column in ("rho_mean_kg_m3", "rho_min_kg_m3", "rho_max_kg_m3"):
+        shown[column] = shown[column].map(lambda x: f"{x:.3e}")
+    shown["day_night_ratio"] = shown["day_night_ratio"].round(2)
+    print(shown.to_string(index=False))
+
+    for kp, name in ((7.0, "G3"), (9.0, "G5")):
+        ratio = density_mod.storm_ratio(table, kp, at=now)
+        print(f"\n{name} storm (Kp {kp:g}, ap {weather_table.kp_to_ap(np.array([kp]))[0]:.0f}), applied for 24 h:")
+        out = ratio.copy()
+        for column in ("rho_quiet_kg_m3", "rho_storm_kg_m3"):
+            out[column] = out[column].map(lambda x: f"{x:.3e}")
+        out["ratio"] = out["ratio"].round(2)
+        print(out.to_string(index=False))
+
+    if args.convergence:
+        print("\nSampling-step convergence (one day, against a 10 s step):")
+        objects = snapshot.read_snapshot(snapshot.latest_snapshot(config.SNAPSHOT_DIR))
+        leo = objects[(objects["perigee_km"] > 200) & (objects["perigee_km"] < 700)]
+        rows = []
+        for lo, hi in ((0.0, 0.002), (0.002, 0.01), (0.01, 0.05), (0.05, 0.15), (0.15, 0.4), (0.4, 0.8)):
+            band = leo[(leo["eccentricity"] >= lo) & (leo["eccentricity"] < hi)]
+            if not len(band):
+                continue
+            row = band.sort_values("perigee_km").iloc[len(band) // 2]
+            step = density_mod.sample_step_s(float(row["mean_motion"]), float(row["eccentricity"]))
+            end = now + timedelta(days=1)
+            rule = density_mod.mean_density(density_mod.density_along_orbit(row, table, now, end, step_s=step))
+            fixed = density_mod.mean_density(density_mod.density_along_orbit(row, table, now, end, step_s=600.0))
+            fine = density_mod.mean_density(density_mod.density_along_orbit(row, table, now, end, step_s=10.0))
+            rows.append(
+                {
+                    "norad_id": int(row["norad_id"]),
+                    "name": str(row["name"])[:22],
+                    "e": round(float(row["eccentricity"]), 4),
+                    "perigee_km": round(float(row["perigee_km"]), 1),
+                    "step_s": round(step, 1),
+                    "rule_err_pct": round(100.0 * (rule["rho_mean"] / fine["rho_mean"] - 1.0), 2),
+                    "fixed600_err_pct": round(100.0 * (fixed["rho_mean"] / fine["rho_mean"] - 1.0), 2),
+                }
+            )
+        print(pd.DataFrame(rows).to_string(index=False))
+    return 0
+
+
+def cmd_ballistic(args: argparse.Namespace) -> int:
+    """Fit a ballistic coefficient for every object of a run, from its own decay or from B*."""
+    try:
+        run_dir = resolve_run(args.run)
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    info = run_dir.read_run()
+    now = datetime.now(UTC)
+    objects = run_dir.read_objects()
+    elements = elements_for_run(info)
+    elements = elements[elements["norad_id"].isin(objects["norad_id"])].reset_index(drop=True)
+    if args.limit:
+        # Primaries first: a partial fit should cover the fleet before the secondaries.
+        primaries = set(int(i) for i in objects.loc[objects.get("is_primary", False).astype(bool), "norad_id"])
+        elements["_rank"] = [0 if int(i) in primaries else 1 for i in elements["norad_id"]]
+        elements = elements.sort_values(["_rank", "norad_id"]).head(args.limit).drop(columns="_rank")
+    log.info("Fitting ballistic coefficients for %d objects", len(elements))
+
+    start = parse_utc(info["start"]) - timedelta(days=args.fit_days)
+    # The B* fallback propagates each element set forward from its own epoch, so the table has
+    # to reach past the run window by that much as well.
+    latest_epoch = pd.to_datetime(elements["epoch"], utc=True).max().to_pydatetime()
+    end = max(parse_utc(info["end"]), latest_epoch + timedelta(days=config.BSTAR_DECAY_DAYS + 1))
+    table = weather_for_density(now, start, end, offline=args.offline)
+    hist = None
+    if not args.no_history:
+        hist = history.load_history(norad_ids=[int(i) for i in elements["norad_id"]], start=start)
+        log.info("History: %d element sets for %d objects", len(hist), hist["norad_id"].nunique() if len(hist) else 0)
+    frame = ballistic_mod.coefficients(elements, table, hist, fit_days=args.fit_days, step_s=args.step_s)
+    run_dir.write_ballistic(
+        frame, metadata={"driftwatch_run_id": info["run_id"], "driftwatch_msis": str(config.MSIS_VERSION)}
+    )
+    summary = ballistic_mod.summary(frame)
+    info["ballistic"] = {**summary, "fitted_at": now.isoformat(), "msis_version": config.MSIS_VERSION}
+    run_dir.write_run(info)
+    log.info("Ballistic coefficients: %s", summary)
+
+    print(f"{len(frame)} objects")
+    print("by source:", summary["by_source"])
+    print("B (m^2/kg): p10 {p10}, median {median}, p90 {p90}".format(**summary["b_m2_kg"]))
+    shown = frame.sort_values("b_m2_kg", ascending=False).head(args.show)
+    columns = ["norad_id", "category", "b_m2_kg", "source", "n_sets", "decay_m", "n_manoeuvre_excluded"]
+    print(shown[columns].to_string(index=False))
+    print(run_dir.ballistic_path)
+    return 0
+
+
 def cmd_spacex(args: argparse.Namespace) -> int:
     """Fetch SpaceX's own ephemeris covariance for a run's Starlink secondaries and store it.
 
@@ -1285,6 +1404,41 @@ def build_parser() -> argparse.ArgumentParser:
     wx.add_argument("--show", type=int, default=24, help="rows of the table to print (default 24)")
     wx.add_argument("--out", help="write the table to this parquet file as well")
     wx.set_defaults(func=cmd_weather)
+
+    dens = sub.add_parser(
+        "density",
+        help="NRLMSIS sanity checks: quiet density by altitude, the storm ratios and the sampling step",
+    )
+    dens.add_argument("--at", help="UTC time to evaluate, ISO 8601 (default: now)")
+    dens.add_argument("--offline", action="store_true", help="use only stored space weather")
+    dens.add_argument(
+        "--convergence",
+        action="store_true",
+        help="also measure the sampling step against a 10 s reference across eccentricities (slow)",
+    )
+    dens.set_defaults(func=cmd_density)
+
+    bal = sub.add_parser(
+        "ballistic",
+        help="fit a ballistic coefficient per object of a run, from its own decay or from B*",
+    )
+    bal.add_argument("run", nargs="?", default="latest", help="run directory, its name, or 'latest'")
+    bal.add_argument("--limit", type=int, help="fit at most this many objects, primaries first")
+    bal.add_argument(
+        "--fit-days",
+        type=float,
+        default=config.BALLISTIC_FIT_DAYS,
+        help=f"days of element-set history to fit over (default {config.BALLISTIC_FIT_DAYS:g})",
+    )
+    bal.add_argument("--no-history", action="store_true", help="skip the decay fit and use B* for everything")
+    bal.add_argument(
+        "--step-s",
+        type=float,
+        help="sampling step along the orbit in seconds (default: the per-object rule; larger is faster)",
+    )
+    bal.add_argument("--offline", action="store_true", help="use only stored space weather")
+    bal.add_argument("--show", type=int, default=15, help="rows to print (default 15)")
+    bal.set_defaults(func=cmd_ballistic)
 
     spx = sub.add_parser(
         "spacex",

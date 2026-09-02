@@ -160,6 +160,66 @@ AP_CLIMATOLOGY_FALLBACK_NT = 20.0
 # 50 nT where the climatological term alone would understate it. A prior, not a measurement.
 AP_FORECAST_RELATIVE_FLOOR = 0.5
 
+# ---------------------------------------------------------------------------------------
+# Density and drag (Phase 3 Step 2). See docs/density-and-drag.md and driftwatch/drag/.
+
+# NRLMSIS through pymsis. 2.1 is the current version; 0 is the 2000 model, kept available
+# because a good deal of published drag work still uses it. Recorded in every run so a
+# result can be reproduced against the model that made it.
+MSIS_VERSION = 2.1
+# The sampling step along an orbit, as samples per revolution. Sixteen puts a sample every
+# 5.6 minutes at low Earth orbit, which resolves the local-time swing -- the factor of about
+# two between the day and night sides -- that dominates a near-circular orbit's density.
+# docs/density-and-drag.md carries the convergence measurement.
+DENSITY_SAMPLES_PER_ORBIT = 16
+# Above this eccentricity the altitude range, not the local time, is what the step has to
+# resolve: the drag of an eccentric orbit is concentrated in its perigee passage.
+DENSITY_ECCENTRICITY_THRESHOLD = 0.005
+# A representative thermospheric scale height. Density falls by a factor of e over this
+# height, so it is the natural unit for "how much altitude may a step cross".
+DENSITY_SCALE_HEIGHT_KM = 50.0
+DENSITY_SCALE_HEIGHTS_PER_STEP = 1.0
+# Whatever the rule gives, the step stays inside these. The floor is cost; the ceiling keeps
+# a slow, high orbit from being sampled so coarsely that the diurnal bulge is aliased.
+DENSITY_MIN_STEP_S = 30.0
+DENSITY_MAX_STEP_S = 600.0
+
+# The ballistic coefficient B = C_D A / m, in m^2/kg. Fitting it from an object's own decay
+# needs the decay to be larger than the scatter of the element sets it is measured from.
+# A window this long, with at least this many element sets, and a measured drop in
+# semi-major axis of at least this many metres, or the fit is refused and B* stands in.
+BALLISTIC_MIN_SPAN_DAYS = 10.0
+BALLISTIC_MIN_SETS = 6
+BALLISTIC_MIN_DECAY_M = 50.0
+# The window the fit looks back over. Long enough to average out the element-set scatter and
+# to include a range of geomagnetic conditions; short enough that the object's attitude and
+# area have not changed much.
+BALLISTIC_FIT_DAYS = 45.0
+# Physically plausible bounds for B. A dense compact body sits near 0.002 m^2/kg; a light
+# panel or a deployed sail reaches a few tenths. Anything outside this came from a bad fit,
+# not from a satellite, and is refused with its label.
+BALLISTIC_MIN_M2_KG = 1e-4
+BALLISTIC_MAX_M2_KG = 1.0
+# Where neither the object's own decay nor its B* gives a usable coefficient, the run's own
+# median stands in, labelled `typical`. A category median needs at least this many fitted
+# objects to be worth more than the overall one.
+BALLISTIC_TYPICAL_MIN_OBJECTS = 5
+# And when a run has fitted almost nothing, this stands in: the middle of the range a mixed
+# catalogue actually shows, which is where the fitted values in docs/density-and-drag.md sit.
+BALLISTIC_TYPICAL_M2_KG = 0.01
+# The SGP4 reference density that defines B*: B* = rho0 C_D A / (2 m), with rho0 as a column
+# density in kg/m^2 per Earth radius. Quoted here for the record and deliberately NOT used to
+# convert -- see docs/density-and-drag.md, where the conversion it implies is measured
+# against the decay SGP4 itself produces and found to be wrong by three orders of magnitude,
+# because B* is a fit parameter for SGP4's own atmosphere rather than a physical quantity.
+SGP4_BSTAR_RHO0 = 2.461e-5
+# The fallback measures what decay the element set's own B* produces over this many days and
+# inverts it through NRLMSIS, which is self-consistent and altitude-aware where a constant is
+# neither. Ten days rather than three because the orbit-averaged semi-major axis carries tens
+# of metres of residual, which over three days is comparable to the decay of anything above
+# about 600 km; the trend is fitted across the span, not differenced across its ends.
+BSTAR_DECAY_DAYS = 10.0
+
 # Helioviewer: Sun imagery for the Step 5 replay. Public API, no account. Credit is asked
 # for in the API documentation rather than required by a licence.
 HELIOVIEWER_BASE_URL = "https://api.helioviewer.org/v2"

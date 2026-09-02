@@ -101,6 +101,8 @@ uv run driftwatch risk latest --scenario test --scale 3
 uv run driftwatch spacex latest           # optional: SpaceX's own covariance for the run's Starlink
                                           #   secondaries, inside their 72-hour horizon
 uv run driftwatch weather --days 7        # space weather for the window, with its provenance
+uv run driftwatch density                 # NRLMSIS sanity check: quiet density and the storm ratios
+uv run driftwatch ballistic latest        # a ballistic coefficient per object, from decay or B*
 uv run driftwatch report latest           # weekly report + the viewer's conjunctions bundle
 cd web && npm install && npm run dev      # open the printed URL
 ```
@@ -188,6 +190,7 @@ src/driftwatch/         Python package (CLI: driftwatch)
   screening/            three-stage conjunction screening, RIC frame, supplemental Starlink sets
   ephemeris/            operator-published ephemerides (SpaceX's Starlink covariance)
   weather/              space weather: CelesTrak SW-All, NOAA SWPC, the three-hourly table, Sun imagery
+  drag/                 NRLMSIS density along an orbit, and the ballistic coefficient per object
   risk/                 covariance model and fit, manoeuvre flag, probability of collision, scenarios, Kelvins
   export/               viewer bundle, conjunction run directory, weekly report, pre-deploy audit
 scripts/                deploy to Cloudflare Pages, register the supplemental fetch task
@@ -219,6 +222,8 @@ data/                   cache, snapshots, history, supplemental and SpaceX ephem
   used and how, what their covariance actually is, and the plan for them.
 - `docs/space-weather.md`: Kp and ap and why the table carries both, the feeds and their
   terms, how the sources are layered, and what is deliberately not filled in.
+- `docs/density-and-drag.md`: NRLMSIS and how it is driven, the sampling step and its
+  convergence, the ballistic coefficient and why B* is not one.
 - `docs/phase2-plan.md`: the Phase 2 plan, the review decisions and the demo fleet.
 - `docs/phase3-plan.md`: the Phase 3 plan and its review decisions.
 

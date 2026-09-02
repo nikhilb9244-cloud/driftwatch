@@ -693,6 +693,144 @@ test. That belongs with `drag/density.py` and is done there.
 
 Any dev server or shell started during a step is closed at the end of it.
 
+## Step 2 decisions (density and drag, built 2026-09-02)
+
+`src/driftwatch/drag/`, `driftwatch density`, `driftwatch ballistic`,
+`docs/density-and-drag.md`, `tests/test_drag.py`. pymsis 0.12 added as a dependency;
+NRLMSIS 2.1 is the version and it is recorded in every run.
+
+### The model inputs, which are not the obvious ones
+
+Four things NRLMSIS wants that a careless caller gets wrong, each now pinned by a test:
+
+- **The previous day's** observed F10.7, not today's — the instruction from the review, and
+  the model was fitted that way.
+- The 81-day **centred** average, which for a forecast needs the predicted flux of the next
+  forty days. CelesTrak publishes it; that is why the table carries it.
+- The **observed** flux, not the value adjusted to 1 AU. Both are in the table and only one is
+  fed to the model.
+- A **seven-element ap vector** per sample, read only when `geomagnetic_activity=-1` is
+  passed. With the default switch the model uses the daily Ap alone and the storm response
+  becomes a smooth daily average — plausible-looking and wrong. The test builds a table whose
+  ap is the interval index, so every element of the expected answer is a different number and
+  a transposition cannot pass by luck.
+
+A sample whose 57 hours of history the table does not cover comes back NaN. This is what made
+the first ballistic run warn: the B\* fallback propagates ten days past an element set's
+epoch, past the end of the table the run had built, and the model said so instead of
+inventing a quiet day.
+
+### The sampling step, measured rather than asserted
+
+One revolution over 16, tightened for eccentric orbits by their altitude range in scale
+heights, clamped to [30, 600] s. Against a 10-second reference over one day:
+
+| Object | e | step | rule error | a fixed 600 s step |
+| --- | ---: | ---: | ---: | ---: |
+| STARLINK-3520 | 0.0001 | 353 s | -0.03 % | -0.05 % |
+| CZ-6A DEB | 0.0070 | 187 s | -0.09 % | -0.36 % |
+| FENGYUN 1C DEB | 0.0374 | 35 s | +0.02 % | +0.65 % |
+| DELTA 1 DEB | 0.0811 | 30 s | -0.02 % | -0.82 % |
+| FREGAT DEB | 0.1521 | 30 s | -0.02 % | **-13.5 %** |
+| IUS R/B(1) | 0.7215 | 30 s | -0.02 % | **-17.0 %** |
+
+The eccentricity refinement earns its place exactly where predicted and nowhere else. The
+convergence table is reproducible with `driftwatch density --convergence`.
+
+### The density sanity check
+
+Against the US Standard Atmosphere 1976 at its own conditions (F10.7 = 150): 1.35, 1.52, 1.68
+and 1.82 times it at 300, 400, 500 and 600 km. Within a factor of two, with the gap growing
+with altitude, which is that profile's known bias. The solar-cycle spread the same model gives
+is a factor of thirteen at 400 km, so the published value sits comfortably inside the range.
+Storm ratios: G3 gives 1.6 to 2.2 and G5 gives 2.7 to 5.7 from 300 to 600 km, growing with
+altitude as the physics requires and in the range reported for May 2024.
+
+### Three sources for the ballistic coefficient, not two
+
+The prompt asked for two: fitted from decay, or from B\* converted to physical units. Both are
+built. The conversion is the part worth reading.
+
+**B\* cannot be converted by a constant.** It is a fit parameter for SGP4's own atmosphere and
+absorbs whatever the fit could not explain; STARLINK-6053's was negative on 2 September, which
+as a physical coefficient means an object that accelerates as it flies through air. The
+textbook `B = 2 B*/rho0` with `rho0 = 2.461e-5` kg/m^2/ER is quoted in the config and **not
+used**: measured against the decay SGP4 itself produces it is wrong by three orders of
+magnitude, and the implied constant is not constant — the ISS and YAM-3 at 415 to 420 km imply
+0.043 and STARLINK-32515 at 463 km implies 0.0064, a factor of seven apart. So the fallback
+propagates the element set with its own B\*, reads the drop off SGP4's **mean** semi-major axis
+(`satrec.am`, because an osculating one carries kilometres of short-period wobble and a
+long-period drift that over ten days looks exactly like a trend), and inverts that through the
+same density model. No constant, altitude-aware, and it inherits exactly as much noise as B\*
+has.
+
+**And a third, `typical`.** Sentinel-1A forced it: at 693 km its decay over 45 days is 25 m,
+inside the element-set scatter, so there is nothing to fit, and an object whose B\* implies no
+decay would otherwise carry B = 0 — which asserts that a storm does nothing to it. Nearly true
+at 800 km, plainly false at 500, and the wrong kind of wrong for a risk model. Such objects
+take the median of the coefficients **this run actually fitted**, for their own category, and
+the label says so.
+
+### What it gives, and why the general form matters
+
+| Object | Altitude | source | B (m^2/kg) | Independent estimate |
+| --- | ---: | --- | ---: | --- |
+| ISS | 420 km | history, 136 sets, 1 burn excluded | 0.0087 | ~0.0075 |
+| YAM-3 | 415 km | history, 123 sets | 0.0121 | ~0.02 |
+| STARLINK-32515 | 463 km | history, 105 sets, 7 burns excluded | 0.0059 | ~0.0055 |
+| Sentinel-1A | 691 km | bstar | 0.0235 | ~0.029 |
+| NOAA-20 | 824 km | bstar | 0.0293 | ~0.017 |
+| STARLINK-6053 | 570 km | typical | 0.0100 | its B\* is negative |
+
+Every one within a factor of two, the fitted ones within about fifteen per cent. Two things
+had to be right for that. The decay is inverted through the **general** form
+`da/dt = -(B a^2/mu) rho |v_rel| (v_rel . v)`, not the circular `-B rho sqrt(mu a)`: an
+eccentric orbit does its drag at perigee, and using a mean density with the circular formula
+made Vanguard 2 come out 2.3 times too heavy on drag before the change. And ``v_rel`` is
+relative to a **co-rotating** atmosphere, which is six per cent of orbital speed and
+seventeen per cent of its cube.
+
+### On a population: the categories separate themselves
+
+150 objects of the demo run, 125 fitted from history, 22 from B\*, 3 typical, in seven
+minutes. Median B by category: station 0.0087, rocket_body 0.0142, payload 0.0248, debris
+0.110. The ordering is the physical one and nothing enforced it — dense station, heavy empty
+tube, mixed payloads, light fragments — which is the closest thing to an external check this
+step has. The debris tail (0.44 to 0.61 for Cosmos 1275 and Cosmos 249 fragments at 750 to
+850 km, radar cross sections of 0.01 to 0.08 m²) implies an area-to-mass near 0.27, a 25 cm
+object weighing 150 g: thin plate or multi-layer insulation, which is what those clouds are.
+Their decay of 750 m over 45 days cannot be produced by a small coefficient. It is also where
+the density model is least certain and where radiation pressure is comparable to drag, so the
+tail is good to a factor rather than a per cent.
+
+### The bias that folds in, and the half of it that cancels
+
+Only the product `B rho` is observable from a decay, so a systematic bias in NRLMSIS folds
+into the fitted coefficient and **cancels when the same model drives the scenarios** — for the
+quiet case. It does not cancel for the storm response, which has no baseline to divide out
+against. Two consequences, both now in the docs: the fitted coefficient is preferred over B\*,
+and the same model must drive the fit and the scenarios or the cancellation breaks invisibly.
+The fitted B is therefore not a measurement of area over mass; it is that divided by the
+model's bias over the fit window.
+
+### Questions for the Step 2 review
+
+1. **A third source, `typical`, was added beyond the two the prompt asked for.** The
+   alternative for an object with no measurable decay and an unusable B\* was B = 0, which
+   says a storm cannot move it. Is the labelled median the right call, or should those objects
+   be excluded from the storm term entirely and reported as such?
+2. **The fit is slow at catalogue scale.** One density sampling per element-set interval means
+   about 100 intervals an object; 150 objects take about eight minutes, so the run's ~3,000
+   objects would take hours. Step 3 needs a coefficient for both objects of every event.
+   Options: fit only the objects in flagged or near-threshold events; batch the model calls
+   across intervals; or cache coefficients across runs by NORAD id, since B changes slowly.
+   Which?
+3. **45 days of history, 10-day minimum clean span, 50 m minimum decay.** These thresholds
+   decide who gets a fitted coefficient and who falls back. They are set from the element-set
+   scatter seen on the demo run's objects, not from a formal noise model.
+4. **`ballistic.parquet` is a new file in the run directory** and `category` is a new column
+   beside the coefficient. Additive; nothing reads it yet but Step 3 will.
+
 ## Later steps in one paragraph each
 
 **Step 2, density and drag.** pymsis with NRLMSIS 2.x, the ap input vector built correctly

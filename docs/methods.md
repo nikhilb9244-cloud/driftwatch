@@ -268,6 +268,55 @@ they enter the chain; each states what is assumed, why, and what it costs.
   is in there. It is a patch on a mismatch, not a fix: the fix is for Stage C to interpolate
   the ephemeris states directly, which is the first Phase 4 item.
 
+## Density and drag (Phase 3, Step 2)
+
+- **NRLMSIS 2.1 through pymsis, and its own uncertainty is the dominant term.** Tens of per
+  cent in quiet conditions, worse in a storm and worse again in the days after one. Nothing
+  here improves on that; the storm scenarios are reported as changes against a quiet baseline
+  for exactly this reason. `docs/density-and-drag.md` carries the sanity check: within a
+  factor of two of the US Standard Atmosphere 1976 at its own conditions, with the gap growing
+  with altitude as that profile's known bias predicts, and well inside the solar-cycle spread.
+- **The model is driven with the inputs it was fitted with**, which are not the obvious ones:
+  the **previous day's** observed F10.7, the 81-day **centred** average, the **observed** flux
+  rather than the flux adjusted to 1 AU, and a **seven-element** ap history per sample (daily
+  Ap; now, 3, 6 and 9 hours back; the mean of 12 to 33 hours back; the mean of 36 to 57 hours
+  back), read only because `geomagnetic_activity=-1` is passed. With the default switch the
+  model would use the daily Ap alone and the storm response would be a smooth daily average.
+  A sample whose history the weather table does not cover comes back NaN, never zero.
+- **Density is sampled along the orbit, not evaluated once.** The step is one revolution over
+  16, tightened for eccentric orbits in proportion to their altitude range in scale heights,
+  and clamped to [30 s, 600 s]. Measured against a 10-second reference the rule holds every
+  orbit tested to under 0.1 %, where a fixed 600 s step is wrong by 13 % at e = 0.15 and 17 %
+  at e = 0.72 — the eccentric tail whose perigee passes through the densest air.
+- **The sampling frame is GMST-only.** No polar motion, UTC treated as UT1: measured on the
+  ISS, 12 m of latitude and 0.9 m of longitude. Nothing, for a model uncertain by tens of per
+  cent, and it avoids an astropy frame transform per sample over millions of samples.
+- **The atmosphere co-rotates exactly, and there are no winds.** The relative velocity used in
+  the drag integral is the inertial velocity minus solid-body rotation, which is a 6 % effect
+  on speed and 17 % on its cube. Real thermospheric winds reach several hundred metres a
+  second in the auroral zones during a storm — a few per cent of the relative speed, in the
+  places and at the times a storm matters most, and not modelled.
+- **B\* is a fit parameter, not a physical ballistic coefficient.** It absorbs whatever the
+  SGP4 fit could not otherwise explain and is routinely negative. The textbook conversion
+  through a reference density is quoted in the config and **not used**: measured against the
+  decay SGP4 itself produces, it is wrong by three orders of magnitude and the implied
+  constant varies sevenfold between objects 45 km apart in altitude. The fallback instead
+  propagates the element set with its own B\* and inverts the resulting decay through the same
+  density model, which is self-consistent and altitude-aware.
+- **A ballistic coefficient is fitted from the object's own decay where the decay is
+  measurable**, over 45 days, excluding manoeuvre intervals, outlier sets and intervals longer
+  than a fortnight, and refused when the total drop is inside the element-set scatter. Objects
+  with neither a usable fit nor a usable B\* take the run's own median for their category,
+  labelled `typical`. Every row carries which of the three it used.
+- **Only the product `B rho` is observable from a decay**, so a systematic bias in the density
+  model folds into the fitted coefficient and cancels when the same model drives the
+  scenarios — for the quiet case. It does **not** cancel for the storm response, which has no
+  baseline to divide out against. The fitted B is therefore not a measurement of area over
+  mass; it is that divided by the model's bias over the fit window.
+- **One coefficient per object, constant over the window.** No attitude changes, no lift, no
+  radiation pressure. A Starlink turning its panel edge-on to ride out a storm — a documented
+  operational response — changes its coefficient by a factor of several, invisibly.
+
 ## Propagation
 
 - **SGP4 with WGS72 constants, improved mode.** The only correct way to use TLE/OMM
@@ -335,6 +384,9 @@ they enter the chain; each states what is assumed, why, and what it costs.
 
 - Manoeuvres, beyond the three-valued flag, the history check and the Starlink
   supplemental sets.
-- Atmospheric density beyond SGP4's built-in power law; storms, and the storm term in
-  the in-track covariance (Phase 3).
+- The storm term itself: the in-track displacement a density excess produces, and its
+  variance (Phase 3 Step 3). Step 2 supplies the density and the coefficient; nothing yet
+  moves a covariance or a miss distance.
+- Thermospheric winds, attitude changes, radiation pressure, and any density model other
+  than NRLMSIS.
 - Velocity covariance, cross-terms between RIC components, long-encounter corrections.

@@ -196,6 +196,17 @@ class RunDirectory:
     def read_covariance(self) -> pd.DataFrame:
         return _read(self.covariance_path)
 
+    @property
+    def ballistic_path(self) -> Path:
+        return self.path / "ballistic.parquet"
+
+    def write_ballistic(self, table: pd.DataFrame, *, metadata: Mapping[str, str] | None = None) -> Path:
+        """The ballistic coefficient per object (Phase 3 Step 2), fitted once and reused per scenario."""
+        return _write(table, self.ballistic_path, metadata)
+
+    def read_ballistic(self) -> pd.DataFrame:
+        return _read(self.ballistic_path)
+
     def write_risk(self, rows: pd.DataFrame, scenario: str) -> Path:
         return _write(rows, self.risk_path(scenario), {"driftwatch_scenario": scenario})
 

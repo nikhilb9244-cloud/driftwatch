@@ -318,6 +318,24 @@ inside the watch radius.
 The parquet metadata records the model version (`driftwatch_model_version`) and the
 run id.
 
+### `ballistic.parquet`
+
+One row per object, written by `driftwatch ballistic` (Phase 3 Step 2). Fitted once per run
+and reused by every scenario; see `docs/density-and-drag.md`.
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `norad_id`, `category` | int64, string | The object. |
+| `b_m2_kg` | float64 | The ballistic coefficient `C_D A / m`. What turns a density into a deceleration. |
+| `source` | string | `history` (fitted from the object's own decay), `bstar` (from the decay its own SGP4 drag term produces, inverted through the same density model) or `typical` (the run's median for its category, where neither worked). |
+| `n_sets`, `span_days` | int64, float64 | Element sets the fit saw and the span they cover. Both are 1 and the B\* baseline for a `bstar` row. |
+| `decay_m` | float64 | The drop in mean semi-major axis the coefficient was fitted to, in metres. Negative means the orbit rose, which for a `bstar` row means B\* is not physical. |
+| `rho_mean_kg_m3` | float64 | Mean density over the fit window, for reading; the fit uses the full `rho \|v_rel\| (v_rel . v)` integral. |
+| `n_intervals`, `n_manoeuvre_excluded` | int64 | Intervals used, and intervals dropped because the manoeuvre detector found a burn in them. |
+| `note` | string | Why a route was refused, and what stood in. |
+
+The parquet metadata records the run id and the NRLMSIS version.
+
 ### `risk_<scenario>.parquet`
 
 | Column | Type | Meaning |
