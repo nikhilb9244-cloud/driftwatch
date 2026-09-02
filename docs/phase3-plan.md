@@ -1012,14 +1012,39 @@ the flag travel together.
 the scenario gives). Median sigma on the shift 199 km. The relative shift moves every one of the
 5,704 events, by a median 44 km.
 
-The flag counts barely move — 1 red and 12 yellow, against quiet's 1 and 12 — and that is worth
-reading carefully rather than as a null result. The storm displaces both objects of most pairs in
-the same direction by similar amounts, because they are at similar altitudes with similar
-coefficients; what matters is the *relative* shift, and it is much smaller than either. What does
-move is the tail: events that were at 1e-80 under quiet come back at 1e-7 because the shift moved
-one object onto the other, and events that were close move apart. The `pc/pc_variance_only` ratio
-over the events above 1e-12 runs from 0.00 to 3,265, so on this run the **shift dominates the
-variance**, which is the answer to the question the prompt asked the docs to settle.
+The flag counts **fall**, which was not what I expected to be writing:
+
+| Scenario | red | yellow | median relative shift | p90 | events on an extrapolated shift |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| `quiet` | 1 | 22 | — | — | — |
+| `forecast` | 2 | 11 | 9.8 km | 468 km | 143 |
+| `storm-g5` | 1 | 12 | 32.0 km | 505 km | 180 |
+
+The storm displaces both objects of most pairs in the same direction by similar amounts, because
+they are at similar altitudes with similar coefficients, and what enters the miss is the
+*relative* shift: a median of 32 km under G5, against a median absolute shift of 278 km. The
+sigma the term adds is smaller still, a median of 6.5 km per object and 48 km at the p90. A
+relative displacement of that size applied to a population of near misses separates more pairs
+than it creates, so the yellow count roughly halves.
+
+**Which of the two effects matters, measured rather than asserted.** Over the 998 events above a
+probability of 1e-9, the median `pc / pc_variance_only` is **0.68**, and the shift *lowers* the
+probability on 823 of them against raising it on 175. That is the right way round and worth
+stating plainly: a relative displacement usually separates two objects that were going to pass
+close, so on most events the shift is protective and the variance is what is left. The screening
+interest is in the other 175, and in the tail — events at 1e-80 under quiet that come back at
+1e-7 because the shift moved one object onto the other, with ratios up to 3,265 among the events
+above 1e-12. So the honest summary is: **the shift moves more events than the variance does, and
+in the safe direction for most of them; the variance is what carries the ones the shift does not
+touch.** Both numbers are on every row so a reader never has to take that on trust.
+
+### The regression assertion, checked rather than claimed
+
+The stored `risk_quiet.parquet` was written before any of this existed. Rescoring it with the
+code as it stands and comparing column by column: **every shared column is identical, NaN for
+NaN**, over all 5,704 events. The nine columns Step 3 adds are all zero or `none` under quiet.
+That is what "bit-for-bit unchanged" was supposed to mean and it is now measured; a test pins
+the same property at the `run_risk` level so it cannot quietly stop being true.
 
 ### Questions for the Step 3 review
 

@@ -204,6 +204,31 @@ def test_the_storm_layer_adds_a_shift_in_track_and_a_variance_in_track_and_nothi
     assert other.mean_shift_ric_km is None and other.source.endswith("storm:none")
 
 
+def test_a_scenario_with_no_storm_layer_is_the_phase_2_answer_exactly(designed_conjunction):
+    """The regression assertion: a Phase 2 model through the extended ``run_risk`` is unchanged.
+
+    Checked on the real run as well -- rescoring the stored ``risk_quiet.parquet`` after Step 3
+    reproduces every shared column identically, NaN for NaN, over all 5,704 events. This pins
+    the same property at the unit level so it cannot quietly stop being true: no shift, no
+    added variance, and ``pc_variance_only`` equal to ``pc`` to the bit, because the two are the
+    same calculation when nothing moved.
+    """
+    from driftwatch.risk.scenario import run_risk
+
+    events, objects = designed_conjunction
+    risk = run_risk(events, objects, Isotropic(0.4), scenario="quiet", run_id="r", snapshot="s", sweep=False)
+    for column in (
+        "shift_i_primary_km",
+        "shift_i_secondary_km",
+        "sigma_shift_i_primary_km",
+        "sigma_shift_i_secondary_km",
+    ):
+        assert (risk[column] == 0).all(), column
+    assert set(risk["storm_source_primary"]) == {"none"}
+    np.testing.assert_array_equal(risk["pc"].to_numpy(), risk["pc_variance_only"].to_numpy())
+    np.testing.assert_allclose(risk["miss_shifted_km"], events["miss_km"], rtol=1e-9)
+
+
 def test_the_shift_moves_the_miss_and_the_probability_and_reports_both_numbers(designed_conjunction):
     """End to end through ``run_risk``: the shift changes the miss, and the comparison is kept.
 

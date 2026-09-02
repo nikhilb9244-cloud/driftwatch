@@ -241,9 +241,34 @@ rescreens, and nothing needs to.
 Every row carries `pc` (shift **and** variance) as the primary number and `pc_variance_only`
 (the same widened covariance, both objects left where their element sets put them) beside it.
 The ratio says how much of a scenario is the displacement and how much is the spread — a
-question the documentation has to answer with a measurement rather than an assertion, and one
-whose answer differs per event: a head-on encounter is nearly all variance, a crossing
-encounter with a large relative in-track shift is nearly all shift.
+question the documentation has to answer with a measurement rather than an assertion.
+
+On the demo run's G5 scenario, over the 998 events above a probability of 1e-9: the median
+`pc / pc_variance_only` is **0.68**, and the shift **lowers** the probability on 823 of them
+against raising it on 175. A relative displacement usually separates two objects that were
+going to pass close, so on most events the shift is protective. The screening interest is in
+the minority it raises and in the tail — pairs at 1e-80 under quiet that come back at 1e-7
+because the shift moved one object onto the other, with ratios reaching 3,265.
+
+The scale of the inputs behind that: a median absolute shift of 278 km per object, but a median
+*relative* shift of only 32 km between the two objects of a pair, because a storm moves
+neighbouring objects in the same direction by similar amounts. The sigma the term adds is a
+median of 6.5 km per object.
+
+Which is why the flag counts **fall** rather than rise:
+
+| Scenario | red | yellow |
+| --- | ---: | ---: |
+| `quiet` | 1 | 22 |
+| `forecast` | 2 | 11 |
+| `storm-g5` | 1 | 12 |
+
+A relative displacement of tens of kilometres applied to a population of near misses separates
+more pairs than it creates. That is a real result and not a bug, and it is the opposite of the
+intuition that a storm must make everything worse. What a storm actually does is make every
+prediction *different*, and different is bad news only for the minority of pairs it pushes
+together — which is exactly why the tail matters more than the count, and why the report shows
+the events that moved most rather than the totals.
 
 Every row also carries `run_id`, `snapshot`, `model_version`, `supplemental_version`,
 `scenario`, both objects' in-track shifts and their sigmas, and the `source` label of the
