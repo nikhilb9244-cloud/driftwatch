@@ -228,6 +228,8 @@ def test_screen_and_risk_commands_end_to_end(designed, tmp_path, monkeypatch):
     monkeypatch.setattr(config, "HISTORY_DIR", data / "history")
     monkeypatch.setattr(config, "SNAPSHOT_DIR", data / "snapshots")
     monkeypatch.setattr(config, "CONJUNCTION_DIR", out_dir)
+    # Without this the run would write its bundle into the repository's own viewer data.
+    monkeypatch.setattr(config, "VIEWER_DATA_DIR", data / "viewer")
     monkeypatch.delenv(config.SPACETRACK_USER_ENV, raising=False)
     monkeypatch.delenv(config.SPACETRACK_PASS_ENV, raising=False)
     snap_path = write_snapshot(snap, data / "snapshots" / "gp_20260901T120000Z.parquet")
@@ -269,8 +271,16 @@ def test_screen_and_risk_commands_end_to_end(designed, tmp_path, monkeypatch):
     )
     assert rc == 0
     run_path = out_dir / "cli_20260901T120000Z"
-    for name in ("run.json", "events.parquet", "objects.parquet", "covariance.parquet", "risk_quiet.parquet"):
+    for name in (
+        "run.json",
+        "events.parquet",
+        "objects.parquet",
+        "covariance.parquet",
+        "risk_quiet.parquet",
+        "report.md",
+    ):
         assert (run_path / name).exists(), name
+    assert (data / "viewer" / "conjunctions.json").exists()
     run_dir = RunDirectory(run_path)
     info = run_dir.read_run()
     assert info["snapshot"] == snap_path.name and info["scenarios"] == ["quiet"] and info["history"]["mode"] == "off"
