@@ -228,13 +228,368 @@ synchronise four widgets by hand will conclude the tool does not know they are r
 Keyboard: left/right by one three-hour interval, shift for a day, space to play. The scrubber
 is the only new persistent chrome the storm mode adds.
 
+---
+
+# The operator console: a Phase 4 specification
+
+Design only. Nothing below is built, no file in `web/src` changes on account of it, and every
+number here is either derived from measurements of the current bundle (recorded below) or
+stated as a budget to be met.
+
+The visual pass above answers "how should the viewer look". This answers a different and more
+important question: **what is the screen for, and in what order does a person read it.** The
+Phase 1 to 3 viewer is a globe with a list attached. An operator does not open a globe. They
+open a screen to find out whether anything needs doing today, and if so, to what, and by when.
+The console is that screen, and the globe becomes one of the things on it.
+
+## 1. The reading order, and why it is fixed
+
+Three questions, always in this order, each answerable without the next:
+
+1. **Is my fleet all right?** — the status strip and the fleet band. Answerable in about two
+   seconds, without scrolling, without clicking, and without the globe having loaded.
+2. **What needs action?** — the event queue. A ranked list where the top row is the most
+   urgent thing and the rank means something the reader can defend.
+3. **What exactly is this one?** — the detail view. Everything about a single encounter,
+   including how much of it is the atmosphere and how much is the geometry.
+
+The globe **supports step 3 and sometimes step 2**. It never leads, and it is never the thing a
+reader must interact with to learn something. This is the single biggest departure from the
+current viewer and the reason for the whole section: a globe is a wonderful way to show *where*
+and a poor way to show *whether*, and the operator's first question is a whether.
+
+The consequence, stated once so it governs every later decision: **the console must be
+completely usable with the globe absent.** Not degraded-but-tolerable — completely usable. That
+is what makes the phone layout in §7 a restriction rather than a rewrite, and it is what makes
+the paint budget in §8 achievable.
+
+## 2. Layout
+
+Desktop, at or above 1280 px:
+
+```
+┌──────────────────────────────────────────────────────────────────────────────┐
+│ STATUS STRIP   Kp now 3+ · fcst 6 (G2) 12h · scenario forecast · 14 h old    │ 44 px
+├───────────────────────────────────────────┬──────────────────────────────────┤
+│ FLEET BAND  6 members, 3 with events      │                                  │ 72 px
+│  ISS ·2   S1C ·0   XI-IV ·1   UWE-3 ·0    │                                  │
+├───────────────────────────────────────────┤             GLOBE                │
+│ EVENT QUEUE                               │          (supporting)            │
+│  1  ISS   × STARLINK-31178   2d 04h  ...  │                                  │
+│  2  XI-IV × FENGYUN 1C DEB   4d 11h  ...  │   selection-linked, lazily       │
+│  3  ...                                   │   loaded, dismissible            │
+│                                           │                                  │
+├───────────────────────────────────────────┤                                  │
+│ DETAIL  (opens under the queue, or as a   │                                  │
+│  right-hand third pane above 1600 px)     │                                  │
+├───────────────────────────────────────────┴──────────────────────────────────┤
+│ REPLAY SCRUBBER (replay mode only) — the Kp bar is its background            │ 64 px
+└──────────────────────────────────────────────────────────────────────────────┘
+```
+
+The queue is the widest thing on the screen at every width, because it is the thing being read.
+The globe gets what is left and never more than 40 %.
+
+## 3. The status strip
+
+One row, always visible, never scrolls away. Four groups, left to right, separated by thin
+rules rather than by whitespace alone so the grouping survives a narrow window.
+
+| Group | Contents | Notes |
+| --- | --- | --- |
+| **Geomagnetic now** | Current Kp with its three-hour interval, and the G level | From the space weather table's newest `observed` row. The Kp digit takes the G-ramp colour; it is one of exactly three places that ramp appears. |
+| **Geomagnetic ahead** | The peak forecast Kp over the next 72 hours, the G level, the hours until it, and the issue time of the forecast it came from | SWPC's three-day forecast. The issue time is not decoration: a six-hour-old forecast and a six-minute-old one are different objects and the strip must not conflate them. |
+| **Scenario in force** | The named scenario every probability on screen was computed under | See §3.1. This is the single most important label on the console. |
+| **Provenance** | Snapshot age, oldest element-set epoch in the run, run id, model version, supplemental version, and when the scoring was computed | Collapsed to `14 h old · run 20260901T2048Z-a3f1` with the rest on click or focus. |
+
+**Snapshot age is two numbers, not one.** The snapshot's own fetch time answers "how old is
+this run", and the *oldest element-set epoch in it* answers "how old is the worst element set a
+probability rests on". They differ by days, the second is what actually degrades the answer,
+and only the second is a fair thing to judge the tool by. Both are shown; the second is the one
+in the collapsed strip when it is the worse of the two.
+
+**Staleness is not shown in colour.** The G ramp is reserved (§5 of the visual pass), and a
+stale-data warning in amber would read as a storm. Staleness is shown by the word, a heavier
+weight on the number, and a hairline rule under the group. If the run is older than the
+screening window it describes, the strip says `EXPIRED` in text and the queue is dimmed as a
+whole, because at that point every probability on screen is about a week that has passed.
+
+### 3.1 The scenario control
+
+The brief left open whether this is a segmented control or a dropdown, saying Phase 3 Step 3
+would settle it. Step 3 delivered five named scenarios plus a parameterised `replay:<date>`, so:
+
+- **Desktop: a segmented control of five** — `quiet · forecast · G3 · G4 · G5`. Five is the
+  most a segmented control carries legibly, and it is exactly five. Replay is not a sixth
+  segment: it is a *mode*, entered from a separate control, because it changes the meaning of
+  the whole screen (the times become historical) rather than only the numbers in it.
+- **Below 900 px: a dropdown**, with the current scenario's name always rendered in full. Never
+  an abbreviation: `G4` alone on a small screen, next to a probability, is too easy to read as
+  a flag.
+- The control is the only way probabilities change, and changing it re-renders the queue and
+  the detail view in place. It does not touch the point cloud (the Phase 1 rule).
+- A scenario the run has not been scored under is shown but disabled, with the reason
+  (`not scored for this run`) rather than hidden, so the reader knows the option exists.
+
+## 4. The fleet band: state at a glance
+
+One row per fleet member, horizontally scrollable only if the fleet is larger than the width
+allows. Per member, in this order:
+
+`name · altitude · events by flag · highest probability · time to that event · Δ vs quiet`
+
+- **Events by flag** is three counts (red, yellow, none) rendered as counts, not as coloured
+  dots. Zero is shown as `–`, not as `0`: the eye should be able to sweep the row and see
+  nothing rather than count zeros.
+- **Δ vs quiet** is the fleet member's worst event's `pc / pc_quiet`, shown as `×0.7` or `×12`
+  with an arrow. This is the number that makes the storm layer worth having on the screen at
+  all, and putting it at fleet level means a reader sees "the storm halved my worst event"
+  before they have opened anything.
+- A member with **no covariance history** (fewer than the fit's minimum element sets) says so
+  here rather than silently carrying a category default. So does a member on a **stale element
+  set**.
+- The band is a filter: clicking a member restricts the queue to it. Clicking again clears.
+
+## 5. The event queue
+
+Sorted by probability under the scenario in force, descending. One row per event. Columns, in
+reading order, with the ones that can be dropped at narrow widths marked:
+
+| Column | Content | Drops at |
+| --- | --- | --- |
+| Rank | Position in the sort | — |
+| Primary | Fleet member, short name | — |
+| Secondary | Name, category glyph, and NORAD id | id at < 1100 px |
+| TCA | Relative first (`in 2 d 04 h`), absolute second, both UTC | absolute at < 900 px |
+| Miss | Kilometres, under the scenario in force | — |
+| **Probability** | The scenario's `pc`, in scientific notation with tabular numerals | — |
+| Flag | `red` / `yellow` / none, as weight and a leading rule, never as hue | — |
+| Region | `robust` / `dilution` / `unscoreable` | — |
+| Confidence | `standard` / `low` / `none` | merged into Region at < 1100 px |
+| **Commandability** | Hours from the last usable ground-station pass to the TCA | < 1100 px |
+| **Δ quiet→storm** | `pc / pc_quiet` as a multiplier with a direction arrow | — |
+
+Five things about this table matter more than the rest.
+
+**The sort key is the scenario's probability, and the sort is stated in the header.** Not
+"risk", not a composite score. A composite would hide the one judgement the tool is making.
+
+**Region and confidence are always both present.** A red flag in the dilution region at low
+confidence is not a red flag; it is a statement that the data cannot support a judgement either
+way. The queue must never render the flag without the region beside it, at any width — which is
+why Region is the one column that never drops, only merges.
+
+**Commandability is a column, not a footnote.** A probability is only actionable if somebody can
+act on it, and for a small operator the binding constraint is usually whether there is a pass
+between now and the encounter. It is `hours from the last usable pass before TCA`, and it is
+rendered `4.2 h` or, when there is no pass at all before the encounter, `none before TCA` in
+the row's heaviest weight. It depends on the ground-station work parked in ROADMAP.md at the
+Step 2 review, and if that work is not done the column shows `–` with a tooltip saying no
+ground stations are defined — never a plausible-looking blank.
+
+**The quiet-to-storm delta is on every row, not only on the interesting ones.** Phase 3's
+headline result is that the storm *lowers* the probability on most events through common-mode
+cancellation, and a reader who sees `×0.7` on twenty rows and `×340` on one has learned that
+result from the screen rather than from the documentation. Under the `quiet` scenario the
+column reads `—` rather than `×1.0`, because the comparison is with itself.
+
+**Unscoreable events are in their own section below the queue**, headed with the count and the
+reason, one row each carrying the object, the reason text and everything except a probability.
+They cannot be ranked by a number they do not have, and putting them in the sort with a blank
+would make them read as "safe". The section is collapsed by default and its header is always
+visible: `3 events not scored — the storm term is outside its own derivation for 2 objects`.
+
+### 5.1 Selection and the globe
+
+Selecting a queue row does four things in one frame: opens the detail view, dims the rest of
+the queue, highlights the two objects on the globe if it is loaded, and, if it is not, does
+nothing about the globe at all and says nothing about it either. **No part of the detail view
+waits on the globe.**
+
+## 6. The detail view
+
+Three blocks, in this order. Everything in it is derived from one risk row plus the two objects'
+rows; nothing here needs a new computation in the browser.
+
+### 6.1 The encounter plane
+
+As specified in §6 of the visual pass: hard-body disc, 1σ/2σ/3σ contours, the miss vector, a
+fixed stated scale, tabular numerals, and under a storm scenario the quiet ellipse as a faint
+outline with an arrow from the quiet miss to the scenario miss.
+
+One addition Step 3 makes possible: the arrow is drawn **from the shift alone**. The console
+carries `pc`, `pc_shift_only` and `pc_variance_only`, so the picture can be honest about which
+half did the work — the arrow is the shift, the change in ellipse size is the variance, and the
+caption gives the three numbers in that order.
+
+### 6.2 The covariance, for both objects
+
+A two-column block, primary and secondary, each stating:
+
+- the covariance source label as it appears in the data (`empirical`, `supplemental:<version>`,
+  `spacex:<epoch>`, `default:<band>`), spelled out in words underneath;
+- σ radial, in-track and cross-track in kilometres at the time of closest approach;
+- how many element sets the fit rests on, and the fitted window;
+- the manoeuvre level (`none` / `possible` / `observed` / `known`) and the date of the last
+  observed jump;
+- the hard-body radius and where it came from (`fleet`, `category`, `rcs`, `span`);
+- **and, under a storm scenario, the in-track sigma the storm term added and the ballistic
+  coefficient source it rests on** (`history`, `bstar`, `typical`), with the thrust marking
+  where it applies.
+
+This block exists because the probability is a model output and the reader is entitled to see
+the model. It is the block that makes a low-confidence red flag legible as what it is.
+
+### 6.3 The scenario comparison
+
+A small table: one row per scenario the run has been scored under, columns `miss`, `pc`,
+`pc shift only`, `pc variance only`, `region`, `confidence`. The scenario in force is marked.
+An unscoreable scenario shows its reason across the row rather than blanks.
+
+This is the console's answer to "what would a G4 do to this", and it is a table rather than a
+chart because five rows of six numbers is a table.
+
+## 7. Responsive behaviour
+
+Three layouts, and the rules are stated as behaviour rather than as breakpoint arithmetic
+because the breakpoints are consequences.
+
+| Width | Layout |
+| --- | --- |
+| ≥ 1600 px | Status strip; fleet band; queue; globe; detail as a third pane beside the queue. |
+| 1280–1599 px | As the diagram in §2: detail opens beneath the queue, globe on the right. |
+| 900–1279 px | Two panes. The globe collapses to a button in the status strip; opening it overlays the right half and can be dismissed. Queue drops the columns marked in §5. |
+| < 900 px | **Single column. The event list is the page.** |
+
+At the phone layout:
+
+- **The event list is primary and the globe is optional.** The globe is not rendered, not
+  fetched, and not loaded until the reader asks for it with an explicit control labelled
+  `Show globe (~3.5 MB)` — the size is in the label, because on a metered connection that is
+  information the reader needs before they tap, not after. The figure is transfer, not raw: the
+  scripts compress about threefold and the two `.bin` float arrays barely compress at all.
+- **Hover is replaced by tap, everywhere, with no information lost.** This is a hard rule, not
+  a courtesy: nothing may exist only in a hover state. Concretely — the queue row's hover
+  tooltip becomes a first-tap expansion of the row in place (a second line under it with the
+  dropped columns); a second tap on the same row opens the detail sheet; a tap elsewhere
+  collapses it. Every hover affordance on the desktop layout must have a focus equivalent as
+  well, which is the same requirement arriving from accessibility rather than from touch.
+- **The encounter-plane inset becomes a full-screen sheet**, entered from the detail view,
+  dismissed by a swipe down or a close control, with the covariance block scrolling underneath
+  it. At phone width the inset is otherwise about 90 mm across, which is not enough for three
+  sigma contours, a disc, a vector, tick marks and a scale to be read at once — so it gets the
+  screen or it does not get drawn.
+- The fleet band becomes a horizontally scrollable strip of chips with the same contents, and
+  the scroll is snapped per member so a chip is never half-visible.
+- The status strip keeps the Kp values and the scenario name and collapses the provenance to a
+  single tappable `ⓘ`. The scenario name is never abbreviated (§3.1).
+- The replay scrubber, in replay mode, becomes the bottom 96 px with the Sun tile moving to a
+  collapsed thumbnail; the four things it drives still move together, which is the whole point
+  of it being one control.
+
+Touch targets are at least 44 × 44 px. The queue row is 56 px tall at phone width against 34 px
+on desktop, which is the main reason the phone layout shows fewer rows rather than smaller ones.
+
+## 8. First meaningful paint on a mid-range phone
+
+**The target: first meaningful paint at or under 1.8 s, and largest contentful paint at or
+under 2.5 s, on a mid-range Android over Slow 4G** — Lighthouse's mobile profile, 1.6 Mbit/s
+down, 150 ms round trip, 4× CPU throttle. "Meaningful" is defined here as *the status strip and
+the first ten queue rows, with real numbers in them*. Not a skeleton, not a spinner: the
+answer to question 1 and the top of the answer to question 2.
+
+That target is a budget, and the budget is spent as follows.
+
+**What the current bundle costs, measured** (2026-09-02, `web/dist` and `web/public/data`):
+
+| Asset | Bytes | On the console's critical path? |
+| --- | ---: | --- |
+| `index-*.js` (three.js, globe.gl, the viewer) | 1 911 248 | **No** |
+| `index-*.js` (second chunk) | 308 863 | Partly — the console's own code is carved out of this |
+| `base-release-*.js` | 152 136 | No |
+| `propagator.worker-*.js` | 30 507 | No |
+| `index-*.css` | 5 241 | Yes |
+| `objects.json` | 2 064 926 | No |
+| `elements.bin` | 2 847 768 | No |
+| `conjunctions.json` | 2 762 393 | **No — replaced, see below** |
+| `reference.bin` | 776 664 | No |
+| `conjunction-tracks.bin` | 439 200 | No |
+| Blue Marble texture (globe.gl default) | ~1 MB | No |
+
+Roughly 11 MB of transfer today, of which about 60 KB is on the console's critical path once
+the split below is made. That is the whole design: the console is a different, much smaller
+document that happens to share a repository with the globe.
+
+**What ships on the critical path:**
+
+1. `console.json` — a new export, written by `driftwatch report`: the status strip's fields, the
+   fleet band's rollup, and the **first 50 queue rows fully populated**, with the rest of the
+   queue in a second file. Estimated 45–70 KB raw, 12–20 KB gzipped, for a demo-fleet run.
+2. The console's own JavaScript: DOM rendering, sorting, the scenario control. No three.js, no
+   globe.gl, no satellite.js, no worker. Budget **40 KB gzipped**, and it is a budget rather
+   than an estimate because it is the number that must be defended in review.
+3. The stylesheet, inlined into the document head at build time while it is under 8 KB.
+4. The document itself, with the status strip's *last known* values server-rendered into the
+   HTML at export time, so the strip has content before any script runs.
+
+That is about 60 KB gzipped on the critical path against roughly 3 MB today for a first paint
+that shows anything at all.
+
+**What is dropped to reach it**, explicitly:
+
+- **The globe and its whole dependency tree** — three.js, globe.gl, the Blue Marble texture,
+  `elements.bin`, `reference.bin`, the propagation worker. Loaded on an explicit control at
+  phone width, and on an idle callback after first paint at desktop width. About 6.7 MB raw and
+  roughly 3.5 MB transferred.
+- **The rest of the event queue** beyond the first 50 rows, and `objects.json` entirely: the
+  queue's rows carry the few object fields they need, denormalised, rather than joining against
+  a catalogue in the browser. About 2 MB.
+- **`conjunction-tracks.bin`** — the two ten-minute tracks per event, fetched only when an event
+  is opened, and only for that event if the export is split per event.
+- **The replay bundle**: Sun imagery, the Kp series and the historical positions load when
+  replay mode is entered, never before.
+- **Web fonts.** The first paint uses a system font stack with
+  `font-variant-numeric: tabular-nums`, which every system UI face in the stack supports; where
+  it does not the fallback is the platform monospace. No font file is on the critical path, so
+  there is no flash of invisible text and no layout shift from a swap. If a display face is
+  wanted later it may only be used for headings, loaded with `font-display: optional`, and it
+  must not touch a number.
+- **Any client-side propagation.** Nothing on the critical path calls SGP4. The console's
+  numbers are computed by the pipeline and exported; the browser renders them.
+
+**What is not dropped:** every number's provenance. The scenario name, the region, the
+confidence and the snapshot age are on the critical path and stay there, because a fast screen
+that does not say what it is showing is worse than a slow one that does.
+
+**How it is checked.** A Lighthouse run in CI against the built bundle on the mobile profile,
+failing the build if FMP exceeds 1.8 s or if the critical-path transfer exceeds 80 KB gzipped.
+The existing `driftwatch check-bundle` already enforces a per-file size limit for Cloudflare
+Pages; this is the same idea one level up, and the two should report together.
+
+## 9. What this specification still does not decide
+
+- **The ground-station model behind commandability.** The column is specified; the pass
+  predictor, the minimum elevation and the fleet-file schema for stations are the parked Phase 4
+  item and are not settled here.
+- **Whether the console and the existing viewer are one page or two.** The split above makes
+  them cleanly separable, and either arrangement satisfies it; the decision belongs with the
+  routing and the hosting, not with the layout.
+- **Persistence of operator state** — acknowledged events, per-member thresholds, a chosen
+  scenario surviving a reload. All of it is desirable and none of it is specified, because it is
+  the first thing that turns a published artefact into an application with accounts.
+- **Anything about the point cloud's data path.** As before: it is not to change.
+
 ## What this brief does not decide
 
-- Whether the storm control is a segmented control or a dropdown. That depends on how many
-  scenarios there are in the end, which Phase 3 Step 3 settles.
 - The replay bundle's size budget, which depends on how many Sun frames a day survive the
   25 MiB Cloudflare Pages file limit that `driftwatch check-bundle` enforces.
 - Anything about the point cloud's data path. It is not to change.
+- The four items in §9 of the console specification above.
+
+*Settled since this brief was first written:* whether the storm control is a segmented control
+or a dropdown. Phase 3 Step 3 delivered five named scenarios plus a parameterised replay, so it
+is a segmented control of five on desktop and a dropdown below 900 px, with replay as a separate
+mode rather than a sixth segment. See §3.1.
 
 ## Sources
 
