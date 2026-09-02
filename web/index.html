@@ -71,6 +71,21 @@
       </section>
     </aside>
 
+    <aside id="conjunctions" hidden>
+      <header>
+        <h1>Conjunctions</h1>
+        <div id="conjunctions-summary" class="sub"></div>
+      </header>
+      <div class="row">
+        <input id="conjunction-filter" type="search" placeholder="Filter by name or NORAD id"
+               aria-label="Filter conjunctions" />
+        <label class="checkbox"><input id="conjunction-flagged" type="checkbox" /> flagged only</label>
+      </div>
+      <div id="conjunction-list"></div>
+      <section id="conjunction-detail" hidden></section>
+      <button id="conjunction-clear" class="btn small">clear selection</button>
+    </aside>
+
     <div id="tooltip" hidden></div>
     <div id="loading">Loading catalogue…</div>
 

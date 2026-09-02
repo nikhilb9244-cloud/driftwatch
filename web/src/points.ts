@@ -44,6 +44,7 @@ uniform float uScale;
 uniform vec3 uPalette[8];
 uniform float uPointSize;
 uniform float uHighlight;
+uniform float uHighlight2;
 uniform float uPixelRatio;
 varying vec3 vColor;
 
@@ -57,7 +58,7 @@ void main() {
   float h11 = t3 - t2;
   vec3 p = h00 * p0 + h10 * uH * v0 + h01 * p1 + h11 * uH * v1;
   vec3 scene = vec3(p.y, p.z, p.x) * uScale;
-  bool highlighted = abs(idx - uHighlight) < 0.5;
+  bool highlighted = abs(idx - uHighlight) < 0.5 || abs(idx - uHighlight2) < 0.5;
   vec4 mv = modelViewMatrix * vec4(scene, 1.0);
   gl_Position = projectionMatrix * mv;
   float size = vis > 0.5 ? (highlighted ? uPointSize * 2.6 : uPointSize) : 0.0;
@@ -151,6 +152,7 @@ export class CataloguePoints {
         uPalette: { value: palette },
         uPointSize: { value: 2.6 },
         uHighlight: { value: -1 },
+        uHighlight2: { value: -1 },
         uPixelRatio: { value: Math.min(window.devicePixelRatio || 1, 2) },
         uOpacity: { value: 0.95 },
       },
@@ -210,8 +212,10 @@ export class CataloguePoints {
     this.refreshVisibility();
   }
 
-  setHighlight(index: number): void {
+  /** Draw up to two objects white and enlarged: a hovered or selected object, and the other half of a pair. */
+  setHighlight(index: number, second = -1): void {
     this.material.uniforms.uHighlight.value = index;
+    this.material.uniforms.uHighlight2.value = second;
   }
 
   /** Number of objects currently drawn. */

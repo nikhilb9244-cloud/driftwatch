@@ -46,6 +46,94 @@ export interface Objects {
   sgp4_error: number[];
 }
 
+/** One close approach, as Python computed it. Probabilities and covariances are never recomputed here. */
+export interface ConjunctionEvent {
+  event_id: string;
+  primary_norad_id: number;
+  secondary_norad_id: number;
+  tca: string;
+  miss_km: number;
+  rel_speed_kms: number;
+  miss_r_km: number;
+  miss_i_km: number;
+  miss_c_km: number;
+  in_box: boolean;
+  hbr_m: number;
+  sigma_i_primary_km: number | null;
+  sigma_i_secondary_km: number | null;
+  cov_source_secondary: string | null;
+  /** The combined covariance projected onto the encounter plane, x along the miss vector. */
+  enc_cov_xx_km2: number | null;
+  enc_cov_xy_km2: number | null;
+  enc_cov_yy_km2: number | null;
+  pc: number | null;
+  pc_max: number | null;
+  pc_max_scale: number | null;
+  region: string;
+  flag: string;
+  confidence: string;
+  /** Index into the track table, or null when this event has no stored track. */
+  track: number | null;
+}
+
+/** Repeated encounters of one pair, collapsed. `events` indexes into `Conjunctions.events`. */
+export interface ConjunctionPair {
+  primary_norad_id: number;
+  primary_name: string;
+  secondary_norad_id: number;
+  secondary_name: string;
+  secondary_category: string;
+  n_events: number;
+  n_in_box: number;
+  first_tca: string;
+  closest_km: number;
+  max_pc: number | null;
+  pc_cumulative: number | null;
+  max_pc_max: number | null;
+  region: string;
+  flag: string;
+  confidence: string;
+  manoeuvre_secondary: string;
+  secondary_ephemeris: string;
+  cov_source_secondary: string | null;
+  hbr_m: number;
+  events: number[];
+}
+
+export interface TracksSpec {
+  path: string;
+  dtype: "float32le";
+  frame: "teme";
+  units: "km";
+  n_events: number;
+  objects_per_event: number;
+  samples: number;
+  step_s: number;
+  half_window_s: number;
+  order: string;
+}
+
+export interface Conjunctions {
+  bundle_version: number;
+  run_id: string;
+  snapshot: string;
+  fleet: string;
+  model_version: string | null;
+  scenario: string;
+  scenarios: string[];
+  window: { start: string; end: string };
+  thresholds: { red: number; yellow: number };
+  n_events: number;
+  n_events_total: number;
+  n_pairs: number;
+  n_pairs_detailed: number;
+  pairs: ConjunctionPair[];
+  events: ConjunctionEvent[];
+  tracks: TracksSpec;
+  caveats: string[];
+  supplemental?: Array<{ name: string; version: string; n_applied: number }> | null;
+}
+
 export interface Bundle {
   manifest: Manifest;
   objects: Objects;
@@ -57,6 +145,10 @@ export interface Bundle {
   /** Reference time as a Unix timestamp in milliseconds. */
   t0Ms: number;
   n: number;
+  /** The screening run's conjunctions, when `driftwatch report` has written them. */
+  conjunctions?: Conjunctions;
+  /** Flat float32 TEME positions (km): event, object, sample, xyz. */
+  tracks?: Float32Array;
 }
 
 async function fetchOk(url: string): Promise<Response> {
@@ -88,7 +180,7 @@ export async function loadBundle(base = "data/"): Promise<Bundle> {
   if (objects.name.length !== n) {
     throw new Error(`objects.json has ${objects.name.length} rows, expected ${n}`);
   }
-  return {
+  const bundle: Bundle = {
     manifest,
     objects,
     elements,
@@ -97,4 +189,44 @@ export async function loadBundle(base = "data/"): Promise<Bundle> {
     t0Ms: Date.parse(manifest.reference_time),
     n,
   };
+  Object.assign(bundle, await loadConjunctions(base));
+  return bundle;
+}
+
+/**
+ * The conjunctions bundle, if a screening run has been exported beside the catalogue.
+ *
+ * Optional on purpose: the globe works without it, and a bundle written before Step 4
+ * has no such file. A failure here is logged and dropped rather than fatal.
+ */
+async function loadConjunctions(base: string): Promise<Partial<Bundle>> {
+  let conjunctions: Conjunctions;
+  try {
+    const res = await fetch(base + "conjunctions.json");
+    if (!res.ok) return {};
+    conjunctions = (await res.json()) as Conjunctions;
+  } catch (err) {
+    console.warn("No conjunctions bundle:", err);
+    return {};
+  }
+  if (conjunctions.bundle_version !== 1) {
+    console.warn(`Ignoring conjunctions bundle version ${conjunctions.bundle_version}`);
+    return {};
+  }
+  let tracks: Float32Array | undefined;
+  const spec = conjunctions.tracks;
+  if (spec && spec.n_events > 0) {
+    try {
+      const buf = await (await fetchOk(base + spec.path)).arrayBuffer();
+      tracks = new Float32Array(buf);
+      const expected = spec.n_events * spec.objects_per_event * spec.samples * 3;
+      if (tracks.length !== expected) {
+        console.warn(`${spec.path} has ${tracks.length} values, expected ${expected}; tracks disabled`);
+        tracks = undefined;
+      }
+    } catch (err) {
+      console.warn("No conjunction tracks:", err);
+    }
+  }
+  return { conjunctions, tracks };
 }

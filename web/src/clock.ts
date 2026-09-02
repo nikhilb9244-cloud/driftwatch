@@ -8,11 +8,16 @@ export class SimClock {
   readonly maxMs: number;
   private listeners: Array<(clock: SimClock) => void> = [];
 
-  constructor(t0Ms: number, windowHours: number) {
+  /**
+   * `range` widens the window beyond the bundle's own, so that a screening window longer
+   * than the propagated window is still reachable: selecting a conjunction seven days out
+   * must move the clock there rather than stop at the edge.
+   */
+  constructor(t0Ms: number, windowHours: number, range?: { minMs: number; maxMs: number }) {
     this.tMs = t0Ms;
     const half = (windowHours / 2) * 3.6e6;
-    this.minMs = t0Ms - half;
-    this.maxMs = t0Ms + half;
+    this.minMs = Math.min(t0Ms - half, range?.minMs ?? Infinity);
+    this.maxMs = Math.max(t0Ms + half, range?.maxMs ?? -Infinity);
   }
 
   /** Advance by a wall-clock interval in milliseconds. Pauses at the window edges. */

@@ -8,6 +8,7 @@ import logging
 import os
 import sys
 import time
+from collections.abc import Sequence
 from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
@@ -22,6 +23,7 @@ import pyarrow.parquet as pq
 from driftwatch import __version__, config
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
 from driftwatch.export.conjunctions import RunDirectory
+from driftwatch.export.report import build_bundle, write_bundle, write_report
 from driftwatch.export.viewer import export_viewer_bundle
 from driftwatch.fleet import Fleet, FleetError, load_fleet, resolve_fleet
 from driftwatch.orbit import frames, propagator
@@ -33,7 +35,10 @@ from driftwatch.risk.covariance import (
     EmpiricalCovariance,
     ObjectRef,
     ScaledCovariance,
+    SupplementalCovariance,
     fit_covariance,
+    fit_supplemental_covariance,
+    label_cov_sources,
     sigma_table,
 )
 from driftwatch.risk.scenario import apply_history, model_version_string, new_run_id, objects_from_snapshot, run_risk
@@ -333,6 +338,53 @@ def fit_from_history(
     return fit, result
 
 
+def supplemental_history(norad_ids: Sequence[int], names: Sequence[str] = config.SUPPLEMENTAL_FILES) -> pd.DataFrame:
+    """Every stored supplemental version's sets for ``norad_ids``, across the configured files."""
+    frames = [supplemental_mod.load_supplemental_history(name, norad_ids=norad_ids) for name in names]
+    frames = [f for f in frames if len(f)]
+    if not frames:
+        return supplemental_mod.load_supplemental_history(names[0], norad_ids=norad_ids)
+    return pd.concat(frames, ignore_index=True)
+
+
+def elements_for_run(info: dict[str, Any]) -> pd.DataFrame:
+    """Rebuild the element sets a stored run screened from: its snapshot plus the supplemental versions it used.
+
+    This is what makes a run reproducible from what it records. The catalogue snapshot is
+    immutable and the supplemental versions are stored per fetch, so the table this
+    returns is the one the screening propagated, whatever CelesTrak is serving now.
+    """
+    df = snapshot.read_snapshot(Path(config.SNAPSHOT_DIR) / str(info["snapshot"]))
+    df["ephemeris"] = "gp"
+    for entry in info.get("supplemental") or []:
+        path = Path(config.SUPPLEMENTAL_DIR) / str(entry["file"])
+        if not path.exists():
+            log.warning("Supplemental version %s is not stored; tracks fall back to the GP element sets", entry["file"])
+            continue
+        sup = supplemental_mod.read_supplemental(path)
+        df, match = supplemental_mod.apply_supplemental_frame(
+            df, sup, name=str(entry["name"]), version=str(entry["version"])
+        )
+        if match.n_applied != entry.get("n_applied"):
+            log.warning(
+                "Supplemental %s version %s applied to %d objects now against %s at the time of the run",
+                entry["name"],
+                entry["version"],
+                match.n_applied,
+                entry.get("n_applied"),
+            )
+    return df
+
+
+def write_outputs(run_dir: RunDirectory, elements: pd.DataFrame, *, scenario: str, export: bool, show: int) -> None:
+    """The Step 4 outputs: the weekly markdown report, and the viewer's JSON and track binary."""
+    path = write_report(run_dir, scenario=scenario)
+    log.info("Report: %s", path)
+    if export:
+        bundle, tracks = build_bundle(run_dir, elements, scenario=scenario)
+        write_bundle(bundle, tracks)
+
+
 def survivor_labels(df: pd.DataFrame, fleet: Fleet, result: ScreeningResult) -> pd.DataFrame:
     """``norad_id``, ``category``, ``altitude_band`` for the fleet and every Stage A survivor."""
     ids = sorted({int(i) for i in fleet.norad_ids} | {int(i) for i in result.stage_a.secondary_ids})
@@ -414,6 +466,7 @@ def cmd_screen(args: argparse.Namespace) -> int:
         return 1
 
     df["ephemeris"] = "gp"
+    supplemental_used: list[dict[str, Any]] = []
     if not args.no_supplemental:
         for name in config.SUPPLEMENTAL_FILES:
             try:
@@ -432,7 +485,22 @@ def cmd_screen(args: argparse.Namespace) -> int:
                 "cache" if res.from_cache else "downloaded",
             )
             records = supplemental_mod.load_supplemental_records(name, config.CACHE_DIR)
-            df, _ = supplemental_mod.apply_supplemental(df, records, name=name)
+            # Store the version before it is used: the cache keeps one version and overwrites it,
+            # so without this a run cannot be reproduced from what it records.
+            path, written = supplemental_mod.store_supplemental(records, name=name, fetched_at=res.fetched_at)
+            version = supplemental_mod.version_of(path)
+            log.info("Supplemental %s version %s (%s)", name, version, "stored" if written else "already stored")
+            df, match = supplemental_mod.apply_supplemental(df, records, name=name, version=version)
+            supplemental_used.append(
+                {
+                    "name": name,
+                    "version": version,
+                    "file": path.name,
+                    "n_records": match.n_records,
+                    "n_applied": match.n_applied,
+                    "epoch_lag_days_median": round(float(match.epoch_lag_days_median), 3),
+                }
+            )
 
     cfg = ScreeningConfig(days=args.days, step_s=args.step, pad_km=args.pad, watch_radius_km=args.watch_radius)
     try:
@@ -455,6 +523,7 @@ def cmd_screen(args: argparse.Namespace) -> int:
             "driftwatch_fleet": str(fleet.path or fleet.name),
             "driftwatch_screening_config": json.dumps(cfg.to_dict()),
             "driftwatch_screening_summary": json.dumps(summary),
+            "driftwatch_supplemental": json.dumps(supplemental_used),
         },
     )
     log.info("Wrote %d events to %s", len(result.events), run_dir.events_path)
@@ -479,15 +548,24 @@ def cmd_screen(args: argparse.Namespace) -> int:
             labels, end=result.start, days=args.history_days, mode="off", offline=True, now=now
         )
         rc = 2
-    timings["history_and_fit"] = time.perf_counter() - t0
-    model = fit.model
-    run_dir.write_covariance(
-        fit.table,
-        metadata={"driftwatch_model_version": model_version_string(model), "driftwatch_run_id": run_id},
-    )
+    model: CovarianceModel = fit.model
     ev = result.events
     involved = sorted({int(i) for i in ev["primary_norad_id"]} | {int(i) for i in ev["secondary_norad_id"]})
     objects = apply_history(objects_from_snapshot(involved + fleet.norad_ids, df, fleet), fit)
+    table = fit.table
+    supplemental_fit = None
+    sup_ids = [int(i) for i in objects.loc[objects["ephemeris"] == "supplemental", "norad_id"]]
+    if sup_ids:
+        sup_history = supplemental_history(sup_ids)
+        supplemental_fit = fit_supplemental_covariance(model, sup_history, sup_ids)
+        model = supplemental_fit.model
+        table = pd.concat([fit.table, supplemental_fit.table], ignore_index=True)
+        objects = label_cov_sources(objects, model)
+    timings["history_and_fit"] = time.perf_counter() - t0
+    run_dir.write_covariance(
+        table,
+        metadata={"driftwatch_model_version": model_version_string(model), "driftwatch_run_id": run_id},
+    )
     run_dir.write_objects(objects)
 
     t1 = time.perf_counter()
@@ -514,6 +592,8 @@ def cmd_screen(args: argparse.Namespace) -> int:
                 "backfill": asdict(backfill) if backfill is not None else None,
                 "backfill_failed": rc != 0,
             },
+            "supplemental": supplemental_used,
+            "supplemental_covariance": supplemental_fit.summary if supplemental_fit is not None else None,
             "covariance": {
                 **fit.summary,
                 "model_version": model_version_string(model),
@@ -531,6 +611,7 @@ def cmd_screen(args: argparse.Namespace) -> int:
         timings["risk"],
         timings["total"],
     )
+    write_outputs(run_dir, df, scenario=args.scenario, export=not args.no_viewer, show=args.show)
     print_fleet_sigmas(model, objects)
     print_risk_summary(joined, args.scenario, args.show)
     print(run_dir.path)
@@ -597,16 +678,24 @@ def cmd_risk(args: argparse.Namespace) -> int:
             log.error("%s", exc)
             return 2
         model = fit.model
+        objects = apply_history(objects, fit)
+        table = fit.table
+        sup_ids = [int(i) for i in objects.loc[objects["ephemeris"] == "supplemental", "norad_id"]]
+        if sup_ids:
+            supplemental_fit = fit_supplemental_covariance(model, supplemental_history(sup_ids), sup_ids)
+            model = supplemental_fit.model
+            table = pd.concat([fit.table, supplemental_fit.table], ignore_index=True)
+            info["supplemental_covariance"] = supplemental_fit.summary
+        objects = label_cov_sources(objects, model)
+        run_dir.write_objects(objects)
         run_dir.write_covariance(
-            fit.table,
+            table,
             metadata={"driftwatch_model_version": model_version_string(model), "driftwatch_run_id": info["run_id"]},
         )
-        objects = apply_history(objects, fit)
-        run_dir.write_objects(objects)
         info["covariance"] = {
             **fit.summary,
             "model_version": model_version_string(model),
-            "window": list(model.window or ()),
+            "window": list(fit.model.window or ()),
         }
         info["history"] = {
             "mode": args.history,
@@ -614,7 +703,10 @@ def cmd_risk(args: argparse.Namespace) -> int:
             "backfill": asdict(backfill) if backfill is not None else None,
         }
     else:
-        model = EmpiricalCovariance.from_frame(run_dir.read_covariance())
+        table = run_dir.read_covariance()
+        model = EmpiricalCovariance.from_frame(table)
+        if (table["kind"] == "supplemental").any():
+            model = SupplementalCovariance.from_frame(model, table)
     if args.scale != 1.0:
         model = ScaledCovariance(model, args.scale)
 
@@ -635,9 +727,33 @@ def cmd_risk(args: argparse.Namespace) -> int:
     info["scenarios"] = run_dir.scenarios()
     run_dir.write_run(info)
     joined = run_dir.rebuild_conjunctions()
+    try:
+        write_outputs(
+            run_dir, elements_for_run(info), scenario=args.scenario, export=not args.no_viewer, show=args.show
+        )
+    except FileNotFoundError as exc:
+        log.warning("Cannot rebuild the run's element sets (%s); the report and viewer bundle were not written", exc)
     print_fleet_sigmas(model, objects)
     print_risk_summary(joined, args.scenario, args.show)
     print(run_dir.risk_path(args.scenario))
+    return 0
+
+
+def cmd_report(args: argparse.Namespace) -> int:
+    """Rewrite the weekly report and the viewer bundle for a stored run."""
+    try:
+        run_dir = resolve_run(args.run)
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    info = run_dir.read_run()
+    scenarios = run_dir.scenarios()
+    scenario = args.scenario or (scenarios[0] if scenarios else "quiet")
+    if scenarios and scenario not in scenarios:
+        log.error("Run %s has no scenario %r; it has %s", run_dir.name, scenario, scenarios)
+        return 2
+    write_outputs(run_dir, elements_for_run(info), scenario=scenario, export=not args.no_viewer, show=0)
+    print(run_dir.path / "report.md")
     return 0
 
 
@@ -741,6 +857,9 @@ def build_parser() -> argparse.ArgumentParser:
             help=f"days of history before the window start to backfill (default: {config.HISTORY_BACKFILL_DAYS})",
         )
         p.add_argument("--no-sweep", action="store_true", help="skip the covariance-scale sweep for pc_max")
+        p.add_argument(
+            "--no-viewer", action="store_true", help="write the markdown report but not the viewer's JSON and tracks"
+        )
         p.add_argument("--show", type=int, default=20, help="events to print, highest probability first (default: 20)")
 
     screen = sub.add_parser(
@@ -772,6 +891,12 @@ def build_parser() -> argparse.ArgumentParser:
     risk.add_argument("--offline", action="store_true", help="use only cached history data when refitting")
     add_risk_options(risk, scenario_default="quiet")
     risk.set_defaults(func=cmd_risk)
+
+    report = sub.add_parser("report", help="rewrite a stored run's markdown report and the viewer's conjunction bundle")
+    report.add_argument("run", help="run directory, its name under data/conjunctions, or 'latest'")
+    report.add_argument("--scenario", help="scenario to report (default: the first stored)")
+    report.add_argument("--no-viewer", action="store_true", help="write the report only")
+    report.set_defaults(func=cmd_report)
 
     kelvins = sub.add_parser("kelvins", help="reproduce ESA's Kelvins risk column and report the fitted radius")
     kelvins.add_argument("--data", help=f"the challenge CSV (default: the first CSV under {config.KELVINS_DIR})")

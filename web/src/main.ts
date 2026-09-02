@@ -9,6 +9,7 @@
 import Globe, { type GlobeInstance } from "globe.gl";
 import * as THREE from "three";
 import { SimClock } from "./clock";
+import { buildConjunctionPanel, ConjunctionTracks, type ConjunctionSelection } from "./conjunctions";
 import { loadBundle, type Bundle } from "./data";
 import { FrameStore } from "./frames";
 import { pick } from "./picking";
@@ -43,7 +44,13 @@ async function main(): Promise<void> {
 
   // Worker ----------------------------------------------------------------------
   const worker = new Worker(new URL("./propagator.worker.ts", import.meta.url), { type: "module" });
-  const clock = new SimClock(bundle.t0Ms, bundle.manifest.window_hours);
+  // A screening window can be longer than the propagated window; the clock has to reach the whole of it.
+  const screening = bundle.conjunctions?.window;
+  const clock = new SimClock(
+    bundle.t0Ms,
+    bundle.manifest.window_hours,
+    screening ? { minMs: Date.parse(screening.start), maxMs: Date.parse(screening.end) } : undefined,
+  );
   const frames = new FrameStore(worker, points, bundle.t0Ms);
   frames.onStats = (s) => {
     el("stat-engine").textContent = s.engine;
@@ -83,6 +90,7 @@ async function main(): Promise<void> {
 
   let selected = -1;
   let hovered = -1;
+  let pairSecondary = -1;
   const updateVisible = () => {
     el("stat-visible").textContent = `${points.visibleCount().toLocaleString()} of ${bundle.n.toLocaleString()}`;
   };
@@ -100,8 +108,29 @@ async function main(): Promise<void> {
   });
   el("clear").addEventListener("click", () => {
     selected = -1;
+    pairSecondary = -1;
     points.setHighlight(-1);
     showSelected(null);
+  });
+
+  // Conjunctions panel: Python's events, drawn here. Selecting one jumps the clock to the
+  // time of closest approach, highlights both objects and draws ten minutes of each track.
+  const tracks = new ConjunctionTracks(bundle.conjunctions?.tracks.samples ?? 0);
+  globe.scene().add(tracks.object3d);
+  buildConjunctionPanel(bundle, (selection: ConjunctionSelection | null) => {
+    if (!selection) {
+      pairSecondary = -1;
+      tracks.hide();
+      points.setHighlight(selected, -1);
+      return;
+    }
+    clock.playing = false;
+    clock.set(Date.parse(selection.event.tca));
+    selected = selection.primaryIndex;
+    pairSecondary = selection.secondaryIndex;
+    points.setHighlight(selected, pairSecondary);
+    showSelected(selected >= 0 ? describe(bundle, points, selected) : null);
+    tracks.show(bundle, selection.event);
   });
 
   // Hover picking, throttled.
@@ -114,12 +143,12 @@ async function main(): Promise<void> {
     pointer.inside = false;
     hovered = -1;
     showTooltip(null, 0, 0);
-    if (selected < 0) points.setHighlight(-1);
+    if (selected < 0) points.setHighlight(-1, pairSecondary);
   });
   container.addEventListener("click", () => {
     if (hovered >= 0) {
       selected = hovered;
-      points.setHighlight(selected);
+      points.setHighlight(selected, pairSecondary);
       showSelected(describe(bundle, points, selected));
     }
   });
@@ -141,7 +170,7 @@ async function main(): Promise<void> {
       const i = pick(points, camera, pointer.x - rect.left, pointer.y - rect.top, rect.width, rect.height);
       hovered = i;
       showTooltip(i >= 0 ? describe(bundle, points, i) : null, pointer.x, pointer.y);
-      points.setHighlight(i >= 0 ? i : selected);
+      points.setHighlight(i >= 0 ? i : selected, pairSecondary);
     }
     if (selected >= 0 && (now | 0) % 8 === 0) showSelected(describe(bundle, points, selected));
     requestAnimationFrame(loop);
