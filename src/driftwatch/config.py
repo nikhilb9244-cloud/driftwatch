@@ -186,11 +186,41 @@ DENSITY_MAX_STEP_S = 600.0
 
 # The ballistic coefficient B = C_D A / m, in m^2/kg. Fitting it from an object's own decay
 # needs the decay to be larger than the scatter of the element sets it is measured from.
-# A window this long, with at least this many element sets, and a measured drop in
-# semi-major axis of at least this many metres, or the fit is refused and B* stands in.
+# A window this long, with at least this many element sets, or the fit is refused.
 BALLISTIC_MIN_SPAN_DAYS = 10.0
 BALLISTIC_MIN_SETS = 6
-BALLISTIC_MIN_DECAY_M = 50.0
+# And the decay has to be *measurably* larger than that scatter, which is the Step 2 review's
+# threshold: the drop in mean semi-major axis over the clean intervals must exceed the
+# uncertainty the element-set scatter puts on it by this factor. The scatter is measured on
+# the object's own series -- the root-mean-square residual of a quadratic through its mean
+# semi-major axis over the kept sets -- rather than assumed, so an object with quiet elements
+# gets a fit from a smaller decay than one whose elements bounce.
+BALLISTIC_MIN_DECAY_SNR = 3.0
+# An absolute floor under that, because below a few tens of metres the difference between two
+# mean semi-major axes is systematics rather than noise and the scatter estimate no longer
+# describes it.
+BALLISTIC_MIN_DECAY_M = 20.0
+# And a fit is refused outright when more than this fraction of the object's intervals had to
+# be excluded as manoeuvres. Excluding a burn assumes the intervals around it are free flight;
+# an object manoeuvring in a quarter of them is under continuous control, and a *continuous*
+# low thrust is a ramp rather than a jump, so the detector cannot see it and the fit reads it
+# as drag.
+#
+# This is a proxy, and it is set from a measurement rather than chosen. On the demo run of
+# 2026-09-02, of the 384 objects fitted from history, the median B by band of excluded
+# fraction is 0.045, 0.018, 0.012, 0.013 and 0.014 for the bands up to a quarter and then
+# 0.023, 0.260 and 0.183 above it: flat, then a jump of an order of magnitude. Every Starlink
+# fitted above 0.5 m^2/kg is above a quarter -- 48 km of decay in 45 days at 400 km, which is
+# a deorbit and not an atmosphere, and inverts to an area-to-mass a satellite does not have.
+#
+# The rule is on the *exclusions* and not on the coefficient because the high coefficients are
+# not all wrong: every debris object above 0.5 has no exclusions at all, and that tail -- thin
+# plate and multi-layer insulation from the big fragmentation clouds -- is real and has to
+# survive. Being a proxy it does not catch everything: STARLINK-65196 has 12 per cent of its
+# intervals excluded and still fits at 0.69 m^2/kg off 43 km of decay. It is reported in
+# docs/density-and-drag.md rather than chased with a tighter number that would start refusing
+# the fragments.
+BALLISTIC_MAX_MANOEUVRE_FRACTION = 0.25
 # The window the fit looks back over. Long enough to average out the element-set scatter and
 # to include a range of geomagnetic conditions; short enough that the object's attitude and
 # area have not changed much.
@@ -207,6 +237,24 @@ BALLISTIC_TYPICAL_MIN_OBJECTS = 5
 # And when a run has fitted almost nothing, this stands in: the middle of the range a mixed
 # catalogue actually shows, which is where the fitted values in docs/density-and-drag.md sit.
 BALLISTIC_TYPICAL_M2_KG = 0.01
+# The median is taken by category *and* altitude band (the Step 2 review's instruction). The
+# bands are drag bands, not the screening bands: what a coefficient has in common with
+# another object's is the regime its decay was measured in, and between 400 and 800 km the
+# density falls by three orders of magnitude. `leo` is one band to the screener and six here.
+BALLISTIC_ALTITUDE_BAND_EDGES_KM: tuple[float, ...] = (0.0, 350.0, 450.0, 550.0, 650.0, 800.0, 1200.0)
+
+# Every coefficient carries an uncertainty, so Step 3 can propagate it into the variance of
+# the storm term. A fitted one gets the statistical uncertainty of its own decay measurement,
+# floored here: no decay measurement over six weeks of element sets pins a coefficient better
+# than a few per cent, whatever its formal error says.
+BALLISTIC_SIGMA_REL_FLOOR = 0.05
+# A B* inversion gets a prior instead, because there is no repeat measurement to take a
+# scatter from. Fifty per cent is the size of the disagreements the Step 2 table showed
+# against independent estimates (Sentinel-1A -19 per cent, NOAA-20 +72 per cent).
+BALLISTIC_SIGMA_REL_BSTAR = 0.5
+# A `typical` stand-in gets the spread of the pool its median came from, floored at a factor
+# of two: it is not a measurement of that object at all.
+BALLISTIC_SIGMA_REL_TYPICAL = 1.0
 # The SGP4 reference density that defines B*: B* = rho0 C_D A / (2 m), with rho0 as a column
 # density in kg/m^2 per Earth radius. Quoted here for the record and deliberately NOT used to
 # convert -- see docs/density-and-drag.md, where the conversion it implies is measured
@@ -219,6 +267,86 @@ SGP4_BSTAR_RHO0 = 2.461e-5
 # of metres of residual, which over three days is comparable to the decay of anything above
 # about 600 km; the trend is fitted across the span, not differenced across its ends.
 BSTAR_DECAY_DAYS = 10.0
+
+# Fitting is not free: one density evaluation per element-set interval is about a hundred
+# NRLMSIS calls an object. A run therefore fits only the objects that appear in events, in
+# descending order of probability, under a wall-clock budget; whatever the budget does not
+# reach falls back to the B* inversion and the typical value, labelled as always. Four
+# minutes fits about 120 objects on this machine.
+BALLISTIC_FIT_BUDGET_S = 240.0
+# The fit runs on a coarser grid than the scenarios do. Profiling put 96 per cent of the fit
+# in NRLMSIS itself, in proportion to the number of samples, and the fit only ever uses the
+# *integral* of the density over an interval -- so the local-time structure the scenario step
+# resolves is being averaged away immediately. See docs/density-and-drag.md for the measured
+# cost of this against the step rule.
+BALLISTIC_FIT_STEP_SCALE = 4.0
+
+# Fitted coefficients are cached across runs by NORAD id, with the history span each was
+# fitted from. B changes only when an object's attitude or configuration does, so refitting
+# it every run is waste; what does change is the history available, so a cached fit is redone
+# when the object's history has grown by this much or when it is this old.
+BALLISTIC_CACHE_DIR = DATA_DIR / "ballistic"
+# Bumped whenever the acceptance rules above change, which invalidates every cached fit made
+# under the old ones. Without it a rule change would reach new objects and silently leave the
+# cached ones as they were, which is the worst of both: a store whose rows were decided by
+# different rules and whose rows do not say which.
+BALLISTIC_RULES_VERSION = "3"
+BALLISTIC_REFIT_AFTER_DAYS = 30.0
+BALLISTIC_REFIT_SPAN_GROWTH_DAYS = 7.0
+
+# ---------------------------------------------------------------------------------------
+# The storm term (Phase 3 Step 3). See docs/storm-term.md and driftwatch/storm/.
+
+# How wrong the density model's *storm response* can be. This is the part of NRLMSIS's
+# uncertainty that does NOT cancel against the fitted ballistic coefficient: only the product
+# B*rho is observable from a decay, so a model biased by a constant factor gives a coefficient
+# biased the other way and a product that is right, but nothing corrects an error in the ratio
+# between stormy and quiet. Thirty per cent is a prior. Step 4 measures it against May 2024 and
+# should replace it; the published comparisons of that storm had the empirical models low on
+# the enhancement, so if this moves it is likely to move up.
+DENSITY_STORM_RATIO_SIGMA_REL = 0.30
+# And how wrong the absolute density can be, which matters only for an object whose coefficient
+# did NOT come from a fit through this same model -- a `bstar` or `typical` one -- where the
+# cancellation argument does not apply. NRLMSIS's own quoted uncertainty, tens of per cent.
+DENSITY_ABSOLUTE_SIGMA_REL = 0.15
+
+# The synthetic storm scenarios are built from the May 2024 sequence scaled to a target level.
+# 10 May 2024 carries the Gannon storm's sudden commencement and its whole G5 period, which is
+# the shape a scenario wants: a fast rise, a long main phase and a slow recovery.
+STORM_TEMPLATE_START = "2024-05-10T00:00:00Z"
+STORM_TEMPLATE_DAYS = 3.0
+# Where in the screening window a synthetic storm begins, in days from the window start. A
+# storm on the first day displaces an object for the whole of the rest of the window; the same
+# storm on the last day displaces almost nothing, because the displacement grows with the
+# square of the time left. That sensitivity is the point of the term, so the offset is a stated
+# scenario parameter rather than something buried.
+STORM_OFFSET_DAYS = 1.0
+# Target peak Kp for each named level, from NOAA's G scale (G3 strong, G4 severe, G5 extreme).
+STORM_LEVEL_KP: dict[str, float] = {"storm-g3": 7.0, "storm-g4": 8.0, "storm-g5": 9.0}
+# The scenario names `driftwatch risk` accepts beyond these. `quiet` is the Phase 2 model
+# untouched and is the regression baseline; `forecast` is NOAA's three-day forecast with the
+# 27-day outlook beyond it; `replay:<date>` reruns the observed record of a historical window.
+SCENARIO_QUIET = "quiet"
+SCENARIO_FORECAST = "forecast"
+SCENARIO_REPLAY_PREFIX = "replay"
+
+# Where the linear theory stops meaning anything. The derivation holds the semi-major axis
+# fixed while it integrates the mean-motion drift, so it is valid while the orbit has barely
+# moved. Two limits, and a shift that breaks either is reported with its number and a flag
+# rather than quietly trusted:
+#
+#  - the decay the scenario implies over the window, as a fraction of the semi-major axis.
+#    One part in a thousand of 6,800 km is 6.8 km of altitude, which is already a large
+#    unmodelled decay for a week and near where the numerical check's error starts growing.
+#  - the displacement itself, as a fraction of the orbit's circumference. Past a quarter of a
+#    revolution "the object is ahead by s" has stopped being a small perturbation of a known
+#    position, and past a full one it is not a position statement at all.
+#
+# The demo run's G5 scenario puts high area-to-mass debris at 300 km past both by orders of
+# magnitude -- those objects would be re-entering, not conjuncting -- so the flag is what keeps
+# a faithful extrapolation from being read as a prediction.
+STORM_MAX_DECAY_FRACTION = 1e-3
+STORM_MAX_SHIFT_REVOLUTIONS = 0.25
 
 # Helioviewer: Sun imagery for the Step 5 replay. Public API, no account. Credit is asked
 # for in the API documentation rather than required by a licence.

@@ -69,6 +69,50 @@ On the live conditions of 2 September 2026 (F10.7 = 100.5, 81-day 110.8, Ap 5) t
 command gives 1.30e-11, 1.59e-12, 2.52e-13 and 4.95e-14, which is the low-moderate part of
 that range, as it should be at this point in the cycle.
 
+### Against published NRLMSIS values, which is the stronger check
+
+The 1976 comparison above measures the 1976 profile's known bias about as much as it measures
+anything of ours. The check that tests **our own plumbing** is against NRLMSIS output somebody
+else published at stated drivers, because everything between the space weather table and the
+number — the previous day's flux, the 81-day centred average, the seven-element ap vector, the
+units, the pymsis call — has to be right to reproduce it, and anything wrong shows up as tens
+of per cent rather than as a subtlety.
+
+The reference is NRL's own test output for NRLMSIS 2.1, distributed with the model and shipped
+inside pymsis as `tests/msis2.1_test_ref_dp.txt`. Four of its rows in the altitude range this
+project cares about, driven end to end through `driftwatch.drag.density` from a space weather
+table built to carry those drivers (the file publishes g/cm³; these are ×1000 for kg/m³):
+
+| Row (yyddd) | Altitude | F10.7 prev. day | 81-day | Ap | NRL published | driftwatch | error |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 76138 | 349.9 km | 77.4 | 72.4 | 4 | 1.5860e-12 | 1.5859e-12 | −0.005 % |
+| 78279 | 379.2 km | 138.7 | 156.5 | 4 | 6.2060e-12 | 6.2063e-12 | +0.005 % |
+| 88156 | 434.6 km | 145.2 | 129.9 | 3 | 2.2890e-12 | 2.2847e-12 | −0.187 % |
+| 6257 | 500.0 km | 82.9 | 77.6 | 4 | 1.8790e-13 | 1.8793e-13 | +0.015 % |
+
+Better than 0.2 per cent, which is the printing precision of NRL's own file. This is pinned by
+a test with the four rows written out in it, so the numbers cannot drift silently.
+
+**Why those four rows and not others.** NRLMSIS has two geomagnetic modes and they are not the
+same model. NRL's reference file was produced in the **daily-Ap** mode; `density()` always asks
+for the **seven-element storm-time** mode, because that is the one that responds to a storm at
+all. The two agree exactly at Ap = 4 — the model's quiet baseline — and diverge as the index
+rises, so the rows at Ap ≈ 4 are the ones on which the plumbing can be compared without the
+model's own two answers confounding it. Measured at 379 km with a flat ap vector:
+
+| Ap | daily-Ap mode | seven-element mode | difference |
+| ---: | ---: | ---: | ---: |
+| 4 | 3.7361e-12 | 3.7361e-12 | +0.00 % |
+| 15 | 4.2985e-12 | 4.4067e-12 | +2.52 % |
+| 40 | 4.9210e-12 | 5.1755e-12 | +5.17 % |
+| 80 | 5.5296e-12 | 5.9126e-12 | +6.93 % |
+| 150 | 6.6039e-12 | 7.1894e-12 | +8.87 % |
+
+That divergence, growing with the index, is the reason the seven-element vector is built at
+all — and this is with a *flat* history. A real storm's history is not flat, and the gap
+between "the daily average said 80" and "it was 4 yesterday and 200 three hours ago" is larger
+still.
+
 ### The storm-to-quiet ratio
 
 A flat Kp applied for the 24 hours before the evaluation as well as at it — a storm switched
@@ -168,9 +212,79 @@ and **intervals longer than a fortnight**, where a burn could hide inside a net 
 windows carry the **observed** ap of those days, so a storm inside the fit window is modelled
 as a storm rather than averaged into a quiet mean.
 
-Refused, with the reason recorded, when the clean span is under 10 days, when fewer than six
-element sets survive, when the total drop is under 50 m (inside the element-set scatter), or
-when the answer lands outside 1e-4 to 1 m²/kg.
+#### When a fit is accepted
+
+Not on a fixed number of metres, which cannot know whether fifty metres is a measurement or a
+wobble. The threshold is the **object's own element-set scatter**.
+
+Excluding the manoeuvre intervals leaves contiguous *runs* of element sets. A quadratic is
+fitted through the mean semi-major axis **inside each run** and the pooled root-mean-square
+residual is the scatter — what one element set of this object disagrees with its neighbours
+by, over this window. A quadratic because a decaying orbit's semi-major axis is curved over
+six weeks and a line's residual would count the curvature as noise; inside each run and never
+across the gap between two, because a run ends where a burn was excluded and a curve fitted
+across the exclusion reads the 2 km burn itself as noise. That last point is not hypothetical:
+the first version of this fitted one curve across the whole window, and the burn-exclusion test
+caught it refusing a designed fit it had just made possible.
+
+The total-decay estimator telescopes to endpoint differences within a run, so its own
+uncertainty is `scatter × sqrt(2 × runs)`, and a fit is accepted only when the measured decay
+exceeds that by a factor of three. Quiet elements therefore earn a fit from a smaller decay
+than noisy ones. NOAA-20 is the case that shows why: its element sets scatter by 0.16 m, so its
+64 m of decay is a 77-sigma measurement, where a fixed 50 m floor would have called it marginal.
+
+Also refused, with the reason recorded: a clean span under 10 days, fewer than six element sets,
+a decay under an absolute 20 m floor (below which the difference of two mean semi-major axes is
+systematics rather than noise), an answer outside 1e-4 to 1 m²/kg, and — see below — more than a
+quarter of the intervals excluded as manoeuvres.
+
+#### An object under continuous control is not measuring drag
+
+Excluding a burn assumes the intervals *around* it are free flight. That fails for an object
+that is manoeuvring most of the time, and it fails in a specific way: a **continuous** low
+thrust is a ramp rather than a jump, the jump detector cannot see it, and the fit reads it as
+atmosphere.
+
+The Starlinks being deorbited are the case. On the demo run several fit at B near 1 m²/kg off
+48 km of decay in 45 days at 400 km, which is not an atmosphere and is not an area-to-mass any
+satellite has. Grouping the run's 384 history fits by the fraction of intervals excluded as
+manoeuvres:
+
+| Excluded fraction | n | median B | max B |
+| --- | ---: | ---: | ---: |
+| 0–5 % | 103 | 0.045 | 0.798 |
+| 5–10 % | 29 | 0.018 | 0.260 |
+| 10–15 % | 74 | 0.012 | 0.692 |
+| 15–20 % | 89 | 0.013 | 0.321 |
+| 20–25 % | 48 | 0.014 | 0.175 |
+| 25–35 % | 11 | 0.023 | 0.994 |
+| 35–50 % | 15 | 0.260 | 0.883 |
+| over 50 % | 15 | 0.183 | 0.759 |
+
+Flat to a quarter, then an order of magnitude. So a fit is refused above a quarter, and the run
+comes back with 362 history fits instead of 384.
+
+**The rule is on the exclusions and not on the coefficient**, deliberately: every *debris*
+object fitted above 0.5 m²/kg has **no** exclusions at all, and that tail is real (below). A cap
+on B would throw the fragments away to catch the satellites.
+
+It is a proxy and it does not catch everything. STARLINK-65196 has 12 per cent of its intervals
+excluded and still fits at 0.69 m²/kg off 43 km of decay; it survives the rule and it is
+certainly a deorbit. It is left in and named here rather than chased with a tighter threshold
+that would start refusing the fragments, and it is a question for the review.
+
+#### Every coefficient carries an uncertainty
+
+So the Step 3 variance term has something to propagate. `b_sigma_m2_kg` on every row:
+
+- **`history`**: the statistical uncertainty of its own decay measurement, `sigma_B/B = 1/snr`,
+  floored at 5 %. It is deliberately *not* the density model's uncertainty — that is a separate
+  Step 3 term where it partly cancels, and adding it here would double-count it.
+- **`bstar`**: a 50 % prior. There is no repeat measurement to take a scatter from, and 50 % is
+  the size of the disagreements the table below shows against independent estimates.
+- **`typical`**: the robust spread of the pool the median came from (`1.4826 × MAD`), floored at
+  a factor of two, because a population median is not a measurement of this object however
+  tight the population is.
 
 **`bstar`** — from the element set's own drag term. **B\* is not a physical ballistic
 coefficient.** It is a fit parameter for SGP4's own atmosphere model and it absorbs whatever
@@ -191,8 +305,12 @@ long-period one that over ten days looks exactly like a trend, either of which s
 tens or hundreds of metres a week of drag removes.)
 
 **`typical`** — the run's own median. Where neither route works, the object takes the median
-of the coefficients this run actually fitted, for its own category where there are at least
-five of them. Sentinel-1A forced this: at 693 km its decay over 45 days is 25 m, inside the
+of the coefficients this run actually fitted, for its own **category and drag altitude band**,
+falling back to the category alone and then to everything fitted, with the label saying which.
+The bands are `config.BALLISTIC_ALTITUDE_BAND_EDGES_KM` — 350, 450, 550, 650, 800, 1200 km —
+and they are drag bands, not the screener's: what one object's coefficient has in common with
+another's is the density regime its decay was measured in, and the screener's `leo` spans three
+orders of magnitude of density. `leo` is one band there and six here. Sentinel-1A forced this: at 693 km its decay over 45 days is 25 m, inside the
 element-set scatter, so there is nothing to fit; before the B\* route was made altitude-aware
 its B\* implied 3.3 m²/kg, which is not a satellite. The alternative was B = 0, which asserts
 that a storm does nothing to it — nearly true at 800 km, plainly false at 500, and the wrong
@@ -241,6 +359,110 @@ coefficient near 0.6 and cannot be produced by a small one. The caveat is that t
 the objects where the model is least certain (helium and hydrogen dominate the atmosphere
 there) and where solar radiation pressure is a comparable force, so read the tail as "light
 fragments, coefficient uncertain by a factor rather than a per cent".
+
+## What it costs, and what is done about it
+
+A history fit is one density evaluation per element-set interval, about a hundred an object.
+The demo run has 2,993 objects appearing in events. Fitting them all at the full sampling step
+would take hours, so the Step 2 review set four rules and they are all measured rather than
+asserted.
+
+### Profiled first
+
+Eight objects, 949 element sets, 814 fitted intervals: 20.3 s unprofiled, 2.53 s an object.
+Under cProfile (26.0 s total, so read the shares rather than the absolutes):
+
+| | tottime | share |
+| --- | ---: | ---: |
+| `pymsis.calculate` (the Fortran model itself) | 12.76 s | 49 % |
+| rebuilding the weather grid, once per interval | 3.97 s | 15 % |
+| propagating the orbit track | 3.92 s | 15 % |
+| everything else | ~5 s | 20 % |
+
+So density evaluation does dominate, and it is dominated in turn by the number of samples. The
+second line is not density evaluation at all: it was pandas re-parsing the same unchanged
+weather table a hundred times an object. That is now `density.WeatherGrid`, built once per run
+and passed down — no approximation, just not doing the same work repeatedly.
+
+### A coarser grid, for the fit alone
+
+The fit only ever uses the *integral* of the density over an interval, so the local-time
+structure the scenario step resolves is being averaged away immediately. Multiplying the
+per-object step rule by a factor, on the same eight objects:
+
+| Step | Time per object | Worst |ΔB| against the rule step |
+| --- | ---: | ---: |
+| ×1 (the rule) | 2.53 s | — |
+| ×2 | 1.75 s | 0.02 % |
+| **×4** | **1.18 s** | **0.65 %** |
+| ×8 | 0.97 s | 1.44 % |
+
+And the same factor applied to the B\* inversion, which is a single ten-day track rather than a
+sum over a hundred intervals and is correspondingly more sensitive (40 objects):
+
+| Step | Time per object | Median |ΔB| | Worst |ΔB| |
+| --- | ---: | ---: | ---: |
+| ×1 | 142 ms | — | — |
+| ×2 | 75 ms | 0.04 % | 0.20 % |
+| **×4** | **41 ms** | **0.67 %** | **3.88 %** |
+| ×8 | 21 ms | 2.85 % | 24.1 % |
+
+×4 is the default for both. It costs the history fit 0.65 % against a coefficient whose own
+statistical uncertainty is 5 %, and the B\* inversion 3.9 % against one carrying a 50 % prior.
+×8 is where the B\* inversion falls apart, which is why the choice is measured and not guessed.
+
+### Only the objects that appear in events, worst first
+
+`driftwatch ballistic` fits the objects that take part in a stored event — nothing else needs a
+coefficient, because nothing else has a conjunction to score — ordered by the highest
+probability they appear in under the run's first scored scenario, falling back to closest
+approach when nothing has been scored yet. `--all` covers every object of the run.
+
+### A wall-clock budget
+
+`--budget-s`, four minutes by default, bounds the **history fits**. What it does not reach
+falls through to the B\* inversion and then to the typical value, labelled exactly as any other
+fallback, so nothing downstream has to know a budget existed. The ordering is what makes this
+sound: the allowance is spent from the top of the probability list down.
+
+### And a persistent cache, which is what makes it converge
+
+`data/ballistic/coefficients.parquet`, keyed by NORAD id, holding each fit **with the span of
+history it used**. A cached fit is reused unless the object's history has grown by more than a
+week, the fit is over 30 days old, or it was made under a different NRLMSIS version or a
+different set of acceptance rules (`config.BALLISTIC_RULES_VERSION` — without it, a change to
+what counts as a good enough decay would reach new objects and silently leave the cached ones
+alone). Rejections are cached too: finding out that an object's decay is inside its own scatter
+costs the same hundred evaluations, and the answer is just as stable.
+
+The effect is that **coverage deepens run over run** rather than the same objects being refitted:
+
+| Run | From cache | Newly fitted | Over budget | Objects with a fitted coefficient |
+| --- | ---: | ---: | ---: | ---: |
+| first | 0 | 608 | 2,367 | 362 |
+| second | 608 | 453 | 1,914 | 670 |
+
+Both took under seven minutes wall clock for 2,993 objects.
+
+## What it gives on the full run
+
+2,993 objects of the demo run, after two passes: **670 fitted from history, 1,620 from B\*, 703
+typical**. Median B by source and category (m²/kg):
+
+| Category | history | bstar | typical |
+| --- | ---: | ---: | ---: |
+| station | 0.0088 | — | — |
+| starlink | 0.0129 | 0.164 | 0.0127 |
+| rocket_body | 0.0204 | 0.0228 | 0.0204 |
+| payload | 0.0264 | 0.0312 | 0.0264 |
+| unknown | 0.0382 | 0.148 | 0.0382 |
+| constellation | 0.0599 | 0.0524 | 0.0685 |
+| debris | 0.327 | 0.197 | 0.442 |
+
+The `history` column is the one to read; the ordering across it is the physical one, station to
+debris, and nothing enforces it. The `bstar` column runs consistently higher for the
+constellations, which is what B\* being a fit parameter that absorbs unmodelled thrust looks
+like on a population that manoeuvres.
 
 ## The bias that folds in, and the part of it that cancels
 

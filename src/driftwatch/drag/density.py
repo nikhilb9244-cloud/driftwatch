@@ -102,16 +102,51 @@ class MsisInputs:
         return len(self.f107)
 
 
-def _grid(table: pd.DataFrame) -> tuple[np.datetime64, np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
-    """The table as aligned arrays on its own three-hourly grid."""
+@dataclass(frozen=True)
+class WeatherGrid:
+    """A space weather table reduced to the aligned arrays the model driver reads.
+
+    Built once and passed down rather than re-derived per call. The conversion itself is
+    trivial arithmetic; what costs is pandas' parsing of the timestamp column and the
+    ``to_numeric`` coercions, and a ballistic fit asks for the same table a hundred times an
+    object. Profiling the fit put a sixth of its wall clock in exactly that -- see
+    ``docs/density-and-drag.md`` -- which is a sixth spent re-reading a table that has not
+    changed.
+
+    Every function here that takes a ``table`` takes one of these instead, so a caller in a
+    loop can hoist the conversion out of it with :func:`weather_grid`.
+    """
+
+    t0: np.datetime64
+    t: np.ndarray
+    ap: np.ndarray
+    ap_daily: np.ndarray
+    f107: np.ndarray
+    f107_81: np.ndarray
+    provenance: np.ndarray  # one label per interval, or an empty array
+
+    def __len__(self) -> int:
+        return len(self.t)
+
+
+def weather_grid(table: pd.DataFrame | WeatherGrid) -> WeatherGrid:
+    """The table as aligned arrays on its own three-hourly grid; a grid passes straight through."""
+    if isinstance(table, WeatherGrid):
+        return table
     t = pd.to_datetime(table["t"], utc=True).dt.tz_localize(None).to_numpy(dtype="datetime64[s]")
     order = np.argsort(t)
-    t = t[order]
-    ap = pd.to_numeric(table["ap"], errors="coerce").to_numpy(dtype=float)[order]
-    ap_daily = pd.to_numeric(table["ap_daily"], errors="coerce").to_numpy(dtype=float)[order]
-    f107 = pd.to_numeric(table["f107"], errors="coerce").to_numpy(dtype=float)[order]
-    f107_81 = pd.to_numeric(table["f107_81"], errors="coerce").to_numpy(dtype=float)[order]
-    return t[0], t, ap, ap_daily, f107, f107_81
+    labels = np.empty(0, dtype=object)
+    if "provenance" in table.columns and len(table):
+        labels = table["provenance"].astype(str).to_numpy()[order]
+    return WeatherGrid(
+        t0=t[order][0],
+        t=t[order],
+        ap=pd.to_numeric(table["ap"], errors="coerce").to_numpy(dtype=float)[order],
+        ap_daily=pd.to_numeric(table["ap_daily"], errors="coerce").to_numpy(dtype=float)[order],
+        f107=pd.to_numeric(table["f107"], errors="coerce").to_numpy(dtype=float)[order],
+        f107_81=pd.to_numeric(table["f107_81"], errors="coerce").to_numpy(dtype=float)[order],
+        provenance=labels,
+    )
 
 
 def _indices(times64: np.ndarray, t0: np.datetime64, n: int) -> np.ndarray:
@@ -121,7 +156,7 @@ def _indices(times64: np.ndarray, t0: np.datetime64, n: int) -> np.ndarray:
     return np.where((idx >= 0) & (idx < n), idx, -1)
 
 
-def ap_vector(times, table: pd.DataFrame) -> np.ndarray:
+def ap_vector(times, table: pd.DataFrame | WeatherGrid) -> np.ndarray:
     """The seven-element ap input NRLMSIS 2.x expects, one row per time.
 
     ``[daily Ap, ap now, ap 3 h ago, ap 6 h ago, ap 9 h ago, mean of 12-33 h ago,
@@ -131,14 +166,15 @@ def ap_vector(times, table: pd.DataFrame) -> np.ndarray:
     record into a calm day and hide a storm.
     """
     times64 = to_datetime64(times)
-    t0, grid_t, ap, ap_daily, _, _ = _grid(table)
-    idx = _indices(times64, t0, len(grid_t))
+    grid = weather_grid(table)
+    idx = _indices(times64, grid.t0, len(grid))
     out = np.full((len(times64), 7), np.nan)
     ok = idx >= AP_HISTORY_INTERVALS
     if not ok.any():
         return out
     here = idx[ok]
-    out[ok, 0] = ap_daily[here]
+    ap = grid.ap
+    out[ok, 0] = grid.ap_daily[here]
     for k, lag in enumerate((0, 1, 2, 3), start=1):
         out[ok, k] = ap[here - lag]
     # Lags 4 to 11 are the intervals 12 to 33 hours back, 12 to 19 those 36 to 57 hours back.
@@ -149,7 +185,7 @@ def ap_vector(times, table: pd.DataFrame) -> np.ndarray:
     return out
 
 
-def f107_inputs(times, table: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
+def f107_inputs(times, table: pd.DataFrame | WeatherGrid) -> tuple[np.ndarray, np.ndarray]:
     """``(previous day's observed F10.7, 81-day centred average)`` for each time.
 
     The previous day's value is what NRLMSIS was fitted with: the thermosphere responds to
@@ -158,27 +194,26 @@ def f107_inputs(times, table: pd.DataFrame) -> tuple[np.ndarray, np.ndarray]:
     flux, so the lookup is one index shift rather than a date join.
     """
     times64 = to_datetime64(times).astype("datetime64[s]")
-    t0, grid_t, _, _, f107, f107_81 = _grid(table)
-    n = len(grid_t)
-    yesterday = _indices(times64 - np.timedelta64(24, "h"), t0, n)
-    today = _indices(times64, t0, n)
-    out_f107 = np.where(yesterday >= 0, f107[np.maximum(yesterday, 0)], np.nan)
-    out_f107a = np.where(today >= 0, f107_81[np.maximum(today, 0)], np.nan)
+    grid = weather_grid(table)
+    n = len(grid)
+    yesterday = _indices(times64 - np.timedelta64(24, "h"), grid.t0, n)
+    today = _indices(times64, grid.t0, n)
+    out_f107 = np.where(yesterday >= 0, grid.f107[np.maximum(yesterday, 0)], np.nan)
+    out_f107a = np.where(today >= 0, grid.f107_81[np.maximum(today, 0)], np.nan)
     return out_f107, out_f107a
 
 
-def msis_inputs(times, table: pd.DataFrame) -> MsisInputs:
+def msis_inputs(times, table: pd.DataFrame | WeatherGrid) -> MsisInputs:
     """Everything NRLMSIS needs for these times, plus a count of what the table could not cover."""
-    ap = ap_vector(times, table)
-    f107, f107a = f107_inputs(times, table)
+    grid = weather_grid(table)
+    ap = ap_vector(times, grid)
+    f107, f107a = f107_inputs(times, grid)
     complete = np.isfinite(ap).all(axis=1) & np.isfinite(f107) & np.isfinite(f107a)
     times64 = to_datetime64(times)
-    t0, grid_t, *_ = _grid(table)
-    idx = _indices(times64, t0, len(grid_t))
+    idx = _indices(times64, grid.t0, len(grid))
     provenance: dict[str, int] = {}
-    if "provenance" in table.columns and len(table):
-        labels = table.sort_values("t")["provenance"].astype(str).to_numpy()
-        used = labels[idx[idx >= 0]]
+    if len(grid.provenance):
+        used = grid.provenance[idx[idx >= 0]]
         provenance = {str(k): int(v) for k, v in zip(*np.unique(used, return_counts=True), strict=True)}
     n_incomplete = int((~complete).sum())
     if n_incomplete:
@@ -313,7 +348,7 @@ def sample_times(start: datetime, end: datetime, step_s: float) -> np.ndarray:
 
 def density_along_orbit(
     element_row: pd.Series | pd.DataFrame,
-    table: pd.DataFrame,
+    table: pd.DataFrame | WeatherGrid,
     start: datetime,
     end: datetime,
     *,

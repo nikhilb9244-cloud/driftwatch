@@ -221,12 +221,23 @@ def bstar_for_decay(altitude_km: float, epoch: datetime, decay_m_per_day: float)
 
 
 def designed_sets(
-    *, b_true: float, rho: float, altitude_km: float, days: int, raise_at: int | None = None, raise_m: float = 0.0
+    *,
+    b_true: float,
+    rho: float,
+    altitude_km: float,
+    days: int,
+    raise_at: int | None = None,
+    raise_m: float = 0.0,
+    scatter_m: float = 0.0,
 ) -> pd.DataFrame:
     """One element set a day for an orbit decaying at exactly the rate ``b_true`` implies.
 
     With ``raise_at`` a burn of ``raise_m`` is inserted between that interval's two sets, so
-    the manoeuvre detector has something real to find.
+    the manoeuvre detector has something real to find. With ``scatter_m`` each set is
+    displaced by that much, alternating in sign: deterministic, so the test is not a coin
+    toss, and never more than ``2 * scatter_m`` between neighbours, which keeps it under the
+    manoeuvre detector's 100 m floor and so tests the acceptance rule rather than the
+    detector.
     """
     a0 = 6378.137e3 + altitude_km * 1e3
     rate = b_true * rho * np.sqrt(MU * a0)  # m/s, the circular closed form
@@ -237,6 +248,7 @@ def designed_sets(
         a_k = a0 - rate * (epoch - T0).total_seconds()
         if raise_at is not None and k > raise_at:
             a_k += raise_m
+        a_k += scatter_m * (1.0 if k % 2 else -1.0)
         sat = circular_satrec(90000 + k, (a_k - 6378.137e3) / 1000.0, epoch, bstar=bstar)
         rows.append(element_row(sat, epoch))
     return pd.DataFrame(rows)
@@ -307,6 +319,14 @@ def test_a_burn_in_the_history_is_excluded_rather_than_read_as_negative_drag(mon
     a_m = bal.mean_sma_m(sets)
     assert (a_m[0] - a_m[-1]) < 0.5 * fit.decay_m
 
+    # And the burn must not reappear as element-set scatter. The exclusion leaves two runs of
+    # sets; a curve fitted across the gap between them would read the 2 km raise as noise,
+    # inflate the decay's uncertainty by a kilometre and refuse the very fit the exclusion
+    # made possible. Measured inside each run, these designed sets have no scatter at all.
+    assert bal.runs_of_sets(np.array([True] * 6 + [False] + [True] * 4)) == [(0, 7), (7, 12)]
+    assert fit.scatter_m < 1.0, f"the burn leaked into the scatter: {fit.scatter_m:.0f} m"
+    assert fit.decay_snr > config.BALLISTIC_MIN_DECAY_SNR
+
 
 def test_an_object_whose_decay_says_nothing_falls_back_and_says_so():
     """Too few sets, too small a decay, an implausible B: each is refused with its reason."""
@@ -324,7 +344,237 @@ def test_an_object_whose_decay_says_nothing_falls_back_and_says_so():
 
     # And the run's own typical value stands in, labelled, rather than a silent zero.
     elements = sets.iloc[[-1]].assign(category="debris")
-    frame = bal.coefficients(elements, table, history=None)
+    frame = bal.coefficients(elements, table, history=None, store=None)
     assert list(frame["source"]) == ["typical"]
     assert frame["b_m2_kg"].iloc[0] == pytest.approx(config.BALLISTIC_TYPICAL_M2_KG)
     assert "stood in" in frame["note"].iloc[0]
+    # Never silently certain: a stand-in carries at least a factor of two.
+    assert frame["b_sigma_m2_kg"].iloc[0] >= config.BALLISTIC_SIGMA_REL_TYPICAL * frame["b_m2_kg"].iloc[0]
+    assert frame["alt_band"].iloc[0] == "650-800"
+
+
+# --------------------------------------------------------------------------------------
+# What the Step 2 review asked for: the acceptance rule, the bands, the uncertainty, the cache
+
+
+def test_a_fit_is_accepted_against_the_objects_own_scatter_not_a_fixed_number_of_metres(monkeypatch):
+    """The same decay is a measurement on quiet elements and noise on scattered ones.
+
+    The review's threshold: the drop in mean semi-major axis has to exceed the uncertainty
+    the element-set scatter puts on it by about three. Both objects here decay by the same
+    designed amount; they differ only in how much their element sets bounce, and that alone
+    decides whether a coefficient comes back.
+    """
+    monkeypatch.setattr(frames, "EARTH_ROTATION_RATE", 0.0)
+    rho = 3e-12
+    monkeypatch.setattr(dn, "density", lambda times, lat, lon, alt, inputs: np.full(len(np.asarray(alt)), rho))
+    table = weather(T0 - timedelta(days=4), 20.0)
+    # 120 m of designed decay over eleven days. The alternating scatter displaces the two end
+    # sets in opposite directions, so what is *measured* is 120 - 2*scatter: 70 m for the noisy
+    # object and 116 m for the quiet one. Both clear the 20 m floor, and neither is anywhere
+    # near a fixed threshold that could separate them -- only the scatter can.
+    b_small = 0.02 * 120.0 / 2972.0
+
+    noisy = bal.fit_from_history(
+        designed_sets(b_true=b_small, rho=rho, altitude_km=450.0, days=12, scatter_m=25.0), table, step_s=300.0
+    )
+    assert noisy.source == "none"
+    assert noisy.decay_snr < config.BALLISTIC_MIN_DECAY_SNR
+    assert "times its own uncertainty" in noisy.note
+    assert noisy.scatter_m == pytest.approx(25.0, rel=0.3)
+
+    quiet = bal.fit_from_history(
+        designed_sets(b_true=b_small, rho=rho, altitude_km=450.0, days=12, scatter_m=2.0), table, step_s=300.0
+    )
+    assert quiet.source == "history", quiet.note
+    assert quiet.decay_snr > config.BALLISTIC_MIN_DECAY_SNR
+    # The two decays are the same to within their own scatter; only the scatter differs.
+    assert quiet.decay_m == pytest.approx(noisy.decay_m, abs=4 * 25.0)
+
+
+def test_every_accepted_coefficient_carries_an_uncertainty_step_3_can_propagate(monkeypatch):
+    """A fitted B gets the statistical error of its own decay; a B* and a stand-in get priors."""
+    monkeypatch.setattr(frames, "EARTH_ROTATION_RATE", 0.0)
+    rho = 3e-12
+    monkeypatch.setattr(dn, "density", lambda times, lat, lon, alt, inputs: np.full(len(np.asarray(alt)), rho))
+    table = weather(T0 - timedelta(days=4), 20.0)
+
+    fit = bal.fit_from_history(
+        designed_sets(b_true=0.02, rho=rho, altitude_km=450.0, days=12, scatter_m=20.0), table, step_s=300.0
+    )
+    assert fit.source == "history"
+    # sigma/B is 1/snr, floored: a designed decay is never known better than the floor says.
+    assert fit.b_sigma_m2_kg / fit.b_m2_kg == pytest.approx(
+        max(1.0 / fit.decay_snr, config.BALLISTIC_SIGMA_REL_FLOOR), rel=1e-6
+    )
+    assert fit.b_sigma_m2_kg > 0
+
+    row = pd.Series(element_row(circular_satrec(90500, 500.0, T0, bstar=1e-4), T0, norad_id=90500))
+    from_bstar = bal.from_bstar(row, table, days=5.0, step_s=300.0)
+    assert from_bstar.source == "bstar"
+    assert from_bstar.b_sigma_m2_kg == pytest.approx(config.BALLISTIC_SIGMA_REL_BSTAR * from_bstar.b_m2_kg)
+
+
+def test_the_typical_value_is_taken_by_category_and_drag_altitude_band():
+    """The review's instruction: medians by category *and* altitude band, not category alone.
+
+    Two bands of the same category with coefficients an order of magnitude apart. An object
+    falling back in one of them must take its own band's median, because what its coefficient
+    has in common with another object's is the density its decay was measured in.
+    """
+    low = [{"b_m2_kg": 0.01, "source": "history", "category": "debris", "alt_band": "450-550"}] * 6
+    high = [{"b_m2_kg": 0.20, "source": "history", "category": "debris", "alt_band": "650-800"}] * 6
+    fitted = pd.DataFrame(low + high)
+
+    b_low, sigma_low, why_low = bal.typical_coefficient(fitted, "debris", "450-550")
+    b_high, _, why_high = bal.typical_coefficient(fitted, "debris", "650-800")
+    assert b_low == pytest.approx(0.01) and b_high == pytest.approx(0.20)
+    assert "450-550" in why_low and "650-800" in why_high
+    # Sigma is the spread of the pool, floored: an identical pool still carries a factor of two.
+    assert sigma_low == pytest.approx(config.BALLISTIC_SIGMA_REL_TYPICAL * 0.01)
+
+    # A band with too few fits falls back to the category, and says so.
+    _, _, why_any = bal.typical_coefficient(fitted, "debris", "0-350")
+    assert "any altitude" in why_any
+
+    # And the bands themselves come from the element set, not from a column somebody may forget.
+    assert bal.altitude_band(420.0) == "350-450"
+    assert bal.altitude_band(693.0) == "650-800"
+    assert bal.altitude_band(1500.0) == ">1200"
+    assert bal.altitude_band(float("nan")) == "unknown"
+    iss_like = pd.Series({"mean_motion": 15.5, "eccentricity": 0.0005})
+    assert bal.band_for_row(iss_like) == "350-450"
+
+
+def test_the_fit_budget_falls_back_rather_than_running_over(monkeypatch):
+    """A run with no time to fit anything still answers, from B*, and says the budget stopped it."""
+    monkeypatch.setattr(frames, "EARTH_ROTATION_RATE", 0.0)
+    rho = 3e-12
+    monkeypatch.setattr(dn, "density", lambda times, lat, lon, alt, inputs: np.full(len(np.asarray(alt)), rho))
+    table = weather(T0 - timedelta(days=4), 20.0)
+    sets = designed_sets(b_true=0.02, rho=rho, altitude_km=450.0, days=12)
+    elements = sets.iloc[[-1]].assign(category="payload")
+    history = sets.assign(norad_id=90000)
+
+    generous = bal.coefficients(elements, table, history, step_s=300.0, budget_s=0.0, store=None)
+    assert generous["source"].iloc[0] == "history"
+
+    # A budget of a nanosecond is exhausted before the first object, so nothing is fitted.
+    spent = bal.coefficients(elements, table, history, step_s=300.0, budget_s=1e-9, store=None)
+    assert spent["source"].iloc[0] in ("bstar", "typical")
+    assert "budget" in spent["note"].iloc[0]
+    assert spent.attrs["budget"]["n_over_budget"] == 1
+
+
+def test_a_fitted_coefficient_is_cached_and_refitted_only_when_it_should_be(tmp_path):
+    """The cache keeps the history span it used, and the three things that invalidate it."""
+    from driftwatch.drag.store import CoefficientStore
+
+    store = CoefficientStore(tmp_path)
+    now = datetime(2026, 9, 2, tzinfo=UTC)
+    history_end = datetime(2026, 9, 1, tzinfo=UTC)
+    row = bal.Coefficient(41335, 0.0087, "history", b_sigma_m2_kg=0.0004).as_row()
+    store.put(row, history_start=datetime(2026, 7, 1, tzinfo=UTC), history_end=history_end, now=now)
+
+    assert store.usable(41335, history_end=history_end, now=now)["b_m2_kg"] == pytest.approx(0.0087)
+    # A day of new element sets is not worth refitting for; a fortnight is.
+    assert store.usable(41335, history_end=history_end + timedelta(days=1), now=now) is not None
+    assert store.usable(41335, history_end=history_end + timedelta(days=14), now=now) is None
+    # Nor does a fit stand for ever.
+    assert store.usable(41335, history_end=history_end, now=now + timedelta(days=90)) is None
+    # And a fit made against another atmosphere is not a fit against this one: only the
+    # product B*rho is observable from a decay.
+    store.rows[41335]["msis_version"] = "0"
+    assert store.usable(41335, history_end=history_end, now=now) is None
+    store.rows[41335]["msis_version"] = str(config.MSIS_VERSION)
+    # Nor is a fit accepted under different rules. Without this a change to what counts as a
+    # good enough decay would reach new objects and leave the cached ones as they were.
+    store.rows[41335]["rules_version"] = "0"
+    assert store.usable(41335, history_end=history_end, now=now) is None
+    store.rows[41335]["rules_version"] = str(config.BALLISTIC_RULES_VERSION)
+    assert store.usable(41335, history_end=history_end, now=now) is not None
+
+    # A rejection is cached too -- it cost the same hundred evaluations to find out.
+    refused = bal.Coefficient(99999, float("nan"), "none", note="decay is inside the scatter").as_row()
+    store.put(refused, history_start=None, history_end=history_end, now=now)
+    store.save()
+    reloaded = CoefficientStore(tmp_path).load()
+    assert reloaded.usable(99999, history_end=history_end, now=now)["source"] == "none"
+    assert reloaded.summary(now=now)["n"] == 2
+
+    # A bstar or typical coefficient is a property of one element set or one run, not of the
+    # object, so it is never stored.
+    store.put(bal.Coefficient(1, 0.01, "bstar").as_row(), history_start=None, history_end=None, now=now)
+    assert 1 not in store.rows
+
+
+# --------------------------------------------------------------------------------------
+# Against NRL's own published output
+
+
+# Rows of NRL's reference output for NRLMSIS 2.1, distributed with the model and shipped with
+# pymsis as `tests/msis2.1_test_ref_dp.txt`. Columns: (yyddd, seconds of day, altitude km,
+# latitude, longitude, F10.7 81-day average, F10.7 previous day, Ap, total mass density in
+# kg/m^3 -- the file publishes g/cm^3 and these are multiplied by 1000).
+#
+# All four have Ap = 4, which is the value at which NRLMSIS's daily-Ap mode and its
+# storm-time seven-element mode agree; NRL's file was produced in the daily mode and
+# driftwatch always drives the storm-time one, so these are the rows on which the two can be
+# compared without confounding the model's own two answers. The rows at other Ap are used
+# below to measure exactly how far apart those two modes are.
+NRL_REFERENCE: tuple[tuple[str, float, float, float, float, float, float, float, float], ...] = (
+    ("76138", 83955.0, 349.9, 4.2, -20.6, 72.4, 77.4, 4.0, 1.5860e-12),
+    ("78279", 63960.0, 379.2, -8.1, 14.2, 156.5, 138.7, 4.0, 6.2060e-12),
+    ("88156", 58563.0, 434.6, 3.0, -4.3, 129.9, 145.2, 3.0, 2.2890e-12),
+    ("6257", 18301.0, 500.0, -47.6, 125.3, 77.6, 82.9, 4.0, 1.8790e-13),
+)
+
+
+def reference_case(iyd: str, sec: float, f107a: float, f107: float, ap: float):
+    """``(sample time, weather table)`` reproducing one NRL reference row's drivers."""
+    year = int(iyd[:-3])
+    year += 1900 if year > 60 else 2000
+    at = datetime(year, 1, 1, tzinfo=UTC) + timedelta(days=int(iyd[-3:]) - 1, seconds=sec)
+    # The table has to reach 57 hours behind the sample for the ap history and a day behind
+    # for the previous day's flux; the drivers are flat, which is what a single reference row
+    # states.
+    table = weather(at - timedelta(days=5), 7.0, f107=f107)
+    table["ap"] = ap
+    table["ap_daily"] = ap
+    table["kp"] = wt.ap_to_kp(np.full(len(table), ap))
+    table["f107"] = f107
+    table["f107_81"] = f107a
+    return at, table
+
+
+def test_the_density_matches_nrls_own_published_reference_output():
+    """End-to-end against NRL's published NRLMSIS 2.1 reference rows: better than one per cent.
+
+    The US Standard Atmosphere 1976 comparison in ``docs/density-and-drag.md`` measures the
+    1976 profile's known bias as much as anything of ours. This measures our plumbing: the
+    table lookup, the previous day's flux, the 81-day average, the seven-element ap vector,
+    the units and the pymsis call, against numbers NRL published for this model at stated
+    drivers. Anything wrong in the driving shows up here as tens of per cent.
+    """
+    for iyd, sec, alt, lat, lon, f107a, f107, ap, expected in NRL_REFERENCE:
+        at, table = reference_case(iyd, sec, f107a, f107, ap)
+        inputs = dn.msis_inputs([at], table)
+        assert inputs.n_incomplete == 0
+        rho = dn.density([at], [lat], [lon], [alt], inputs)[0]
+        assert rho == pytest.approx(expected, rel=0.01), f"{iyd} at {alt} km: {rho:.4e} against {expected:.4e}"
+
+
+def test_the_seven_element_ap_mode_is_the_one_that_answers_a_storm():
+    """Why the reference rows above are the Ap = 4 ones, stated as a measurement.
+
+    NRLMSIS has two geomagnetic modes and they are not the same model. The daily-Ap mode NRL's
+    reference file was produced in and the storm-time mode ``density()`` always asks for agree
+    at Ap = 4 -- the model's quiet baseline -- and diverge as the index rises, which is the
+    whole reason the seven-element vector exists. If they agreed everywhere, building it would
+    not matter.
+    """
+    at, table = reference_case("78279", 63960.0, 156.5, 138.7, 4.0)
+    quiet = dn.density([at], [-8.1], [14.2], [379.2], dn.msis_inputs([at], table))[0]
+    at_storm, stormy = reference_case("78279", 63960.0, 156.5, 138.7, 80.0)
+    storm = dn.density([at_storm], [-8.1], [14.2], [379.2], dn.msis_inputs([at_storm], stormy))[0]
+    assert storm > 1.3 * quiet, "a sustained Ap of 80 has to move the density"
