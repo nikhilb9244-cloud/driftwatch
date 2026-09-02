@@ -2,10 +2,27 @@
 
 The design rule for Phase 3: geometry and probability are separate. Stages A to C run
 once per snapshot and write the events with both objects' TEME states at the time of
-closest approach. A scenario (``quiet`` here; ``storm`` and ``replay:<name>`` in Phase
-3) reruns only this module over those stored events with its own covariance model, and
-writes one row per event carrying the scenario, the run id, the snapshot and the model
-version. Nothing here propagates an orbit.
+closest approach. A scenario reruns only this module over those stored events with its own
+covariance model, and writes one row per event carrying the scenario, the run id, the
+snapshot, the supplemental version and the model version. Nothing here propagates an orbit.
+
+**Step 3 adds a mean shift.** A scenario may now say that an object is not where its element
+set puts it, by returning an in-track displacement beside the covariance (see
+:class:`~driftwatch.risk.covariance.RicCovariance`). The two objects' displacements are
+rotated into TEME and applied to the stored positions, which moves the relative position and
+therefore the miss; the uncertainty of each displacement is already in the in-track element of
+its covariance by the time it arrives here.
+
+Applying the shift at the *stored* time of closest approach rather than searching for a new
+one is exact for what the probability depends on, not an approximation. The encounter plane is
+perpendicular to the relative velocity, and the component of a shift along that direction is
+precisely the part that moves the time of closest approach rather than the miss at it; the
+projection removes it. What survives the projection is what changes the answer.
+
+Every scenario also reports ``pc_variance_only``: the same probability with the covariance the
+scenario gives but the objects left where their element sets put them. The difference between
+it and ``pc`` is how much of the scenario is the shift and how much is the spread, which is a
+question the docs have to answer rather than assert.
 """
 
 from __future__ import annotations
@@ -280,6 +297,7 @@ RISK_COLUMNS: tuple[str, ...] = (
     "run_id",
     "snapshot",
     "model_version",
+    "supplemental_version",
     "scenario",
     "event_id",
     "sigma_r_primary_km",
@@ -295,10 +313,18 @@ RISK_COLUMNS: tuple[str, ...] = (
     "enc_cov_xy_km2",
     "enc_cov_yy_km2",
     "pc",
+    "pc_variance_only",
     "pc_alfano",
     "pc_chan",
     "pc_max",
     "pc_max_scale",
+    "miss_shifted_km",
+    "shift_i_primary_km",
+    "shift_i_secondary_km",
+    "sigma_shift_i_primary_km",
+    "sigma_shift_i_secondary_km",
+    "storm_source_primary",
+    "storm_source_secondary",
     "region",
     "flag",
     "confidence",
@@ -328,10 +354,16 @@ def model_version_string(model: CovarianceModel) -> str:
 
 def _covariances(
     model: CovarianceModel, objects: pd.DataFrame, norad_ids: np.ndarray, at: np.ndarray
-) -> tuple[np.ndarray, np.ndarray]:
-    """Per-event RIC covariances ``(n, 3, 3)`` and source labels, one model call per distinct object."""
+) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+    """Per-event RIC covariances ``(n, 3, 3)``, source labels and mean shifts ``(n, 3)`` in km.
+
+    One model call per distinct object, whatever the model is. A model that returns no shift
+    -- every Phase 2 one -- contributes zeros, so the arithmetic downstream is the same and
+    the quiet scenario comes out bit for bit as it did.
+    """
     by_id = objects.set_index("norad_id")
     cov = np.full((len(norad_ids), 3, 3), np.nan)
+    shift = np.zeros((len(norad_ids), 3))
     source = np.empty(len(norad_ids), dtype=object)
     for norad_id in np.unique(norad_ids):
         idx = np.nonzero(norad_ids == norad_id)[0]
@@ -340,7 +372,14 @@ def _covariances(
         result = model.covariance_ric(ref, row["epoch"].to_pydatetime(), at[idx])
         cov[idx] = result.cov_km2
         source[idx] = result.source
-    return cov, source
+        if result.mean_shift_ric_km is not None:
+            shift[idx] = np.asarray(result.mean_shift_ric_km, dtype=float)
+    return cov, source, shift
+
+
+def _storm_label(source: np.ndarray) -> np.ndarray:
+    """The ``storm:<b source>`` part of a covariance source label, or ``none``."""
+    return np.array([str(s).split("+storm:")[-1] if "+storm:" in str(s) else "none" for s in source], dtype=object)
 
 
 def run_risk(
@@ -351,6 +390,7 @@ def run_risk(
     scenario: str,
     run_id: str,
     snapshot: str,
+    supplemental_version: str = "",
     sweep: bool = True,
     now: datetime | None = None,
 ) -> pd.DataFrame:
@@ -376,15 +416,27 @@ def run_risk(
     dr = r_s - r_p
     dv = v_s - v_p
 
-    cov_p, src_p = _covariances(model, objects, p, tca)
-    cov_s, src_s = _covariances(model, objects, s, tca)
-    combined = rotate_ric_to_teme(ric_basis(r_p, v_p), cov_p) + rotate_ric_to_teme(ric_basis(r_s, v_s), cov_s)
-    plane = encounter_plane(dr, dv, combined)
+    cov_p, src_p, shift_p = _covariances(model, objects, p, tca)
+    cov_s, src_s, shift_s = _covariances(model, objects, s, tca)
+    basis_p = ric_basis(r_p, v_p)
+    basis_s = ric_basis(r_s, v_s)
+    combined = rotate_ric_to_teme(basis_p, cov_p) + rotate_ric_to_teme(basis_s, cov_s)
+    # The scenario's mean shifts, out of each object's own RIC frame and into TEME. The basis
+    # rows are the R, I and C unit vectors, so the transpose takes RIC components to TEME.
+    dr_shift = np.einsum("nji,nj->ni", basis_s, shift_s) - np.einsum("nji,nj->ni", basis_p, shift_p)
+    dr_shift = np.nan_to_num(dr_shift, nan=0.0)
+    plane = encounter_plane(dr + dr_shift, dv, combined)
+    # The same covariance with both objects left where their element sets put them: the
+    # comparison that says how much of a scenario is the shift and how much is the spread.
+    plane_unshifted = encounter_plane(dr, dv, combined) if np.any(dr_shift) else plane
 
     hbr = objects.set_index("norad_id")["hbr_m"]
     hbr_m = hbr.reindex(p).to_numpy(dtype=float) + hbr.reindex(s).to_numpy(dtype=float)
     radius_km = hbr_m / 1000.0
     pc = pc_foster(plane.miss_km, plane.cov_km2, radius_km)
+    pc_variance_only = (
+        pc if plane_unshifted is plane else pc_foster(plane_unshifted.miss_km, plane_unshifted.cov_km2, radius_km)
+    )
     pc_a = pc_alfano(plane.miss_km, plane.cov_km2, radius_km)
     pc_c = pc_chan(plane.miss_km, plane.cov_km2, radius_km)
     if sweep:
@@ -395,6 +447,14 @@ def run_risk(
 
     sig = np.sqrt(np.stack([cov_p[:, 0, 0], cov_p[:, 1, 1], cov_p[:, 2, 2]], axis=1))
     sig_s = np.sqrt(np.stack([cov_s[:, 0, 0], cov_s[:, 1, 1], cov_s[:, 2, 2]], axis=1))
+    # What the covariance would have been without the storm layer, so the report can say how
+    # much of each object's in-track sigma the scenario added rather than only what it is now.
+    base = getattr(model, "base", None) if hasattr(model, "shifts") else None
+    if base is not None:
+        cov_p_base, _, _ = _covariances(base, objects, p, tca)
+        cov_s_base, _, _ = _covariances(base, objects, s, tca)
+    else:
+        cov_p_base, cov_s_base = cov_p, cov_s
     region = regions(scale)
     flag = flags(pc)
     slow = slow_encounters(np.linalg.norm(dv, axis=1))
@@ -403,6 +463,7 @@ def run_risk(
             "run_id": run_id,
             "snapshot": snapshot,
             "model_version": model_version_string(model),
+            "supplemental_version": supplemental_version,
             "scenario": scenario,
             "event_id": events["event_id"].to_numpy(),
             "sigma_r_primary_km": sig[:, 0],
@@ -418,10 +479,18 @@ def run_risk(
             "enc_cov_xy_km2": plane.cov_km2[:, 0, 1],
             "enc_cov_yy_km2": plane.cov_km2[:, 1, 1],
             "pc": pc,
+            "pc_variance_only": pc_variance_only,
             "pc_alfano": pc_a,
             "pc_chan": pc_c,
             "pc_max": pc_max,
             "pc_max_scale": scale,
+            "miss_shifted_km": plane.miss_km[:, 0],
+            "shift_i_primary_km": shift_p[:, 1],
+            "shift_i_secondary_km": shift_s[:, 1],
+            "sigma_shift_i_primary_km": np.sqrt(np.maximum(cov_p[:, 1, 1] - cov_p_base[:, 1, 1], 0.0)),
+            "sigma_shift_i_secondary_km": np.sqrt(np.maximum(cov_s[:, 1, 1] - cov_s_base[:, 1, 1], 0.0)),
+            "storm_source_primary": _storm_label(src_p),
+            "storm_source_secondary": _storm_label(src_s),
             "region": region.astype(str),
             "flag": flag.astype(str),
             "confidence": confidences(region).astype(str),
@@ -447,6 +516,22 @@ def run_risk(
         float(disagreement[meaningful].max()) if meaningful.any() else 0.0,
         int(meaningful.sum()),
     )
+    moved = np.abs(shift_p[:, 1]) + np.abs(shift_s[:, 1])
+    if np.any(moved > 0):
+        with np.errstate(invalid="ignore", divide="ignore"):
+            ratio = np.where(pc_variance_only > 0, pc / pc_variance_only, np.nan)
+        interesting = np.isfinite(ratio) & (pc_variance_only > 1e-12)
+        log.info(
+            "Storm term (%s): the in-track shift moves %d of %d events by a median %.3f km relative; "
+            "pc/pc_variance_only over the %d events above 1e-12 runs %.2f to %.2f",
+            scenario,
+            int((moved > 0).sum()),
+            n,
+            float(np.median(moved[moved > 0])),
+            int(interesting.sum()),
+            float(np.nanmin(ratio[interesting])) if interesting.any() else float("nan"),
+            float(np.nanmax(ratio[interesting])) if interesting.any() else float("nan"),
+        )
     if slow.any():
         log.info(
             "Slow encounters (%s): %d of %d events are below %g km/s relative, %d of them flagged; "

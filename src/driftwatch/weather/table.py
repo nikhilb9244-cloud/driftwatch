@@ -388,24 +388,37 @@ def weather_table(
     return table[list(TABLE_COLUMNS)]
 
 
-def apply_synthetic(table: pd.DataFrame, kp: np.ndarray, *, name: str) -> pd.DataFrame:
+def apply_synthetic(table: pd.DataFrame, kp: np.ndarray, *, name: str, mask: np.ndarray | None = None) -> pd.DataFrame:
     """Replace the geomagnetic columns with a designed profile, marked ``synthetic``.
 
     Step 3's storm scenarios build their ap profile from the May 2024 sequence scaled to a
     target level. The solar flux is left alone: a geomagnetic storm does not change F10.7, and
     pretending otherwise would put two unrelated changes behind one scenario name.
+
+    ``mask`` says which intervals the scenario actually designed. A storm occupies a few days
+    of a window that is mostly observation or forecast, and relabelling the whole table
+    ``synthetic`` would be a false statement about the rows the storm never touched -- their
+    provenance, their skill, their issue time and their uncertainty are all still what the feed
+    said. Omitted, the whole table is treated as designed, which is what a caller replacing
+    every interval means.
     """
     out = table.copy()
     kp = np.asarray(kp, dtype=float)
     if len(kp) != len(out):
         raise ValueError(f"the synthetic profile has {len(kp)} intervals, the table has {len(out)}")
-    out["kp"] = kp
-    out["ap"] = kp_to_ap(kp)
+    designed = np.ones(len(out), dtype=bool) if mask is None else np.asarray(mask, dtype=bool)
+    if len(designed) != len(out):
+        raise ValueError(f"the mask has {len(designed)} intervals, the table has {len(out)}")
+    where = out.index[designed]
+    out.loc[where, "kp"] = kp[designed]
+    out.loc[where, "ap"] = kp_to_ap(kp[designed])
+    # The daily average is recomputed over the whole table, because a day the storm entered
+    # partway through has a different average whether or not every one of its intervals moved.
     out["ap_daily"] = out.groupby(out["t"].dt.floor("D"))["ap"].transform("mean")
-    out["provenance"] = "synthetic"
-    out["skill"] = "designed"
-    out["source"] = f"synthetic:{name}"
-    out["issued_at"] = pd.Series(pd.NaT, index=out.index, dtype="datetime64[ns, UTC]")
+    out.loc[where, "provenance"] = "synthetic"
+    out.loc[where, "skill"] = "designed"
+    out.loc[where, "source"] = f"synthetic:{name}"
+    out.loc[where, "issued_at"] = pd.NaT
     # A scenario states its ap rather than predicting it, so there is no forecast error to
     # carry. What is left is that the scenario itself is a supposition of that magnitude, so
     # the uncertainty stays at the climatological spread the table was built with -- the
@@ -414,7 +427,8 @@ def apply_synthetic(table: pd.DataFrame, kp: np.ndarray, *, name: str) -> pd.Dat
     spread = float(np.nanmax(table["ap_sigma"])) if "ap_sigma" in table.columns else np.nan
     if not np.isfinite(spread):
         spread = float(config.AP_CLIMATOLOGY_FALLBACK_NT)
-    out["ap_sigma"] = np.maximum(spread, config.AP_FORECAST_RELATIVE_FLOOR * out["ap"].to_numpy(dtype=float))
+    ap = out["ap"].to_numpy(dtype=float)
+    out.loc[where, "ap_sigma"] = np.maximum(spread, config.AP_FORECAST_RELATIVE_FLOOR * ap[designed])
     return out[list(TABLE_COLUMNS)]
 
 

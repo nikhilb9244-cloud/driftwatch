@@ -3,9 +3,13 @@
 from __future__ import annotations
 
 import argparse
+import cProfile
+import functools
+import io
 import json
 import logging
 import os
+import pstats
 import sys
 import time
 from collections.abc import Sequence
@@ -24,6 +28,7 @@ from driftwatch import __version__, config
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
 from driftwatch.drag import ballistic as ballistic_mod
 from driftwatch.drag import density as density_mod
+from driftwatch.drag.store import CoefficientStore
 from driftwatch.ephemeris import spacex
 from driftwatch.export.audit import audit_bundle
 from driftwatch.export.conjunctions import RunDirectory
@@ -55,6 +60,8 @@ from driftwatch.risk.scenario import (
 )
 from driftwatch.screening import ScreeningConfig, ScreeningError, ScreeningResult, screen_fleet
 from driftwatch.screening import supplemental as supplemental_mod
+from driftwatch.storm import scenarios as storm_scenarios
+from driftwatch.storm import term as storm_term
 from driftwatch.weather import celestrak_sw, helioviewer, swpc
 from driftwatch.weather import table as weather_table
 
@@ -464,6 +471,35 @@ def survivor_labels(df: pd.DataFrame, fleet: Fleet, result: ScreeningResult) -> 
     return labels
 
 
+def print_scenario_comparison(run_dir: RunDirectory, scenario: str, show: int) -> None:
+    """What the scenario did to the quiet numbers, event by event, for the events it moved most.
+
+    The comparison the prompt asks for: the probability under shift plus variance is the
+    primary number, the probability under variance alone is beside it, and the quiet run --
+    when one is stored -- is the baseline both are read against.
+    """
+    if scenario == config.SCENARIO_QUIET or config.SCENARIO_QUIET not in run_dir.scenarios():
+        return
+    quiet = run_dir.read_risk(config.SCENARIO_QUIET).set_index("event_id")
+    now = run_dir.read_risk(scenario).set_index("event_id")
+    joined = now.join(quiet[["pc"]].rename(columns={"pc": "pc_quiet"}), how="inner")
+    moved = joined[(joined["pc"] > 1e-9) | (joined["pc_quiet"] > 1e-9)].copy()
+    if not len(moved):
+        print(f"\nNo event under '{scenario}' or 'quiet' reaches a probability of 1e-9; nothing to compare.")
+        return
+    with np.errstate(divide="ignore", invalid="ignore"):
+        moved["ratio"] = moved["pc"] / moved["pc_quiet"].replace(0.0, np.nan)
+    moved["shift_km"] = moved["shift_i_secondary_km"] - moved["shift_i_primary_km"]
+    columns = ["pc_quiet", "pc", "pc_variance_only", "ratio", "shift_km", "miss_shifted_km", "flag"]
+    print(f"\n'{scenario}' against 'quiet', the {show} events it moves most (probability, km):")
+    shown = moved.reindex(moved["ratio"].abs().sort_values(ascending=False).index).head(show)
+    print(shown[columns].to_string(float_format=lambda x: f"{x:.3g}"))
+    print(
+        f"  shift plus variance is `pc`; variance alone is `pc_variance_only`. "
+        f"Median pc/pc_variance_only over these: {float(np.nanmedian(moved['pc'] / moved['pc_variance_only'])):.3f}"
+    )
+
+
 def print_risk_summary(joined: pd.DataFrame, scenario: str, show: int) -> None:
     """The top events by probability and a per-primary table for one scenario of a run."""
     rows = joined[joined["scenario"] == scenario]
@@ -640,7 +676,15 @@ def cmd_screen(args: argparse.Namespace) -> int:
 
     t1 = time.perf_counter()
     risk = run_risk(
-        ev, objects, model, scenario=args.scenario, run_id=run_id, snapshot=path.name, sweep=not args.no_sweep, now=now
+        ev,
+        objects,
+        model,
+        scenario=args.scenario,
+        run_id=run_id,
+        snapshot=path.name,
+        supplemental_version=supplemental_version_string({"supplemental": supplemental_used}),
+        sweep=not args.no_sweep,
+        now=now,
     )
     run_dir.write_risk(risk, args.scenario)
     timings["risk"] = time.perf_counter() - t1
@@ -716,6 +760,78 @@ def layer_spacex_ephemerides(model: CovarianceModel, objects: pd.DataFrame, info
     return layered
 
 
+def supplemental_version_string(info: dict[str, Any]) -> str:
+    """``starlink:20260902T064855Z`` and so on: which supplemental versions the run screened on.
+
+    Carried on every risk row because two runs against the same catalogue snapshot but
+    different supplemental versions are different runs -- the sets change several times a day
+    and CelesTrak keeps only the current one.
+    """
+    entries = info.get("supplemental") or []
+    return ",".join(f"{e.get('name')}:{e.get('version')}" for e in entries if isinstance(e, dict))
+
+
+def layer_storm_term(
+    model: CovarianceModel,
+    run_dir: RunDirectory,
+    objects: pd.DataFrame,
+    info: dict[str, Any],
+    *,
+    scenario_name: str,
+    offline: bool,
+    now: datetime,
+    step_s: float | None = None,
+    offset_days: float | None = None,
+) -> tuple[CovarianceModel, storm_scenarios.Scenario]:
+    """Build the named scenario's weather, compute the storm term, and wrap ``model`` in it.
+
+    The quiet scenario returns ``model`` untouched, which is what makes it the Phase 2
+    regression baseline. Anything else needs the run's ballistic coefficients; without them
+    the scenario would move nothing, so the absence is an error rather than a quiet zero.
+    """
+    if not storm_scenarios.is_known(scenario_name) or scenario_name == config.SCENARIO_QUIET:
+        scenario = storm_scenarios.build_scenario(
+            scenario_name,
+            start=parse_utc(info["start"]),
+            end=parse_utc(info["end"]),
+            sources=weather_table.WeatherSources(),
+            now=now,
+        )
+        log.info("Scenario %s: %s", scenario.name, scenario.description)
+        return model, scenario
+    if not run_dir.ballistic_path.exists():
+        raise FileNotFoundError(
+            f"scenario {scenario_name!r} needs a ballistic coefficient per object and "
+            f"{run_dir.ballistic_path} does not exist; run `driftwatch ballistic {run_dir.name}` first"
+        )
+    coefficients = run_dir.read_ballistic()
+    elements = elements_for_run(info)
+    elements = elements[elements["norad_id"].isin(objects["norad_id"])].reset_index(drop=True)
+    # The table has to reach behind the *oldest element set*, not the window start: every shift
+    # is integrated from its own object's epoch.
+    scenario = storm_scenarios.build_scenario(
+        scenario_name,
+        start=parse_utc(info["start"]),
+        end=parse_utc(info["end"]),
+        sources=weather_sources(now=now, offline=offline)[0],
+        now=now,
+        offset_days=offset_days,
+        earliest_epoch=pd.to_datetime(elements["epoch"], utc=True).min().to_pydatetime(),
+    )
+    log.info("Scenario %s: %s", scenario.name, scenario.description)
+    shifts = storm_scenarios.shifts_for_objects(
+        scenario, elements, coefficients, end=parse_utc(info["end"]), step_s=step_s
+    )
+    summary = storm_term.shift_summary(shifts)
+    log.info("Storm term: %s", summary)
+    info.setdefault("storm", {})[scenario.name] = {
+        "description": scenario.description,
+        **scenario.provenance,
+        "shifts": summary,
+    }
+    return storm_scenarios.StormCovariance(model, shifts, scenario=scenario.name), scenario
+
+
 def risk_run_record(risk: pd.DataFrame, scenario: str, model: CovarianceModel, now: datetime) -> dict[str, Any]:
     """What ``run.json`` keeps about one scoring: when, which model, how many flags."""
     return {
@@ -726,6 +842,12 @@ def risk_run_record(risk: pd.DataFrame, scenario: str, model: CovarianceModel, n
         "n_red": int((risk["flag"] == "red").sum()) if len(risk) else 0,
         "n_yellow": int((risk["flag"] == "yellow").sum()) if len(risk) else 0,
         "max_pc": float(risk["pc"].max()) if len(risk) else None,
+        "max_pc_variance_only": float(risk["pc_variance_only"].max()) if len(risk) else None,
+        "max_abs_shift_km": float(
+            np.nanmax(np.abs(risk[["shift_i_primary_km", "shift_i_secondary_km"]].to_numpy(dtype=float)))
+        )
+        if len(risk)
+        else None,
     }
 
 
@@ -817,6 +939,21 @@ def cmd_risk(args: argparse.Namespace) -> int:
         model = layer_spacex_ephemerides(model, objects, info)
     if args.scale != 1.0:
         model = ScaledCovariance(model, args.scale)
+    try:
+        model, _scenario = layer_storm_term(
+            model,
+            run_dir,
+            objects,
+            info,
+            scenario_name=args.scenario,
+            offline=args.offline,
+            now=now,
+            step_s=args.storm_step_s,
+            offset_days=args.storm_offset_days,
+        )
+    except (ValueError, FileNotFoundError) as exc:
+        log.error("%s", exc)
+        return 2
 
     risk = run_risk(
         events,
@@ -825,6 +962,7 @@ def cmd_risk(args: argparse.Namespace) -> int:
         scenario=args.scenario,
         run_id=info["run_id"],
         snapshot=info["snapshot"],
+        supplemental_version=supplemental_version_string(info),
         sweep=not args.no_sweep,
         now=now,
     )
@@ -843,6 +981,7 @@ def cmd_risk(args: argparse.Namespace) -> int:
         log.warning("Cannot rebuild the run's element sets (%s); the report and viewer bundle were not written", exc)
     print_fleet_sigmas(model, objects)
     print_risk_summary(joined, args.scenario, args.show)
+    print_scenario_comparison(run_dir, args.scenario, min(args.show, 12))
     print(run_dir.risk_path(args.scenario))
     return 0
 
@@ -1075,8 +1214,51 @@ def cmd_density(args: argparse.Namespace) -> int:
     return 0
 
 
+def rank_by_probability(run_dir: RunDirectory, elements: pd.DataFrame) -> pd.DataFrame:
+    """The objects that appear in the run's events, in descending order of their worst probability.
+
+    The Step 2 review's instruction: do not fit the catalogue. An object that appears in no
+    event has no conjunction to score and no coefficient is needed for it; among those that
+    do, the fit budget should be spent where it changes an answer, which is the top of the
+    probability list. Ties, and a run with no scored scenario yet, fall back to the closest
+    approach the object takes part in -- the only ordering the geometry alone supports.
+    """
+    events = run_dir.read_events()
+    in_events = set(int(i) for i in events["primary_norad_id"]) | set(int(i) for i in events["secondary_norad_id"])
+    worst_pc: dict[int, float] = {}
+    scenarios = run_dir.scenarios()
+    if scenarios:
+        risk = run_dir.read_risk(scenarios[0])
+        pc = risk.set_index("event_id")["pc"].reindex(events["event_id"]).to_numpy(dtype=float)
+        for column in ("primary_norad_id", "secondary_norad_id"):
+            for norad_id, value in zip(events[column].to_numpy(dtype=np.int64), pc, strict=True):
+                if np.isfinite(value):
+                    worst_pc[int(norad_id)] = max(worst_pc.get(int(norad_id), 0.0), float(value))
+    closest: dict[int, float] = {}
+    miss = events["miss_km"].to_numpy(dtype=float)
+    for column in ("primary_norad_id", "secondary_norad_id"):
+        for norad_id, value in zip(events[column].to_numpy(dtype=np.int64), miss, strict=True):
+            closest[int(norad_id)] = min(closest.get(int(norad_id), np.inf), float(value))
+
+    ranked = elements[elements["norad_id"].isin(in_events)].copy()
+    ids = ranked["norad_id"].astype(int)
+    ranked["_pc"] = [worst_pc.get(int(i), 0.0) for i in ids]
+    ranked["_miss"] = [closest.get(int(i), np.inf) for i in ids]
+    ranked = ranked.sort_values(["_pc", "_miss"], ascending=[False, True]).drop(columns=["_pc", "_miss"])
+    dropped = len(elements) - len(ranked)
+    if dropped:
+        log.info(
+            "%d of the run's %d objects appear in no event and are not fitted; %d ranked by %s",
+            dropped,
+            len(elements),
+            len(ranked),
+            f"probability under '{scenarios[0]}'" if scenarios else "miss distance (no scenario scored yet)",
+        )
+    return ranked.reset_index(drop=True)
+
+
 def cmd_ballistic(args: argparse.Namespace) -> int:
-    """Fit a ballistic coefficient for every object of a run, from its own decay or from B*."""
+    """Fit a ballistic coefficient for the objects of a run that appear in events, worst first."""
     try:
         run_dir = resolve_run(args.run)
     except FileNotFoundError as exc:
@@ -1087,11 +1269,10 @@ def cmd_ballistic(args: argparse.Namespace) -> int:
     objects = run_dir.read_objects()
     elements = elements_for_run(info)
     elements = elements[elements["norad_id"].isin(objects["norad_id"])].reset_index(drop=True)
+    if not args.all:
+        elements = rank_by_probability(run_dir, elements)
     if args.limit:
-        # Primaries first: a partial fit should cover the fleet before the secondaries.
-        primaries = set(int(i) for i in objects.loc[objects.get("is_primary", False).astype(bool), "norad_id"])
-        elements["_rank"] = [0 if int(i) in primaries else 1 for i in elements["norad_id"]]
-        elements = elements.sort_values(["_rank", "norad_id"]).head(args.limit).drop(columns="_rank")
+        elements = elements.head(args.limit)
     log.info("Fitting ballistic coefficients for %d objects", len(elements))
 
     start = parse_utc(info["start"]) - timedelta(days=args.fit_days)
@@ -1104,7 +1285,38 @@ def cmd_ballistic(args: argparse.Namespace) -> int:
     if not args.no_history:
         hist = history.load_history(norad_ids=[int(i) for i in elements["norad_id"]], start=start)
         log.info("History: %d element sets for %d objects", len(hist), hist["norad_id"].nunique() if len(hist) else 0)
-    frame = ballistic_mod.coefficients(elements, table, hist, fit_days=args.fit_days, step_s=args.step_s)
+    store = None if args.no_cache else CoefficientStore().load()
+
+    def progress(done: int, total: int) -> None:
+        log.info("  %d/%d objects, %.0f s elapsed", done, total, time.perf_counter() - t_start)
+
+    t_start = time.perf_counter()
+    fit = functools.partial(
+        ballistic_mod.coefficients,
+        elements,
+        table,
+        hist,
+        fit_days=args.fit_days,
+        step_s=args.step_s,
+        budget_s=args.budget_s,
+        store=store,
+        step_scale=args.step_scale,
+        now=now,
+        progress=progress,
+    )
+    if args.profile:
+        profiler = cProfile.Profile()
+        profiler.enable()
+        frame = fit()
+        profiler.disable()
+        stream = io.StringIO()
+        pstats.Stats(profiler, stream=stream).sort_stats("tottime").print_stats(15)
+        print(stream.getvalue())
+    else:
+        frame = fit()
+    if store is not None:
+        store.save()
+
     run_dir.write_ballistic(
         frame, metadata={"driftwatch_run_id": info["run_id"], "driftwatch_msis": str(config.MSIS_VERSION)}
     )
@@ -1113,25 +1325,28 @@ def cmd_ballistic(args: argparse.Namespace) -> int:
         **summary,
         "n_objects_in_run": int(len(objects)),
         "fit_days": args.fit_days,
+        "step_scale": args.step_scale,
         "fitted_at": now.isoformat(),
         "msis_version": config.MSIS_VERSION,
+        "cache": store.summary(now=now) if store is not None else None,
     }
     if len(frame) < len(objects):
-        log.warning(
-            "%d of the run's %d objects have a coefficient; the rest are unfitted and Step 3 will have "
-            "nothing to apply to them",
+        log.info(
+            "%d of the run's %d objects have a coefficient; the rest appear in no event, so no scenario asks for one",
             len(frame),
             len(objects),
         )
     run_dir.write_run(info)
     log.info("Ballistic coefficients: %s", summary)
 
-    print(f"{len(frame)} objects")
+    print(f"{len(frame)} objects in {time.perf_counter() - t_start:.0f} s")
     print("by source:", summary["by_source"])
+    print("budget:   ", summary.get("budget"))
     print("B (m^2/kg): p10 {p10}, median {median}, p90 {p90}".format(**summary["b_m2_kg"]))
+    print("relative sigma: median {median}, p90 {p90}".format(**summary["relative_sigma"]))
     shown = frame.sort_values("b_m2_kg", ascending=False).head(args.show)
-    columns = ["norad_id", "category", "b_m2_kg", "source", "n_sets", "decay_m", "n_manoeuvre_excluded"]
-    print(shown[columns].to_string(index=False))
+    columns = ["norad_id", "category", "alt_band", "b_m2_kg", "b_sigma_m2_kg", "source", "n_sets", "decay_snr"]
+    print(shown[columns].to_string(index=False, float_format=lambda x: f"{x:.4g}"))
     print(run_dir.ballistic_path)
     return 0
 
@@ -1300,7 +1515,28 @@ def build_parser() -> argparse.ArgumentParser:
     fleet.set_defaults(func=cmd_fleet)
 
     def add_risk_options(p: argparse.ArgumentParser, *, scenario_default: str) -> None:
-        p.add_argument("--scenario", default=scenario_default, help=f"scenario label (default: {scenario_default})")
+        p.add_argument(
+            "--scenario",
+            default=scenario_default,
+            help=(
+                "quiet (the Phase 2 baseline, no storm layer), forecast, storm-g3, storm-g4, storm-g5, "
+                f"or replay:<YYYY-MM-DD> (default: {scenario_default})"
+            ),
+        )
+        p.add_argument(
+            "--storm-offset-days",
+            type=float,
+            default=config.STORM_OFFSET_DAYS,
+            help=(
+                f"days into the window at which a synthetic storm begins (default {config.STORM_OFFSET_DAYS:g}); "
+                "the displacement grows with the square of the time left, so this matters"
+            ),
+        )
+        p.add_argument(
+            "--storm-step-s",
+            type=float,
+            help="sampling step for the storm term's density track (default: the per-object rule)",
+        )
         p.add_argument(
             "--history",
             choices=("auto", "on", "off"),
@@ -1436,7 +1672,12 @@ def build_parser() -> argparse.ArgumentParser:
         help="fit a ballistic coefficient per object of a run, from its own decay or from B*",
     )
     bal.add_argument("run", nargs="?", default="latest", help="run directory, its name, or 'latest'")
-    bal.add_argument("--limit", type=int, help="fit at most this many objects, primaries first")
+    bal.add_argument("--limit", type=int, help="fit at most this many objects, worst probability first")
+    bal.add_argument(
+        "--all",
+        action="store_true",
+        help="cover every object of the run, not only those that appear in an event",
+    )
     bal.add_argument(
         "--fit-days",
         type=float,
@@ -1444,11 +1685,31 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"days of element-set history to fit over (default {config.BALLISTIC_FIT_DAYS:g})",
     )
     bal.add_argument("--no-history", action="store_true", help="skip the decay fit and use B* for everything")
+    bal.add_argument("--no-cache", action="store_true", help="ignore the stored coefficients and refit everything")
+    bal.add_argument(
+        "--budget-s",
+        type=float,
+        default=config.BALLISTIC_FIT_BUDGET_S,
+        help=(
+            f"wall-clock allowance for the history fits in seconds (default "
+            f"{config.BALLISTIC_FIT_BUDGET_S:g}); 0 for no limit. What it does not reach falls back to B*"
+        ),
+    )
+    bal.add_argument(
+        "--step-scale",
+        type=float,
+        default=config.BALLISTIC_FIT_STEP_SCALE,
+        help=(
+            f"coarsen the sampling step by this factor for the fit alone (default "
+            f"{config.BALLISTIC_FIT_STEP_SCALE:g}; see docs/density-and-drag.md)"
+        ),
+    )
     bal.add_argument(
         "--step-s",
         type=float,
-        help="sampling step along the orbit in seconds (default: the per-object rule; larger is faster)",
+        help="sampling step along the orbit in seconds (default: the per-object rule; overrides --step-scale)",
     )
+    bal.add_argument("--profile", action="store_true", help="report where the fit spends its time")
     bal.add_argument("--offline", action="store_true", help="use only stored space weather")
     bal.add_argument("--show", type=int, default=15, help="rows to print (default 15)")
     bal.set_defaults(func=cmd_ballistic)

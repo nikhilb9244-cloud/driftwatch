@@ -318,22 +318,25 @@ def test_screen_and_risk_commands_end_to_end(designed, tmp_path, monkeypatch):
 
     # A second scenario over the stored events: no rescreening, a new risk file, the join grows.
     events_mtime = (run_path / "events.parquet").stat().st_mtime_ns
-    rc = main(["risk", str(run_path), "--scenario", "storm", "--scale", "9", "--history", "off"])
+    rc = main(["risk", str(run_path), "--scenario", "scaled9", "--scale", "9", "--history", "off"])
     assert rc == 0
     assert (run_path / "events.parquet").stat().st_mtime_ns == events_mtime
-    assert (run_path / "risk_storm.parquet").exists()
+    assert (run_path / "risk_scaled9.parquet").exists()
     info = json.loads((run_path / "run.json").read_text(encoding="utf-8"))
-    assert info["scenarios"] == ["quiet", "storm"] and [r["scenario"] for r in info["risk_runs"]] == ["quiet", "storm"]
+    assert info["scenarios"] == ["quiet", "scaled9"] and [r["scenario"] for r in info["risk_runs"]] == [
+        "quiet",
+        "scaled9",
+    ]
     joined = run_dir.read_conjunctions()
-    assert set(joined["scenario"]) == {"quiet", "storm"} and len(joined) == 2 * len(run_dir.read_events())
-    storm = joined[joined["scenario"] == "storm"].set_index("event_id")
+    assert set(joined["scenario"]) == {"quiet", "scaled9"} and len(joined) == 2 * len(run_dir.read_events())
+    scaled = joined[joined["scenario"] == "scaled9"].set_index("event_id")
     quiet = joined[joined["scenario"] == "quiet"].set_index("event_id")
-    assert (storm["cov_source_secondary"] == "scaled:9:default:leo").all()
-    np.testing.assert_allclose(storm["sigma_i_primary_km"], 3.0 * quiet.loc[storm.index, "sigma_i_primary_km"])
-    assert not np.allclose(storm["pc"], quiet.loc[storm.index, "pc"])
+    assert (scaled["cov_source_secondary"] == "scaled:9:default:leo").all()
+    np.testing.assert_allclose(scaled["sigma_i_primary_km"], 3.0 * quiet.loc[scaled.index, "sigma_i_primary_km"])
+    assert not np.allclose(scaled["pc"], quiet.loc[scaled.index, "pc"])
     # "latest" resolves under the configured output directory; an empty one is an error, not a guess.
     assert main(["risk", "latest", "--scenario", "again", "--history", "off"]) == 0
-    assert (run_path / "risk_again.parquet").exists() and run_dir.scenarios() == ["again", "quiet", "storm"]
+    assert (run_path / "risk_again.parquet").exists() and run_dir.scenarios() == ["again", "quiet", "scaled9"]
     (tmp_path / "empty").mkdir()
     monkeypatch.setattr(config, "CONJUNCTION_DIR", tmp_path / "empty")
     assert main(["risk", "latest", "--scenario", "again", "--history", "off"]) == 2

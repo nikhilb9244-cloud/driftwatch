@@ -166,10 +166,20 @@ class ObjectRef:
 
 @dataclass(frozen=True)
 class RicCovariance:
-    """Position covariance in the object's own RIC frame at each requested time, and where it came from."""
+    """Position covariance in the object's own RIC frame at each requested time, and where it came from.
+
+    ``mean_shift_ric_km`` is the Phase 3 Step 3 extension, and it is the whole of the change to
+    the protocol: a scenario may say that the object is not where its element set puts it, by
+    returning the displacement beside the covariance. ``None`` means no shift, which is what
+    every Phase 2 model returns and is why the quiet scenario is unchanged bit for bit. The
+    only component Step 3 ever fills is the in-track one, but the field is a full RIC vector
+    because a scenario that wanted to move an object radially should not have to change the
+    protocol again.
+    """
 
     cov_km2: np.ndarray  # (n, 3, 3)
     source: str  # 'empirical', 'pooled:<category>/<band>', 'default:<band>', 'storm:<model>'
+    mean_shift_ric_km: np.ndarray | None = None  # (n, 3), or None for "where the element set says"
 
 
 @runtime_checkable
@@ -180,7 +190,11 @@ class CovarianceModel(Protocol):
 
     def covariance_ric(self, obj: ObjectRef, epoch: datetime, at: np.ndarray) -> RicCovariance:
         """Covariance of ``obj`` at the absolute UTC times ``at`` (datetime64[us]), given that
-        its state was propagated from the element set with epoch ``epoch``."""
+        its state was propagated from the element set with epoch ``epoch``.
+
+        A scenario may also return a mean position shift on the result; see
+        :class:`RicCovariance`. A model that does not is saying the element set is right about
+        where the object is, which is what every Phase 2 model says."""
         ...
 
 

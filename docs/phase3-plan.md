@@ -831,6 +831,216 @@ model's bias over the fit window.
 4. **`ballistic.parquet` is a new file in the run directory** and `category` is a new column
    beside the coefficient. Additive; nothing reads it yet but Step 3 will.
 
+## The Step 2 review's four instructions (2026-09-02)
+
+### 1. A typical value by category *and* altitude band
+
+Done, and the bands are new. `config.BALLISTIC_ALTITUDE_BAND_EDGES_KM` cuts at 350, 450, 550,
+650, 800 and 1200 km, derived from the element set rather than read off a column. They are
+**drag** bands, not the screener's: what one object's coefficient has in common with another's
+is the density regime its decay was measured in, and `leo` spans three orders of magnitude of
+density. The median narrows as far as the population allows — category and band, then category,
+then everything fitted — and the label says which won, e.g. *median of 23 fitted starlink
+objects at 450-550 km*. The order of resort is as instructed: history fit, then the B\*
+inversion, then this.
+
+### 2. The fit cost, measured before it was changed
+
+Profiled first, on eight objects and 814 fitted intervals (20.3 s unprofiled):
+
+| | tottime | share |
+| --- | ---: | ---: |
+| `pymsis.calculate` | 12.76 s | 49 % |
+| rebuilding the weather grid, per interval | 3.97 s | 15 % |
+| propagating the orbit track | 3.92 s | 15 % |
+
+So density evaluation dominates, as the review supposed. But the second line is not density
+evaluation at all — it was pandas re-parsing the same unchanged weather table a hundred times
+an object, which is now `density.WeatherGrid`, built once and passed down. No approximation,
+just not doing the same work repeatedly.
+
+The coarser grid for the fit alone is measured rather than assumed. ×4 costs a history fit
+0.65 % at worst and the B\* inversion 3.9 %, against coefficients whose own uncertainties are
+5 % and 50 %; ×8 is where the B\* inversion falls apart at 24 %. The B\* route needed the same
+treatment because once the budget stops the history fits, every remaining object of a run comes
+through it, and at the full step that was the slowest thing in the command.
+
+Only the objects appearing in events are fitted, ordered by the highest probability they appear
+in. A four-minute budget bounds the history fits; the rest fall through to B\* and then
+`typical`, labelled as always. And the cache is what makes it converge — keyed by NORAD id with
+the history span each fit used, invalidated by a week of new history, thirty days of age, a
+different NRLMSIS version or a different `BALLISTIC_RULES_VERSION`:
+
+| Run | From cache | Newly fitted | Over budget | Objects with a fitted coefficient |
+| --- | ---: | ---: | ---: | ---: |
+| first | 0 | 608 | 2,367 | 362 |
+| second | 608 | 453 | 1,914 | 670 |
+
+Both under seven minutes for 2,993 objects. Rejections are cached too: finding out that an
+object's decay is inside its own scatter costs the same hundred evaluations.
+
+### 3. The thresholds, and what they found
+
+The acceptance rule is now the object's own scatter, as instructed. Excluding the manoeuvre
+intervals leaves contiguous *runs* of element sets; a quadratic is fitted **inside each run**
+and the pooled residual is the scatter; the decay estimator telescopes to endpoint differences,
+so its uncertainty is `scatter × sqrt(2 × runs)` and the decay must exceed it by three.
+
+Inside each run and never across the gap between two, and that distinction was not anticipated:
+the first version fitted one curve across the whole window, and the existing burn-exclusion test
+caught it reading a 2 km station-keeping burn as element-set noise and refusing a designed fit
+the exclusion had just made possible.
+
+**The threshold then surfaced something the old fixed 50 m had hidden.** Deorbiting Starlinks
+fit at B near 1 m²/kg off 48 km of decay in 45 days — an area-to-mass no satellite has. The
+cause is structural: a continuous low thrust is a *ramp* rather than a jump, so the manoeuvre
+detector cannot see it and the fit reads it as atmosphere. Grouping the run's 384 history fits
+by the fraction of intervals excluded as manoeuvres, the median B is flat (0.045, 0.018, 0.012,
+0.013, 0.014) up to a quarter and then jumps (0.023, 0.260, 0.183). A fit is now refused above a
+quarter, which is set from that break.
+
+The rule is on the **exclusions** and not on the coefficient, deliberately: every *debris*
+object fitted above 0.5 m²/kg has no exclusions at all, and that light-fragment tail is real.
+A cap on B would throw the fragments away to catch the satellites. It is a proxy and it does not
+catch everything — STARLINK-65196 has 12 % of its intervals excluded and still fits at 0.69
+m²/kg — and that case is named in the docs rather than chased with a tighter number.
+
+Every coefficient now carries `b_sigma_m2_kg`: the statistical error of its own decay for a fit
+(floored at 5 %), a 50 % prior for a B\* inversion, the pool's robust spread floored at a factor
+of two for a stand-in. Step 3 propagates it.
+
+### 4. Docs and hygiene
+
+- **Published NRLMSIS values added.** The 1976 comparison measures the 1976 profile's bias as
+  much as anything of ours. The new one drives our whole chain at the stated drivers of NRL's
+  own reference rows for NRLMSIS 2.1 — the file shipped with the model and with pymsis — and
+  agrees to better than 0.2 %, which is that file's printing precision. Pinned by a test with
+  the rows written out. The rows used are the Ap ≈ 4 ones, because NRL produced the file in the
+  daily-Ap mode and `density()` always asks for the seven-element storm-time mode; the two
+  coincide at the model's quiet baseline and diverge to +8.9 % by Ap 150, which is measured and
+  tabulated beside it and is the reason the vector is built at all.
+- **Source maps excluded from the deployed bundle.** `sourcemap: false` in `web/vite.config.ts`.
+  They were 9.5 MB of a 12 MB `dist` and they publish the unminified sources with their
+  comments. `npm run build -- --sourcemap` turns them back on locally.
+- **The two remaining shells were mine and are closed.** Two `npm run dev --prefix web` Vite
+  dev servers for this project's viewer (PIDs 38644/52348 and 34840/44456), started at 13:40 and
+  13:41 during the Step 1 and Step 2 viewer checks and never stopped. Both killed. The other
+  node processes on the machine are a `next start` for an unrelated project and an OpenAI Codex
+  runtime, neither of them ours.
+
+## Step 3 decisions (the storm term, built 2026-09-02)
+
+`src/driftwatch/storm/`, `docs/storm-term.md`, `tests/test_storm.py`. The derivation, its
+numerical check and the scenario definitions are in the docs page; what follows is what had to
+be decided.
+
+### The closed form, and the one that is actually used
+
+`s = (3/4) B drho v² t²` falls out of the mean-motion drift integrated twice, and it matches an
+independent Runge-Kutta integration of the same orbit with a step density change to **0.24 % at
+worst** (300 km, seven days, doubled density) and better than 0.05 % at 400 km and above. The
+error is always the same sign and grows with the decay, which is the approximation being
+measured: the closed form holds `v` fixed and the real orbit does not.
+
+But the scenarios use the *weighted* form, `s(t) = (3/2)(n a² B/mu) ∫(t-τ) drho(τ) P(τ) dτ`,
+because a storm is not a constant. The `(t-τ)` weight means the same total excess delivered on
+day one displaces an object **more than ten times as far** as the same excess on day seven, and
+the closed form applied to a window mean cannot express that. This is also why the synthetic
+storms use the real May 2024 shape scaled on the Kp axis rather than a square wave, and why the
+offset into the window is a stated scenario parameter.
+
+### `quiet` applies nothing, and that is the point
+
+The prompt asks for `quiet` "using observed conditions" and for the Phase 2 quiet scenario to be
+bit-for-bit unchanged. These are the same requirement: the Phase 2 empirical covariance was
+fitted on real element sets that flew through whatever weather actually happened, so it *is* an
+observed-conditions model, and every other scenario is read as a difference from it. So `quiet`
+carries no weather table and adds no layer. The protocol makes that free — `mean_shift_ric_km`
+defaults to `None` and every Phase 2 model returns it — and the Phase 2 tests pass untouched.
+
+**This is a decision for the review.** The alternative reading, applying the term under observed
+conditions, would make the baseline move whenever the density model changed, which is what a
+regression baseline must not do.
+
+### The protocol extension is one field
+
+`RicCovariance.mean_shift_ric_km`, `(n, 3)` or `None`. Step 3 only ever fills the in-track
+component, but the field is a full RIC vector so a later scenario wanting to move an object
+radially does not have to change the protocol again. `run_risk` rotates both objects' shifts into
+TEME, differences them, and adds the result to the stored relative position.
+
+**Applying the shift at the stored time of closest approach is exact, not an approximation.** The
+encounter plane is perpendicular to the relative velocity, and the component of a shift along
+that direction is precisely the part that moves the TCA rather than the miss at it; the
+projection removes it. Nothing rescreens and nothing needs to.
+
+### The variance, and the half of it that cancels
+
+Three terms in quadrature, each a displacement passed through the same weighted integral rather
+than a fraction scaled off the total. The coefficient's own sigma from Step 2. The density
+model's **storm-response** error — 30 %, a prior — rather than its absolute error, because the
+absolute part cancels against a coefficient fitted through the same model and only the ratio has
+no baseline to divide out against; a `bstar` or `typical` coefficient gets the absolute 15 % in
+quadrature with it, because for those the cancellation argument does not apply. And the index,
+evaluated rather than differentiated: the whole track is recomputed with every interval's ap
+raised by its own `ap_sigma`. The model term is applied **coherently in time**, since a model
+bias is not a fresh random number every three hours; summing it in quadrature across samples
+would understate it by about fifty over a week.
+
+### Two things the first real run found
+
+**The weather table was not reaching back far enough.** It was built over the *screening window*
+plus NRLMSIS's 57 hours, but every shift is integrated from its own object's element-set epoch,
+and a run screens on sets up to five days stale. Objects whose epoch predated the table came back
+with part of their track NaN and their shifts silently understated — one showed 2,620 of 4,499
+samples with no driver. The table is now built back to the earliest epoch in the run; the rerun
+has zero.
+
+**The linear theory runs out, and now says so.** The G5 scenario gives a median absolute shift of
+278 km, a p90 of 971 km — and a maximum of **106,726 km**, which is two and a half Earth
+circumferences. That is a faithful evaluation of the formula for a high area-to-mass fragment at
+300 km under a G5, and it is meaningless as a position: such an object is re-entering, not
+conjuncting. Every shift now carries the implied decay as a fraction of `a` and the displacement
+in orbit circumferences, and is labelled `!extrapolated` past one part in a thousand or a quarter
+of a revolution. 53 of 2,993 objects fail it on the G5 run. Nothing is dropped — the number and
+the flag travel together.
+
+### What the G5 scenario does to the demo run
+
+2,993 objects, 5,704 events. Median absolute shift 278 km, p90 971 km, 2,675 objects pushed
+*ahead* and 318 behind (the behind ones are objects whose own B\* already assumed more drag than
+the scenario gives). Median sigma on the shift 199 km. The relative shift moves every one of the
+5,704 events, by a median 44 km.
+
+The flag counts barely move — 1 red and 12 yellow, against quiet's 1 and 12 — and that is worth
+reading carefully rather than as a null result. The storm displaces both objects of most pairs in
+the same direction by similar amounts, because they are at similar altitudes with similar
+coefficients; what matters is the *relative* shift, and it is much smaller than either. What does
+move is the tail: events that were at 1e-80 under quiet come back at 1e-7 because the shift moved
+one object onto the other, and events that were close move apart. The `pc/pc_variance_only` ratio
+over the events above 1e-12 runs from 0.00 to 3,265, so on this run the **shift dominates the
+variance**, which is the answer to the question the prompt asked the docs to settle.
+
+### Questions for the Step 3 review
+
+1. **`quiet` applies no storm term at all**, for the regression-baseline reason above. Is that
+   the right reading of "quiet, using observed conditions", or should there be a sixth scenario
+   that applies the term under the observed record so the two can be compared directly?
+2. **The extrapolation flag is a label, not a refusal.** 53 objects on the G5 run have shifts
+   outside the linear theory by orders of magnitude, and they keep their probabilities with a
+   `!extrapolated` marker. Should those events instead be reported as unscoreable — a dilution-
+   like statement — rather than carrying a number nobody should use?
+3. **The storm-response uncertainty is a 30 % prior** and it is the largest single term in the
+   variance. Step 4 measures it against May 2024. Nothing downstream should be tuned against it
+   until then.
+4. **A scenario rescore takes about sixteen minutes** for 2,993 objects: two density tracks per
+   object from its own epoch to the window end. `--storm-step-s` coarsens it and the same
+   argument that justified ×4 for the fit applies, but the default is left at the full step so
+   the first reported numbers are not sampling-limited. Should the default coarsen?
+5. **`replay:<date>` is built and reachable but not yet meaningful**, because it would pair
+   today's element sets with 2024's weather. Step 4's historical snapshots are what make it a
+   real scenario.
+
 ## Later steps in one paragraph each
 
 **Step 2, density and drag.** pymsis with NRLMSIS 2.x, the ap input vector built correctly

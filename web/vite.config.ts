@@ -6,8 +6,11 @@ export default defineConfig({
   base: "./",
   worker: { format: "es" },
   build: {
+    // No source maps in the deployed bundle. They were 9.5 MB of the 12 MB dist, they publish
+    // the unminified sources and the comments with them, and nothing about a static viewer
+    // needs them on a CDN. `npm run build -- --sourcemap` turns them back on for a local debug.
+    sourcemap: false,
     target: "es2022",
-    sourcemap: true,
     chunkSizeWarningLimit: 1500,
   },
 });

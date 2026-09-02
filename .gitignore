@@ -16,6 +16,10 @@ data/conjunctions/
 data/supplemental/
 data/spacex/
 data/weather/
+data/ballistic/
+
+# wrangler caches the account id and the account name (an email address) here
+.wrangler/
 data/external/
 web/public/data/*
 !web/public/data/.gitkeep

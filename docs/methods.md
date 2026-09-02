@@ -305,9 +305,30 @@ they enter the chain; each states what is assumed, why, and what it costs.
   density model, which is self-consistent and altitude-aware.
 - **A ballistic coefficient is fitted from the object's own decay where the decay is
   measurable**, over 45 days, excluding manoeuvre intervals, outlier sets and intervals longer
-  than a fortnight, and refused when the total drop is inside the element-set scatter. Objects
-  with neither a usable fit nor a usable B\* take the run's own median for their category,
-  labelled `typical`. Every row carries which of the three it used.
+  than a fortnight. Objects with neither a usable fit nor a usable B\* take the run's own
+  median for their category **and drag altitude band**, labelled `typical`. Every row carries
+  which of the three it used and an uncertainty: the statistical error of its own decay for a
+  fit (floored at 5 %), a 50 % prior for a B\* inversion, the pool's robust spread floored at a
+  factor of two for a stand-in.
+- **A fit is accepted against the object's own element-set scatter, not a fixed threshold.**
+  The scatter is the pooled residual of a quadratic fitted through the mean semi-major axis
+  *inside each contiguous run* of surviving element sets — never across the gap a manoeuvre
+  exclusion leaves, or the burn itself is counted as noise. The decay must exceed
+  `scatter × sqrt(2 × runs)` by a factor of three. So a quiet object earns a fit from a smaller
+  decay than a noisy one: NOAA-20's elements scatter by 0.16 m, making its 64 m of decay a
+  77-sigma measurement.
+- **A jump detector cannot see a continuous thrust**, and a drag fit reads it as atmosphere.
+  Deorbiting Starlinks fit at B near 1 m²/kg off 48 km of decay in 45 days, an area-to-mass no
+  satellite has. The proxy used is the fraction of intervals excluded as manoeuvres, refused
+  above a quarter — set from a measured break in the population, where the median B is flat at
+  0.012 to 0.045 below it and jumps to 0.18 to 0.26 above. It is a proxy and it does not catch
+  everything: one Starlink with 12 % of its intervals excluded still fits at 0.69 m²/kg.
+- **The fit runs on a coarser grid than the scenarios**, four times the step rule, because it
+  only ever uses the integral. Measured cost: 0.65 % on a history fit against a 5 % statistical
+  uncertainty, 3.9 % on a B\* inversion against a 50 % prior. And under a **wall-clock budget**,
+  spent from the top of the probability list down, with a persistent cache keyed by NORAD id
+  and the history span it used, so coverage deepens run over run rather than the same objects
+  being refitted.
 - **Only the product `B rho` is observable from a decay**, so a systematic bias in the density
   model folds into the fitted coefficient and cancels when the same model drives the
   scenarios — for the quiet case. It does **not** cancel for the storm response, which has no
@@ -316,6 +337,52 @@ they enter the chain; each states what is assumed, why, and what it costs.
 - **One coefficient per object, constant over the window.** No attitude changes, no lift, no
   radiation pressure. A Starlink turning its panel edge-on to ride out a storm — a documented
   operational response — changes its coefficient by a factor of several, invisibly.
+
+## The storm term (Phase 3, Step 3)
+
+- **The displacement is derived for a near-circular orbit.** Equation (2) of
+  `docs/storm-term.md` linearises the relation between the energy loss and the mean motion,
+  which is a near-circular statement. The general drag integral `rho |v_rel| (v_rel . v)` is
+  carried through it, so the perigee weighting of an eccentric orbit is right, but the
+  derivation itself is not. Eccentric orbits get the term with that caveat and no other.
+- **The closed form is verified, not asserted.** `s = (3/4) B drho v² t²` against a
+  Runge-Kutta integration of the same orbit with a step density change: 0.24 % at worst
+  (300 km, seven days, doubled density), better than 0.05 % at 400 km and above. The error is
+  the closed form holding `v` fixed while the real orbit decays, and it grows with the decay,
+  exactly as it should.
+- **The term is applied at the *stored* time of closest approach, and this is exact rather
+  than approximate.** The encounter plane is perpendicular to the relative velocity, and the
+  component of a shift along that direction is precisely the part that moves the TCA rather
+  than the miss at it; the projection removes it. Nothing rescreens.
+- **The excess is measured against SGP4's own atmosphere**, through the element set's B\*,
+  which the entry above describes as noisy. An object whose B\* is nonsense has a nonsense
+  implied density and therefore a nonsense excess. The coefficient's source label travels with
+  every risk row for this reason.
+- **The linear theory is checked for validity and flagged where it fails.** The derivation
+  holds the semi-major axis fixed, so it is a small-perturbation statement. Every object's
+  shift carries the implied decay as a fraction of `a` and the displacement in orbit
+  circumferences, and is flagged `!extrapolated` past one part in a thousand or a quarter of a
+  revolution. The G5 scenario puts high area-to-mass debris at 300 km past both by orders of
+  magnitude — those objects would be re-entering rather than conjuncting — and the flag is what
+  keeps a faithful evaluation of a formula outside its domain from being read as a prediction.
+- **The density model's uncertainty is entered as a *storm-response* error, not an absolute
+  one.** The absolute part cancels against a coefficient fitted through the same model, so
+  30 % of the scenario density is carried for a fitted coefficient and that in quadrature with
+  15 % for a `bstar` or `typical` one, where the cancellation does not apply. Both are priors
+  until Step 4 measures them against May 2024. The term is applied **coherently in time**,
+  because a model bias is not a fresh random number every three hours.
+- **The index uncertainty is evaluated, not differentiated.** There is no closed form for the
+  density's response to ap, so the whole track is recomputed with every interval's ap raised by
+  its own `ap_sigma` and the difference in the displacement is the term.
+- **`quiet` applies no storm term at all.** It is the Phase 2 model untouched, which is what
+  the regression baseline requires and what makes every other scenario a readable difference
+  from it. The alternative — applying the term under observed conditions — would make the
+  baseline move whenever the density model changed.
+- **The shift is zero at each object's own element-set epoch**, by construction. A run screened
+  on fresh element sets shows a smaller storm effect than one screened on week-old sets, which
+  is correct and is worth knowing when comparing two runs.
+- **No coefficient means no shift**, labelled `storm:none`. That is a statement that the
+  displacement is unknown, not that it is zero, and the two must not be read alike.
 
 ## Propagation
 
