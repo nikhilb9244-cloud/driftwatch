@@ -4,6 +4,7 @@ import json
 from datetime import UTC, date, datetime, timedelta
 
 import httpx
+import pandas as pd
 import pytest
 
 from driftwatch import config
@@ -59,6 +60,9 @@ class FakeSpaceTrack:
         self.requests: list[httpx.Request] = []
         self.fail = False
         self.expire_session = False
+        self.max_history_ids: int | None = None  # refuse gp_history requests with more ids than this
+        self.refuse_status = 414  # with this status (Space-Track's front end says 403 to a long URL)
+        self.timeout_history_above: int | None = None  # raise a read timeout for requests with more ids
 
     def handler(self, request: httpx.Request) -> httpx.Response:
         self.requests.append(request)
@@ -81,6 +85,10 @@ class FakeSpaceTrack:
             return httpx.Response(200, json=self.records)
         if "/class/gp_history/" in path:
             ids = {int(x) for x in path.split("/NORAD_CAT_ID/")[1].split("/")[0].split(",")}
+            if self.max_history_ids is not None and len(ids) > self.max_history_ids:
+                return httpx.Response(self.refuse_status, text="Request refused")
+            if self.timeout_history_above is not None and len(ids) > self.timeout_history_above:
+                raise httpx.ReadTimeout("slow", request=request)
             return httpx.Response(200, json=[r for r in self.records if int(r["NORAD_CAT_ID"]) in ids])
         return httpx.Response(404, text="no such class")
 
@@ -223,6 +231,75 @@ def test_history_is_chunked_and_cached_for_ever(server, tmp_path):
     with pytest.raises(ValueError):
         spacetrack.fetch_gp_history(ids, end, start, cache_dir=tmp_path)
     assert spacetrack.fetch_gp_history([], start, end, cache_dir=tmp_path) == []
+
+
+def test_gp_history_request_can_restrict_the_fields():
+    path = gp_history_request([25544], date(2024, 5, 1), date(2024, 5, 2), predicates=("NORAD_CAT_ID", "EPOCH"))
+    assert path.endswith("/orderby/EPOCH%20asc/predicates/NORAD_CAT_ID,EPOCH/format/json")
+
+
+def test_chunk_ids_by_url_keeps_every_request_under_the_budget():
+    start, end = date(2026, 7, 19), date(2026, 9, 2)
+    ids = list(range(100000, 100300))
+    chunks = spacetrack.chunk_ids_by_url(ids, start, end, url_budget=600)
+    assert [i for c in chunks for i in c] == ids and len(chunks) > 1
+    for chunk in chunks:
+        url = config.SPACETRACK_QUERY_URL + gp_history_request(
+            chunk, start, end, predicates=config.SPACETRACK_HISTORY_PREDICATES
+        )
+        assert len(url) <= 600
+    assert spacetrack.chunk_ids_by_url(ids, start, end, url_budget=600) == chunks  # deterministic
+    assert spacetrack.chunk_ids_by_url([3, 1, 2, 2], start, end, url_budget=10) == [[1], [2], [3]]
+    assert spacetrack.chunk_ids_by_url([], start, end) == []
+    default = spacetrack.chunk_ids_by_url(range(100000, 130000), start, end)
+    assert 400 < len(default[0]) < 500  # 3,500 characters, under Space-Track's 4 KB limit: about 450 six-digit ids
+
+
+@pytest.mark.parametrize("status", [414, 403])
+def test_history_url_too_long_is_split_and_coverage_records_every_part(server, tmp_path, status):
+    ids = sorted(int(r["NORAD_CAT_ID"]) for r in server.records)
+    start, end = date(2026, 8, 1), date(2026, 8, 3)
+    server.max_history_ids = 3
+    server.refuse_status = status
+    with server.client() as client:
+        records = spacetrack.fetch_gp_history(
+            ids,
+            start,
+            end,
+            cache_dir=tmp_path,
+            client=client,
+            url_budget=10_000,
+            predicates=config.SPACETRACK_HISTORY_PREDICATES,
+        )
+    assert sorted(int(r["NORAD_CAT_ID"]) for r in records) == ids
+    paths = server.query_paths()
+    # 8 refused, two halves of 4 refused, four quarters of 2 served; a 403 is first taken for an expired
+    # session and retried once after a fresh login, so each refusal shows up twice.
+    assert len(paths) == (7 if status == 414 else 10)
+    assert all("/predicates/" in p for p in paths)
+    cached = [p for p in spacetrack.history_cache_dir(tmp_path).glob("*.json") if ".meta" not in p.name]
+    assert len(cached) == 4
+    coverage = spacetrack.history_coverage(tmp_path)
+    assert sorted(coverage["norad_id"]) == ids and (coverage["start"] == pd.Timestamp(start)).all()
+    assert spacetrack.covered_ids(coverage, ids + [1], start, end) == set(ids)
+    assert spacetrack.covered_ids(coverage, ids, start, date(2026, 8, 4)) == set()
+    assert spacetrack.covered_ids(pd.DataFrame(), ids, start, end) == set()
+
+
+def test_history_timeout_splits_the_request_down_to_the_minimum(omm_records, tmp_path):
+    if len(omm_records) < 16:
+        pytest.skip("need 16 verification objects")
+    server = FakeSpaceTrack(spacetrack_records(omm_records[:16]))
+    ids = sorted(int(r["NORAD_CAT_ID"]) for r in server.records)
+    server.timeout_history_above = spacetrack.HISTORY_MIN_SPLIT_IDS
+    start, end = date(2026, 8, 1), date(2026, 8, 3)
+    with server.client() as client:
+        records = spacetrack.fetch_gp_history(ids, start, end, cache_dir=tmp_path, client=client, url_budget=10_000)
+    assert sorted(int(r["NORAD_CAT_ID"]) for r in records) == ids
+    assert len(server.query_paths()) == 3  # 16 timed out, two halves of 8 served
+    server.timeout_history_above = 4  # now even the minimum chunk times out: the error stands
+    with server.client() as client, pytest.raises(httpx.ReadTimeout):
+        spacetrack.fetch_gp_history(ids, start, date(2026, 8, 9), cache_dir=tmp_path, client=client, url_budget=10_000)
 
 
 def test_credentials_never_reach_disk_or_logs(server, tmp_path, caplog):

@@ -20,6 +20,9 @@ SNAPSHOT_DIR = DATA_DIR / "snapshots"
 PROPAGATED_DIR = DATA_DIR / "propagated"
 HISTORY_DIR = DATA_DIR / "history"
 CONJUNCTION_DIR = DATA_DIR / "conjunctions"
+EXTERNAL_DIR = DATA_DIR / "external"
+# ESA's Kelvins Collision Avoidance Challenge data, if downloaded (see risk/kelvins.py).
+KELVINS_DIR = EXTERNAL_DIR / "kelvins"
 VIEWER_DATA_DIR = Path(os.environ.get("DRIFTWATCH_VIEWER_DATA_DIR", PROJECT_ROOT / "web" / "public" / "data"))
 
 # CelesTrak asks for a descriptive User-Agent so they can tell polite tools from
@@ -61,8 +64,44 @@ MIN_SPACETRACK_GP_INTERVAL = timedelta(hours=2)
 MAX_SPACETRACK_GP_PULLS_PER_DAY = 4
 # "Current catalogue" per Space-Track's own recipe: no decay date and an epoch in the last 30 days.
 SPACETRACK_GP_MAX_EPOCH_AGE_DAYS = 30
-# NORAD ids per gp_history request; keeps the URL short and each response a few thousand rows.
+# NORAD ids per gp_history request for the ``history`` command; keeps the URL short and each
+# response a few thousand rows.
 SPACETRACK_HISTORY_CHUNK = 200
+# The Step 3 backfill batches ids into as many as fit a request URL of this many characters
+# (about 450 six-digit ids), so the fleet and the Stage A survivors take about fifty requests
+# rather than a few hundred. The Step 0 review's figure was 8,000 characters; measured on
+# 2026-09-02, Space-Track serves a 3,602-character gp_history URL and answers a generic
+# 403 Forbidden to one of 5,365, so the limit sits near 4 KB and 3,500 keeps clear of it. A
+# 403, 413 or 414 on a long URL splits the chunk and retries anyway.
+SPACETRACK_HISTORY_URL_BUDGET = 3500
+# Only the element-set fields are requested from gp_history (Space-Track's ``predicates``
+# operator), which cuts each response to about a third of the full record. If Space-Track
+# rejects the operator the request is retried for the full records.
+SPACETRACK_HISTORY_PREDICATES: tuple[str, ...] = (
+    "NORAD_CAT_ID",
+    "OBJECT_NAME",
+    "OBJECT_ID",
+    "EPOCH",
+    "MEAN_MOTION",
+    "ECCENTRICITY",
+    "INCLINATION",
+    "RA_OF_ASC_NODE",
+    "ARG_OF_PERICENTER",
+    "MEAN_ANOMALY",
+    "BSTAR",
+    "MEAN_MOTION_DOT",
+    "MEAN_MOTION_DDOT",
+    "EPHEMERIS_TYPE",
+    "CLASSIFICATION_TYPE",
+    "ELEMENT_SET_NO",
+    "REV_AT_EPOCH",
+)
+# A history response for a thousand objects over 45 days is tens of megabytes; give it time.
+SPACETRACK_HISTORY_TIMEOUT_S = 900.0
+# Default backfill window for the covariance fit: element sets from this many days before the
+# snapshot. Seven days of propagation error needs pairs up to seven days apart; 45 gives
+# several such pairs per object without pulling a season of history.
+HISTORY_BACKFILL_DAYS = 45
 
 # Attribution required by the data providers. Space-Track's user agreement grants blanket approval
 # to redistribute basic SSA data (TLEs/OMMs, SATCAT, decay data) "conditioned on appropriate
