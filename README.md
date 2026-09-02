@@ -8,9 +8,10 @@ catalogue and show how miss distances and probabilities move under quiet and sto
 conditions, live and in replay of past storms.
 
 **Status: Phase 2 of 5 in progress** (conjunction screening; Space-Track merged in, the
-demo fleet defined and the three-stage screening running; uncertainty and probability
-next). Phase 1 (catalogue and globe) is complete. See
-`ROADMAP.md` for the full plan, `docs/phase1-plan.md` for what Phase 1 built and why, and
+demo fleet defined, the three-stage screening running, and every event now carries an
+empirical covariance, a probability of collision and a flag; the report and the viewer
+panel are next). Phase 1 (catalogue and globe) is complete. See `ROADMAP.md` for the
+full plan, `docs/phase1-plan.md` for what Phase 1 built and why, and
 `docs/phase2-plan.md` for the Phase 2 plan and the decisions taken so far.
 
 What works today:
@@ -33,14 +34,32 @@ What works today:
   whole catalogue in three stages (apogee/perigee overlap, coarse time stepping with a
   step and threshold chosen so nothing inside the screening volume can be missed, and
   root-finding on the range rate), using CelesTrak's supplemental Starlink sets for
-  Starlink secondaries, and writes every close approach with its time, miss distance,
-  relative speed, radial/in-track/cross-track components and flags to
-  `data/conjunctions/`. The demo fleet's week takes about three minutes on a laptop.
+  Starlink secondaries; then backfills 45 days of Space-Track element-set history for
+  the fleet and every surviving secondary, fits each object's position uncertainty from
+  the disagreement between its own element sets (with a pooled fallback per category and
+  altitude band, and a labelled prior below that), checks the history for unexplained
+  orbit raises, and computes the probability of collision on the encounter plane by
+  Foster's integration with Alfano's form as a cross-check, the maximum probability over
+  covariance scale factors, and red/yellow flags at the ISS thresholds. Everything goes
+  into a run directory under `data/conjunctions/`: the geometry, the objects, the
+  covariance model, one risk file per scenario and the joined export. The demo fleet's
+  week takes about four minutes plus the history backfill on a laptop.
+- `driftwatch risk <run> --scenario <name>` rescores a stored run's events with another
+  covariance model without rescreening (today a scale factor; Phase 3's storm model
+  uses the same interface), so a quiet row and a storm row for the same event sit side
+  by side in the export.
+- `driftwatch kelvins` reproduces the risk column of ESA's Kelvins Collision Avoidance
+  Challenge data from its own inputs, fitting the hard-body radius, once the dataset is
+  downloaded into `data/external/kelvins/`.
 - Tests cover the official SGP4 verification cases, frame conversions against skyfield,
   a real ISS pass over Durban, the cache rules, the snapshot schema, the export, the
-  Space-Track client, the fleet files, and the screening: synthetic conjunctions with a
+  Space-Track client, the fleet files, the screening (synthetic conjunctions with a
   designed time and miss distance recovered to a millisecond and a metre, and the coarse
-  step checked against one-second brute force.
+  step checked against one-second brute force), the probability of collision (closed
+  forms, brute-force quadrature, the three integrators against each other, the dilution
+  maximum), the covariance fit and the manoeuvre detector on synthetic element-set
+  histories, the history index and batched backfill, and the scenario mechanism end to
+  end.
 
 ## Quick start
 
@@ -56,7 +75,9 @@ uv run driftwatch propagate --at 2026-09-01T12:00:00Z
                                           # and web/public/data/{manifest.json,objects.json,elements.bin,reference.bin}
 uv run driftwatch fleet fleets/demo.yaml  # check the demo fleet against the snapshot
 uv run driftwatch screen --fleet fleets/demo.yaml --days 7
-                                          # ~3 min; writes data/conjunctions/demo_<stamp>.parquet
+                                          # ~4 min + the history backfill; writes data/conjunctions/demo_<stamp>/
+uv run driftwatch risk latest --scenario test --scale 3
+                                          # rescore the same events with every covariance tripled
 cd web && npm install && npm run dev      # open the printed URL
 ```
 
@@ -65,8 +86,10 @@ rebuilds the snapshot from cache without touching the network; `--spacetrack off
 Space-Track and `--spacetrack on` fails without it (the default uses it when the
 credentials or a cache are present). `uv run driftwatch history --ids 25544,39634
 --start 2024-05-01 --end 2024-05-20` pulls every element set for those objects from
-Space-Track's `gp_history` into `data/history/`. Run `uv run pytest` for the tests (the
-first run downloads IERS Earth-orientation data for astropy, about 3 MB).
+Space-Track's `gp_history` into `data/history/`; `screen` does the same for the fleet
+and its surviving secondaries by itself (`--history off` skips it, `--history on` insists
+on it). Run `uv run pytest` for the tests (the first run downloads IERS Earth-orientation
+data for astropy, about 3 MB).
 
 ## What you are looking at
 
@@ -93,7 +116,8 @@ src/driftwatch/         Python package (CLI: driftwatch)
   catalogue/            CelesTrak and Space-Track fetch, SATCAT, classification, parquet snapshots, history
   orbit/                time, SGP4 propagation, frame conversions
   screening/            three-stage conjunction screening, RIC frame, supplemental Starlink sets
-  export/               viewer bundle
+  risk/                 covariance model and fit, manoeuvre flag, probability of collision, scenarios, Kelvins
+  export/               viewer bundle, conjunction run directory
 fleets/                 YAML fleet definitions (the primaries to screen)
 tests/                  pytest
 docs/                   physics background, frames and time, data schema, methods, data sources, plans
@@ -109,7 +133,9 @@ data/                   cache, snapshots, history, propagated states (git-ignore
   cost of the browser's shortcut.
 - `docs/data-schema.md`: every column in the snapshot, state, conjunction and viewer files.
 - `docs/screening.md`: the three screening stages, the step-and-threshold derivation
-  with its brute-force proof, and what an event's numbers mean.
+  with its brute-force proof, what an event's numbers mean; then the covariance from
+  element-set consistency and why it is a floor, the manoeuvre flag, the encounter
+  plane, the three probability integrators, the dilution maximum and the flags.
 - `docs/methods.md`: the running list of approximations.
 - `docs/data-sources.md`: each data provider's terms, the Space-Track redistribution
   clause as checked, and the citation format.

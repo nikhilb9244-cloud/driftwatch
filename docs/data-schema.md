@@ -30,7 +30,10 @@ records the query URL, the fetch time and the count only.
 - `gp_history/<start>_<end>_<n>ids_<digest>.json` and its `.meta.json`: one file per
   `gp_history` request, keyed by the date range and a digest of the sorted NORAD ids.
   Space-Track asks for history to be requested once and kept, so these are never
-  re-fetched.
+  re-fetched; the metadata (ids, days) is also how the Step 3 backfill knows which ids
+  and days are already covered. Backfill requests ask only for the element-set fields
+  (Space-Track's `predicates` operator), so a record holds the OMM fields and nothing
+  else.
 
 ## Snapshot: `data/snapshots/gp_<YYYYMMDDTHHMMSSZ>.parquet`
 
@@ -117,7 +120,7 @@ YAML document per fleet:
 | `name` | string | Display name. |
 | `hard_body_radius_m` | number | Radius of the sphere that encloses the deployed spacecraft, in metres, in (0, 1000]. |
 | `radius_source` | string | Required. The dimensions the radius came from and what was assumed. |
-| `manoeuvres` | bool | Whether the object performs orbit manoeuvres. Step 2 flags every pair that involves one. |
+| `manoeuvres` | bool | Whether the object performs orbit manoeuvres: sets the member's manoeuvre level to `known` or `none`, overriding the category rules. |
 | `role` | string | Optional tag: `station`, `sentinel`, `university_cubesat`, `safr`, or anything else. |
 | `notes` | string | Optional. |
 
@@ -126,34 +129,56 @@ Unknown keys are errors, so a misspelt `manoeuvres` cannot silently default.
 latest snapshot knows it (`resolve_fleet()` in `driftwatch.fleet`), flagging members the
 snapshot does not hold.
 
-## History: `data/history/gph_<YYYYMMDDTHHMMSSZ>.parquet`
+## History: `data/history/gph_<YYYYMMDDTHHMMSSZ>[_n].parquet` and `index.parquet`
 
-One file per `driftwatch history` run, holding every element set Space-Track's
-`gp_history` returned for the requested NORAD ids and date range. Columns are the
-element-set columns of the snapshot (`norad_id` through `rev_at_epoch`) plus `source`
-(`spacetrack`) and `fetched_at`; the parquet metadata records the ids and the range.
-One row per (`norad_id`, `epoch`); a re-issued element set with the same epoch replaces
-the earlier one.
+One file per pull, whether a `driftwatch history` run or a backfill by `driftwatch
+screen` (the parquet metadata says which: `kind = backfill` with the window's `start`
+and `end`, or the ids and range of a `history` command). A second pull in the same
+second gets a `_2`, `_3` suffix rather than overwriting the first. Each file holds
+every element set Space-Track's `gp_history` returned. Columns are the element-set
+columns of the snapshot (`norad_id` through `rev_at_epoch`) plus `source`
+(`spacetrack`) and `fetched_at`, one row per (`norad_id`, `epoch`), sorted by object
+and epoch and written in row groups of 50,000 rows so that a read filtered on
+`norad_id` skips most of a large file. A re-issued element set with the same epoch
+replaces the earlier one.
 
-`driftwatch.catalogue.history.load_history()` concatenates these files with the
-snapshots (which carry the same columns) and keeps one row per (`norad_id`, `epoch`), so
-the snapshots taken by the daily fetch and the backfilled history form one table. Step 3
-fits per-object covariance from that table; Phase 3 replays storms from it.
+`index.parquet` is the consolidated index decided at the Step 0 review: one row per
+element set in every history file, `norad_id` (int64), `epoch` (timestamp[us, UTC])
+and `file` (the history file's name). It is derived data: updated after every history
+write, rebuilt from the files whenever it is missing or does not list every file
+(`driftwatch history --rebuild-index` forces it).
 
-## Conjunctions: `data/conjunctions/<fleet>_<YYYYMMDDTHHMMSSZ>.parquet`
+`driftwatch.catalogue.history.load_history(norad_ids=...)` reads the index, opens only
+the history files that hold those objects (with the row-group filter), adds the rows
+for those objects from every snapshot (which carry the same columns), and keeps one
+row per (`norad_id`, `epoch`), so the snapshots taken by the daily fetch and the
+backfilled history form one table. Without `norad_ids` every file is read. Step 3 fits
+the covariance from that table; Phase 3 replays storms from it.
 
-One file per `driftwatch screen` run, named by the fleet and the window start, one row
-per close-approach event between a fleet member (the primary) and a catalogue object
-(the secondary). An event is kept when its miss vector lies inside the RIC box or its
-miss distance is inside the watch radius. The parquet metadata records the snapshot
-(`driftwatch_snapshot`), the fleet file, the screening configuration as JSON
-(`driftwatch_screening_config`, including the step, pad, box, watch radius and the
-derived screening radius) and the run summary with per-stage timings. These are the
-Step 2 columns; Step 3 adds the uncertainty and probability columns and Step 4 the run
-identity, as decided at the Step 0 review (see `docs/phase2-plan.md`).
+## Conjunction runs: `data/conjunctions/<fleet>_<YYYYMMDDTHHMMSSZ>/`
+
+One directory per `driftwatch screen` run, named by the fleet and the window start.
+Geometry and probability live in separate files, the Phase 3 design rule: Stages A to
+C write the events once, and every scenario writes its own risk file over the same
+events. `driftwatch risk <run> --scenario <name>` adds a scenario without rescreening.
+
+| File | Content |
+| --- | --- |
+| `run.json` | The run id, snapshot, fleet file, window, screening configuration, per-stage summary and timings, the history backfill result, the covariance fit summary, the scenarios present and one record per scoring (scenario, time, model version, flag counts). |
+| `events.parquet` | Stages A to C: one row per event, the geometry and both TEME states at the time of closest approach (below). Metadata: the snapshot, the run id, the fleet, the configuration and the summary. |
+| `objects.parquet` | One row per object that takes part in any event, plus every fleet member (below). |
+| `covariance.parquet` | The fitted covariance model: one row per object analysed (every Stage A survivor), per (category, band) pool and per default band (below). Rebuilding the model from this table gives the same covariances. |
+| `risk_<scenario>.parquet` | One row per event for that scenario: the sigmas, their sources, the hard-body radius, the encounter-plane covariance, the probabilities, the flag (below). A `replay:may2024` scenario is `risk_replay-may2024.parquet`; the metadata carries the exact name. |
+| `conjunctions.parquet` | The export decided at the Step 0 review: `events` joined with the manoeuvre levels and every risk file, one row per event per scenario (below). Rebuilt whenever a risk file is written. |
+
+An event is kept when its miss vector lies inside the RIC box or its miss distance is
+inside the watch radius.
+
+### `events.parquet`
 
 | Column | Type | Meaning |
 | --- | --- | --- |
+| `event_id` | string | `<snapshot stamp>:<primary>:<secondary>:<TCA to the minute>`, e.g. `20260901T204841Z:55053:53000:20260903T0857Z`. The same in every scenario and across reruns of the same snapshot; two distinct minima of one pair inside one minute get `#2`, `#3`. |
 | `primary_norad_id`, `primary_name`, `primary_category` | int64, string, string | The fleet member; the name is the fleet file's. |
 | `secondary_norad_id`, `secondary_name`, `secondary_category` | int64, string, string | The catalogue object, as the snapshot names and classifies it. |
 | `tca` | timestamp[us, UTC] | Time of closest approach between the two SGP4 trajectories. |
@@ -163,9 +188,69 @@ identity, as decided at the Step 0 review (see `docs/phase2-plan.md`).
 | `in_box` | bool | Inside the box: radial within 2 km, in-track and cross-track within 25 km, by default. |
 | `within_watch_radius` | bool | `miss_km` at or under the watch radius (25 km by default). |
 | `stale_primary`, `stale_secondary` | bool | Element set older than five days at the window start. |
-| `manoeuvrable_primary`, `manoeuvrable_secondary` | bool | Known to manoeuvre: the fleet file's flag for members; the `starlink`, `oneweb`, `constellation` and `station` categories for other secondaries. A warning, not a model. |
+| `manoeuvre_primary`, `manoeuvre_secondary` | string | The prior manoeuvre level, `known`, `possible` or `none` (see `docs/screening.md`, "Manoeuvres"). The objects table and the export carry the level after the history check, which can be `observed`. |
 | `secondary_ephemeris` | string | `gp` or `supplemental`: which element set the secondary was propagated from. |
 | `refine_method` | string | `root` (range-rate root inside a sign-change bracket) or `minimum` (golden-section fallback). |
+| `p_x_km`, `p_y_km`, `p_z_km`, `p_vx_kms`, `p_vy_kms`, `p_vz_kms` | float64 | The primary's TEME position (km) and velocity (km/s) at `tca`. |
+| `s_x_km`, ..., `s_vz_kms` | float64 | The same for the secondary. The risk step rotates covariances and builds the encounter plane from these and never propagates. |
+
+### `objects.parquet`
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `norad_id`, `name`, `category`, `altitude_band` | int64, string, string, string | As the snapshot (the fleet file's name for members). |
+| `is_primary` | bool | A fleet member. |
+| `epoch` | timestamp[us, UTC] | Epoch of the element set the object was propagated from (the supplemental set's for a Starlink that used one). |
+| `ephemeris`, `source` | string | `gp` or `supplemental`; `celestrak` or `spacetrack`. |
+| `in_active_group` | bool | In CelesTrak's `active` group (the manoeuvre prior's second rule). |
+| `rcs_m2` | float64 | SATCAT radar cross-section, NaN if unpublished. |
+| `hbr_m`, `hbr_source` | float64, string | The hard-body radius used and its rule: `fleet` (the fleet file), `rcs` (`sqrt(RCS / pi)`, clipped to 0.1 to 20 m) or `category` (the default for the category). |
+| `manoeuvre_prior`, `manoeuvre_level` | string | The prior (`known`, `possible`, `none`) and the level after the history check (`possible` becomes `observed` when the history shows a burn). |
+| `n_history_sets`, `n_jumps` | int64 | Element sets the fit saw; burns the detector found. |
+| `jump_epochs`, `last_jump` | list<timestamp>, timestamp | Epochs of the first element set after each detected burn, and the latest of them. |
+| `cov_source` | string | Which covariance the model uses for the object: `empirical`, `pooled:<category>/<band>` or `default:<band>`. |
+
+### `covariance.parquet`
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `kind` | string | `object`, `pool` or `default`. |
+| `norad_id`, `category`, `altitude_band` | int64, string, string | The object (with its labels), the pool's labels, or the default's band. |
+| `source` | string | For an object row, the label the model uses for it (empirical, pooled or default); for a pool or default row, its own label; empty for a pool with too few pairs. |
+| `n_objects`, `n_fitted`, `n_sets`, `n_pairs`, `dt_min_days`, `dt_max_days` | int64, float64 | What the fit saw: objects in the pool and how many of them have their own fit, element sets, residual pairs and their propagation-time range. |
+| `sigma_r_1d_km`, `p_r`, `sigma_i_1d_km`, `p_i`, `sigma_c_1d_km`, `p_c` | float64 | The power law per RIC component, `sigma(dt) = sigma_1d * dt^p` with `dt` in days; empty where there is no fit. |
+| `n_jumps`, `n_bad_sets` | int64 | Burns detected and outlier sets dropped for the object. |
+
+The parquet metadata records the model version (`driftwatch_model_version`) and the
+run id.
+
+### `risk_<scenario>.parquet`
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `run_id`, `snapshot`, `model_version`, `scenario` | string | The Step 0 review's run identity: the UTC stamp of the screening run plus a suffix; the snapshot file; `<driftwatch version>+<covariance model version>`; the scenario name (`quiet` in Phase 2). |
+| `event_id` | string | Joins to `events.parquet`. |
+| `sigma_r_primary_km`, `sigma_i_primary_km`, `sigma_c_primary_km` | float64 | The primary's RIC standard deviations at `tca` under this scenario's model. |
+| `sigma_r_secondary_km`, `sigma_i_secondary_km`, `sigma_c_secondary_km` | float64 | The same for the secondary. |
+| `cov_source_primary`, `cov_source_secondary` | string | The model's source label for each (a scenario wrapper prefixes its own, e.g. `scaled:4:default:leo`). |
+| `hbr_m` | float64 | The combined hard-body radius, primary plus secondary. |
+| `enc_cov_xx_km2`, `enc_cov_xy_km2`, `enc_cov_yy_km2` | float64 | The combined covariance projected onto the encounter plane, x along the miss vector. Enough to draw the ellipse. |
+| `pc` | float64 | Probability of collision, Foster's integration. |
+| `pc_alfano`, `pc_chan` | float64 | The same integral by Alfano's one-dimensional form (the cross-check) and Chan's series. |
+| `pc_max`, `pc_max_scale` | float64 | The maximum probability over covariance scale factors 0.1 to 10, and the factor at which it occurs. NaN when the sweep was skipped. |
+| `flag` | string | `red` (`pc >= 1e-4`), `yellow` (`>= 1e-5`) or `none`. |
+| `computed_at` | timestamp[us, UTC] | When this scenario was scored. |
+
+### `conjunctions.parquet`
+
+The columns of `risk_*` (without `computed_at`) merged with those of `events`
+(without the states), plus `manoeuvre_primary` and `manoeuvre_secondary` taken from
+the objects table (so they can read `observed`), in the order fixed by
+`EXPORT_COLUMNS` in `driftwatch.export.conjunctions`: run identity, event identity,
+geometry, uncertainty, probability, flags, `secondary_ephemeris`, `refine_method` and
+the encounter-plane covariance. One row per event per scenario; (`event_id`,
+`scenario`) is unique. With no risk file present the geometry rows are exported with
+the risk columns empty.
 
 ## Propagated state: `data/propagated/state_<YYYYMMDDTHHMMSSZ>.parquet`
 

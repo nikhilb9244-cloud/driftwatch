@@ -1,9 +1,12 @@
-# Conjunction screening: the three stages
+# Conjunction screening and collision probability
 
 How `driftwatch screen` finds close approaches between a fleet and the catalogue, why
-the coarse time step cannot miss one, and what the output means. Step 3 of Phase 2 adds
-uncertainty and probability on top of the geometry described here; the covariance
-method, the probability definitions and the flag thresholds will join this page then.
+the coarse time step cannot miss one, and what the output means (the first half of this
+page, Step 2 of Phase 2); then how an uncertainty is put on every position, how the
+probability of collision is computed on the encounter plane, what the maximum
+probability and the flags mean, and how the probability layer is kept separate from
+the geometry so that a scenario can be rescored without rescreening (the second half,
+Step 3).
 
 ## The problem
 
@@ -17,7 +20,7 @@ and gets the demo fleet done in a few minutes.
 Everything is computed in TEME from the snapshot's mean elements with SGP4. The
 positions are only as good as the element sets (hundreds of metres to kilometres; see
 `docs/tle-and-sgp4.md`), so a miss distance here is the miss distance of two SGP4
-trajectories, not of two spacecraft. Step 3 puts numbers on that.
+trajectories, not of two spacecraft. The second half of this page puts numbers on that.
 
 ## Stage A: apogee and perigee overlap
 
@@ -192,19 +195,260 @@ which set the secondary carried (`secondary_ephemeris`).
 The supplemental sets are better, not true. CelesTrak's published fit residuals
 (`starlink.rms.txt`, 0.1 to 5 km per satellite on 2026-09-02) are the floor on their
 error, and the ephemerides are predictions that SpaceX revises. Manoeuvres by anything
-else are not modelled at all; the `manoeuvrable_*` flags say which pairs involve an
-object known to manoeuvre (the fleet's own flag for members; the `starlink`, `oneweb`,
-`constellation` and `station` categories for secondaries) so a reader knows which
-predictions can be overtaken by events.
+else are not modelled at all; the `manoeuvre_*` columns say, for each side of a pair,
+whether the object is known to manoeuvre, might, or has been seen to (the three-valued
+flag described under "Manoeuvres" below), so a reader knows which predictions can be
+overtaken by events.
 
-## Output
+## Output of the geometry: the events table
 
-`data/conjunctions/<fleet>_<start stamp>.parquet`, one row per event, with the columns
-listed in `docs/data-schema.md`: identity of both objects, the time of closest approach
-to the microsecond, the miss distance, the relative speed, the RIC components of the miss
-vector, the two volume flags, the stale and manoeuvre flags, the secondary's ephemeris
-source and the refinement method. Step 3 adds the uncertainty and probability columns
-and Step 4 the run identity and the report.
+Stages A to C write `events.parquet` in the run directory
+`data/conjunctions/<fleet>_<start stamp>/`, one row per event, with the columns listed
+in `docs/data-schema.md`: a stable event id, the identity of both objects, the time of
+closest approach to the microsecond, the miss distance, the relative speed, the RIC
+components of the miss vector, the two volume flags, the stale and manoeuvre flags, the
+secondary's ephemeris source, the refinement method, and both objects' TEME position
+and velocity at the time of closest approach. The states are what lets everything
+below run without touching SGP4 again.
+
+## Uncertainty: what the catalogue does not say
+
+A public element set comes with no covariance. The only handle on its accuracy that
+needs nothing but the catalogue is consistency: an object with several element sets
+can have an older set propagated to a newer set's epoch and the two compared. The
+difference, taken in the newer set's radial, in-track, cross-track frame, is how much
+two fits of the same orbit disagree after a given propagation time. Do that for every
+pair of sets between half a day and seven days apart and the scatter, as a function of
+the propagation time, is a model of how fast the position error grows.
+
+**Why that is a floor, not a measure.** Both sets are fits by the same tracking
+network with the same force model, so they share whatever error the network and the
+model have in common: a biased drag model during a geomagnetic storm, a sparse tracking
+geometry, a systematic in the sensors. The difference between two such fits cannot see
+any of it. Consistency measures the part of the error that changes from fit to fit;
+the true error is at least that large and, in a storm, much larger. Every probability
+on this page is therefore indicative, not operational, and the maximum-probability
+sweep below is the honest way to read it.
+
+**One contribution to the floor is SGP4 itself.** A set fitted at a later epoch with the
+same `B*` does not propagate drag exactly as the original set did: the theory's drag
+terms are polynomials in time from the epoch, so re-basing the epoch changes them.
+Measured on a 500 km orbit with `B* = 1e-4`, the re-initialised set drifts in-track by
+about 0.07 km per day; with `B* = 0` the inversion is exact to the metre. That is well
+below the kilometre-a-day errors of real element sets, but it is in the residuals, and
+a test keeps its drag-free case drag-free for that reason.
+
+## The empirical fit
+
+For each object with history, `risk/covariance.py` propagates every element set to
+every other set's epoch in one vectorised call, keeps the pairs `(older, newer)` whose
+propagation time `dt` lies in `[0.5, 7]` days, and takes the difference of the older
+set's propagated position from the newer set's own position in the newer set's RIC
+frame. Pairs that span a detected manoeuvre, or involve an element set judged to be an
+outlier (next section), are dropped. An object with many sets a day is subsampled to
+600 pairs so it does not dominate its pool.
+
+The model for each RIC component is a power law in the propagation time,
+
+```
+sigma_k(dt) = s_k dt^p_k,     dt in days,  s_k in km at one day,  k in {R, I, C}.
+```
+
+Two parameters per component keep the fit stable on thin history and cover the shapes
+that matter: a period error (a wrong mean motion) puts an in-track error that grows
+linearly, `p = 1`; a timing error (a wrong mean anomaly) is a constant offset, `p = 0`;
+drag errors accumulate faster than linearly. The parameters come from maximum
+likelihood for zero-mean Gaussian residuals: at fixed `p` the best `s` is
+`s^2 = sum(d^2 / dt^(2p)) / N`, and the profile likelihood over `p` is evaluated on a
+grid from 0 to 2.5 in steps of 0.05. The sufficient statistics (`sum d^2 / dt^(2p)` on
+the grid, `sum log dt`, `N`) add across objects, which is how the pools are formed. A
+test feeds designed residuals through this and recovers the exponents to 0.1 and the
+scales to 15 %; another builds element-set histories through SGP4 with a period error
+and a timing error and recovers `p = 1` and `p = 0`.
+
+An object gets its own fit when it has at least 5 element sets and 10 usable pairs
+whose propagation times span at least a factor of 3 (`empirical`). Otherwise it takes
+the pool for its (category, altitude band): the component-wise median of the fits of
+the pool's fitted members when there are at least 5 of them, so that a typical member
+is represented and one satellite whose residuals are enormous (a manoeuvring object the
+detector did not catch) cannot dominate; with fewer fitted members, a fit of the same
+form to the pool's residuals added together, when they hold at least 30 pairs
+(`pooled:<category>/<band>`). The first run showed why the median is needed: the summed
+residuals of the Starlink pool gave 48 km at one day, the rocket-body pool 37 km, both
+set by a handful of objects. An object whose pool is empty too falls to a default per
+band (`default:<band>`), taken
+from published assessments of TLE accuracy (Flohrer, Krag and Klinkrad 2008; Vallado
+and Cefola 2012): in LEO a few hundred metres at epoch, in-track dominant, growing by
+about a kilometre a day. Every covariance the pipeline uses carries its label, and the
+objects table and the export record it per object and per event.
+
+The covariance is diagonal in the object's own RIC frame, with the standard deviations
+floored at half a day of propagation time (the fit does not extrapolate below the
+shortest pairs). It is a full 3 x 3 matrix in the interface, because Phase 3's storm
+model will add an in-track term and the interface should not change when it does.
+
+**History for the fit.** `driftwatch screen` backfills 45 days of `gp_history` before
+the window start for every fleet member and every Stage A survivor, batched into as
+many NORAD ids as fit a 3,500-character request URL (about 450; Space-Track's front end
+refuses URLs much beyond 4 KB with a bare 403, measured 2026-09-02, and the Step 0
+review's 8,000 was cut to fit), asking only for the element-set fields, and skipping
+every id and day a cached request already covers. A
+consolidated index, `data/history/index.parquet`, records which history file holds each
+(NORAD id, epoch) so that a lookup opens only the files it needs. The fit takes every
+element set in the history store for those objects, the snapshots included.
+
+## Manoeuvres: known, possible, observed, none
+
+SGP4 cannot predict a burn, and an element set fitted before one is wrong afterwards by
+the size of the burn. What the pipeline can say is, for every object, how likely a burn
+is and whether the history shows one. Decided at the Step 2 review, the flag has three
+prior values and one the history can promote to:
+
+- `known`: operated constellations and crewed stations (the `starlink`, `oneweb`,
+  `constellation` and `station` categories) and fleet members whose file says so;
+- `possible`: every other payload in CelesTrak's `active` group (an operational
+  satellite that may or may not carry propulsion);
+- `none`: debris and rocket bodies, payloads outside the active group, and fleet
+  members whose file says `manoeuvres: false`;
+- `observed`: a `possible` object whose element-set history shows a jump in
+  semi-major axis that drag cannot explain; the dates are recorded in the objects
+  table.
+
+**The detector.** Between consecutive element sets `k` and `k + 1` the osculating
+semi-major axis should change only by drag, and SGP4 has its own model of that. Set `k`
+is propagated to the epoch of set `k + 1` twice, once with its `B*` and once with `B*`
+zeroed; the difference is the drag-driven change SGP4 expects. The osculating
+semi-major axis of set `k + 1` at its own epoch, minus that of set `k` propagated with
+drag to the same instant, is the change the model did not predict. Because both are
+evaluated at the same time within kilometres of each other, the short-period J2 terms
+(about 8 km peak to peak in LEO) cancel to metres. A raise beyond a floor of 100 m and
+half the modelled drag change is a burn: drag cannot raise an orbit. A lowering counts
+only beyond the floor and twice the modelled drag change, because an underestimated
+`B*` or a storm can double or treble the decay and Phase 3 needs exactly those
+intervals kept. A jump that the next interval reverses is one bad element set, not two
+burns; that set is dropped from the fit and neither interval counts. Gaps longer than
+ten days are not compared. A test raises a synthetic orbit by 1 km mid-history and
+recovers the burn's epoch and size; another plants a single outlier set and gets no
+burn and one bad set.
+
+Calibrated on the demo run's 45 days of history (2026-07-19 to 2026-09-01): the
+unexplained change in semi-major axis between consecutive sets scatters by about 1 m
+(median absolute deviation) for debris, rocket bodies and payloads, so the 100 m floor
+sits far above the fit noise. 1.8 % of debris and 4.8 % of rocket bodies still show at
+least one jump (the heavier tails, and objects whose drag model is poorest), against
+14 % of payloads, 43 % of the other constellations and 89 % of Starlink satellites,
+which average 13 jumps in 45 days, one every three and a half days of station keeping.
+A robust rule (five median absolute deviations about the median) was tried on the same
+sample and changed the debris rate by a fraction of a percent while halving the Starlink
+count; the simpler rule stays.
+
+## The encounter plane
+
+Near the time of closest approach the relative motion of two objects in LEO is a
+straight line at constant velocity: the encounter lasts a fraction of a second and
+gravity bends the relative path by micrometres. The combined position uncertainty,
+each object's RIC covariance rotated into TEME with the object's own frame at the time
+of closest approach and the two added, is projected onto the plane perpendicular to the
+relative velocity. In that plane the miss vector is a point and the two objects touch
+when the relative position falls inside a disc of the combined hard-body radius. The
+probability of collision is the mass of the projected two-dimensional Gaussian inside
+that disc.
+
+The combined hard-body radius is the primary's radius from the fleet file plus the
+secondary's. Secondaries carry a category default: 30 m for a station, 10 m for a
+Starlink (V1.5 spans about 11 m, V2 Mini about 30 m with both arrays), 3 m for OneWeb,
+the other constellations and payloads, 5 m for a rocket body, 0.5 m for debris, 1 m for
+an untyped object. For payloads, rocket bodies, debris and untyped objects a published
+radar cross-section replaces the default with the equivalent sphere, `sqrt(RCS / pi)`,
+clipped to 0.1 to 20 m; the constellations and stations keep their envelope because a
+radar return understates a body much larger than the wavelength. The objects table
+records which rule produced each radius.
+
+## Probability of collision, three ways
+
+The same integral is evaluated by three methods in `risk/pc.py`; the export carries all
+three so the reader can see where they agree.
+
+- **Foster (`pc`).** Foster and Estes' numerical integration on a polar grid over the
+  disc: Gauss-Legendre in radius, a uniform grid in angle (spectrally accurate for a
+  periodic integrand). At least 24 radial and 72 angular nodes, more when the disc is
+  large against the smaller standard deviation. This is the value the flags use.
+- **Alfano (`pc_alfano`).** The disc integral reduced to one dimension along a
+  principal axis of the covariance, the other dimension in closed form with error
+  functions; with the substitution `x = R sin(phi)` the integrand is smooth and a few
+  dozen nodes give ten digits. The prompt's cross-check: it must agree with Foster
+  within one percent, and a test asserts that over aspect ratios up to 100, misses up
+  to six sigma and discs up to twice the smaller sigma (they agree to about 1e-8).
+- **Chan (`pc_chan`).** Chan's analytical series after replacing the ellipse of equal
+  probability by a circle of equal area. Exact for an isotropic covariance and within
+  one percent when the disc is under a tenth of the smaller standard deviation; it
+  drifts by tens of percent when the disc is comparable to it, which a test records
+  rather than hides. It is a third value, not a check that has to pass.
+
+Two closed forms anchor all three. Zero miss with an isotropic sigma gives
+`1 - exp(-R^2 / 2 sigma^2)`; a miss `d` with an isotropic sigma gives the non-central
+chi-square with two degrees of freedom, `P(chi^2_2(d^2 / sigma^2) <= R^2 / sigma^2)`.
+Anisotropic cases are checked against brute-force two-dimensional quadrature.
+
+## The maximum probability and dilution
+
+For a fixed miss the probability is not monotonic in the uncertainty. Shrink the
+covariance and the Gaussian pulls away from the disc; inflate it and the mass spreads
+thin; the maximum lies where the standard deviation is of the order of the miss
+distance. For a small disc and an isotropic sigma_0 the probability at a scale factor
+`k` on the covariance is about `(R^2 / 2 k sigma_0^2) exp(-d^2 / 2 k sigma_0^2)`, with
+its maximum at `k* = d^2 / (2 sigma_0^2)`, and a test recovers that.
+
+`pc_max` is the largest probability over scale factors from 0.1 to 10 on the combined
+covariance (61 log-spaced steps, the maximum refined by a parabola through its
+neighbours), and `pc_max_scale` the factor at which it occurs. Because the empirical
+covariance is a floor on the true error, `pc_max` is the honest upper bound: a
+`pc_max_scale` above one says the real risk could be higher than `pc` if the fits are
+more consistent than they are accurate, which is the usual case; a scale below one says
+the uncertainty already dilutes the probability and a better orbit would raise it.
+This is Alfano's dilution, and it is what the Phase 3 storm term will move.
+
+## Flags
+
+Red at a probability of `1e-4` or above, yellow at `1e-5`, the thresholds the ISS
+programme uses (a yellow starts the planning of an avoidance manoeuvre, a red calls for
+one unless the risk is refined away). The flag is set on `pc`, not on `pc_max`, and
+every row carries both so the reader can apply either rule.
+
+## Scenarios: geometry once, probability per scenario
+
+The design rule for Phase 3, taken at the Step 2 review: Stages A to C run once per
+snapshot and write the events; each scenario reruns only the covariance and the
+probability over those stored events. `driftwatch screen` writes the run directory
+(`events.parquet`, `objects.parquet`, `covariance.parquet`, `risk_quiet.parquet`,
+`conjunctions.parquet`, `run.json`), and `driftwatch risk <run> --scenario <name>`
+scores the same events again with another covariance model and adds a
+`risk_<name>.parquet`, rebuilding the joined export with one row per event per
+scenario. Every risk row carries the scenario, the run id, the snapshot and the model
+version, and the event id is the same across scenarios, so a quiet row and a storm row
+for one event are directly comparable. A covariance model is anything with a `version`
+and a `covariance_ric(obj, epoch, at)` method (the protocol decided at the Step 0
+review); `--scale` wraps the fitted model in a factor as a stand-in until Phase 3's
+storm model exists.
+
+## The Kelvins check
+
+ESA's Kelvins Collision Avoidance Challenge dataset holds anonymised real conjunction
+messages with the relative position and velocity in the target's RTN frame, both
+objects' covariances and ESA's computed risk (log10 of the probability), and for many
+rows a maximum risk and its scaling. `driftwatch kelvins` reconstructs the probability
+from those inputs with the code above, treats the hard-body radius ESA used (not
+given) as a fit parameter, and reports the radius that best reproduces the risk column
+over the high-risk tail (`risk >= -6`) together with the distribution of residuals by
+risk bin. Two approximations are stated in `risk/kelvins.py`: the chaser's frame is
+built from the target's with the target's velocity taken as circular, and the
+covariances are used as position-only matrices.
+
+The dataset is not redistributed with driftwatch and has to be downloaded from the
+Kelvins site (registration required) into `data/external/kelvins/`. At the time of
+writing it was not present, so the reproduction test is skipped with a message saying
+so and the command explains where to put the file; the numbers will be added here
+when it has run.
 
 ## References
 
@@ -214,3 +458,24 @@ and Step 4 the run identity and the report.
 - D. A. Vallado, Fundamentals of Astrodynamics and Applications, section 11.7, for the
   RSW (RIC) frame and close-approach geometry.
 - T. S. Kelso, CelesTrak supplemental GP data, https://celestrak.org/NORAD/elements/supplemental/.
+- J. L. Foster and H. S. Estes, "A parametric analysis of orbital debris collision
+  probability and maneuver rate for space vehicles", NASA JSC-25898 (1992). The
+  polar-grid integration.
+- S. Alfano, "A numerical implementation of spherical object collision probability",
+  Journal of the Astronautical Sciences 53(1), 103-109 (2005). The one-dimensional
+  form used as the cross-check.
+- S. Alfano, "Relating position uncertainty to maximum conjunction probability",
+  Journal of the Astronautical Sciences 53(2), 193-205 (2005). The scale sweep and
+  dilution.
+- F. K. Chan, Spacecraft Collision Probability, The Aerospace Press (2008). The
+  equal-area series.
+- T. Flohrer, H. Krag and H. Klinkrad, "Assessment and categorisation of TLE orbit
+  errors for the US SSN catalogue", AMOS Conference (2008); D. A. Vallado and P. J.
+  Cefola, "Two-line element sets: practice and use", IAC-12 (2012). The default
+  priors.
+- L. K. Newman, "The NASA robotic conjunction assessment process: overview and
+  operational experiences", Acta Astronautica 66, 1253-1261 (2010). The `1e-4` and
+  `1e-5` thresholds.
+- T. Uriot et al., "Spacecraft collision avoidance challenge: design and results of a
+  machine learning competition", Astrodynamics 6, 121-140 (2022); data at
+  https://kelvins.esa.int/collision-avoidance-challenge/.

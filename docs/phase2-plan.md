@@ -32,11 +32,17 @@ src/driftwatch/
     ric.py                RIC frame from a TEME state; relative vectors                       (step 2)
     supplemental.py       CelesTrak supplemental Starlink ephemerides                         (step 2)
   risk/
-    covariance.py         CovarianceModel protocol, empirical fit, pooled fallback            (step 3)
-    pc.py                 Foster polar-grid integration, Chan series, Alfano max-Pc scan      (step 3)
+    covariance.py         CovarianceModel protocol, empirical power-law fit, pooled fallback,
+                          default priors, the ScaledCovariance stand-in                       (step 3)
+    manoeuvre.py          three-valued manoeuvre flag and the semi-major-axis jump detector   (step 3)
+    pc.py                 Foster polar-grid integration, Alfano 1-D form, Chan series,
+                          the covariance-scale sweep for the maximum Pc, the flags            (step 3)
+    scenario.py           covariance + probability over stored events, once per scenario     (step 3)
     kelvins.py            ESA Kelvins reproduction                                            (step 3)
   export/
-    conjunctions.py       parquet + JSON + markdown report + viewer panel data                (step 4)
+    conjunctions.py       the run directory: events, objects, covariance, one risk file per
+                          scenario, the joined export                                        (step 3)
+                          + JSON + markdown report + viewer panel data                        (step 4)
 fleets/                   YAML fleet definitions                                              (step 1)
 data/history/             gph_<stamp>.parquet from gp_history (git-ignored)                   (step 0)
 data/conjunctions/        screening output (git-ignored)                                     (step 4)
@@ -401,23 +407,261 @@ What the first run says:
    event as a row, as now, or collapse repeats of the same pair in the Step 4 report to
    the closest one with a count?
 
+## Step 2 review (2026-09-02)
+
+Approved, including the Sentinel swap. The three questions were answered:
+
+1. **Manoeuvre flag: three-valued.** `known` for constellations and stations as built
+   (and fleet members flagged in the file); `possible` for every payload in the active
+   group; `none` for debris, rocket bodies and dead payloads. Step 3 adds an empirical
+   detector on the history backfill that promotes `possible` to `observed` when the
+   semi-major axis jumps between consecutive element sets by more than drag can
+   explain, recording the date, and excludes those intervals from the covariance fit.
+2. **Step: 30 s stays the default**, exposed as `--step`.
+3. **Repeated encounters: keep every row** in the parquet and the JSON. Collapse only in
+   the report and the viewer (Step 4), where a pair appears once with the event count,
+   the closest miss, the highest probability and the first TCA, and expands on demand.
+
+One design requirement for Step 3: **geometry and probability must be separate.**
+Stages A to C run once per snapshot and write the events. Each scenario (quiet, storm,
+replay) reruns only the covariance and the probability over the stored events and
+writes rows with the scenario, run id, snapshot id and model version from the schema
+decision. Nothing in Phase 3 should need to rescreen.
+
+## Step 3 decisions (uncertainty and probability, built 2026-09-02)
+
+The method and its caveats are in the second half of `docs/screening.md`; the files and
+columns in `docs/data-schema.md`; the approximations in `docs/methods.md`. What was
+decided:
+
+- **The run directory replaces the single parquet.** `data/conjunctions/<fleet>_<start>/`
+  holds `events.parquet` (Stages A to C, with both objects' TEME states at TCA and a
+  stable `event_id`), `objects.parquet` (hard-body radius, manoeuvre level, covariance
+  source per object), `covariance.parquet` (the fitted model), one `risk_<scenario>.parquet`
+  per scenario and `conjunctions.parquet`, the joined export of the Step 0 schema with
+  one row per event per scenario. `driftwatch risk <run> --scenario <name>` rescores the
+  stored events with another covariance model and never propagates an orbit; `--refit`
+  redoes the history and the fit; `--scale` wraps the fitted model in a factor as a
+  stand-in scenario until Phase 3's storm model exists. The run id is the screening
+  run's and is shared by every scenario scored in the directory.
+- **History backfill.** 45 days before the window start for the fleet and every Stage A
+  survivor (22,628 objects on the demo run), only the element-set fields
+  (`predicates`), ids sorted and batched by URL length, every id and day a cached
+  request already covers skipped (coverage intervals chained, so a daily rerun asks for
+  one new day per id). Space-Track's front end answers a bare 403 to a URL over about
+  4 KB (a 3,602-character request was served, a 5,365-character one refused, 2026-09-02),
+  so the Step 0 review's 8,000-character budget became 3,500 (about 450 ids; 44
+  requests for the demo fleet), and a 403, 413 or 414 on a long URL splits the
+  chunk. Two pulls in the same second get distinct file names. The consolidated
+  `index.parquet` is built and used as decided at the Step 0 review.
+- **The fit.** Per object and RIC component, `sigma(dt) = s dt^p` by profile maximum
+  likelihood on an exponent grid (0 to 2.5 by 0.05) over pairs 0.5 to 7 days apart,
+  differenced in the newer set's RIC frame, at most 600 pairs per object. Own fit with
+  at least 5 sets, 10 pairs and a factor-3 span of propagation times (`empirical`);
+  otherwise the (category, band) pool with at least 30 pairs (`pooled:<category>/<band>`),
+  else a per-band prior from Flohrer et al. 2008 and Vallado and Cefola 2012
+  (`default:<band>`). Diagonal in RIC, floored at half a day. Every object row of the
+  covariance table carries the label the model actually uses for it.
+- **The detector.** Consecutive sets: the unexplained change in osculating semi-major
+  axis is the newer set's value minus the older set propagated with drag; the modelled
+  drag change is the difference between propagating with and without `B*`. Raise beyond
+  max(100 m, half the drag change); lowering beyond max(100 m, twice the drag change),
+  deliberately lenient so that storm-driven decay is not called a burn; a jump the next
+  interval reverses is one bad element set, dropped from the fit; gaps over 10 days
+  skipped. Pairs spanning a burn are excluded from the fit.
+- **SGP4 is not invariant under re-initialisation with drag.** Found while testing the
+  fit: a set fitted at a later epoch with the same `B*` drifts in-track by about
+  0.07 km per day at `B* = 1e-4` (exactly zero with `B* = 0`). Recorded in the docs as a
+  known contribution to the consistency floor; the drag-free test case is kept
+  drag-free for that reason.
+- **Hard-body radii for secondaries.** Category defaults (station 30 m, Starlink 10 m,
+  OneWeb / constellation / payload 3 m, rocket body 5 m, debris 0.5 m, untyped 1 m); a
+  published radar cross-section replaces the default with `sqrt(RCS / pi)`, clipped to
+  0.1 to 20 m, for payloads, rocket bodies, debris and untyped objects. The objects
+  table records which rule applied.
+- **Probability.** Foster's polar grid is the reported `pc` (adaptive: at least 24 x 72
+  nodes, more when the disc is large against the smaller sigma); Alfano's 1-D form is
+  the cross-check that must agree within one percent (it agrees to about 1e-8 over
+  aspect ratios to 100 and discs to two sigma); Chan's series is exported as a third
+  value and its drift where the disc is comparable to the smaller sigma is recorded, not
+  hidden. Closed-form tests: `1 - exp(-R^2 / 2 sigma^2)` at zero miss, the non-central
+  chi-square at an offset, and brute-force quadrature for anisotropic cases.
+- **The sweep.** `pc_max` over covariance scale factors 0.1 to 10 (61 log steps, parabolic
+  refinement), `pc_max_scale` the factor at the maximum; the test recovers the analytic
+  `k* = d^2 / 2 sigma_0^2`. Flags on `pc`: red at 1e-4, yellow at 1e-5.
+- **Kelvins.** `driftwatch kelvins` and `risk/kelvins.py` are built (frame reconstruction,
+  the hard-body radius as a fit parameter over the `risk >= -6` tail, residuals by risk
+  bin, the maximum-risk comparison that reads the scaling convention). The dataset was
+  not under `data/external/kelvins/` when Step 3 was built, so the reproduction test is
+  skipped with a message saying where to put it, and the numbers are still to come.
+- **Tests.** 312 pass and 1 is skipped (Kelvins): the closed forms and cross-checks
+  above; the fit recovering designed exponents (a period error gives `p = 1`, a timing
+  error `p = 0`) through SGP4; the detector finding a planted 1 km burn and a planted
+  outlier; the pooled and default labels and the table round trip; the closed form
+  reproduced through the whole chain (Stage C geometry, RIC rotation, encounter plane,
+  Foster) on a designed conjunction; a rescoring changing the probabilities and not the
+  events; the run directory and the joined export; the index and the backfill against
+  the fake Space-Track server (batching, coverage, 403/414 splitting, timeouts); the
+  `screen` and `risk` commands end to end.
+
+### First run (2026-09-02; snapshot of 2026-09-01 20:48 UTC; 7 days from 20:48 UTC)
+
+The whole command, screening included, took 619 s: Stage B 187 s, history and fit
+425 s (backfill 3.5 min, fit 3.5 min), risk 3.6 s. The screening reproduced the Step 2
+run to within the day's supplemental update (47,925 pairs, 169,649 candidates, 5,704
+events, 1,017 in the box).
+
+| History backfill | |
+| --- | --- |
+| Window | 2026-07-19 to 2026-09-01 (45 days) |
+| Objects | 22,628 (the fleet and every Stage A survivor); all 22,628 had element sets in the window |
+| Requests | 44, of 136 to 654 ids each (about 3,500 characters); 3.5 minutes at nine a minute |
+| Element sets | 2,129,877; 134 MB of parquet plus a 13 MB index; 1.1 GB of raw JSON in the cache |
+
+The first attempt, with the Step 0 review's 8,000-character URL budget, was refused with
+a bare 403 on its first request (1,427 ids); the probes that found the limit are in the
+decisions above. A failed backfill now leaves a complete run directory scored with the
+stored history, and `driftwatch risk <run> --refit --history on` finishes the job
+without rescreening, which is how the numbers below were produced after the pooling
+was changed to the median.
+
+| Covariance fit | |
+| --- | --- |
+| Own fit (`empirical`) | 22,035 objects |
+| Pooled | 593 objects (436 LEO debris, 60 untyped LEO objects, 46 HEO debris, 20 Starlink, 9 payloads, the rest in ones and sevens); 16 pools |
+| Default | none: every survivor had history |
+| Median element sets per object | 72 (debris) to 126 (payloads); 100 for Starlink |
+| Pairs per object | capped at 600 for almost every object |
+
+Median own fits by category, in-track sigma at one day and exponent (radial and
+cross-track are 50 to 300 m with exponents near 1):
+
+| Category | Objects | sigma_I at 1 d (km) | p_I | sigma_R at 1 d (km) | sigma_C at 1 d (km) |
+| --- | --- | --- | --- | --- | --- |
+| debris | 6,849 | 0.37 | 1.35 | 0.06 | 0.05 |
+| rocket body | 1,081 | 0.41 | 1.30 | 0.08 | 0.07 |
+| payload | 3,067 | 0.55 | 1.50 | 0.07 | 0.03 |
+| station | 15 | 1.21 | 1.75 | 0.05 | 0.20 |
+| constellation | 792 | 3.70 | 1.40 | 0.09 | 0.15 |
+| starlink | 9,944 | 10.4 | 1.35 | 0.30 | 0.21 |
+
+Across all own fits the in-track sigma at one day runs from 0.15 km (10th percentile)
+through 2.3 km (median) to 13 km (90th), and the in-track exponent from 0.8 to 1.85
+with a median of 1.35: drag errors grow faster than linearly, as expected, and the
+prompt's "half a day to seven days" window is where the power law holds. Debris and
+rocket bodies at a few hundred metres a day agree with the published TLE assessments
+that set the default priors. Starlink is the outlier: its GP element sets disagree by
+10 km after a day because the satellites manoeuvre between fits, so the GP history
+measures the manoeuvring, not the tracking. The events use the supplemental set for a
+Starlink's geometry but the GP history for its covariance, which overstates the
+supplemental set's error (CelesTrak's own residuals are 0.1 to 5 km); a covariance for
+the supplemental sets is a refinement for Step 4 or Phase 3.
+
+The pools, after the change to the median of the members' fits (the summed residuals
+had given 48 km for Starlink and 37 km for LEO rocket bodies, both set by a handful of
+objects); in-track sigma at one day and exponent:
+
+| Pool | Members (fitted) | sigma_I at 1 d (km) | p_I | Uses it |
+| --- | --- | --- | --- | --- |
+| debris / leo | 6,595 (6,249) | 0.34 | 1.35 | 436 objects |
+| debris / heo | 514 (475) | 0.99 | 1.20 | 46 |
+| rocket body / leo | 589 (589) | 0.12 | 1.25 | 0 |
+| rocket body / heo | 466 (459) | 0.90 | 1.55 | 7 |
+| payload / leo | 2,985 (2,979) | 0.55 | 1.50 | 9 |
+| constellation / leo | 792 (792) | 3.70 | 1.40 | 0 |
+| starlink / leo | 9,964 (9,944) | 10.4 | 1.35 | 20 |
+| unknown / leo | 314 (262) | 0.44 | 1.40 | 60 |
+| unknown / other | 5 (3) | 139 | 1.95 | 4 (too few fitted members: the summed fit, and a poor one) |
+
+Only 63 events in the run took a pooled covariance on the secondary side.
+
+The fleet's own fits (RIC sigma in km at 1, 3 and 7 days of propagation):
+
+| Member | sigma_R | sigma_I | sigma_C | at 7 days: sigma_I |
+| --- | --- | --- | --- | --- |
+| ISS | 0.05 | 1.08 | 0.20 | 32.6 |
+| Sentinel-1C | 0.06 | 0.31 | 0.05 | 4.3 |
+| XI-IV | 0.05 | 0.05 | 0.05 | 0.6 |
+| UWE-3 | 0.07 | 0.55 | 0.04 | 8.3 |
+| ZACube-1 | 0.06 | 0.58 | 0.04 | 13.0 |
+| EOS SAT-1 | 0.07 | 0.46 | 0.01 | 10.3 |
+
+The ISS's in-track sigma of 33 km at seven days (exponent 1.75) is the drag at 420 km
+on a body whose attitude and drag area change, plus one reboost in the window that the
+detector found and excluded; the ISS's public element sets are known to be poor a week
+out. XI-IV at 810 km barely feels drag and stays at half a kilometre after a week.
+
+| Manoeuvre check | |
+| --- | --- |
+| Objects with at least one jump | 9,893 of 22,628; 132,455 jumps and 8,704 outlier sets |
+| By category | debris 1.8 %, rocket bodies 4.8 %, untyped 4.6 %, payloads 14 %, other constellations 43 %, Starlink 89 % (13 jumps each in 45 days) |
+| In the objects table (2,993 objects in events plus the fleet) | `known` 1,848, `none` 797, `possible` 305, `observed` 43 |
+| Promoted to `observed` | 43 active payloads, among them EARTHCARE, ICEYE-X49, TELEOS-2, YAOGAN-30 05C and GEESAT satellites; 106 events involve one |
+
+| Probability (scenario `quiet`) | |
+| --- | --- |
+| Events | 5,704; 2,034 in the box |
+| Flags | 2 red, 12 yellow, 5,690 none; all 14 flagged events are in the box |
+| `pc` above 1e-6 / 1e-8 | 221 / 1,096; 1,210 events underflow to zero (misses of many sigma) |
+| `pc_max_scale` | at the 10 edge for 3,872 events (the covariance is smaller than the miss: a larger uncertainty would raise the probability), below 1 for 1,066, at the 0.1 edge for 663 (dilution) |
+| Foster against Alfano | largest relative disagreement 6e-12 over the 1,782 events with `pc` above 1e-12 |
+| Chan against Foster | median 0, 90th percentile 0.04 %, 99th 0.7 %, worst 55 % (a disc comparable to the smaller sigma) |
+| Secondary sigma_I at TCA | median 18 km (Starlink dominated), 10th percentile 1.5 km, 90th 157 km; sigma_R median 0.44 km |
+
+The two reds:
+
+| Primary | Secondary | TCA | Miss (km) | `pc` | `pc_max` (scale) | sigma_I primary / secondary (km) | HBR (m) |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| ISS | YAM-3 (payload, `possible`) | 2026-09-08 19:04 | 11.5 | 1.6e-4 | 1.6e-4 (0.88) | 35 / 30 | 73 |
+| ZACube-1 | STARLINK-6053 (`known`, supplemental set) | 2026-09-05 08:36 | 1.9 | 1.0e-4 | 1.0e-4 (0.88) | 5.1 / 4.6 | 15 |
+
+What the first run says:
+
+- **The ISS red is the fit being honest, not a close call.** Seven days out, the ISS
+  and YAM-3 are each uncertain by 30 km in-track, the 11.5 km miss is well inside that
+  tube, and a 73 m disc inside a 35 x 30 km Gaussian gives 1.6e-4 wherever the miss
+  vector sits; `pc_max_scale` of 0.88 says the probability is already near the most it
+  could be. This is the known result that public element sets cannot screen the ISS a
+  week ahead: the ISS programme uses its own ephemeris and the yellow-red rule on
+  numbers three orders of magnitude tighter. The same pair two hours earlier is the
+  first yellow.
+- **The ZACube-1 red is a real screening candidate**: a 1.9 km miss at 14.8 km/s three
+  and a half days out, both objects with 5 km in-track sigma, and a 15 m combined
+  radius. It is the only red under 5 km.
+- **Two thirds of events sit in the retreat regime** (`pc_max_scale` at the upper edge):
+  the fitted uncertainty is smaller than the miss, so the probability is tiny and would
+  grow if the covariance were larger. That is where a storm term in Phase 3 will act,
+  and it is why `pc_max` is exported beside `pc`: for those events `pc_max` at ten times
+  the covariance is the number to watch when the fits are more consistent than they are
+  accurate.
+- **Starlink covariances need their own treatment.** Every Starlink secondary carries a
+  10 km-a-day in-track sigma from its GP history, which is the history of its
+  manoeuvres, while its geometry comes from the supplemental set. The Step 4 report
+  should say so beside every Starlink event, and a supplemental-set covariance (from
+  CelesTrak's published residuals, or from the supplemental sets' own consistency) is
+  the obvious next refinement.
+- **The cross-checks hold at scale**: Foster and Alfano agree to 6e-12 across the run,
+  and Chan drifts only where the docs say it will.
+
+
 ## Later steps in one paragraph each
 
-**Step 2.** Built 2026-09-02; see "Step 2 decisions" above and `docs/screening.md`.
+**Step 2.** Built 2026-09-02, reviewed 2026-09-02; see "Step 2 decisions" above and
+`docs/screening.md`.
 
-**Step 3.** Empirical RIC error growth from consecutive element sets, pooled fallback by
-category and band, the interface above, Foster polar-grid integration cross-checked by
-Chan's series within one percent, the Alfano scale scan for maximum probability, NASA
-ISS thresholds for flags, closed-form tests, and the Kelvins reproduction with a fitted
-hard-body radius and a residual report.
+**Step 3.** Built 2026-09-02; see "Step 3 decisions" above and the second half of
+`docs/screening.md`. Outstanding: the Kelvins reproduction once the dataset is in place.
 
-**Step 4.** `driftwatch screen --fleet fleets/demo.yaml --days 7`, the parquet, JSON and
-markdown outputs, and the viewer's conjunctions panel with the encounter-plane inset fed
-from Python's numbers.
+**Step 4.** The JSON export and the weekly markdown report beside the run directory
+(repeated encounters of one pair collapsed to one line with the count, the closest miss,
+the highest probability and the first TCA, expanding on demand), and the viewer's
+conjunctions panel with the encounter-plane inset fed from Python's numbers (the
+`enc_cov_*` columns and the states in `events.parquet` are what it needs).
 
 ## Review points
 
 One commit per step, stopping after each: Step 0 (Space-Track and history, reviewed
-2026-09-01), Step 1 (fleets, reviewed 2026-09-02), Step 2 (screening, built 2026-09-02,
-awaiting review), Step 3 (covariance and probability), Step 4 (outputs and viewer). The **ask** items were raised at the Step 0 review and are
+2026-09-01), Step 1 (fleets, reviewed 2026-09-02), Step 2 (screening, reviewed
+2026-09-02), Step 3 (covariance and probability, built 2026-09-02, awaiting review),
+Step 4 (outputs and viewer). The **ask** items were raised at the Step 0 review and are
 now recorded as decisions above.

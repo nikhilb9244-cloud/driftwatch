@@ -95,7 +95,10 @@ changes.
 
 - **ESA Kelvins Collision Avoidance Challenge dataset** (Step 3). Anonymised real
   conjunction messages released by ESA for the 2019 challenge, used to check the
-  probability-of-collision code. Registration on the Kelvins site may be needed for the
-  download; the terms are recorded here when it is first fetched.
+  probability-of-collision code (`driftwatch kelvins`). The download needs an account
+  on https://kelvins.esa.int/ and goes into `data/external/kelvins/` (git-ignored); the
+  data are never redistributed by driftwatch, only the fitted hard-body radius and the
+  residual statistics are reported. The terms are recorded here when it is first
+  fetched; at the time of writing it had not been.
 - **CelesTrak `SW-All.csv`, NOAA SWPC JSON feeds, NASA OMNIweb** (Phase 3). Public,
   no account, no redistribution restriction beyond credit. Terms recorded when first used.
