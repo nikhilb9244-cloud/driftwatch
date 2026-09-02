@@ -1109,7 +1109,20 @@ def cmd_ballistic(args: argparse.Namespace) -> int:
         frame, metadata={"driftwatch_run_id": info["run_id"], "driftwatch_msis": str(config.MSIS_VERSION)}
     )
     summary = ballistic_mod.summary(frame)
-    info["ballistic"] = {**summary, "fitted_at": now.isoformat(), "msis_version": config.MSIS_VERSION}
+    info["ballistic"] = {
+        **summary,
+        "n_objects_in_run": int(len(objects)),
+        "fit_days": args.fit_days,
+        "fitted_at": now.isoformat(),
+        "msis_version": config.MSIS_VERSION,
+    }
+    if len(frame) < len(objects):
+        log.warning(
+            "%d of the run's %d objects have a coefficient; the rest are unfitted and Step 3 will have "
+            "nothing to apply to them",
+            len(frame),
+            len(objects),
+        )
     run_dir.write_run(info)
     log.info("Ballistic coefficients: %s", summary)
 
