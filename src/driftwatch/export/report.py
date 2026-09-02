@@ -703,10 +703,12 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
     if spacex_rows:
         lines.append(
             f"- **{spacex_rows} events use SpaceX's own published covariance** for the Starlink secondary, "
-            "inside the 72-hour horizon of the operator's ephemeris, as published and with nothing added. It is "
-            "much tighter than an estimate from element-set consistency, and it answers a different question: it "
-            "is the uncertainty *within* one published plan, not the uncertainty *of the plan being revised*. Past "
-            "the horizon the covariance changes hands mid-window and `Cov source` says so."
+            "inside the 72-hour horizon of the operator's ephemeris. It is much tighter than an estimate from "
+            "element-set consistency, and it answers a different question: it is the uncertainty *within* one "
+            "published plan, not the uncertainty *of the plan being revised*. One term is added to it: the "
+            "0.2 km published residual of CelesTrak's SGP4 fit to that same ephemeris, in quadrature, because "
+            "that fit is the trajectory being propagated here while their covariance describes the ephemeris. "
+            "Past the horizon the covariance changes hands mid-window and `Cov source` says so."
         )
     slow = rows[rows["slow_encounter"]] if "slow_encounter" in rows.columns else rows.iloc[:0]
     if len(slow):
@@ -716,8 +718,11 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
             f"{SLOW_ENCOUNTER_KMS:g} km/s relative (slowest {slow['rel_speed_kms'].min():.3f} km/s), and "
             f"{flagged_slow or 'none'} of them {'is' if flagged_slow == 1 else 'are'} flagged. Their "
             "probability is a **known underestimate**: the two-dimensional method assumes the pair passes in "
-            "a straight line at constant velocity, and a co-orbital pair does not. Nothing here corrects for "
-            "it; a three-dimensional integration would."
+            "a straight line at constant velocity, and a co-orbital pair does not. The flag rests on that "
+            "assumption, not on a measured error — the ESA Kelvins reproduction agrees with the operational "
+            "risk column on slow rows as closely as on fast ones, which cannot clear the method, because both "
+            "tools compute the same two-dimensional integral and a bias they share is invisible to the "
+            "comparison. Nothing here corrects for it; a three-dimensional integration would."
         )
     if supplemental:
         used = ", ".join(f"{s['name']} version {s['version']} ({s['n_applied']} objects)" for s in supplemental)

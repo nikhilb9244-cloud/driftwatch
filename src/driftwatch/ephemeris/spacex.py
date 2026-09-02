@@ -31,13 +31,22 @@ revision at the same lead, and that is not a contradiction: theirs is the uncert
 ahead the revision is the part that matters, which is why the supplemental-consistency fit
 stays in place as a cross-check (:func:`cross_check`) rather than being replaced.
 
-It is used **as published**. Nothing here inflates it, and one thing that arguably should is
-recorded rather than done: the geometry driftwatch propagates comes from CelesTrak's SGP4
-fit to this ephemeris, not from the ephemeris itself, and that fit disagrees with it by a
-published RMS of about 0.2 km -- larger than SpaceX's own sigma inside the first several
-hours. ``add_fit_rms_floor`` on :class:`SpacexEphemerisCovariance` applies that as a floor;
-it is off by default because "use their covariance as published" was the instruction, and
-the question is on the Step 0 review list.
+Their covariance is used as published, **plus the fit residual of the trajectory it is
+attached to**. The geometry driftwatch propagates comes from CelesTrak's SGP4 fit to this
+ephemeris, not from the ephemeris itself, and that fit disagrees with it by a published RMS
+of about 0.2 km -- larger than SpaceX's own sigma inside the first several hours, where used
+as published the covariance would be tighter than the distance between the two trajectories
+it sits between. The two are independent quantities, so they add in quadrature:
+
+    sigma_k(t)^2  =  sigma_k^spacex(t)^2  +  (share_k * rms_fit)^2
+
+``fit_rms_km`` on :class:`SpacexEphemerisCovariance` carries that residual and defaults to
+:data:`driftwatch.config.SPACEX_SGP4_FIT_RMS_KM`; ``0.0`` restores the as-published
+behaviour. The scalar is split across R, I and C in the shape of the base model's own
+measured floor, which is in-track dominated, because that is where an SGP4 fit to an
+ephemeris misses. **This term exists only while the fit is in the chain.** Once Stage C
+interpolates these ephemeris states directly for served events, trajectory and covariance
+share a source and the term goes to zero; that is the first Phase 4 item in ``ROADMAP.md``.
 
 The file format is the "Modified ITC" of the *Spaceflight Safety Handbook for Operators*:
 three or four header lines, then one state per four lines -- an epoch and position and
@@ -371,6 +380,10 @@ class SpacexEphemerisCovariance:
     Source labels: ``spacex-ephemeris`` when every requested time was covered,
     ``spacex-ephemeris+<what the base said>`` when only some were, and the base model's own
     label when none were.
+
+    ``fit_rms_km`` is the published residual of CelesTrak's SGP4 fit to these ephemerides,
+    added in quadrature because that fit is the trajectory driftwatch actually propagates.
+    See the module docstring; ``0.0`` gives the covariance exactly as SpaceX published it.
     """
 
     def __init__(
@@ -378,13 +391,14 @@ class SpacexEphemerisCovariance:
         base: CovarianceModel,
         table: pd.DataFrame | None = None,
         *,
-        add_fit_rms_floor: bool = False,
-        fit_rms_km: float = 0.0,
+        fit_rms_km: float | None = None,
+        fit_rms_share: tuple[float, float, float] | None = None,
     ) -> None:
         self.base = base
         self.table = table if table is not None else pd.DataFrame(columns=list(EPHEMERIS_COLUMNS))
-        self.add_fit_rms_floor = bool(add_fit_rms_floor)
-        self.fit_rms_km = float(fit_rms_km)
+        self.fit_rms_km = float(config.SPACEX_SGP4_FIT_RMS_KM if fit_rms_km is None else fit_rms_km)
+        self.fit_rms_share = tuple(fit_rms_share) if fit_rms_share is not None else self._share_from_base()
+        self.fit_variance_km2 = np.array([(s * self.fit_rms_km) ** 2 for s in self.fit_rms_share])
         self.series: dict[int, tuple[np.ndarray, np.ndarray, np.datetime64, np.datetime64]] = {}
         for norad_id, group in self.table.groupby("norad_id"):
             group = group.sort_values("t")
@@ -393,7 +407,40 @@ class SpacexEphemerisCovariance:
             start = np.datetime64(pd.Timestamp(group["ephemeris_start"].iloc[0]).tz_localize(None), "us")
             stop = np.datetime64(pd.Timestamp(group["ephemeris_stop"].iloc[0]).tz_localize(None), "us")
             self.series[int(norad_id)] = (times, cov, start, stop)
-        self.version = f"{base.version}+spacex-ephemeris/1"
+        # Version 2 is "as published plus the SGP4 fit residual"; version 1 was as published.
+        # The residual is in the string because it changes every served covariance.
+        self.version = f"{base.version}+spacex-ephemeris/2"
+        if self.fit_rms_km > 0:
+            self.version += f"+sgp4-fit-{self.fit_rms_km:g}km"
+
+    def _share_from_base(self) -> tuple[float, float, float]:
+        """How to split CelesTrak's scalar fit residual across R, I and C.
+
+        The base model's own measured floor is the best answer available: it is the
+        version-to-version disagreement of the same fits at essentially no lead, so its shape
+        is the shape those fits miss in. Where the base has no floor to take a shape from --
+        an empirical model, or a supplemental table written before the floors were split --
+        the configured shape stands in.
+        """
+        models = getattr(self.base, "models", None)
+        if isinstance(models, dict):
+            floors = [
+                np.asarray(m.floor_km, dtype=float) for m in models.values() if getattr(m, "floor_km", None) is not None
+            ]
+            if floors:
+                pooled = np.median(np.stack(floors), axis=0)
+                total = float(np.linalg.norm(pooled))
+                if np.isfinite(total) and total > 0:
+                    return (float(pooled[0] / total), float(pooled[1] / total), float(pooled[2] / total))
+        return tuple(float(s) for s in config.SPACEX_FIT_RMS_SHARE)  # type: ignore[return-value]
+
+    def fit_rms_summary(self) -> dict[str, Any]:
+        """What the fit-residual term adds, per component, for run.json and the log."""
+        return {
+            "fit_rms_km": self.fit_rms_km,
+            "share": [round(s, 4) for s in self.fit_rms_share],
+            "sigma_km": {k: round(float(np.sqrt(v)), 4) for k, v in zip("ric", self.fit_variance_km2, strict=True)},
+        }
 
     @property
     def dt_floor_days(self) -> float:
@@ -419,12 +466,13 @@ class SpacexEphemerisCovariance:
         block[:, 0, 1] = block[:, 1, 0] = ri
         block[:, 0, 2] = block[:, 2, 0] = rc
         block[:, 1, 2] = block[:, 2, 1] = ic
-        if self.add_fit_rms_floor and self.fit_rms_km > 0:
+        if self.fit_rms_km > 0:
             # The geometry comes from CelesTrak's SGP4 fit to this ephemeris, not from the
-            # ephemeris; the fit's own residual is a floor under the covariance of what we
-            # actually propagated. Off by default -- see the module docstring.
-            floor = (self.fit_rms_km / np.sqrt(3.0)) ** 2
-            block[:, [0, 1, 2], [0, 1, 2]] = np.maximum(block[:, [0, 1, 2], [0, 1, 2]], floor)
+            # ephemeris. Their covariance describes the ephemeris; the fit residual is the
+            # distance from it to what we actually propagate. Independent quantities, so the
+            # residual adds in quadrature on the diagonal -- which keeps the matrix positive
+            # definite and dilutes the published correlations, as an added error should.
+            block[:, [0, 1, 2], [0, 1, 2]] += self.fit_variance_km2[None, :]
         out[covered] = block
         return out, covered
 

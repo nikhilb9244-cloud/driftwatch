@@ -145,6 +145,9 @@ they enter the chain; each states what is assumed, why, and what it costs.
   uncertainty is in play than the one-plane integral sees. `slow_encounter` marks those
   events in every risk table and the report counts them; **nothing rescales the
   probability**, and the fix is a three-dimensional integration, which is not in this phase.
+  **The flag rests on the method's straight-line assumption, not on a measured error.** The
+  size of the underestimate is unmeasured here, and the flag would stand at this threshold
+  whether it turned out to be a factor of two or a factor of ten.
   Ten of the demo run's 5,704 events qualify, the slowest at 23 m/s, none flagged. Note two
   things. A large in-track uncertainty is not this problem — it is mostly a timing error and
   the projection discards it, which is why the method survives hundreds of kilometres of
@@ -244,8 +247,8 @@ they enter the chain; each states what is assumed, why, and what it costs.
   bin holding 30 pairs, not the single longest pair — and the GP model serves beyond it,
   labelled `supplemental:beyond-horizon`. The horizon moves out as the scheduled fetch
   accumulates versions.
-- **SpaceX's published covariance is used as published, and it is not the same quantity as
-  ours.** Inside a file's 72-hour validity a Starlink secondary's covariance is SpaceX's own,
+- **SpaceX's published covariance is used as published plus the fit residual, and it is not
+  the same quantity as ours.** Inside a file's 72-hour validity a Starlink secondary's covariance is SpaceX's own,
   interpolated on a ten-minute grid and labelled `spacex-ephemeris`; outside it the base
   model serves and reports its own label. Three things to hold on to. Past about ten hours
   their numbers are a stated envelope on round figures (100 m radial, 1,000 m in-track, 10 m
@@ -254,10 +257,16 @@ they enter the chain; each states what is assumed, why, and what it costs.
   plan being revised*, which is roughly eleven times larger at three hours and is the part a
   seven-day screen depends on; the two are reported side by side rather than merged. And the
   geometry driftwatch propagates is CelesTrak's SGP4 fit to that ephemeris, not the
-  ephemeris itself, and that fit's own published residual of about 0.2 km is larger than
-  SpaceX's sigma for the first several hours — so inside that range the covariance is
-  tighter than the trajectory it is attached to. Applying the fit residual as a floor is
-  implemented (`add_fit_rms_floor`) and off by default; it is a Step 0 review question.
+  ephemeris itself, so that fit's own published residual — 0.2 km, split in the base model's
+  measured shape to 20 m radial, 199 m in-track and 11 m cross-track — is **added in
+  quadrature** to every served covariance. The two are independent errors: theirs is how well
+  SpaceX knows the satellite's future position, the residual is how far the element set we
+  propagate sits from the ephemeris they published. It changes nothing past a day, where
+  their number is a kilometre-scale control box, and triples the probability inside one,
+  where used as published the covariance was tighter than the gap between the two
+  trajectories. `SPACEX_SGP4_FIT_RMS_KM`; `spacex-ephemeris/2` in the model version says it
+  is in there. It is a patch on a mismatch, not a fix: the fix is for Stage C to interpolate
+  the ephemeris states directly, which is the first Phase 4 item.
 
 ## Propagation
 

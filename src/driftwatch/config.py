@@ -79,6 +79,20 @@ SPACEX_MANIFEST_MAX_AGE = timedelta(hours=4)
 # fetch is bounded to the objects a run's events actually involve.
 SPACEX_COVARIANCE_STEP_S = 600.0
 SPACEX_MAX_OBJECTS = 300
+# The trajectory driftwatch propagates for a Starlink secondary is CelesTrak's SGP4 fit to
+# the ephemeris, not the ephemeris itself, and that fit's own published residual (the median
+# `RMS` field of the supplemental records, 0.20 km on 2026-09-02) is larger than SpaceX's
+# published sigma for the first several hours. It is an independent error source from theirs
+# -- theirs describes the ephemeris, this is the distance from the ephemeris to what we
+# propagate -- so it is added in quadrature rather than used as a floor. Set to 0.0 once
+# Stage C interpolates the ephemeris states directly, at which point the fit is out of the
+# chain; that is the first Phase 4 item in ROADMAP.md.
+SPACEX_SGP4_FIT_RMS_KM = 0.20
+# CelesTrak publishes that residual as one scalar. An SGP4 fit to an ephemeris misses mostly
+# along track, so the scalar is split in the shape of the base model's own measured floor
+# where there is one, and in this shape -- the shortest supplemental bin's measured
+# disagreement, unit-normed -- where there is not.
+SPACEX_FIT_RMS_SHARE = (0.099, 0.994, 0.055)
 
 # ---------------------------------------------------------------------------------------
 # Space weather (Phase 3 Step 1). See docs/space-weather.md and driftwatch/weather/.

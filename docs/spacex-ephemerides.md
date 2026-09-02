@@ -151,16 +151,56 @@ propagated covariance. And the envelope is not the same for every satellite: the
 measured for the terms question sat at 1,000 m in-track from 12 to 48 hours, well below the
 constellation median here.
 
-### What was not done, and why it is a review question
+### The residual of the fit we actually propagate, added in quadrature
 
 The geometry driftwatch propagates is CelesTrak's SGP4 **fit** to this ephemeris, not the
 ephemeris itself, and CelesTrak publishes that fit's residual as a median of about 0.2 km.
 SpaceX's own in-track sigma is 62 m at three hours and 576 m at eight. So for roughly the
-first eight hours the covariance in use is tighter than the disagreement between the
-trajectory we are propagating and the trajectory the covariance describes. Applying the fit
-residual as a floor is implemented (`add_fit_rms_floor` on `SpacexEphemerisCovariance`) and
-**off by default**, because the instruction was to use their covariance as published. It is
-on the Step 0 revision review list.
+first eight hours their covariance, used as published, is tighter than the disagreement
+between the trajectory we are propagating and the trajectory the covariance describes.
+
+Those are two different errors and they are independent: theirs is how well SpaceX knows
+where the satellite will be, the residual is how far the element set we propagate sits from
+the ephemeris they published. So the residual is added in quadrature rather than used as a
+floor, on the diagonal only, which keeps the matrix positive definite and dilutes the
+published correlations the way an added error should:
+
+    sigma_k(t)^2  =  sigma_k^spacex(t)^2  +  (share_k * 0.20 km)^2
+
+CelesTrak publishes the residual as one scalar, so it is split across R, I and C in the
+shape of the base model's own measured floor — the version-to-version disagreement of those
+same fits at essentially no lead, which is what shape those fits miss in. On the store in
+hand that comes out as (0.099, 0.994, 0.054), giving 20 m radial, **199 m in-track** and 11 m
+cross-track. `SPACEX_SGP4_FIT_RMS_KM` and `SPACEX_FIT_RMS_SHARE` hold the numbers;
+`fit_rms_km=0.0` restores the as-published behaviour, and `spacex-ephemeris/2` in the model
+version says the residual is in there.
+
+**What it changed, on the demo run's 499 served events.** Nothing in the tally: 1 red, 22
+yellow, highest probability 1.58e-4, all three identical to the as-published run, and not a
+single event changed flag or region. It bites at short lead and nowhere else, which is
+exactly where the argument said it would:
+
+| Lead | Events | In-track sigma before | after | Median probability ratio |
+| ---: | ---: | ---: | ---: | ---: |
+| 8 to 24 h | 17 | 72 m | **211 m** | **3.63** |
+| 24 to 48 h | 92 | 2.50 km | 2.51 km | 1.10 |
+| 48 to 72 h | 109 | 2.50 km | 2.51 km | 1.08 |
+| past 72 h | 27 | 3.80 km | 3.81 km | 1.05 |
+
+Past a day their published number is a kilometre-scale control box and 199 m in quadrature is
+a third of a percent of it. Inside a day it triples the probability, because there the
+covariance was smaller than the gap between the two trajectories. A fifth of the served
+events move by more than 10 per cent and 3.5 per cent of them by more than a factor of two.
+That the probabilities go **up** rather than down is the geometry: at these misses the
+covariance is small against the miss distance, so widening it moves probability mass onto the
+hard-body disc rather than away from it.
+
+**This term is a patch on a mismatch, not a fix for it.** The fix is to propagate the
+ephemeris instead of the fit, which removes the residual from the chain entirely and improves
+the nominal miss as well as the covariance. That is the first Phase 4 item in `ROADMAP.md`:
+Stage C should interpolate the SpaceX ephemeris states directly for served events, so the
+trajectory and the covariance share a source. When it lands, `SPACEX_SGP4_FIT_RMS_KM` goes to
+zero for those events.
 
 ## Sources
 

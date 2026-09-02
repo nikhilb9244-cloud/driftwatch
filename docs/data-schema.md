@@ -307,7 +307,7 @@ run id.
 | `event_id` | string | Joins to `events.parquet`. |
 | `sigma_r_primary_km`, `sigma_i_primary_km`, `sigma_c_primary_km` | float64 | The primary's RIC standard deviations at `tca` under this scenario's model. |
 | `sigma_r_secondary_km`, `sigma_i_secondary_km`, `sigma_c_secondary_km` | float64 | The same for the secondary. |
-| `cov_source_primary`, `cov_source_secondary` | string | The model's source label for each, per event (a scenario wrapper prefixes its own, e.g. `scaled:4:default:leo`). `spacex-ephemeris` where SpaceX's own published covariance served, and `spacex-ephemeris+<base label>` where an event straddled the 72-hour horizon of their file; past it the base model serves and reports its own label, so this column says which of the three models covered each event. |
+| `cov_source_primary`, `cov_source_secondary` | string | The model's source label for each, per event (a scenario wrapper prefixes its own, e.g. `scaled:4:default:leo`). `spacex-ephemeris` where SpaceX's own published covariance served, and `spacex-ephemeris+<base label>` where an event straddled the 72-hour horizon of their file; past it the base model serves and reports its own label, so this column says which of the three models covered each event. A `spacex-ephemeris` sigma is their published number with the 0.2 km residual of CelesTrak's SGP4 fit added in quadrature, because that fit is the trajectory being propagated; `model_version` carries `spacex-ephemeris/2` when it is in there. |
 | `hbr_m` | float64 | The combined hard-body radius, primary plus secondary. |
 | `enc_cov_xx_km2`, `enc_cov_xy_km2`, `enc_cov_yy_km2` | float64 | The combined covariance projected onto the encounter plane, x along the miss vector. Enough to draw the ellipse. |
 | `pc` | float64 | Probability of collision, Foster's integration. |
@@ -316,7 +316,7 @@ run id.
 | `region` | string | `dilution` when `pc_max_scale` is below one (shrinking the covariance would raise the probability), `robust` at or above one, `unknown` when the sweep did not run. |
 | `flag` | string | `red` (`pc >= 1e-4`), `yellow` (`>= 1e-5`) or `none`. |
 | `confidence` | string | `standard` in the robust region, `low` elsewhere. A red or yellow flag with `low` confidence is not actionable; see `docs/screening.md`. |
-| `slow_encounter` | bool | True below 0.1 km/s relative, where the two-dimensional method's straight-line assumption no longer holds and the probability is a **known underestimate**. Not a correction: nothing rescales `pc`. See `driftwatch.risk.pc.slow_encounters`. |
+| `slow_encounter` | bool | True below 0.1 km/s relative, where the two-dimensional method's straight-line assumption no longer holds and the probability is a **known underestimate**. The flag rests on that assumption, not on any measured error: no comparison driftwatch has run can size the bias, because ESA's own risk column shares the approximation. Not a correction either: nothing rescales `pc`. See `driftwatch.risk.pc.slow_encounters`. |
 | `computed_at` | timestamp[us, UTC] | When this scenario was scored. |
 
 ### `conjunctions.parquet`

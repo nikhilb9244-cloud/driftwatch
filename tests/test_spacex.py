@@ -15,8 +15,16 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from driftwatch import config
 from driftwatch.ephemeris import spacex
-from driftwatch.risk.covariance import DEFAULT_GROWTH, EmpiricalCovariance, ObjectRef
+from driftwatch.risk.covariance import (
+    DEFAULT_GROWTH,
+    EmpiricalCovariance,
+    FlooredGrowth,
+    ObjectRef,
+    PowerLawGrowth,
+    SupplementalCovariance,
+)
 
 T0 = datetime(2026, 9, 2, 9, 23, 42, tzinfo=UTC)
 NORAD_ID = 69228
@@ -117,7 +125,9 @@ def stored_frame(**kwargs) -> pd.DataFrame:
 def test_the_model_serves_spacex_inside_the_file_and_hands_back_outside_it():
     """Their covariance for the three days it covers, the base model for days four to seven."""
     base = EmpiricalCovariance()
-    model = spacex.SpacexEphemerisCovariance(base, stored_frame(sigma_i_km=1.0))
+    # fit_rms_km=0.0 isolates the hand-over: what the published numbers are, and where the
+    # base model takes over. The fit residual the default carries is the test below.
+    model = spacex.SpacexEphemerisCovariance(base, stored_frame(sigma_i_km=1.0), fit_rms_km=0.0)
     ref = ObjectRef(NORAD_ID, "starlink", "leo")
     epoch = T0 - timedelta(hours=2)
 
@@ -143,25 +153,59 @@ def test_the_model_serves_spacex_inside_the_file_and_hands_back_outside_it():
     # An object with no stored file falls through untouched.
     other = ObjectRef(4242, "debris", "leo")
     assert model.covariance_ric(other, epoch, at(24.0)).source == "default:leo"
-    assert model.version.endswith("+spacex-ephemeris/1")
+    assert model.version.endswith("+spacex-ephemeris/2")
 
 
-def test_the_published_covariance_is_used_as_published_unless_the_fit_floor_is_asked_for():
-    """The instruction was to use it as published; the fit-residual floor is an opt-in.
+def test_the_sgp4_fit_residual_is_added_in_quadrature_by_default():
+    """The covariance describes the ephemeris; we propagate CelesTrak's SGP4 fit to it.
 
-    The geometry driftwatch propagates comes from CelesTrak's SGP4 fit to this ephemeris,
-    not from the ephemeris, and that fit's own residual is larger than SpaceX's sigma inside
-    the first several hours. Applying it is a decision for the review, not a default.
+    Those are two independent errors -- SpaceX's own uncertainty about where the satellite
+    will be, and the distance between their ephemeris and the element set driftwatch
+    actually propagates -- so the published residual of that fit adds in quadrature. Inside
+    the first several hours it is the larger of the two, which is the whole point: used as
+    published, the covariance is tighter than the gap between the two trajectories it sits
+    between. `fit_rms_km=0.0` restores the as-published behaviour.
     """
     frame = stored_frame(sigma_i_km=0.05)
     ref = ObjectRef(NORAD_ID, "starlink", "leo")
     at = np.array([np.datetime64((T0 + timedelta(hours=4)).replace(tzinfo=None), "us")])
 
-    plain = spacex.SpacexEphemerisCovariance(EmpiricalCovariance(), frame)
-    assert np.sqrt(plain.covariance_ric(ref, T0, at).cov_km2[0, 1, 1]) == pytest.approx(0.05)
+    published = spacex.SpacexEphemerisCovariance(EmpiricalCovariance(), frame, fit_rms_km=0.0)
+    assert np.sqrt(published.covariance_ric(ref, T0, at).cov_km2[0, 1, 1]) == pytest.approx(0.05)
+    assert published.version.endswith("+spacex-ephemeris/2")
 
-    floored = spacex.SpacexEphemerisCovariance(EmpiricalCovariance(), frame, add_fit_rms_floor=True, fit_rms_km=0.2)
-    assert np.sqrt(floored.covariance_ric(ref, T0, at).cov_km2[0, 1, 1]) == pytest.approx(0.2 / np.sqrt(3.0))
+    model = spacex.SpacexEphemerisCovariance(EmpiricalCovariance(), frame)
+    assert model.fit_rms_km == config.SPACEX_SGP4_FIT_RMS_KM
+    cov = model.covariance_ric(ref, T0, at).cov_km2[0]
+    share = model.fit_rms_share
+    for k in range(3):
+        added = (share[k] * model.fit_rms_km) ** 2
+        assert cov[k, k] == pytest.approx(published.covariance_ric(ref, T0, at).cov_km2[0, k, k] + added)
+    # In-track dominated, because that is where an SGP4 fit to an ephemeris misses.
+    assert share[1] > share[0] > share[2]
+    assert np.sqrt(cov[1, 1]) == pytest.approx(np.hypot(0.05, share[1] * model.fit_rms_km))
+    # Adding on the diagonal only cannot break positive definiteness.
+    assert np.all(np.linalg.eigvalsh(cov) > 0)
+    # And the model version says the residual is in there, so a stored row records it.
+    assert "sgp4-fit-0.2km" in model.version
+
+
+def test_the_fit_residual_is_split_in_the_shape_of_the_base_models_own_floor():
+    """CelesTrak publishes one scalar. The base model's measured floor says what shape it has."""
+    frame = stored_frame(sigma_i_km=0.05)
+    base = SupplementalCovariance(
+        EmpiricalCovariance(),
+        {NORAD_ID: FlooredGrowth(PowerLawGrowth((0.0, 0.0, 0.0), (1.0, 1.0, 1.0)), (0.0, 1.0, 0.0), 0.2)},
+        {NORAD_ID: "supplemental:rms"},
+    )
+    model = spacex.SpacexEphemerisCovariance(base, frame)
+    # An entirely in-track floor puts the whole residual in-track and none of it elsewhere.
+    assert model.fit_rms_share == pytest.approx((0.0, 1.0, 0.0))
+
+    # With nothing to take a shape from, the configured shape stands in.
+    assert spacex.SpacexEphemerisCovariance(EmpiricalCovariance(), frame).fit_rms_share == pytest.approx(
+        config.SPACEX_FIT_RMS_SHARE
+    )
 
 
 def test_the_store_keeps_only_the_newest_version_of_each_satellite(tmp_path):

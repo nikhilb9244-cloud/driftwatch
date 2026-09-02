@@ -377,9 +377,15 @@ model serves and reports **its own** label, so `cov_source_secondary` says which
 models covered each event; an event straddling the horizon reads
 `spacex-ephemeris+<what the base said>`.
 
-It is used **as published**. Nothing inflates it, and the version-to-version revision the
-supplemental fit measures is deliberately not added to it — the two are different quantities
-and `driftwatch spacex` prints them side by side instead:
+It is used **as published, plus one term**: the published residual of CelesTrak's SGP4 fit to
+the same ephemeris, 0.2 km, added in quadrature because that fit is the trajectory driftwatch
+actually propagates while their covariance describes the ephemeris. Split in the shape of the
+base model's own floor it is 20 m radial, 199 m in-track and 11 m cross-track — a third of a
+per cent of their kilometre-scale envelope past a day, and a tripling of the probability
+inside one, where the covariance would otherwise be tighter than the gap between the two
+trajectories. The version-to-version revision the supplemental fit measures is a different
+matter and is deliberately **not** added: it is a different quantity, and `driftwatch spacex`
+prints the two side by side instead:
 
 | Lead | SpaceX in-track | driftwatch in-track | Ratio |
 | ---: | ---: | ---: | ---: |
@@ -391,12 +397,10 @@ and `driftwatch spacex` prints them side by side instead:
 
 Theirs is the uncertainty *within* one published plan; ours is the uncertainty *of the plan
 being revised*, and past eight hours it is the GP element sets, which measure the manoeuvring
-itself. Both numbers are real and they answer different questions. Two caveats travel with
-theirs: past about ten hours it is a stated envelope on round figures rather than a
-propagated covariance, and the trajectory driftwatch actually propagates is CelesTrak's SGP4
-fit to that ephemeris, whose own published residual of about 0.2 km is larger than SpaceX's
-sigma for the first several hours. `docs/spacex-ephemerides.md` has the terms, the format and
-the full argument.
+itself. Both numbers are real and they answer different questions. One caveat still travels
+with theirs: past about ten hours it is a stated envelope on round figures rather than a
+propagated covariance. `docs/spacex-ephemerides.md` has the terms, the format, the fit
+residual and the full argument.
 
 **What it did to the demo run.** 499 of 5,704 events served, the median secondary in-track
 sigma on them falling from 24.8 km to 2.5 km. Of those events 111 were in the dilution region

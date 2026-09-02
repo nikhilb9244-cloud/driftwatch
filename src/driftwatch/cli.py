@@ -690,6 +690,10 @@ def layer_spacex_ephemerides(model: CovarianceModel, objects: pd.DataFrame, info
 
     Everything else, and every time past a file's 72-hour horizon, stays with ``model``: the
     ephemeris is the operator's plan for the next three days and says nothing about day four.
+
+    Their covariance carries CelesTrak's SGP4 fit residual in quadrature, because the
+    trajectory being propagated is that fit rather than the ephemeris itself; see
+    ``ephemeris/spacex.py``.
     """
     ids = [int(i) for i in objects.loc[objects["category"] == "starlink", "norad_id"]]
     if not ids:
@@ -703,6 +707,7 @@ def layer_spacex_ephemerides(model: CovarianceModel, objects: pd.DataFrame, info
         "n_starlink_in_run": len(ids),
         "window": [str(table["ephemeris_start"].min()), str(table["ephemeris_stop"].max())],
         "source": "spacex-ephemeris",
+        "sgp4_fit_residual": layered.fit_rms_summary(),
     }
     log.info("SpaceX ephemeris covariance: %s", info["spacex_covariance"])
     return layered

@@ -331,10 +331,16 @@ def slow_encounters(rel_speed_kms: np.ndarray, *, threshold_kms: float = SLOW_EN
     more of the uncertainty is in play than the single plane sees.
 
     It is a flag and not a correction. Nothing here rescales the probability; the fix is a
-    three-dimensional integration over the encounter, and that is not in this phase. Note
-    also that the reproduction of ESA's Kelvins risk column cannot confirm the size of the
-    underestimate, because ESA's own column is computed the same way and the two share the
-    approximation exactly (``docs/kelvins-reproduction.md``).
+    three-dimensional integration over the encounter, and that is not in this phase.
+
+    **It rests on the method's assumption and not on any measured error.** The reproduction
+    of ESA's Kelvins risk column cannot size the underestimate, or even detect it: ESA's own
+    column is computed the same way, so the residual binned by relative speed is flat at the
+    slow end whatever the true bias is. Agreement between two tools that share an
+    approximation is not evidence about the approximation
+    (``docs/kelvins-reproduction.md``). The threshold is therefore set from the geometry --
+    at 0.1 km/s a pair takes 100 s to cross 10 km, in which a low orbit turns through about
+    six degrees against a twentieth of a degree at 13 km/s -- not from a measured residual.
     """
     speed = np.asarray(rel_speed_kms, dtype=float)
     with np.errstate(invalid="ignore"):

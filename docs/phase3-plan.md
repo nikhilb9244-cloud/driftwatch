@@ -422,6 +422,8 @@ covariance inside that range is tighter than the trajectory it is attached to. A
 fit residual as a floor is implemented and off by default (`add_fit_rms_floor`), because
 "use their covariance as published" was the instruction. Given how much the layer moves the
 flags, this one matters more than it looked before the numbers were in.
+*Answered by the review: turn it on, in quadrature. Done — see "The four instructions"
+below, and the first Phase 4 item in `ROADMAP.md` for the fix it stands in for.*
 
 ### Questions for the Step 0 review
 
@@ -453,6 +455,8 @@ flags, this one matters more than it looked before the numbers were in.
    Starlink secondary's covariance inside about the first eight hours to 0.2 km, roughly
    eight times their published in-track sigma at three hours. This is now the biggest open
    question of the four, because the SpaceX layer is what moves the flag counts.
+   *Answered by the review: yes, and in quadrature rather than as a floor. Done; the tally
+   did not move. See "The four instructions" below.*
 2. **Only 120 satellites were fetched, of 1,751 Starlink objects in the run.** The cap is
    politeness and disk: 2 MB a file, 8 minutes for 120. The 120 were chosen by closest
    approach, which is the ranking available before scoring. Is that the right selection
@@ -556,6 +560,77 @@ worse than showing none.
 3. **The solar wind is stored but not yet used.** A week of one-minute L1 data is most of the
    store's bulk. It is context for the replay rather than a driver; if it stays unused past
    Step 5 it should be dropped to the one-hour feed.
+
+## The four instructions (Step 1 review, 2026-09-02)
+
+Four instructions came back with the Step 1 review, before Step 2. What was done, and what
+each one turned out to cost.
+
+### 1. SpaceX covariance: the fit residual, in quadrature
+
+`SPACEX_SGP4_FIT_RMS_KM = 0.20`, on by default, added in quadrature on the diagonal of every
+covariance SpaceX's ephemerides serve. The scalar CelesTrak publishes is split across R, I
+and C in the shape of the base model's own measured floor — (0.099, 0.994, 0.054) on the
+store in hand, so 20 m radial, 199 m in-track, 11 m cross-track. `fit_rms_km=0.0` restores
+the as-published behaviour and the model version says which was used
+(`spacex-ephemeris/2+sgp4-fit-0.2km`).
+
+Quadrature rather than a floor because the two are independent: SpaceX's covariance is how
+well they know where the satellite will be, the residual is how far the element set
+driftwatch propagates sits from the ephemeris they published. A floor would treat them as
+the same error and keep only the larger.
+
+**The flag tally did not move.** Same 5,704 events, 499 of them served by SpaceX:
+
+| | As published | With the fit residual |
+| --- | ---: | ---: |
+| Red pairs | 1 | **1** |
+| Yellow pairs | 22 | **22** |
+| Highest probability | 1.58e-4 | **1.58e-4** |
+| Events in the dilution region (all) | 1,021 | **1,021** |
+| ... of the 499 served | 37 | **37** |
+| Events changing flag | — | **0** |
+| Events changing region | — | **0** |
+
+It moves the numbers only at short lead, which is where the argument said it would:
+
+| Lead | Events | In-track sigma before | after | Median probability ratio |
+| ---: | ---: | ---: | ---: | ---: |
+| 8 to 24 h | 17 | 72 m | **211 m** | **3.63** |
+| 24 to 48 h | 92 | 2.50 km | 2.51 km | 1.10 |
+| 48 to 72 h | 109 | 2.50 km | 2.51 km | 1.08 |
+| past 72 h | 27 | 3.80 km | 3.81 km | 1.05 |
+
+Past a day their published number is a kilometre-scale control box and 199 m in quadrature
+is a third of a per cent of it; inside a day it triples the probability. A fifth of the
+served events move by more than 10 per cent, 3.5 per cent of them by more than a factor of
+two, and the probabilities go **up** rather than down because at these misses the covariance
+is small against the miss distance, so widening it moves mass onto the disc.
+
+**The demo run has no short-lead Starlink event near a threshold, so nothing moved.** That is
+a property of this run rather than of the term: a run whose window opened on a Starlink
+conjunction eight hours out would show it.
+
+Recorded as the **first Phase 4 item** in `ROADMAP.md`: Stage C should interpolate the
+SpaceX ephemeris states directly for served events, so the trajectory and the covariance
+share a source. This term is the patch for the mismatch, not the fix; when the states are
+interpolated the residual leaves the chain and `SPACEX_SGP4_FIT_RMS_KM` goes to zero for
+those events.
+
+### 2. The slow-encounter flag: what it rests on
+
+Approved as built, with the basis stated wherever the flag appears — `risk/pc.py`,
+`docs/methods.md`, `docs/screening.md`, `docs/data-schema.md` and the report:
+
+- It rests on the **method's straight-line assumption**, not on a measured error. The
+  threshold comes from the geometry (at 0.1 km/s a pair takes 100 s to cross 10 km, in which
+  a low orbit turns through about six degrees, against a twentieth of a degree at 13 km/s),
+  not from a residual.
+- **Agreement with ESA on the slow rows cannot detect a bias the two tools share.** The
+  Kelvins reproduction matches ESA's operational risk column as closely on slow rows as on
+  fast ones, and that is exactly what would be seen whether the shared two-dimensional
+  integral is right or wrong there. The size of the underestimate is unmeasured, and the
+  flag would stand whether it is a factor of two or of ten.
 
 ## Later steps in one paragraph each
 
