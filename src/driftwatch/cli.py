@@ -10,7 +10,7 @@ import sys
 import time
 from collections.abc import Sequence
 from dataclasses import asdict
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -52,6 +52,8 @@ from driftwatch.risk.scenario import (
 )
 from driftwatch.screening import ScreeningConfig, ScreeningError, ScreeningResult, screen_fleet
 from driftwatch.screening import supplemental as supplemental_mod
+from driftwatch.weather import celestrak_sw, helioviewer, swpc
+from driftwatch.weather import table as weather_table
 
 log = logging.getLogger("driftwatch")
 
@@ -855,6 +857,105 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def weather_sources(
+    *, now: datetime, offline: bool, as_of: datetime | None = None
+) -> tuple[weather_table.WeatherSources, dict[str, Any]]:
+    """The parsed space weather feeds and a summary of where each came from.
+
+    ``as_of`` picks the newest SWPC version issued at or before that time instead of the
+    newest stored, which is what makes rescoring a stored run reproducible: a run made last
+    Tuesday rescores against last Tuesday's forecast.
+    """
+    used: dict[str, Any] = {}
+    rows = None
+    try:
+        path = celestrak_sw.fetch_sw_all(now=now, offline=offline)
+        rows = celestrak_sw.load_sw_all(path)
+        used["celestrak"] = celestrak_sw.summary(rows)
+    except (httpx.HTTPError, FileNotFoundError, ValueError) as exc:
+        log.warning("CelesTrak space weather unavailable (%s)", exc)
+
+    parsed: dict[str, tuple[pd.DataFrame, datetime] | None] = {}
+    for product in ("kp-forecast", "outlook-27day"):
+        path = swpc.stored_before(product, as_of) if as_of is not None else swpc.latest_version(product)
+        if path is None:
+            parsed[product] = None
+            continue
+        meta = swpc.read_meta(path)
+        issued = datetime.fromisoformat(meta["issued_at"]) if meta.get("issued_at") else now
+        parsed[product] = (swpc.load(product, path), issued)
+        used[product] = {"file": path.name, "issued_at": issued.isoformat(), "from": meta.get("issued_from")}
+
+    sources = weather_table.WeatherSources(
+        celestrak=rows,
+        kp_forecast=parsed["kp-forecast"][0] if parsed["kp-forecast"] else None,
+        kp_forecast_issued=parsed["kp-forecast"][1] if parsed["kp-forecast"] else None,
+        outlook=parsed["outlook-27day"][0] if parsed["outlook-27day"] else None,
+        outlook_issued=parsed["outlook-27day"][1] if parsed["outlook-27day"] else None,
+    )
+    return sources, used
+
+
+def cmd_weather(args: argparse.Namespace) -> int:
+    """Fetch the space weather feeds, build the three-hourly table for a window and report it."""
+    now = datetime.now(UTC)
+    if not args.no_fetch:
+        try:
+            celestrak_sw.fetch_sw_all(now=now, offline=args.offline)
+        except (httpx.HTTPError, FileNotFoundError) as exc:
+            log.warning("CelesTrak space weather unavailable (%s)", exc)
+        fetched = swpc.fetch_all(now=now, offline=args.offline)
+        for product, res in fetched.items():
+            log.info(
+                "%-16s issued %s (%s)%s",
+                product,
+                res.issued_at.isoformat(timespec="minutes"),
+                res.issued_from,
+                " [stored]" if res.from_cache else "",
+            )
+
+    start = parse_utc(args.start) if args.start else now
+    end = parse_utc(args.end) if args.end else start + timedelta(days=args.days)
+    sources, used = weather_sources(now=now, offline=True)
+    table = weather_table.weather_table(start, end, sources)
+    summary = weather_table.table_summary(table)
+    log.info("Space weather table: %s", summary)
+
+    print(f"Space weather, {start.isoformat(timespec='minutes')} to {end.isoformat(timespec='minutes')}")
+    with pd.option_context("display.width", 200, "display.max_rows", args.show):
+        shown = (
+            table if len(table) <= args.show else pd.concat([table.head(args.show // 2), table.tail(args.show // 2)])
+        )
+        print(shown.to_string(index=False, float_format=lambda x: f"{x:.4g}"))
+    print()
+    print("provenance:", summary["by_provenance"])
+    print("sources:   ", {k: v for k, v in summary["by_source"].items()})
+    if summary["forecast_issued"]:
+        print("forecasts issued:", ", ".join(summary["forecast_issued"]))
+    if summary["n_missing"]:
+        print(f"WARNING: {summary['n_missing']} intervals have no source at all")
+
+    if not args.no_solar_wind:
+        try:
+            wind = swpc.load("solar-wind")
+            print("solar wind:", swpc.solar_wind_summary(wind))
+        except (FileNotFoundError, KeyError) as exc:
+            log.info("No stored solar wind (%s)", exc)
+
+    if args.images:
+        frames = helioviewer.fetch_frames(start, end, per_day=args.frames_per_day, offline=args.offline)
+        if frames:
+            print()
+            print(helioviewer.frames_table(frames).to_string(index=False))
+
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        table.to_parquet(out, index=False)
+        print(out)
+    return 0
+
+
 def cmd_spacex(args: argparse.Namespace) -> int:
     """Fetch SpaceX's own ephemeris covariance for a run's Starlink secondaries and store it.
 
@@ -1094,6 +1195,27 @@ def build_parser() -> argparse.ArgumentParser:
     sup.add_argument("--fit", action="store_true", help="refit the supplemental covariance over the whole store")
     sup.add_argument("--offline", action="store_true", help="use only the cached supplemental response")
     sup.set_defaults(func=cmd_supplemental)
+
+    wx = sub.add_parser(
+        "weather",
+        help="fetch the space weather feeds and build the three-hourly table with its provenance",
+    )
+    wx.add_argument("--start", help="window start, ISO 8601 UTC (default: now)")
+    wx.add_argument("--end", help="window end, ISO 8601 UTC (default: --days after the start)")
+    wx.add_argument("--days", type=float, default=7.0, help="window length in days when --end is not given")
+    wx.add_argument("--no-fetch", action="store_true", help="use the stored feeds; do not refresh any of them")
+    wx.add_argument("--offline", action="store_true", help="use only what is already cached or stored")
+    wx.add_argument("--no-solar-wind", action="store_true", help="skip the solar wind summary")
+    wx.add_argument("--images", action="store_true", help="fetch Sun imagery for the window as well")
+    wx.add_argument(
+        "--frames-per-day",
+        type=int,
+        default=config.HELIOVIEWER_FRAMES_PER_DAY,
+        help=f"Sun frames a day with --images (default {config.HELIOVIEWER_FRAMES_PER_DAY})",
+    )
+    wx.add_argument("--show", type=int, default=24, help="rows of the table to print (default 24)")
+    wx.add_argument("--out", help="write the table to this parquet file as well")
+    wx.set_defaults(func=cmd_weather)
 
     spx = sub.add_parser(
         "spacex",

@@ -15,6 +15,7 @@ data/history/
 data/conjunctions/
 data/supplemental/
 data/spacex/
+data/weather/
 data/external/
 web/public/data/*
 !web/public/data/.gitkeep

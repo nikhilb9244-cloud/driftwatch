@@ -21,6 +21,7 @@ PROPAGATED_DIR = DATA_DIR / "propagated"
 HISTORY_DIR = DATA_DIR / "history"
 SUPPLEMENTAL_DIR = DATA_DIR / "supplemental"
 SPACEX_DIR = DATA_DIR / "spacex"
+WEATHER_DIR = DATA_DIR / "weather"
 CONJUNCTION_DIR = DATA_DIR / "conjunctions"
 EXTERNAL_DIR = DATA_DIR / "external"
 # ESA's Kelvins Collision Avoidance Challenge data, if downloaded (see risk/kelvins.py).
@@ -78,6 +79,54 @@ SPACEX_MANIFEST_MAX_AGE = timedelta(hours=4)
 # fetch is bounded to the objects a run's events actually involve.
 SPACEX_COVARIANCE_STEP_S = 600.0
 SPACEX_MAX_OBJECTS = 300
+
+# ---------------------------------------------------------------------------------------
+# Space weather (Phase 3 Step 1). See docs/space-weather.md and driftwatch/weather/.
+
+# CelesTrak's SW-All.csv: three-hourly Kp and ap and daily F10.7 back to 1957, then
+# predicted F10.7 forward to 2041. The primary driver for the density model. Same politeness
+# rules as the element sets; it changes once a day.
+CELESTRAK_SW_URL = "https://celestrak.org/SpaceData/SW-All.csv"
+CELESTRAK_SW_MAX_AGE = timedelta(hours=12)
+
+# NOAA SWPC. Public, no account, no stated rate limit; the cache floors below keep the
+# fetches to roughly the rate at which each product is actually reissued.
+SWPC_BASE_URL = "https://services.swpc.noaa.gov"
+# Three-hourly Kp: the last week observed and estimated, then three days predicted, in one
+# feed. This is the three-day Kp forecast the prompt asks for; the JSON carries no issue
+# time of its own, so the HTTP Last-Modified header is used (see weather/swpc.py).
+SWPC_KP_FORECAST_URL = f"{SWPC_BASE_URL}/products/noaa-planetary-k-index-forecast.json"
+# The real-time planetary K index, estimated once a minute from the ground magnetometers.
+SWPC_KP_REALTIME_URL = f"{SWPC_BASE_URL}/json/planetary_k_index_1m.json"
+# The 27-day outlook: daily F10.7, planetary A index and largest Kp. Text only -- SWPC
+# publishes no JSON for it -- and it carries its own ``:Issued:`` line.
+SWPC_27DAY_URL = f"{SWPC_BASE_URL}/text/27-day-outlook.txt"
+# The three-day forecast text, fetched only for its ``:Issued:`` line and its discussion; the
+# numbers come from the JSON above.
+SWPC_3DAY_URL = f"{SWPC_BASE_URL}/text/3-day-forecast.txt"
+# Solar wind at L1, propagated to the bow shock: speed, density, temperature and the
+# interplanetary magnetic field in one series. The one-hour file is the live view, the full
+# file the last week.
+SWPC_SOLAR_WIND_URL = f"{SWPC_BASE_URL}/products/geospace/propagated-solar-wind.json"
+SWPC_SOLAR_WIND_1H_URL = f"{SWPC_BASE_URL}/products/geospace/propagated-solar-wind-1-hour.json"
+# How often each product is worth refetching. Kp is reissued every three hours, the 27-day
+# outlook once a day, the solar wind once a minute (but a screening run does not need it that
+# fresh).
+SWPC_KP_MIN_INTERVAL = timedelta(minutes=30)
+SWPC_27DAY_MIN_INTERVAL = timedelta(hours=6)
+SWPC_SOLAR_WIND_MIN_INTERVAL = timedelta(minutes=15)
+
+# Helioviewer: Sun imagery for the Step 5 replay. Public API, no account. Credit is asked
+# for in the API documentation rather than required by a licence.
+HELIOVIEWER_BASE_URL = "https://api.helioviewer.org/v2"
+# SDO/AIA 193 A shows the corona and the coronal holes that drive recurrent storms; it is the
+# channel a reader recognises. 512 px at 4.8 arcsec/px is the full disc with a margin.
+HELIOVIEWER_LAYERS = "[SDO,AIA,193,1,100]"
+HELIOVIEWER_IMAGE_SCALE = 4.8
+HELIOVIEWER_IMAGE_PX = 512
+# A few frames a day, not a movie: enough to see the active region turn.
+HELIOVIEWER_FRAMES_PER_DAY = 4
+HELIOVIEWER_CITATION = "Sun imagery courtesy of the Helioviewer Project (helioviewer.org), NASA/SDO and the AIA team."
 
 # Space-Track.org: the full public catalogue and element-set history. Needs a free account;
 # credentials are read from the environment only (see catalogue/spacetrack.py).

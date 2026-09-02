@@ -100,6 +100,7 @@ uv run driftwatch risk latest --scenario test --scale 3
                                           # rescore the same events with every covariance tripled
 uv run driftwatch spacex latest           # optional: SpaceX's own covariance for the run's Starlink
                                           #   secondaries, inside their 72-hour horizon
+uv run driftwatch weather --days 7        # space weather for the window, with its provenance
 uv run driftwatch report latest           # weekly report + the viewer's conjunctions bundle
 cd web && npm install && npm run dev      # open the printed URL
 ```
@@ -140,6 +141,7 @@ src/driftwatch/         Python package (CLI: driftwatch)
   orbit/                time, SGP4 propagation, frame conversions
   screening/            three-stage conjunction screening, RIC frame, supplemental Starlink sets
   ephemeris/            operator-published ephemerides (SpaceX's Starlink covariance)
+  weather/              space weather: CelesTrak SW-All, NOAA SWPC, the three-hourly table, Sun imagery
   risk/                 covariance model and fit, manoeuvre flag, probability of collision, scenarios, Kelvins
   export/               viewer bundle, conjunction run directory, weekly report
 fleets/                 YAML fleet definitions (the primaries to screen)
@@ -168,6 +170,8 @@ data/                   cache, snapshots, history, supplemental and SpaceX ephem
   clause as checked, and the citation format.
 - `docs/spacex-ephemerides.md`: whether SpaceX's published Starlink ephemerides may be
   used and how, what their covariance actually is, and the plan for them.
+- `docs/space-weather.md`: Kp and ap and why the table carries both, the feeds and their
+  terms, how the sources are layered, and what is deliberately not filled in.
 - `docs/phase2-plan.md`: the Phase 2 plan, the review decisions and the demo fleet.
 - `docs/phase3-plan.md`: the Phase 3 plan and its review decisions.
 
@@ -194,6 +198,13 @@ data/                   cache, snapshots, history, supplemental and SpaceX ephem
   raw files are never redistributed, only one satellite's file is fetched per satellite a
   run actually needs, and the store holds a thinned covariance series rather than the
   file. See `docs/spacex-ephemerides.md` and `docs/data-sources.md`.
+
+- [NOAA SWPC](https://services.swpc.noaa.gov) space weather forecasts and the L1 solar
+  wind, and [CelesTrak's `SW-All.csv`](https://celestrak.org/SpaceData/) for the observed
+  record. Both public and free of account. Every forecast is stored under the time it was
+  **issued**, so a stored run can be rescored against the forecast it actually used.
+- [Helioviewer](https://helioviewer.org) for Sun imagery in the storm replay. Public API,
+  credit given in `config.HELIOVIEWER_CITATION`; the images are NASA/SDO products.
 
 ## Licence
 

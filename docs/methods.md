@@ -209,6 +209,27 @@ they enter the chain; each states what is assumed, why, and what it costs.
   convention** — deliberately generous, and the reason these probabilities are comparable
   with ESA's. And a median is not a measurement: any individual fragment may be a tenth of
   it or ten times it, and nothing here knows which.
+- **Kp is an index, not a measurement of anything an orbit feels.** It is a three-hourly
+  average over thirteen mid-latitude magnetometer stations of a phenomenon whose energy is
+  deposited mainly in the auroral ovals, so two storms with the same Kp can heat a given
+  orbit differently. The table converts it to ap by the published Bartels table before
+  anything averages it, because Kp is quasi-logarithmic and averaging it is meaningless: 4
+  and 6 are 27 and 80 nT, whose mean is 53 nT, which is Kp 5+ rather than Kp 5.
+- **F10.7 is a proxy for the heating, not the heating.** The thermosphere is warmed by
+  extreme ultraviolet, which the 10.7 cm radio flux correlates with over a solar cycle and
+  less well day to day. It is what NRLMSIS was built on, so it is what the table carries. The
+  **observed** flux is used rather than the value adjusted to 1 AU, because the atmosphere
+  feels the flux that arrives; both are in the table so the choice can be reversed.
+- **Everything past the last observation is somebody else's forecast**, carried with the time
+  it was issued and never smoothed into the observations. SWPC's three-day Kp forecast is
+  skilful; CelesTrak's six-week prediction appears to be derived from it and is not an
+  independent opinion; the 27-day outlook is a recurrence climatology and should be read as
+  one. A three-hour interval with no source at all is left as NaN with provenance `missing`
+  rather than filled with a quiet value.
+- **A daily A index spread across eight intervals is flat by construction.** Where the 27-day
+  outlook is the only source, every interval of the day gets the same ap. A real disturbed day
+  is not flat, and the density model will therefore miss the shape of it even when it has the
+  level about right.
 - **A supplemental-set covariance is a floor plus a growth term, used only over the lead
   times the stored versions resolve.** The floor per component is the larger of the shortest
   resolved lead-time bin's measured disagreement and CelesTrak's published fit residual —

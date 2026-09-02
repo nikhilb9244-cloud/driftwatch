@@ -9,8 +9,10 @@ and update the date here when you do.
 **Used for.** GP element sets (OMM JSON) by group, the SATCAT metadata table and, from
 Step 2 of Phase 2, the supplemental Starlink element sets (`sup-gp.php?FILE=starlink`,
 SGP4 fits CelesTrak makes to SpaceX's published ephemerides; the fit residuals are
-published alongside as `starlink.rms.txt`). Phase 3 adds the `SW-All.csv` space-weather
-file.
+published alongside as `starlink.rms.txt`). From Phase 3 Step 1, `SW-All.csv`: three-hourly
+Kp and ap back to 1957, daily F10.7, and predictions forward. Cached for twelve hours; a
+stale copy is kept and used if a download fails, because a day-old space weather record is
+far better than none.
 
 **Rules (read 2026-09-01).** No account. At most one request per group every two hours,
 a descriptive `User-Agent`, and the JSON endpoints rather than scraping. The fetcher
@@ -136,5 +138,38 @@ used for analysis; the raw files are not redistributed.
   data are never redistributed by driftwatch, only the fitted hard-body radius and the
   residual statistics are reported. The terms are recorded here when it is first
   fetched; at the time of writing it had not been.
-- **CelesTrak `SW-All.csv`, NOAA SWPC JSON feeds, NASA OMNIweb** (Phase 3). Public,
-  no account, no redistribution restriction beyond credit. Terms recorded when first used.
+## NOAA Space Weather Prediction Center (services.swpc.noaa.gov)
+
+**Used for.** Everything CelesTrak does not observe or predict: the three-day Kp forecast
+(`noaa-planetary-k-index-forecast.json`), the real-time planetary K index
+(`planetary_k_index_1m.json`), the 27-day outlook (`27-day-outlook.txt`) and the propagated
+L1 solar wind (`propagated-solar-wind.json`). See `docs/space-weather.md`.
+
+**Rules (read 2026-09-02).** Public, no account, no authentication, no stated rate limit.
+US government work, so not subject to copyright. driftwatch caches each product with a floor
+matched to how often it is actually reissued — thirty minutes for Kp, six hours for the
+27-day outlook, fifteen minutes for the solar wind — and stores one file per issue rather
+than one per fetch.
+
+**What driftwatch republishes.** The derived space weather table and the analyses built on
+it, which is what a public-domain product is for. The raw feeds are small and public; they
+are stored locally for reproducibility (`data/weather/`, git-ignored) rather than
+redistributed.
+
+## Helioviewer (api.helioviewer.org)
+
+**Used for.** A PNG of the Sun nearest a chosen time (SDO/AIA 193 A), a few frames a day, for
+the Phase 3 Step 5 storm replay.
+
+**Rules (read 2026-09-02).** Public API, no account. The documentation asks for credit rather
+than imposing a licence, and the underlying images are NASA/SDO products, which are not
+subject to copyright. `config.HELIOVIEWER_CITATION` carries the credit line:
+
+```
+Sun imagery courtesy of the Helioviewer Project (helioviewer.org), NASA/SDO and the AIA team.
+```
+
+## Sources used in later steps
+
+- **NASA OMNIweb** (Phase 3, if the solar wind record is needed further back than SWPC's
+  week). Public, no account. Terms recorded when first used.

@@ -53,6 +53,43 @@ and only every ten minutes of it, and neither this nor the raw files are ever re
 | `t` | timestamp[us, UTC] | The sample time. |
 | `cov_rr_km2`, `cov_ri_km2`, `cov_ii_km2`, `cov_rc_km2`, `cov_ic_km2`, `cov_cc_km2` | float64 | The six independent entries of the RIC (their UVW) position covariance in km^2, used as published. |
 
+## Space weather: `data/weather/`
+
+`data/cache/weather/SW-All.csv` is CelesTrak's file as downloaded, with a `.meta.json`
+recording the fetch. `data/weather/swpc/<product>_<issued stamp>.<ext>` holds one file per
+**issue** of each SWPC product, never overwritten, each with a sidecar:
+
+| Sidecar field | Meaning |
+| --- | --- |
+| `product` | `kp-forecast`, `kp-realtime`, `outlook-27day` or `solar-wind`. |
+| `url`, `bytes`, `fetched_at` | Where it came from, how big, and when it was fetched. |
+| `issued_at` | When SWPC issued it. This names the file, so a stored run can be rescored against the forecast it actually used. |
+| `issued_from` | How the issue time was determined: `product` (its own `:Issued:` line), `companion` (the three-day forecast text fetched beside the JSON, which carries no issue time of its own), `last-observation` (an observation stream, stamped by its newest sample) or `fetch-time` (the fallback). |
+
+### The three-hourly table
+
+Built on demand by `driftwatch.weather.table.weather_table`, and written by
+`driftwatch weather --out`. One row per three-hour interval.
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `t` | timestamp[us, UTC] | Start of the interval (00, 03, ... 21 UTC). |
+| `kp` | float64 | Planetary K index, snapped to thirds. |
+| `ap` | float64 | The interval's ap in nT; from the Bartels table where only Kp was published. |
+| `ap_daily` | float64 | The day's average ap, what NRLMSIS calls the daily Ap. |
+| `f107`, `f107_81` | float64 | Observed 10.7 cm solar flux for the day and its centred 81-day average, in solar flux units. |
+| `f107_adj`, `f107_adj_81` | float64 | The same adjusted to 1 AU. The observed pair is the one an atmosphere model wants; see `docs/space-weather.md`. |
+| `provenance` | string | `observed`, `forecast`, `synthetic` or `missing`. A `missing` row has NaN indices and is left that way deliberately. |
+| `source` | string | `celestrak:observed`, `swpc:kp-observed`, `swpc:kp-estimated`, `swpc:kp-forecast`, `celestrak:predicted`, `swpc:outlook-27day` or `synthetic:<name>`. |
+| `issued_at` | timestamp[us, UTC] | The forecast's issue time; empty on an observed row. |
+
+### Sun imagery
+
+`data/cache/helioviewer/aia193_<YYYYMMDDTHHMMSSZ>.png`, named for the time **requested**,
+with a `.meta.json` giving the time Helioviewer actually returned, the image id, the layers,
+the scale and the size. The two times differ because Helioviewer serves the nearest image it
+has.
+
 ## Cache: `data/cache/spacetrack/`
 
 Raw Space-Track downloads. Nothing here ever contains the credentials; the metadata

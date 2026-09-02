@@ -465,13 +465,99 @@ flags, this one matters more than it looked before the numbers were in.
    and `floor_r_km`, `floor_i_km` and `floor_c_km` are new in `covariance.parquet`. Both
    are additive. The viewer does not read either yet.
 
-## Later steps in one paragraph each
+## Step 1 decisions (space weather, built 2026-09-02)
 
-**Step 1, space weather.** CelesTrak `SW-All.csv` cached daily as the primary driver;
-NOAA SWPC JSON for the real-time planetary K index, the three-day forecast, the 27-day
-outlook and the solar wind, each cached with a floor and stamped with its issue time; one
-row per three-hour interval with Kp, ap, F10.7, the 81-day average and a provenance column
-saying observed, forecast or synthetic; Helioviewer frames for the replay.
+`src/driftwatch/weather/`, `driftwatch weather`, `docs/space-weather.md`,
+`tests/test_weather.py`. Everything the prompt asked for is in, and the decisions worth a
+review are below.
+
+### The table, and the layering that fills it
+
+One row per three-hour interval, built on demand from the caches by
+`weather.table.weather_table`. Columns: `t`, `kp`, `ap`, `ap_daily`, `f107`, `f107_81`,
+`f107_adj`, `f107_adj_81`, `provenance`, `source`, `issued_at`. The schema is in
+`docs/data-schema.md`; it is the thing the prompt said to ask about, and it is the prompt's
+own list plus three additions, each with a reason:
+
+- **`ap_daily`** as well as the interval's `ap`, because NRLMSIS wants both the daily Ap and
+  the three-hourly history and computing one from the other in the density module would hide
+  which day a boundary interval belongs to.
+- **`f107_adj` and `f107_adj_81`** beside the observed pair. CelesTrak publishes both;
+  observed is the one an atmosphere model wants, because the atmosphere feels the flux that
+  arrives rather than the flux scaled to 1 AU. Carrying both makes the choice visible and
+  reversible instead of buried in a loader.
+- **`source`** as well as `provenance`. "Forecast" does not distinguish SWPC's three-day Kp
+  from CelesTrak's six-week prediction from a 27-day recurrence climatology, and those are
+  very different objects.
+
+The sources are layered best-first, each filling only what the one above leaves:
+
+| Layer | Source | On the live window of 2026-09-02 |
+| --- | --- | ---: |
+| 1 | CelesTrak observed | 0 intervals |
+| 2 | SWPC observed, then estimated | 4 |
+| 3 | SWPC three-day Kp forecast | 17 |
+| 4 | CelesTrak predicted (about six weeks out) | 36 |
+| 5 | SWPC 27-day outlook | 0 |
+
+Layer 2 was added after the first build showed the hole it fills: CelesTrak rebuilds its file
+once a day, so the last day or two before now has only a CelesTrak *prediction* while SWPC
+already has the real index. Falling through to a forecast when a measurement exists would
+have been wrong every single day.
+
+### Four decisions worth the review's attention
+
+1. **A gap stays a gap.** An interval with no source in any layer comes back NaN with
+   provenance `missing`. Substituting a quiet zero would be a silent invention, and Step 2
+   has to decide what to do about a hole rather than be handed one dressed as a calm day.
+   `driftwatch weather` prints a warning when the count is not zero.
+2. **The 27-day outlook's A index is used, not its largest Kp.** The outlook is a daily
+   product giving both. Repeating a daily *maximum* across eight intervals would say the whole
+   day was as bad as its worst three hours, which for a density model driven by the average
+   overstates in the dangerous direction. The A index is already a daily average, so spreading
+   it flat is the honest reading, and `kp` on those rows is the inverse of the ap table.
+3. **The forecast issue time is fetched, not inferred.** SWPC's JSON products carry no issue
+   time, and their `Last-Modified` is a file-regeneration time — measured at 36 seconds before
+   the request, which is meaningless as a forecast stamp. So the three-day forecast **text**
+   product is fetched alongside the Kp JSON purely for its `:Issued:` line. Two small requests
+   every half hour, in exchange for a stored run knowing which forecast it used.
+   `issued_from` records which of four routes gave each stamp.
+4. **ap, not Kp, is what the table is really for.** Kp must not be averaged: 4 and 6 are 27
+   and 80 nT, whose mean is 53 nT, which is Kp 5+ and not Kp 5. The Bartels table is
+   reproduced in the code rather than pulled from a dependency, and a test walks it in both
+   directions.
+
+### What the store looks like
+
+Every SWPC fetch is written under its product and **issue** time and never overwritten
+(`data/weather/swpc/`), with a sidecar carrying the URL, the fetch time, the issue time and
+how the issue time was determined. `swpc.stored_before(product, when)` returns the version
+that existed at a past moment, which is what will let a stored run rescore against the
+forecast it actually used. The four products together are about 1.2 MB a fetch, almost all of
+it the week of one-minute solar wind.
+
+Sun imagery is `weather/helioviewer.py`: SDO/AIA 193 A through `takeScreenshot`, four frames
+a day, 512 px, cached permanently by the time **requested** with the time actually returned
+recorded beside it. On the Gannon storm days the two differ by 13 seconds; during a data gap
+they could differ by hours, and a replay showing yesterday's Sun without saying so would be
+worse than showing none.
+
+### Questions for the Step 1 review
+
+1. **Is the table schema right?** It is the prompt's list plus `ap_daily`, the adjusted F10.7
+   pair and `source`, reasoned above. This is the thing that constrains Phase 4, so it is the
+   one to push back on now.
+2. **Layer 4 is CelesTrak's predicted Kp, and that is what covers days four to seven of a
+   screening window.** It appears to be derived from SWPC's own forecasts, so it is not an
+   independent opinion — it is a smoothed, longer-range version of layer 3. Should days four
+   to seven instead be treated as having *no usable geomagnetic forecast*, with the scenario
+   machinery (quiet, storm-g3 and so on) carrying that part of the window? That would be the
+   more honest position and it is a bigger change than it looks.
+3. **The solar wind is stored but not yet used.** A week of one-minute L1 data is most of the
+   store's bulk. It is context for the replay rather than a driver; if it stays unused past
+   Step 5 it should be dropped to the one-hour feed.
+
+## Later steps in one paragraph each
 
 **Step 2, density and drag.** pymsis with NRLMSIS 2.x, the ap input vector built correctly
 from the table (the daily value plus the three-hourly history it expects); density along
