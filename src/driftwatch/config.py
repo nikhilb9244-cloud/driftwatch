@@ -129,6 +129,36 @@ SWPC_SOLAR_WIND_1H_URL = f"{SWPC_BASE_URL}/products/geospace/propagated-solar-wi
 SWPC_KP_MIN_INTERVAL = timedelta(minutes=30)
 SWPC_27DAY_MIN_INTERVAL = timedelta(hours=6)
 SWPC_SOLAR_WIND_MIN_INTERVAL = timedelta(minutes=15)
+# The minute-cadence solar wind is most of the store's bulk: about a megabyte a fetch, and
+# every fetch repeats the whole week. It is kept at one minute for this long and then rolled
+# into one hourly archive (weather/swpc.py, roll_solar_wind), which keeps the means and the
+# extremes -- an hourly *mean* of Bz would average away exactly the southward excursions that
+# drive a storm, so the archive carries the minimum and the maximum beside the mean.
+SOLAR_WIND_MINUTE_DAYS = 7
+
+# The uncertainty of the ap the table carries, which is what Step 3's variance term consumes.
+# Two regimes. A measurement is uncertain only by the resolution of the index itself, which is
+# one Bartels step; SWPC's estimated Kp is provisional and is revised by about a step. A
+# forecast is uncertain by the part of the climatological spread its skill does not remove:
+# with a correlation r against what happens, the residual spread is sigma_clim * sqrt(1 - r^2),
+# so as skill goes to zero the uncertainty widens to the climatological spread itself. These
+# correlations are a prior of the right order for SWPC's three-day Kp forecast, not a measured
+# skill score, and May 2024 was very much worse than this; the lead-day breakpoints are
+# 0, 1, 2 and 3 days and everything past three days takes r = 0.
+AP_FORECAST_CORRELATION_BY_LEAD_DAY = ((0.0, 0.85), (1.0, 0.70), (2.0, 0.50), (3.0, 0.40))
+# The climatological spread is measured from the observed record itself, over this many days
+# before the window. The distribution is strongly skewed -- most intervals are quiet and the
+# variance is carried by a few storm days -- so this standard deviation is much larger than a
+# typical interval's ap, which is the honest statement of what "no forecast skill" means.
+AP_CLIMATOLOGY_DAYS = 365
+# Used only when no observed record is available to measure it from. Of the right order for a
+# solar maximum year; the log says when the fallback was used.
+AP_CLIMATOLOGY_FALLBACK_NT = 20.0
+# A forecast of a storm carries an uncertainty proportional to the storm it forecasts: an ap
+# of 100 nT is not known to the same absolute precision as an ap of 5 nT. The forecast
+# uncertainty is floored at this fraction of the forecast value, which matters above about
+# 50 nT where the climatological term alone would understate it. A prior, not a measurement.
+AP_FORECAST_RELATIVE_FLOOR = 0.5
 
 # Helioviewer: Sun imagery for the Step 5 replay. Public API, no account. Credit is asked
 # for in the API documentation rather than required by a licence.

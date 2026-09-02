@@ -81,10 +81,12 @@ reads.
 | `t` | Start of the three-hour interval, UTC (00, 03, … 21). |
 | `kp` | Planetary K index for the interval, snapped to thirds. |
 | `ap` | The interval's ap in nT, from the Bartels table where only Kp was published. |
+| `ap_sigma` | The standard deviation of that ap in nT. See "How uncertain the index is" below. |
 | `ap_daily` | The day's average ap — what NRLMSIS calls the daily Ap. |
 | `f107`, `f107_81` | Observed 10.7 cm flux for the day, and its centred 81-day average. |
 | `f107_adj`, `f107_adj_81` | The same adjusted to 1 AU. |
 | `provenance` | `observed`, `forecast`, `synthetic` or `missing`. |
+| `skill` | `measured`, `provisional`, `forecast`, `recurrence`, `designed` or `none`. See below. |
 | `source` | Which feed: `celestrak:observed`, `swpc:kp-observed`, `swpc:kp-estimated`, `swpc:kp-forecast`, `celestrak:predicted`, `swpc:outlook-27day` or `synthetic:<name>`. |
 | `issued_at` | The forecast's issue time; empty for an observation. |
 
@@ -108,6 +110,62 @@ Best first, each filling only what the one above leaves:
 
 On the live window of 2026-09-02, that comes out as 4 intervals from SWPC's estimated index,
 17 from its three-day forecast, and 36 from CelesTrak's prediction.
+
+### Every layer says what it is worth
+
+`provenance` says measurement or forecast. It is not enough, because "forecast" covers both
+SWPC's three-day Kp, which has real skill, and a 27-day recurrence outlook, which anticipates
+a coronal hole coming round again and is blind to the coronal mass ejection that causes the
+storms this project exists for. So every layer also carries a `skill`:
+
+| Layer | Source | Skill | What that means |
+| ---: | --- | --- | --- |
+| 1 | `celestrak:observed` | `measured` | The definitive index. |
+| 2 | `swpc:kp-observed` | `measured` | The definitive index, fresher than CelesTrak's daily rebuild. |
+| 2 | `swpc:kp-estimated` | `provisional` | Measured from the live magnetometer network; revised by about a step when it is made definitive. |
+| 3 | `swpc:kp-forecast` | `forecast` | A real forecast with skill over climatology for three days. |
+| 4 | `celestrak:predicted` | `recurrence` | Derived from SWPC's outlooks; a smoothed recurrence guess however far ahead it is read. |
+| 5 | `swpc:outlook-27day` | `recurrence` | A 27-day recurrence climatology. |
+| — | `synthetic:<name>` | `designed` | A scenario. Not a prediction at all. |
+| — | (a gap) | `none` | No source in any layer. |
+
+**Days four to seven keep their forecast rather than being blanked.** The Step 1 review asked
+whether to treat them as having no usable geomagnetic forecast and let the scenarios carry
+that part of the window instead. They are not blanked: a recurrence guess is weak information
+but it is not no information, deleting it would put a hole in the middle of the density
+computation that Step 2 would then have to fill with something, and the honest way to say
+"this is nearly worthless" is to label it and widen its uncertainty — which is exactly what
+`skill` and `ap_sigma` now do. The scenario machinery answers a different question: what if
+the storm were this bad, rather than what do we expect.
+
+### How uncertain the index is
+
+`ap_sigma` is the standard deviation of the interval's ap, and it is what Step 3's variance
+term consumes. Three regimes:
+
+- **A measurement** is uncertain only by the resolution of the index itself — half a Bartels
+  step, which is 0.5 nT at ap 4 and 50 nT at ap 300, because the table is quasi-logarithmic.
+  SWPC's *estimated* Kp is a measurement that has not been made definitive yet and carries a
+  full step.
+- **A forecast** is uncertain by the part of the climatological spread its skill does not
+  remove. For a forecast correlating with reality at `r`, the residual spread is
+  `sigma_clim * sqrt(1 - r^2)`; the priors are `r` = 0.85, 0.70, 0.50, 0.40 at leads of 0, 1,
+  2 and 3 days and **zero past three days**, so the uncertainty widens to the climatological
+  spread itself. That is the honest statement about a three-hour interval eleven days out.
+  The lead is measured from the forecast's own issue time where it has one.
+- **The climatological spread is measured, not assumed**: the standard deviation of
+  three-hourly observed ap over the year before the window, from the record already in hand.
+  On 2 September 2026 that is **20.0 nT**, against a median interval of 7 nT — the
+  distribution is strongly skewed, most intervals are quiet, and the variance is carried by a
+  few storm days. A symmetric interval around a quiet forecast would imply a negative ap, so
+  Step 3 must use this as a variance on the *density* and not as an interval on the index.
+- **A forecast storm is not precisely known**: the forecast uncertainty is floored at half the
+  forecast value, which binds above about 40 nT. An ap of 200 nT forecast three days out is
+  not known to plus or minus 20.
+
+The correlation priors are of the right order for SWPC's three-day Kp forecast and are **not**
+a measured skill score. May 2024 was far worse than this: the Gannon storm was under-forecast
+a day ahead. Step 4's validation is where that gets tested.
 
 ### Three decisions worth stating
 
@@ -151,6 +209,12 @@ showing none.
 - **F10.7 is a proxy.** The thermosphere is heated by extreme ultraviolet, which F10.7
   correlates with rather than measures; the correlation is good over a solar cycle and worse
   day to day. It is what NRLMSIS was built on, so it is what the table carries.
+- **The solar wind is rolled, not kept at one minute for ever.** The feed serves a week at
+  one minute and every fetch repeats the whole week. Versions older than seven days are
+  summarised into one hourly archive and deleted; the archive keeps the Bz and speed extremes
+  beside the means, because an hourly mean of Bz averages away exactly the southward
+  excursions that drive a storm. The forecast products are never rolled: a stored run has to
+  be rescorable against the forecast it actually used.
 - **Kp is a global average of a local phenomenon.** A storm's energy deposition is
   concentrated in the auroral ovals, and two storms with the same Kp can heat a given orbit
   differently. Step 2 inherits that limitation from the model.

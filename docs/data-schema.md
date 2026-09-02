@@ -76,12 +76,31 @@ Built on demand by `driftwatch.weather.table.weather_table`, and written by
 | `t` | timestamp[us, UTC] | Start of the interval (00, 03, ... 21 UTC). |
 | `kp` | float64 | Planetary K index, snapped to thirds. |
 | `ap` | float64 | The interval's ap in nT; from the Bartels table where only Kp was published. |
+| `ap_sigma` | float64 | Standard deviation of that ap in nT, which is what Step 3's variance term consumes. Half a Bartels step on a measurement, a full step on SWPC's provisional estimate, and on a forecast the part of the climatological spread its skill does not remove -- widening to the whole spread past three days, and floored at half the forecast value so a forecast storm is not treated as precisely known. NaN where `ap` is. |
 | `ap_daily` | float64 | The day's average ap, what NRLMSIS calls the daily Ap. |
 | `f107`, `f107_81` | float64 | Observed 10.7 cm solar flux for the day and its centred 81-day average, in solar flux units. |
 | `f107_adj`, `f107_adj_81` | float64 | The same adjusted to 1 AU. The observed pair is the one an atmosphere model wants; see `docs/space-weather.md`. |
 | `provenance` | string | `observed`, `forecast`, `synthetic` or `missing`. A `missing` row has NaN indices and is left that way deliberately. |
+| `skill` | string | What the row's numbers are worth: `measured`, `provisional` (measured, not yet definitive), `forecast` (skilful over climatology), `recurrence` (a 27-day recurrence guess, blind to coronal mass ejections), `designed` (a synthetic scenario) or `none` (a gap). Provenance cannot make this distinction -- SWPC's three-day Kp and CelesTrak's six-week prediction are both `forecast`. |
 | `source` | string | `celestrak:observed`, `swpc:kp-observed`, `swpc:kp-estimated`, `swpc:kp-forecast`, `celestrak:predicted`, `swpc:outlook-27day` or `synthetic:<name>`. |
 | `issued_at` | timestamp[us, UTC] | The forecast's issue time; empty on an observed row. |
+
+### The rolled solar wind: `data/weather/swpc/solar-wind-hourly.parquet`
+
+The minute-cadence feed serves a week and every fetch repeats it, so versions issued more
+than `SOLAR_WIND_MINUTE_DAYS` (7) days ago are summarised into one hourly archive and their
+JSON deleted -- the only place in the store where raw data does not survive, and deliberately
+not done to the forecast products. `<archive>.meta.json` lists every file that was rolled
+into it.
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `t` | timestamp[us, UTC] | Start of the hour. |
+| `n` | int64 | Minutes that went into the row, so a gap stays visible. |
+| `speed_kms`, `speed_kms_max` | float64 | Mean and peak solar wind speed. |
+| `density_cm3`, `temperature_k` | float64 | Hourly means. |
+| `bx_nt`, `by_nt`, `bz_nt`, `bt_nt` | float64 | Hourly means of the interplanetary magnetic field. |
+| `bz_nt_min`, `bz_nt_max` | float64 | The extremes of Bz in the hour. A mean is the wrong summary for it: an hour swinging from -15 to +15 nT averages to zero while being the most geoeffective hour of the storm. |
 
 ### Sun imagery
 

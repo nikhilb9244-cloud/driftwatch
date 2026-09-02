@@ -918,6 +918,14 @@ def cmd_weather(args: argparse.Namespace) -> int:
                 res.issued_from,
                 " [stored]" if res.from_cache else "",
             )
+        if not args.no_roll:
+            rolled = swpc.roll_solar_wind(now=now)
+            if rolled["n_rolled"]:
+                print(
+                    f"rolled {rolled['n_rolled']} minute-cadence solar wind files older than "
+                    f"{config.SOLAR_WIND_MINUTE_DAYS} days into hourly means "
+                    f"({rolled['kilobytes_freed']} kB freed, archive now {rolled['archive_rows']} hours)"
+                )
 
     start = parse_utc(args.start) if args.start else now
     end = parse_utc(args.end) if args.end else start + timedelta(days=args.days)
@@ -934,7 +942,13 @@ def cmd_weather(args: argparse.Namespace) -> int:
         print(shown.to_string(index=False, float_format=lambda x: f"{x:.4g}"))
     print()
     print("provenance:", summary["by_provenance"])
+    print("skill:     ", summary["by_skill"])
     print("sources:   ", {k: v for k, v in summary["by_source"].items()})
+    print(
+        f"ap sigma:   {summary['ap_sigma']['min']} to {summary['ap_sigma']['max']} nT "
+        f"(climatological spread {summary['ap_sigma']['climatological']} nT, "
+        f"{summary['ap_sigma']['climatological_from']}, over the last {config.AP_CLIMATOLOGY_DAYS} days)"
+    )
     if summary["forecast_issued"]:
         print("forecasts issued:", ", ".join(summary["forecast_issued"]))
     if summary["n_missing"]:
@@ -1211,6 +1225,14 @@ def build_parser() -> argparse.ArgumentParser:
     wx.add_argument("--no-fetch", action="store_true", help="use the stored feeds; do not refresh any of them")
     wx.add_argument("--offline", action="store_true", help="use only what is already cached or stored")
     wx.add_argument("--no-solar-wind", action="store_true", help="skip the solar wind summary")
+    wx.add_argument(
+        "--no-roll",
+        action="store_true",
+        help=(
+            "do not roll minute-cadence solar wind older than "
+            f"{config.SOLAR_WIND_MINUTE_DAYS} days into the hourly archive"
+        ),
+    )
     wx.add_argument("--images", action="store_true", help="fetch Sun imagery for the window as well")
     wx.add_argument(
         "--frames-per-day",

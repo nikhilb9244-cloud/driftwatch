@@ -551,15 +551,22 @@ worse than showing none.
 1. **Is the table schema right?** It is the prompt's list plus `ap_daily`, the adjusted F10.7
    pair and `source`, reasoned above. This is the thing that constrains Phase 4, so it is the
    one to push back on now.
+   *Answered by the review: keep it as proposed, both F10.7 pairs included. Two columns were
+   added on top — `skill` and `ap_sigma` — see "The four instructions" below.*
 2. **Layer 4 is CelesTrak's predicted Kp, and that is what covers days four to seven of a
    screening window.** It appears to be derived from SWPC's own forecasts, so it is not an
    independent opinion — it is a smoothed, longer-range version of layer 3. Should days four
    to seven instead be treated as having *no usable geomagnetic forecast*, with the scenario
    machinery (quiet, storm-g3 and so on) carrying that part of the window? That would be the
    more honest position and it is a bigger change than it looks.
+   *Answered by the review: do not blank them. They are labelled `recurrence` in the new
+   `skill` column instead, and their `ap_sigma` widens to the full climatological spread,
+   which says the same thing without putting a hole in the density computation.*
 3. **The solar wind is stored but not yet used.** A week of one-minute L1 data is most of the
    store's bulk. It is context for the replay rather than a driver; if it stays unused past
    Step 5 it should be dropped to the one-hour feed.
+   *Answered by the review: keep the minute cadence for the last seven days and roll older
+   data to hourly means. Done, with the Bz and speed extremes kept beside the means.*
 
 ## The four instructions (Step 1 review, 2026-09-02)
 
@@ -631,6 +638,60 @@ Approved as built, with the basis stated wherever the flag appears — `risk/pc.
   fast ones, and that is exactly what would be seen whether the shared two-dimensional
   integral is right or wrong there. The size of the underestimate is unmeasured, and the
   flag would stand whether it is a factor of two or of ten.
+
+### 3. The space weather table: schema kept, four changes
+
+The schema stands as proposed, both F10.7 pairs included. Four changes on top of it.
+
+**`skill` on every layer.** `provenance` says measurement or forecast, which is not enough:
+SWPC's three-day Kp and CelesTrak's six-week prediction are both `forecast` and they are not
+the same kind of object. The six values are `measured`, `provisional` (SWPC's estimated index,
+revised by about a step when it is made definitive), `forecast` (skilful over climatology),
+`recurrence` (a coronal hole coming round again, blind to a coronal mass ejection),
+`designed` (a scenario) and `none` (a gap). On the live window of 2 September that is 3
+provisional, 17 forecast and 37 recurrence — which says plainly that most of a seven-day
+screening window rests on a recurrence guess.
+
+**Days four to seven keep their forecast.** Not blanked. A recurrence guess is weak
+information but it is not none, and blanking would put a hole in the middle of the density
+computation for Step 2 to fill with something. Labelling it and widening its uncertainty says
+the same thing honestly, which is what `skill` and `ap_sigma` now do together.
+
+**`ap_sigma`, for Step 3's variance term.** The standard deviation of each interval's ap:
+
+- A measurement is uncertain by the resolution of the index, half a Bartels step — 0.5 nT at
+  ap 4, 50 nT at ap 300, because the table is quasi-logarithmic. A provisional estimate
+  carries a full step.
+- A forecast is uncertain by the part of the climatological spread its skill does not remove,
+  `sigma_clim * sqrt(1 - r^2)`, with `r` = 0.85, 0.70, 0.50, 0.40 at leads of 0 to 3 days and
+  **zero past three days**, so it widens to the climatological spread exactly as the review
+  asked. The lead is measured from the forecast's own issue time where it has one.
+- The spread is **measured, not assumed**: the standard deviation of observed three-hourly ap
+  over the year before the window. On 2 September 2026 it is 20.0 nT, against a median
+  interval of 7 nT. The distribution is strongly skewed and the variance is carried by a few
+  storm days, so Step 3 must consume this as a variance on the density and not as an interval
+  on the index — one standard deviation below a quiet forecast is a negative ap.
+- Floored at half the forecast value, because an ap of 200 nT three days out is not known to
+  20 nT. A prior, labelled as one.
+
+The correlation numbers are priors of the right order for SWPC's three-day forecast, not
+measured skill scores, and May 2024 was much worse than them. Step 4 is where that gets
+tested.
+
+**The solar wind is rolled.** One minute for the last seven days, hourly means before that,
+into one archive with the file list that fed it. The archive keeps `bz_nt_min`, `bz_nt_max`
+and `speed_kms_max` beside the means, because an hourly mean of Bz averages away exactly the
+southward excursions that drive a storm. It is the only place in the store where raw data is
+deleted, and it is deliberately not done to the forecast products, whose whole point is that
+a stored run can be rescored against the forecast it actually used.
+
+**Deferred to Step 2, as instructed.** The density code reads the **observed** F10.7 of the
+**previous day** with the 81-day centred average, which is what NRLMSIS expects, pinned by a
+test. That belongs with `drag/density.py` and is done there.
+
+### 4. Housekeeping
+
+Any dev server or shell started during a step is closed at the end of it.
 
 ## Later steps in one paragraph each
 

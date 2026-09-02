@@ -165,6 +165,63 @@ def test_the_solar_wind_arrives_as_an_array_of_arrays_with_its_header_in_the_fir
     assert summary["speed_kms"]["max"] == pytest.approx(370.0)
 
 
+def solar_wind_file(directory, issued: str, start: datetime, minutes: int, bz) -> None:
+    """One stored minute-cadence version, with its sidecar, as `fetch_product` writes it."""
+    header = ["time_tag", "speed", "density", "temperature", "bx", "by", "bz", "bt"]
+    rows = [
+        [(start + timedelta(minutes=m)).strftime("%Y-%m-%dT%H:%M:%SZ"), 400.0 + m, 5.0, 7e4, 1.0, 1.0, bz(m), 5.0]
+        for m in range(minutes)
+    ]
+    path = directory / f"solar-wind_{issued}.json"
+    path.write_text(json.dumps([header, *rows]), encoding="utf-8")
+    stamp = f"{issued[:4]}-{issued[4:6]}-{issued[6:8]}T{issued[9:11]}:{issued[11:13]}:00+00:00"
+    (directory / f"solar-wind_{issued}.json.meta.json").write_text(
+        json.dumps({"product": "solar-wind", "issued_at": stamp}), encoding="utf-8"
+    )
+
+
+def test_solar_wind_older_than_a_week_is_rolled_to_hourly_means_keeping_the_extremes(tmp_path):
+    """The feed repeats a week of minutes on every fetch, so the store would grow for nothing.
+
+    What must survive the roll is the shape of a storm. An hourly *mean* of Bz averages away
+    exactly the southward excursions that drive one, so the archive keeps the minimum and the
+    maximum beside the mean.
+    """
+    directory = tmp_path / "swpc"
+    directory.mkdir(parents=True)
+    now = datetime(2026, 9, 20, tzinfo=UTC)
+    # One version from a fortnight ago (rolled) and one from yesterday (kept at one minute).
+    solar_wind_file(directory, "20260906T000000Z", datetime(2026, 9, 5, 22, tzinfo=UTC), 120, lambda m: -20.0 + m / 3)
+    solar_wind_file(directory, "20260919T000000Z", datetime(2026, 9, 18, 22, tzinfo=UTC), 120, lambda m: 1.0)
+
+    rolled = swpc.roll_solar_wind(out_dir=tmp_path, now=now, keep_days=7)
+    assert rolled["n_rolled"] == 1 and rolled["kilobytes_freed"] > 0
+    assert not (directory / "solar-wind_20260906T000000Z.json").exists()
+    assert not (directory / "solar-wind_20260906T000000Z.json.meta.json").exists()
+    assert (directory / "solar-wind_20260919T000000Z.json").exists()  # inside the week, untouched
+
+    archive = swpc.load_solar_wind_archive(tmp_path)
+    assert list(archive["n"]) == [60, 60]
+    assert archive["speed_kms"].iloc[0] == pytest.approx(400.0 + 29.5)
+    assert archive["speed_kms_max"].iloc[0] == pytest.approx(459.0)
+    # The first hour swings from -20 to -0.3 nT: the mean hides how southward it went.
+    assert archive["bz_nt"].iloc[0] == pytest.approx(-20.0 + 29.5 / 3)
+    assert archive["bz_nt_min"].iloc[0] == pytest.approx(-20.0)
+    assert archive["bz_nt_max"].iloc[0] == pytest.approx(-20.0 + 59 / 3)
+    # The rolled file is recorded rather than silently dropped.
+    meta = json.loads((directory / "solar-wind-hourly.parquet.meta.json").read_text(encoding="utf-8"))
+    assert [r["file"] for r in meta["rolled"]] == ["solar-wind_20260906T000000Z.json"]
+
+    # Rolling again is a no-op, and an overlapping version does not duplicate an hour.
+    assert swpc.roll_solar_wind(out_dir=tmp_path, now=now, keep_days=7)["n_rolled"] == 0
+    solar_wind_file(directory, "20260907T000000Z", datetime(2026, 9, 5, 22, tzinfo=UTC), 30, lambda m: 1.0)
+    swpc.roll_solar_wind(out_dir=tmp_path, now=now, keep_days=7)
+    again = swpc.load_solar_wind_archive(tmp_path)
+    assert len(again) == 2 and again["t"].is_unique
+    # The hour built from more minutes is the better summary of it, so the 60-minute row stays.
+    assert again["n"].iloc[0] == 60
+
+
 def test_a_stored_version_is_chosen_by_the_time_it_was_issued_not_by_the_time_it_was_fetched(tmp_path):
     """Rescoring a run made last Tuesday has to use last Tuesday's forecast."""
     directory = tmp_path / "swpc"
@@ -284,10 +341,102 @@ def test_a_synthetic_profile_is_labelled_as_one_and_leaves_the_solar_flux_alone(
     assert storm["ap"].max() == 400.0  # Kp 9
     np.testing.assert_allclose(storm["f107"], table["f107"])
     assert storm["issued_at"].isna().all()
+    # A scenario states its ap rather than forecasting it, so its skill is `designed`; the
+    # uncertainty stays at the climatological spread so Step 3 cannot read zero variance off
+    # a storm it was told to suppose.
+    assert set(storm["skill"]) == {"designed"}
+    assert (storm["ap_sigma"] > 0).all()
+    assert storm["ap_sigma"].max() >= table["ap_sigma"].max()
+    assert list(storm.columns) == list(wt.TABLE_COLUMNS)
     # The day's average ap is recomputed from the profile rather than left at the quiet value.
     assert storm["ap_daily"].iloc[0] > table["ap_daily"].iloc[0]
     with pytest.raises(ValueError, match="intervals"):
         wt.apply_synthetic(table, np.array([1.0, 2.0]), name="too-short")
+
+
+def test_every_layer_carries_a_skill_and_the_skill_is_not_the_provenance():
+    """`forecast` covers both a skilful three-day Kp and a 27-day recurrence guess."""
+    celestrak = celestrak_rows(
+        [("2026-09-01", 2.0, "OBS"), ("2026-09-02", 1.0, "PRD"), ("2026-09-03", 1.0, "PRD"), ("2026-09-04", 1.0, "PRD")]
+    )
+    forecast = pd.DataFrame(
+        {
+            "t": pd.date_range(pd.Timestamp("2026-09-02", tz="UTC"), periods=16, freq="3h"),
+            "kp": [2.0] * 16,
+            "observed": ["observed"] * 4 + ["estimated"] * 4 + ["predicted"] * 8,
+            "noaa_scale": None,
+        }
+    )
+    table = wt.build(
+        datetime(2026, 9, 1, tzinfo=UTC),
+        datetime(2026, 9, 4, 21, tzinfo=UTC),
+        celestrak_rows=celestrak,
+        kp_forecast=(forecast, datetime(2026, 9, 2, 12, 30, tzinfo=UTC)),
+    )
+    by_skill = table.groupby("skill", observed=True)["t"].size().to_dict()
+    # SWPC's forecast runs out after 3 September; CelesTrak's own prediction covers the 4th.
+    # `measured` is both CelesTrak's observed day and SWPC's definitive rows: two sources, one skill.
+    assert by_skill == {"measured": 12, "provisional": 4, "forecast": 8, "recurrence": 8}
+    # Provenance cannot make this distinction: three of these four skills are one provenance.
+    assert set(table.loc[table["skill"] == "recurrence", "provenance"]) == {"forecast"}
+    assert set(table.loc[table["skill"].isin(["measured", "provisional"]), "provenance"]) == {"observed"}
+    assert set(table["skill"]) <= set(wt.SKILLS)
+
+
+def test_the_ap_uncertainty_widens_to_the_climatological_spread_past_three_days():
+    """A measurement is uncertain by the resolution of the index; a forecast by its lack of skill.
+
+    Past three days the correlation prior is zero, which is the honest statement about a
+    three-hour interval eleven days out: it is drawn from the recent climatology and nothing
+    narrower is known. Step 3's variance term reads this column.
+    """
+    now = datetime(2026, 9, 1, tzinfo=UTC)
+    # A year of quiet observed record with one storm in it, so the spread is measurable.
+    days = [((now - timedelta(days=d)).strftime("%Y-%m-%d"), 1.0, "OBS") for d in range(365, 0, -1)]
+    days += [(now.strftime("%Y-%m-%d"), 1.0, "OBS")]
+    celestrak = celestrak_rows(days)
+    celestrak.loc[celestrak["t"].dt.strftime("%Y-%m-%d") == "2026-05-11", ["kp", "ap"]] = [8.0, 236.0]
+    predicted = celestrak_rows([((now + timedelta(days=d)).strftime("%Y-%m-%d"), 1.0, "PRD") for d in range(1, 12)])
+    both = pd.concat([celestrak, predicted], ignore_index=True)
+
+    table = wt.build(now, now + timedelta(days=11), celestrak_rows=both, now=now)
+    sigma_clim, how = wt.climatological_ap_sigma(both[both["provenance"] == "observed"], before=now)
+    assert "measured" in how and sigma_clim > 10.0
+
+    lead = (table["t"] - pd.Timestamp(now)).dt.total_seconds() / 86400.0
+    observed = table["provenance"] == "observed"
+    # The observed rows sit at ap 4 nT, whose neighbouring Bartels steps are 3 and 5, so the
+    # index resolves it to 1 nT and half of that is the measurement's whole uncertainty.
+    assert table.loc[observed, "ap_sigma"].max() == pytest.approx(0.5)
+    # Inside three days the forecast knows something; past them it does not.
+    inside = table[(~observed) & (lead > 0.5) & (lead < 2.5)]
+    past = table[lead > 3.5]
+    assert (inside["ap_sigma"] < sigma_clim).all()
+    assert past["ap_sigma"].to_numpy() == pytest.approx(sigma_clim)
+    # And it is monotonic in lead time over the forecast rows, as a widening uncertainty must be.
+    forecast_rows = table[~observed].sort_values("t")
+    assert (forecast_rows["ap_sigma"].diff().dropna() >= -1e-9).all()
+    # A gap has no ap and therefore no uncertainty; nothing invents one.
+    gap = wt.build(now + timedelta(days=30), now + timedelta(days=31), celestrak_rows=both, now=now)
+    assert gap["ap_sigma"].isna().all() and set(gap["skill"]) == {"none"}
+
+
+def test_a_forecast_storm_carries_an_uncertainty_proportional_to_the_storm():
+    """An ap of 200 nT is not known to the same absolute precision as an ap of 5."""
+    now = datetime(2026, 9, 1, tzinfo=UTC)
+    quiet = celestrak_rows([((now - timedelta(days=d)).strftime("%Y-%m-%d"), 1.0, "OBS") for d in range(30, 0, -1)])
+    forecast = pd.DataFrame(
+        {
+            "t": pd.date_range(pd.Timestamp(now), periods=8, freq="3h"),
+            "kp": [8.0] * 8,
+            "observed": ["predicted"] * 8,
+            "noaa_scale": None,
+        }
+    )
+    table = wt.build(now, now + timedelta(hours=21), celestrak_rows=quiet, kp_forecast=(forecast, now), now=now)
+    assert set(table["ap"]) == {207.0}  # Kp 8 on the Bartels table
+    # Half the forecast value, which beats the climatological term at this level.
+    assert table["ap_sigma"].to_numpy() == pytest.approx(207.0 * 0.5)
 
 
 def test_the_interval_grid_covers_the_window_at_three_hour_steps():

@@ -33,6 +33,14 @@ the last observation in the series, which is the honest answer for a stream.
 issue time and never overwritten, with a sidecar recording the URL, the fetch time, the
 issue time and where the issue time came from. A stored run can then be rescored against the
 forecast it actually used, months later, whatever SWPC is serving now.
+
+**Except the solar wind, which is rolled.** That feed serves a week at one minute and every
+fetch repeats the whole week, so the store would grow by a megabyte a fetch for data it
+already holds. :func:`roll_solar_wind` keeps the minute cadence for
+:data:`driftwatch.config.SOLAR_WIND_MINUTE_DAYS` days and summarises anything older into one
+hourly archive -- with the Bz and speed extremes beside the means, because an hourly mean of
+Bz averages away exactly the southward excursions that drive a storm. It is the only place
+where raw data is deleted, and it is deliberately not done to the forecast products.
 """
 
 from __future__ import annotations
@@ -372,6 +380,139 @@ def solar_wind_summary(frame: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+# --------------------------------------------------------------------------------------
+# Rolling the solar wind: one minute for a week, hourly for ever
+
+
+SOLAR_WIND_ARCHIVE = "solar-wind-hourly.parquet"
+HOURLY_COLUMNS: tuple[str, ...] = (
+    "t",
+    "n",
+    "speed_kms",
+    "speed_kms_max",
+    "density_cm3",
+    "temperature_k",
+    "bx_nt",
+    "by_nt",
+    "bz_nt",
+    "bz_nt_min",
+    "bz_nt_max",
+    "bt_nt",
+)
+
+
+def hourly_means(frame: pd.DataFrame) -> pd.DataFrame:
+    """One row an hour: the means, and the extremes that a mean would destroy.
+
+    A mean is the wrong summary for the interplanetary magnetic field. What couples the solar
+    wind into the magnetosphere is a **southward** Bz, and an hour that swings from -15 to +15
+    nT averages to zero while being the most geoeffective hour of the storm. So the archive
+    carries ``bz_nt_min`` and ``bz_nt_max`` beside the mean, and the peak speed beside the mean
+    speed. ``n`` is how many minutes went into the row, which is how a gap stays visible.
+    """
+    if not len(frame):
+        return pd.DataFrame(columns=list(HOURLY_COLUMNS))
+    f = frame.copy()
+    f["t"] = pd.to_datetime(f["t"], utc=True)
+    grouped = f.set_index("t").resample("1h")
+    out = grouped.mean(numeric_only=True)
+    out["n"] = grouped.size()
+    if "bz_nt" in f.columns:
+        out["bz_nt_min"] = grouped["bz_nt"].min()
+        out["bz_nt_max"] = grouped["bz_nt"].max()
+    if "speed_kms" in f.columns:
+        out["speed_kms_max"] = grouped["speed_kms"].max()
+    out = out[out["n"] > 0].reset_index()
+    out["t"] = out["t"].astype("datetime64[us, UTC]")
+    return out[[c for c in HOURLY_COLUMNS if c in out.columns]]
+
+
+def archive_path(out_dir: Path = config.WEATHER_DIR) -> Path:
+    return product_dir(out_dir) / SOLAR_WIND_ARCHIVE
+
+
+def load_solar_wind_archive(out_dir: Path = config.WEATHER_DIR) -> pd.DataFrame:
+    """The rolled hourly series, or an empty frame if nothing has been rolled yet."""
+    path = archive_path(out_dir)
+    if not path.exists():
+        return pd.DataFrame(columns=list(HOURLY_COLUMNS))
+    return pd.read_parquet(path)
+
+
+def roll_solar_wind(
+    *, out_dir: Path = config.WEATHER_DIR, now: datetime | None = None, keep_days: int | None = None
+) -> dict[str, Any]:
+    """Keep the minute cadence for a week and roll everything older into the hourly archive.
+
+    The feed serves the last seven days at one minute and every fetch repeats the whole week,
+    so the store grows by a megabyte a fetch for data it already holds. A version issued more
+    than ``keep_days`` ago contains nothing newer than that, so it can be summarised to hourly
+    means and dropped: the most recent version still carries every minute of the last week.
+
+    This is the one place in the store where raw data is deleted rather than kept. It is the
+    right trade for an observation stream used as replay context -- the hourly series keeps the
+    shape of a storm, including its southward field extremes -- and it is deliberately not
+    applied to the forecast products, whose whole point is that a stored run can be rescored
+    against the forecast it actually used.
+    """
+    now = now or datetime.now(UTC)
+    keep_days = config.SOLAR_WIND_MINUTE_DAYS if keep_days is None else keep_days
+    cutoff = now - timedelta(days=keep_days)
+    rolled: list[dict[str, Any]] = []
+    frames: list[pd.DataFrame] = []
+    for path in list_versions("solar-wind", out_dir):
+        meta = read_meta(path)
+        issued = meta.get("issued_at")
+        if not issued or datetime.fromisoformat(issued) > cutoff:
+            continue
+        try:
+            frames.append(hourly_means(parse_solar_wind(path.read_text(encoding="utf-8"))))
+        except (json.JSONDecodeError, ValueError, KeyError) as exc:
+            log.warning("Cannot roll %s (%s); leaving it alone", path.name, exc)
+            continue
+        rolled.append({"file": path.name, "issued_at": issued, "bytes": path.stat().st_size})
+        path.unlink()
+        sidecar = Path(str(path) + ".meta.json")
+        if sidecar.exists():
+            sidecar.unlink()
+    if not frames:
+        return {"n_rolled": 0, "archive_rows": len(load_solar_wind_archive(out_dir))}
+
+    combined = pd.concat([load_solar_wind_archive(out_dir), *frames], ignore_index=True)
+    # Two versions overlap by up to a week, so the same hour arrives more than once. The row
+    # built from more minutes is the better summary of that hour, so it wins.
+    combined = combined.sort_values(["t", "n"]).drop_duplicates("t", keep="last").sort_values("t")
+    path = archive_path(out_dir)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    combined.reset_index(drop=True).to_parquet(path, index=False)
+    meta_path = Path(str(path) + ".meta.json")
+    previous = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+    history = [*previous.get("rolled", []), *rolled]
+    meta_path.write_text(
+        json.dumps(
+            {
+                "product": "solar-wind-hourly",
+                "note": "Hourly means of the minute-cadence feed, with the Bz and speed extremes. The "
+                "minute files listed here were summarised into this archive and deleted.",
+                "keep_days": keep_days,
+                "rows": int(len(combined)),
+                "range": [str(combined["t"].min()), str(combined["t"].max())],
+                "rolled": history,
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
+    summary = {
+        "n_rolled": len(rolled),
+        "kilobytes_freed": round(sum(r["bytes"] for r in rolled) / 1024.0, 1),
+        "archive_rows": int(len(combined)),
+        "archive_range": [str(combined["t"].min()), str(combined["t"].max())],
+    }
+    log.info("Rolled the solar wind: %s", summary)
+    return summary
+
+
 def store_status(out_dir: Path = config.WEATHER_DIR) -> dict[str, Any]:
     """What the SWPC store holds, per product, for the log and the report."""
     out: dict[str, Any] = {}
@@ -388,6 +529,14 @@ def store_status(out_dir: Path = config.WEATHER_DIR) -> dict[str, Any]:
             "last_issued": max(issued) if issued else None,
             "issued_from": sorted({str(m.get("issued_from")) for m in metas}),
             "kilobytes": round(sum(v.stat().st_size for v in versions) / 1024.0, 1),
+        }
+    archive = archive_path(out_dir)
+    if archive.exists():
+        rolled = load_solar_wind_archive(out_dir)
+        out["solar-wind-hourly"] = {
+            "n_rows": int(len(rolled)),
+            "range": [str(rolled["t"].min()), str(rolled["t"].max())] if len(rolled) else None,
+            "kilobytes": round(archive.stat().st_size / 1024.0, 1),
         }
     return out
 
