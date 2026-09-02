@@ -18,11 +18,15 @@ SKIP_MESSAGE = (
 )
 
 
-def synthetic_frame(sigma_m: float = 100.0, hbr_m: float = 10.0) -> pd.DataFrame:
+def synthetic_frame(sigma_m: float = 100.0, hbr_m: float | np.ndarray = 10.0) -> pd.DataFrame:
     """Rows in the challenge's column layout whose ``risk`` is the exact two-dimensional probability.
 
     Both covariances are isotropic and uncorrelated, so the chaser's frame rotation
     drops out and the combined covariance is ``2 sigma^2`` times the identity.
+
+    ``hbr_m`` may be one radius per row, in which case the ``*_span`` columns are set to
+    match it: the dataset's convention is that the combined radius is half of each span
+    added, so a span of ``R`` on both objects gives a combined radius of ``R``.
     """
     rng = np.random.default_rng(7)
     n = 12
@@ -55,6 +59,9 @@ def synthetic_frame(sigma_m: float = 100.0, hbr_m: float = 10.0) -> pd.DataFrame
         df[f"{prefix}_ct_r"] = 0.0
         df[f"{prefix}_cn_r"] = 0.0
         df[f"{prefix}_cn_t"] = 0.0
+        df[f"{prefix}_span"] = hbr_m
+        # A radar cross-section that is deliberately not the size: a quarter of the disc area.
+        df[f"{prefix}_rcs_estimate"] = np.pi * (np.asarray(hbr_m, dtype=float) / 4.0) ** 2
     return df
 
 
@@ -70,13 +77,64 @@ def test_reconstruction_is_exact_on_designed_rows_and_fits_the_radius():
     assert wrong.loc[5.0, "median_abs_residual"] == pytest.approx(np.log10(4.0), abs=0.01)  # Pc scales with R^2
     assert wrong.loc[20.0, "within_factor_two"] == 0.0
     text = kelvins.to_markdown(fit, kelvins.config.KELVINS_DIR / "synthetic.csv")
-    assert "Best hard-body radius: **10.0 m**" in text and "| Risk bin |" in text
+    assert "Best single hard-body radius: **10.0 m**" in text and "| Risk bin |" in text
 
     # A floored row is left out of the tail; a chaser correlation term is applied without error.
     floored = pd.concat([df, df.iloc[:1].assign(risk=kelvins.RISK_FLOOR)], ignore_index=True)
     assert kelvins.fit_hbr(floored, radii_m=np.array([10.0])).n_tail == len(df)
     correlated = df.assign(c_ct_r=0.3, c_cn_t=-0.2)
     assert np.isfinite(kelvins.reproduce(correlated, 10.0)).all()
+
+
+def test_a_per_object_radius_is_recovered_from_the_span_columns():
+    """When the truth uses a different radius per row, the span columns recover it and one radius cannot."""
+    radii = np.linspace(2.0, 30.0, 12)
+    df = synthetic_frame(hbr_m=radii)
+    np.testing.assert_allclose(kelvins.combined_radius_m(df, "span"), radii)
+
+    rep = kelvins.reproduce_tail(df, source="span", tail_risk=-30.0 + 1e-9)
+    assert rep is not None and rep.n == len(df) and rep.label == "span"
+    assert abs(rep.report["overall"]["median"]) < 1e-4
+    assert rep.report["overall"]["within_factor_two"] == 1.0
+
+    # Each object's radar cross-section here is a disc of a quarter the radius, so the two
+    # equivalent radii add to half the truth and the proxy needs a multiplier of two.
+    rcs = kelvins.test_size_proxy(df, "rcs", scales=np.arange(0.5, 8.01, 0.5))
+    assert rcs is not None and rcs["best_scale"] == pytest.approx(2.0)
+    span = kelvins.test_size_proxy(df, "span")
+    assert span is not None and span["best_scale"] == pytest.approx(1.0)
+    # A single radius cannot fit twelve different ones; the per-object radius must beat it.
+    assert span["median_abs_residual"] < span["constant_median_abs_residual"]
+
+    text = kelvins.to_markdown(
+        kelvins.fit_hbr(df, tail_risk=-30.0 + 1e-9),
+        kelvins.config.KELVINS_DIR / "s.csv",
+        primary=rep,
+        proxies=[span, rcs],
+        plot_path="s.svg",
+    )
+    assert "The hard-body radius ESA used" in text and "(t_span + c_span) / 2" in text
+    assert "![Residual against ESA's risk](s.svg)" in text
+
+    # Missing columns are a fallback, not an error.
+    assert kelvins.reproduce_tail(df.drop(columns=["t_span", "c_span"]), source="span") is None
+    assert kelvins.test_size_proxy(df.drop(columns=["c_rcs_estimate"]), "rcs") is None
+    assert kelvins.test_size_proxy(df.assign(t_rcs_estimate=np.nan, c_rcs_estimate=np.nan), "rcs") is None
+    with pytest.raises(ValueError, match="unknown size proxy"):
+        kelvins.combined_radius_m(df, "mass")
+
+
+def test_the_residual_plot_is_valid_svg_with_both_medians():
+    import xml.etree.ElementTree as ET
+
+    rng = np.random.default_rng(3)
+    risk = rng.uniform(-6.0, 0.0, 4000)
+    svg = kelvins.residual_plot_svg(risk, rng.normal(0.0, 0.2, 4000), compare=(risk, rng.normal(0.5, 0.3, 4000)))
+    root = ET.fromstring(svg)
+    tags = [e.tag.split("}")[-1] for e in root]
+    assert tags.count("polyline") == 4  # median and two percentiles, plus the comparison median
+    assert tags.count("rect") > 50  # the density map
+    assert kelvins.residual_plot_svg(risk[:5], np.zeros(5)).count("<polyline") == 0  # too few rows to bin
 
 
 def test_max_risk_comparison_reads_the_scaling_convention():
@@ -104,19 +162,31 @@ def test_find_dataset_returns_none_without_the_download(tmp_path):
 
 @pytest.mark.skipif(kelvins.find_dataset() is None, reason=SKIP_MESSAGE)
 def test_kelvins_risk_column_is_reproduced_within_a_factor_of_two_across_the_tail():
-    """The target is agreement within a factor of two across the high-risk tail, with the hard-body radius
-    fitted. The tail's median residual meets it; the spread of individual rows does not, because ESA used a
-    radius per object and the data give only the target's radar cross-section (see docs/screening.md). The
-    residual distribution is printed whatever the outcome; nothing here is tuned to make it pass."""
+    """The target was agreement within a factor of two across the high-risk tail with the radius fitted.
+    With the per-object span the reconstruction is far better than that; with a single fitted radius it is
+    the median that meets the target and not the spread. Both are checked, the second because it is what a
+    catalogue without a size column gets. Nothing here is tuned to make it pass."""
     path = kelvins.find_dataset()
     assert path is not None
     df = kelvins.load_kelvins(path)
     fit = kelvins.fit_hbr(df)
-    print(kelvins.to_markdown(fit, path, kelvins.compare_max_risk(df, fit.hbr_m, limit=400)))
+    primary = kelvins.reproduce_tail(df, source="span")
+    print(kelvins.to_markdown(fit, path, kelvins.compare_max_risk(df, fit.hbr_m, limit=400), primary=primary))
+
+    # The per-object span: ESA's own convention, so the agreement is close to exact.
+    assert primary is not None
+    tight = primary.report["tight_tail"]
+    assert abs(tight["median"]) <= 0.01, tight  # within a couple of percent in the probability
+    assert tight["within_factor_two"] >= 0.85, tight
+    # Where it disagrees it reads the encounter as safer, which is the direction to keep an eye on.
+    assert tight["p05"] < -0.1 and tight["p95"] < 0.3, tight
+
+    # One fitted radius, the fallback.
     overall = fit.report["overall"]
     assert 1.0 <= fit.hbr_m <= 30.0, fit.hbr_m
     assert abs(overall["median"]) <= np.log10(2.0), overall
     assert overall["within_factor_ten"] >= 0.7, overall
+    assert overall["within_factor_two"] < primary.report["overall"]["within_factor_two"]
     # The bins an operator acts on are reproduced at least as well as the tail as a whole.
     operational = fit.report["by_risk_bin"]["[-4, -3)"]
     assert abs(operational["median"]) <= np.log10(2.0), operational

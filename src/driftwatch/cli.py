@@ -225,6 +225,63 @@ def cmd_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_supplemental(args: argparse.Namespace) -> int:
+    """Keep the supplemental store: fetch a version, thin the old ones, and refit the covariance across it.
+
+    This is what the scheduled task runs (see ``.github/workflows/supplemental.yml`` and
+    ``scripts/register-supplemental-task.ps1``). The supplemental covariance can only stop
+    being an extrapolation once the store holds versions days apart, and CelesTrak keeps
+    one version and overwrites it, so the versions have to be collected as they appear.
+    """
+    now = datetime.now(UTC)
+    names = [n.strip() for n in (args.files or ",".join(config.SUPPLEMENTAL_FILES)).split(",") if n.strip()]
+    for name in names:
+        if not args.no_fetch:
+            try:
+                res = supplemental_mod.fetch_supplemental(name, now=now, offline=args.offline)
+            except (httpx.HTTPError, celestrak.CelesTrakError, FileNotFoundError) as exc:
+                log.error("Cannot fetch supplemental %s: %s", name, exc)
+                return 2
+            log.info(
+                "%-22s %6d records  %s",
+                f"supplemental {name}",
+                res.n_objects,
+                "cache" if res.from_cache else "downloaded",
+            )
+            records = supplemental_mod.load_supplemental_records(name, config.CACHE_DIR)
+            path, written = supplemental_mod.store_supplemental(records, name=name, fetched_at=res.fetched_at)
+            log.info(
+                "Supplemental %s version %s: %s (%d records)",
+                name,
+                supplemental_mod.version_of(path),
+                "stored" if written else "already stored",
+                len(records),
+            )
+        if not args.no_prune:
+            supplemental_mod.prune_supplemental(name, now=now, dry_run=args.dry_run)
+        status = supplemental_mod.store_status(name)
+        log.info("Supplemental store: %s", status)
+        print(
+            f"{name}: {status['n_versions']} versions, {status['first']} to {status['last']} "
+            f"({status['span_days']} days, {status['megabytes']} MB)"
+        )
+        if args.fit:
+            history_df = supplemental_mod.load_supplemental_history(name)
+            ids = sorted({int(i) for i in history_df["norad_id"].unique()}) if len(history_df) else []
+            fit = fit_supplemental_covariance(EmpiricalCovariance(), history_df, ids)
+            if fit.bins is not None and len(fit.bins):
+                print(fit.bins.to_string(index=False, float_format=lambda x: f"{x:.4g}"))
+            print(f"growth: {fit.summary.get('growth')}")
+            horizon = fit.summary.get("horizon_days")
+            print(
+                f"exponent fitted: {fit.summary.get('exponent_fitted')} "
+                f"(amplitude from the {fit.summary.get('amplitude_from')}); "
+                f"valid to {horizon if horizon is not None else 'the whole window'}"
+                f"{' days' if horizon is not None else ''}, beyond that the base model serves"
+            )
+    return 0
+
+
 def cmd_fleet(args: argparse.Namespace) -> int:
     """Validate a fleet file and show each member as the latest (or given) snapshot knows it."""
     try:
@@ -772,11 +829,34 @@ def cmd_kelvins(args: argparse.Namespace) -> int:
     log.info("Loaded %d rows from %s", len(df), data)
     fit = kelvins_mod.fit_hbr(df)
     extra = kelvins_mod.compare_max_risk(df, fit.hbr_m)
-    text = kelvins_mod.to_markdown(fit, data, extra)
-    print(text)
-    if args.out:
-        out = Path(args.out)
+    tail = df[(df["risk"] >= kelvins_mod.TAIL_RISK) & (df["risk"] > kelvins_mod.RISK_FLOOR)].reset_index(drop=True)
+    primary = kelvins_mod.reproduce_tail(df, source="span")
+    if primary is not None:
+        log.info(
+            "Kelvins with the span radius: %d rows, %s",
+            primary.n,
+            {k: round(v, 4) for k, v in primary.report["tight_tail"].items() if isinstance(v, float)},
+        )
+    proxies = [p for p in (kelvins_mod.test_size_proxy(tail, s) for s in ("span", "rcs")) if p is not None]
+    for proxy in proxies:
+        log.info("Kelvins size proxy: %s", proxy)
+
+    out = Path(args.out) if args.out else None
+    plot_name = None
+    if out is not None:
+        plot_name = out.with_suffix(".svg").name
+        risk = tail["risk"].to_numpy(dtype=float)
+        svg = kelvins_mod.residual_plot_svg(
+            primary.risk if primary is not None else risk,
+            primary.residuals if primary is not None else fit.residuals,
+            compare=(risk, fit.residuals) if primary is not None else None,
+        )
         out.parent.mkdir(parents=True, exist_ok=True)
+        (out.parent / plot_name).write_text(svg, encoding="utf-8")
+        log.info("Wrote %s", out.parent / plot_name)
+    text = kelvins_mod.to_markdown(fit, data, extra, primary=primary, proxies=proxies, plot_path=plot_name)
+    print(text)
+    if out is not None:
         out.write_text(text + "\n", encoding="utf-8")
         log.info("Wrote %s", out)
     return 0
@@ -897,6 +977,18 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--scenario", help="scenario to report (default: the first stored)")
     report.add_argument("--no-viewer", action="store_true", help="write the report only")
     report.set_defaults(func=cmd_report)
+
+    sup = sub.add_parser(
+        "supplemental",
+        help="fetch and store a supplemental version, thin the old ones, and optionally refit across the store",
+    )
+    sup.add_argument("--files", help=f"comma-separated file names (default: {','.join(config.SUPPLEMENTAL_FILES)})")
+    sup.add_argument("--no-fetch", action="store_true", help="do not fetch; report (and prune) the store as it is")
+    sup.add_argument("--no-prune", action="store_true", help="keep every stored version, however old")
+    sup.add_argument("--dry-run", action="store_true", help="report what pruning would remove without removing it")
+    sup.add_argument("--fit", action="store_true", help="refit the supplemental covariance over the whole store")
+    sup.add_argument("--offline", action="store_true", help="use only the cached supplemental response")
+    sup.set_defaults(func=cmd_supplemental)
 
     kelvins = sub.add_parser("kelvins", help="reproduce ESA's Kelvins risk column and report the fitted radius")
     kelvins.add_argument("--data", help=f"the challenge CSV (default: the first CSV under {config.KELVINS_DIR})")

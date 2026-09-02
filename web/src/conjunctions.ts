@@ -276,8 +276,11 @@ export function buildConjunctionPanel(
         `<button class="cj-head" aria-expanded="${expanded === index}">` +
         `<span class="cj-names">${escapeHtml(pair.primary_name)} <span class="muted">vs</span> ` +
         `${escapeHtml(pair.secondary_name)}</span>` +
-        `<span class="cj-nums">${fmtKm(pair.closest_km)} km · ${fmtPc(pair.max_pc)} ${flagChip(pair.flag, pair.confidence, pair.region)}</span>` +
+        // The miss quoted beside the probability is the miss of the event that produced it, which
+        // for a pair seen many times is often not the closest pass. The closest is in the subtitle.
+        `<span class="cj-nums">${fmtKm(pair.miss_at_max_pc_km ?? pair.closest_km)} km · ${fmtPc(pair.max_pc)} ${flagChip(pair.flag, pair.confidence, pair.region)}</span>` +
         `<span class="muted cj-sub">${pair.n_events} event${pair.n_events === 1 ? "" : "s"} · ` +
+        `closest ${fmtKm(pair.closest_km)} km · ` +
         `first ${escapeHtml(pair.first_tca.slice(5, 16).replace("T", " "))} · ${escapeHtml(pair.secondary_category)}` +
         `${pair.n_in_box > 0 ? ` · ${pair.n_in_box} in box` : ""}</span>` +
         `</button>`;
@@ -348,8 +351,10 @@ function eventDetailHtml(pair: ConjunctionPair, event: ConjunctionEvent, modelVe
   const note =
     event.region === "dilution"
       ? `<p class="caveat">The maximum probability lies below the covariance used, so shrinking the uncertainty
-         would raise it. The number is held up by the size of the covariance rather than by the geometry: it says
-         the trajectories are uncertain, not that a collision is likely.</p>`
+         at the same miss would raise it. The number is held up by the size of the covariance rather than by the
+         geometry: it says the trajectories are uncertain, not that a collision is likely &mdash; and equally not
+         that one is unlikely. The data cannot support a judgement either way. Better tracking would shrink the
+         covariance and move the nominal miss together, so nothing here predicts which way this would go.</p>`
       : `<p class="caveat">The probability is limited by the geometry rather than by the uncertainty. It still
          rests on a covariance estimated from how much each object's own element sets disagree, which is a floor
          on the error and not a measurement of it.</p>`;

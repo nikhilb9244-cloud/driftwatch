@@ -88,6 +88,8 @@ export interface ConjunctionPair {
   first_tca: string;
   closest_km: number;
   max_pc: number | null;
+  // The miss of the event that produced max_pc, which is not always the closest pass.
+  miss_at_max_pc_km?: number | null;
   pc_cumulative: number | null;
   max_pc_max: number | null;
   region: string;

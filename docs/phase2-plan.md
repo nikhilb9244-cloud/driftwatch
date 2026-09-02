@@ -663,7 +663,15 @@ The ISS red at 11.5 km is worked through in `docs/screening.md` and summarised i
 `docs/methods.md`: seven days out the encounter-plane uncertainty is 13.9 by 0.50 km
 against an 11.5 km miss and a 73 m disc, `pc_max_scale` is 0.88, and shrinking the
 covariance tenfold drops the probability from 1.6e-4 to 7.1e-7 while a hundredfold
-extinguishes it. Better data clears that flag rather than confirming it.
+extinguishes it.
+
+> Corrected at the Phase 3 Step 0 review (2026-09-02). This section originally ended
+> "Better data clears that flag rather than confirming it", which the tool must not
+> claim. The sweep holds the miss fixed while it scales the covariance; a better orbit
+> shrinks the covariance *and* moves the nominal miss, by a distance of the order of the
+> in-track uncertainty being removed and in a direction nothing here can predict. The
+> dilution region means the data cannot support a judgement either way. See
+> `docs/phase3-plan.md`.
 
 ### 2. Supplemental covariance
 

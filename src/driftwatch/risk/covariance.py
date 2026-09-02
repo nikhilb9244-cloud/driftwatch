@@ -33,7 +33,11 @@ how much the satellite manoeuvred between fits, not how well it is tracked, so i
 nothing about the set actually used. :func:`fit_supplemental_covariance` fits those
 objects from the consistency of successive stored supplemental versions instead, with
 CelesTrak's published fit residual as a floor, and :class:`SupplementalCovariance`
-wraps a base model to serve them.
+wraps a base model to serve them. That fit differs from the GP one in two ways, both
+taken at the Phase 3 Step 0 review: its pairs are binned by lead time so that the
+thousands of pairs a few hours apart do not outweigh the few days apart, and its
+exponents are a physically bounded prior rather than a free fit, because a power law
+fitted over hours cannot be extrapolated to a seven-day screening window.
 
 The covariance is diagonal in the object's own RIC frame in Phase 2. Phase 3 will wrap
 this model and add a storm term to the in-track variance, which is why the interface
@@ -76,11 +80,43 @@ MIN_PAIRS_POOLED = 30
 # hours apart rather than days; the fit window and the floor move down to match.
 SUPPLEMENTAL_DT_MIN_DAYS = 0.02
 SUPPLEMENTAL_DT_FLOOR_DAYS = 0.05
-# A power law fitted over a narrow range of propagation times cannot determine its own
-# exponent; below this span ratio the exponent is fixed at :data:`SUPPLEMENTAL_DEFAULT_P`
-# and only the scale is fitted. One is the shape of a plan revised at a steady rate.
+# The supplemental growth exponents are priors, not measurements (Phase 3 Step 0). A power
+# law fitted to pairs hours apart and evaluated at seven days is an extrapolation of forty
+# times, and the free fit on the first two stored versions returned an in-track exponent of
+# 0.55, below anything the physics allows. What the physics allows: an unmodelled along-track
+# acceleration (a drag error, or a revised burn plan) changes the semi-major axis linearly in
+# time, which moves the object radially as t and, through the mean motion, in-track as t^2;
+# an along-track velocity or epoch error moves it in-track as t. So the in-track exponent is
+# constrained to [1, 2] with the prior in the middle, and the radial and cross-track
+# exponents are held at one, the growth of a semi-major-axis or node error. Only the
+# amplitudes are fitted. The in-track exponent is fitted (and clipped into the range) only
+# once the store gives pairs over several lead-time bins reaching at least a day apart.
+SUPPLEMENTAL_P_MIN = 1.0
+SUPPLEMENTAL_P_MAX = 2.0
+SUPPLEMENTAL_PRIOR_P: tuple[float, float, float] = (1.0, 1.5, 1.0)
+# Only the in-track exponent is ever fitted; R and C stay linear (see above).
+SUPPLEMENTAL_FIT_P_COMPONENT = 1
 SUPPLEMENTAL_MIN_SPAN_RATIO = 3.0
-SUPPLEMENTAL_DEFAULT_P = 1.0
+# Pairs are binned by lead time before fitting, so that the thousands of pairs a few hours
+# apart do not outweigh the few that are days apart: each occupied bin contributes equally.
+SUPPLEMENTAL_LEAD_BIN_EDGES_DAYS: tuple[float, ...] = (0.02, 0.05, 0.1, 0.25, 0.5, 1.0, 2.0, 4.0, 7.0)
+# What it takes to fit the exponent rather than take the prior: this many occupied bins,
+# reaching at least this far, over at least :data:`SUPPLEMENTAL_MIN_SPAN_RATIO` in lead time.
+SUPPLEMENTAL_MIN_BINS_FOR_P = 4
+SUPPLEMENTAL_MIN_LEAD_FOR_P_DAYS = 1.0
+# How far past its longest observed pair the supplemental fit may be used: not at all.
+# A prior exponent anchored on pairs hours apart cannot be run out to a seven-day screening
+# window. Measured on the first two stored versions (leads of 0.02 to 0.24 days), the
+# constrained law gives an in-track sigma at seven days of 42 km at p = 1, 321 km at
+# p = 1.5 and 2,500 km at p = 2, against about 18 km measured directly from the same
+# objects' GP element sets seven days apart. There is no exponent in the physical range
+# that makes that extrapolation safe, and picking the one that happens to land near the GP
+# number would be fitting the answer. So the fit serves only the lead times the store
+# actually measures, the base model serves the rest, and every covariance says which it
+# got. The horizon moves out on its own as the scheduled fetch accumulates versions: a
+# store spanning seven days covers the whole screening window and the fallback disappears.
+# Raise this only with a reason, and record it: every step above one is unmeasured growth.
+SUPPLEMENTAL_EXTRAPOLATION_FACTOR = 1.0
 # Pairs per object are capped (random subsample) so that objects with several element sets
 # a day do not dominate the pooled fit and the residual arrays stay small.
 MAX_PAIRS_PER_OBJECT = 600
@@ -263,6 +299,11 @@ class ObjectHistoryFit:
     stats: SufficientStats
     jumps: JumpDetection
     growth: PowerLawGrowth | None  # the object's own fit, or None when the history is too thin
+    # The raw consistency pairs, kept only when ``collect_pairs`` was asked for: the
+    # supplemental fit bins them by lead time, which the sufficient statistics cannot do
+    # once they have been summed. The GP fit never asks, so nothing grows by keeping them.
+    dt_days: np.ndarray | None = None  # (n_pairs,)
+    ric_km: np.ndarray | None = None  # (n_pairs, 3)
 
     @property
     def enough_history(self) -> bool:
@@ -280,6 +321,7 @@ def analyse_object(
     min_pairs: int = MIN_PAIRS_EMPIRICAL,
     min_span_ratio: float = MIN_DT_SPAN_RATIO,
     exclude_jumps: bool = True,
+    collect_pairs: bool = False,
 ) -> ObjectHistoryFit:
     """Detect manoeuvres and measure consistency residuals for one object's element sets.
 
@@ -294,6 +336,9 @@ def analyse_object(
     are fitted to an ephemeris that already contains the planned manoeuvres, so a jump
     between two of them is a revision of the plan, which is the error being measured
     rather than something to drop.
+
+    ``collect_pairs=True`` also returns the pairs themselves, which the supplemental fit
+    needs so it can bin them by lead time.
     """
     rng = rng or np.random.default_rng(0)
     sets = sets.sort_values("epoch").drop_duplicates("epoch", keep="last").reset_index(drop=True)
@@ -344,7 +389,18 @@ def analyse_object(
     stats = sufficient_stats(dt, ric)
     enough = n >= min_sets and len(i) >= min_pairs and dt.max() >= min_span_ratio * dt.min()
     growth = stats.fit() if enough else None
-    return ObjectHistoryFit(norad_id, n, int(len(i)), float(dt.min()), float(dt.max()), stats, jumps, growth)
+    return ObjectHistoryFit(
+        norad_id,
+        n,
+        int(len(i)),
+        float(dt.min()),
+        float(dt.max()),
+        stats,
+        jumps,
+        growth,
+        dt_days=dt if collect_pairs else None,
+        ric_km=ric if collect_pairs else None,
+    )
 
 
 # --------------------------------------------------------------------------------------
@@ -467,12 +523,20 @@ class FlooredGrowth:
 
 
 class SupplementalCovariance:
-    """A base model with the supplemental-set objects served from their own fit.
+    """A base model with the supplemental-set objects served from their own fit, inside its horizon.
 
     An object screened on a supplemental set is propagated from a fit to the operator's
     published ephemeris, so its uncertainty is the uncertainty of that ephemeris, not of
     the GP element sets the catalogue holds for it. Only the objects in ``models`` are
     treated this way; everything else falls through to ``base``.
+
+    So does anything past ``horizon_days``. The supplemental fit is a power law with a
+    prior exponent anchored on however much lead time the store of versions covers, and
+    running it out to a seven-day screening window from a store covering hours gives an
+    in-track sigma of hundreds of kilometres, which the objects' own GP element sets
+    contradict directly. Past the horizon the base model serves, and the source label says
+    so. The horizon moves out on its own as the scheduled fetch accumulates versions; it is
+    ``None`` when the fit covers the whole window.
     """
 
     def __init__(
@@ -482,14 +546,16 @@ class SupplementalCovariance:
         sources: Mapping[int, str] | None = None,
         *,
         dt_floor_days: float = SUPPLEMENTAL_DT_FLOOR_DAYS,
+        horizon_days: float | None = None,
         table: pd.DataFrame | None = None,
     ) -> None:
         self.base = base
         self.models = dict(models or {})
         self.sources = dict(sources or {})
         self.supplemental_dt_floor_days = float(dt_floor_days)
+        self.horizon_days = float(horizon_days) if horizon_days is not None else None
         self.table = table
-        self.version = f"{base.version}+supplemental/1"
+        self.version = f"{base.version}+supplemental/2"
 
     @property
     def dt_floor_days(self) -> float:
@@ -511,7 +577,14 @@ class SupplementalCovariance:
         epoch_ts = epoch_ts.tz_convert(None) if epoch_ts.tzinfo else epoch_ts
         dt_days = (at64 - np.datetime64(epoch_ts.to_datetime64(), "us")) / np.timedelta64(86_400_000_000, "us")
         cov = model.covariance_km2(dt_days, dt_floor_days=self.supplemental_dt_floor_days)
-        return RicCovariance(cov, self.sources.get(int(obj.norad_id), "supplemental"))
+        source = self.sources.get(int(obj.norad_id), "supplemental")
+        if self.horizon_days is not None:
+            beyond = np.abs(dt_days) > self.horizon_days
+            if beyond.any():
+                cov = cov.copy()
+                cov[beyond] = self.base.covariance_ric(obj, epoch, at64[beyond]).cov_km2
+                source = "supplemental:beyond-horizon" if beyond.all() else f"{source}+beyond-horizon"
+        return RicCovariance(cov, source)
 
     def to_frame(self) -> pd.DataFrame:
         """The base model's table with the supplemental rows appended."""
@@ -522,7 +595,11 @@ class SupplementalCovariance:
 
     @classmethod
     def from_frame(cls, base: CovarianceModel, df: pd.DataFrame, **kwargs: Any) -> SupplementalCovariance:
-        """Rebuild the supplemental layer from the rows of :meth:`to_frame` with ``kind == 'supplemental'``."""
+        """Rebuild the supplemental layer from the rows of :meth:`to_frame` with ``kind == 'supplemental'``.
+
+        ``dt_max_days`` on those rows carries the validity horizon, so a stored run rescores
+        with the same fallback the fit was written with.
+        """
         rows = df[(df["kind"] == "supplemental") & df["sigma_i_1d_km"].notna()]
         models: dict[int, FlooredGrowth] = {}
         sources: dict[int, str] = {}
@@ -531,6 +608,9 @@ class SupplementalCovariance:
             share = _share_from(PowerLawGrowth.from_row(row))
             models[norad_id] = FlooredGrowth(PowerLawGrowth.from_row(row), float(row.get("rms_km") or 0.0), share)
             sources[norad_id] = str(row["source"])
+        if "horizon_days" not in kwargs and len(rows) and "dt_max_days" in rows.columns:
+            horizon = pd.to_numeric(rows["dt_max_days"], errors="coerce").dropna()
+            kwargs["horizon_days"] = float(horizon.iloc[0]) if len(horizon) else None
         return cls(base, models, sources, table=rows.reset_index(drop=True), **kwargs)
 
 
@@ -715,11 +795,116 @@ def fit_covariance(
 
 @dataclass
 class SupplementalFit:
-    """A fitted supplemental layer, its table and a summary for the log."""
+    """A fitted supplemental layer, its table, its lead-time bins and a summary for the log."""
 
     model: SupplementalCovariance
     table: pd.DataFrame
     summary: dict[str, Any]
+    bins: pd.DataFrame | None = None
+
+
+LEAD_BIN_COLUMNS: tuple[str, ...] = (
+    "lead_lo_days",
+    "lead_hi_days",
+    "lead_days",
+    "n_pairs",
+    "rms_r_km",
+    "rms_i_km",
+    "rms_c_km",
+)
+
+
+def bin_pairs_by_lead(
+    dt_days: np.ndarray,
+    ric_km: np.ndarray,
+    edges: Iterable[float] = SUPPLEMENTAL_LEAD_BIN_EDGES_DAYS,
+) -> pd.DataFrame:
+    """Root-mean-square consistency residual per RIC component in each lead-time bin.
+
+    Why bin at all. Supplemental versions are published every few hours, so the number of
+    pairs at a given lead time falls off sharply: a store covering a week holds tens of
+    thousands of pairs a few hours apart and a few hundred six days apart. Fitted over the
+    raw pairs, the growth law is set almost entirely by the short leads and then
+    extrapolated across the part of the range that actually matters for a seven-day
+    screening window. Binning by lead time and giving each occupied bin the same weight
+    puts the long leads on an equal footing with the short ones.
+
+    ``lead_days`` is the geometric mean of the pair lead times in the bin, which is the
+    right abscissa for a power law fitted in log space.
+    """
+    dt = np.asarray(dt_days, dtype=float)
+    ric = np.asarray(ric_km, dtype=float)
+    edges = np.asarray(list(edges), dtype=float)
+    rows: list[dict[str, Any]] = []
+    for lo, hi in zip(edges[:-1], edges[1:], strict=False):
+        sel = (dt >= lo) & (dt < hi)
+        n = int(sel.sum())
+        if n == 0:
+            continue
+        rows.append(
+            {
+                "lead_lo_days": float(lo),
+                "lead_hi_days": float(hi),
+                "lead_days": float(np.exp(np.mean(np.log(dt[sel])))),
+                "n_pairs": n,
+                "rms_r_km": float(np.sqrt(np.mean(ric[sel, 0] ** 2))),
+                "rms_i_km": float(np.sqrt(np.mean(ric[sel, 1] ** 2))),
+                "rms_c_km": float(np.sqrt(np.mean(ric[sel, 2] ** 2))),
+            }
+        )
+    return pd.DataFrame(rows, columns=list(LEAD_BIN_COLUMNS))
+
+
+def fit_binned_growth(
+    bins: pd.DataFrame,
+    *,
+    prior_p: tuple[float, float, float] = SUPPLEMENTAL_PRIOR_P,
+    fit_exponent: bool = False,
+    p_min: float = SUPPLEMENTAL_P_MIN,
+    p_max: float = SUPPLEMENTAL_P_MAX,
+    fit_component: int = SUPPLEMENTAL_FIT_P_COMPONENT,
+) -> tuple[PowerLawGrowth, dict[str, Any]] | tuple[None, dict[str, Any]]:
+    """Fit ``sigma_k(dt) = s1_k dt^p_k`` to binned residuals, each occupied bin weighted equally.
+
+    The exponents come from :data:`SUPPLEMENTAL_PRIOR_P` unless ``fit_exponent`` is set,
+    in which case the one component named by ``fit_component`` is fitted by least squares
+    in log space and clipped into ``[p_min, p_max]``.
+
+    The amplitude then depends on which of the two it was. With a fitted exponent the law
+    follows the bins, and the amplitude is the equal-weight least-squares intercept in log
+    space. With a prior exponent the law does *not* follow the bins — the residuals over a
+    few hours grow more slowly than any exponent the physics allows, so a law forced
+    through them at ``p >= 1`` is above the data everywhere except at one point, and where
+    that point sits decides the extrapolation. It is anchored at the longest occupied bin:
+    the bin nearest the lead times being extrapolated to, and the one where the growing
+    term is least swamped by the publication floor. Anchoring at the mean of the bins
+    instead would put the law a factor of two above its own longest bin.
+    """
+    if not len(bins):
+        return None, {"n_bins": 0}
+    dt = bins["lead_days"].to_numpy(dtype=float)
+    rms = bins[["rms_r_km", "rms_i_km", "rms_c_km"]].to_numpy(dtype=float)
+    p = list(prior_p)
+    diagnostics: dict[str, Any] = {"n_bins": int(len(bins)), "exponent_fitted": False}
+    if fit_exponent and len(bins) >= 2:
+        k = int(fit_component)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            x, y = np.log(dt), np.log(rms[:, k])
+        good = np.isfinite(x) & np.isfinite(y)
+        if good.sum() >= 2:
+            slope = float(np.polyfit(x[good], y[good], 1)[0])
+            diagnostics.update(exponent_fitted=True, exponent_raw=round(slope, 3))
+            p[k] = float(np.clip(slope, p_min, p_max))
+            diagnostics["exponent_clipped"] = not (p_min <= slope <= p_max)
+    p_arr = np.asarray(p, dtype=float)
+    per_bin = rms / dt[:, None] ** p_arr[None, :]  # the one-day amplitude each bin implies
+    if diagnostics["exponent_fitted"]:
+        s1 = np.exp(np.mean(np.log(np.maximum(per_bin, 1e-12)), axis=0))
+        diagnostics["amplitude_from"] = "log-mean of bins"
+    else:
+        s1 = per_bin[int(np.argmax(dt))]
+        diagnostics["amplitude_from"] = f"longest bin ({dt.max():.4g} d)"
+    return PowerLawGrowth(tuple(float(x) for x in s1), tuple(float(x) for x in p)), diagnostics
 
 
 def fit_supplemental_covariance(
@@ -730,19 +915,26 @@ def fit_supplemental_covariance(
     dt_min: float = SUPPLEMENTAL_DT_MIN_DAYS,
     dt_max: float = DT_MAX_DAYS,
     seed: int = 0,
-    default_p: float = SUPPLEMENTAL_DEFAULT_P,
+    prior_p: tuple[float, float, float] = SUPPLEMENTAL_PRIOR_P,
+    edges: Iterable[float] = SUPPLEMENTAL_LEAD_BIN_EDGES_DAYS,
+    extrapolation_factor: float = SUPPLEMENTAL_EXTRAPOLATION_FACTOR,
 ) -> SupplementalFit:
     """Fit the objects in ``norad_ids`` from the consistency of successive supplemental versions.
 
     ``history`` is the stored supplemental history (see
     :func:`driftwatch.screening.supplemental.load_supplemental_history`): the element
     columns of the snapshot plus the published ``rms_km``. Every object with two or more
-    stored sets contributes its residuals to one pool, since no object has enough
-    versions of its own yet; the pool's power law is fitted with a free exponent when the
-    propagation times span a factor of :data:`SUPPLEMENTAL_MIN_SPAN_RATIO`, and with the
-    exponent fixed at ``default_p`` when they do not. Every object then gets that growth
-    over its own published RMS as a floor. Objects with no stored history at all get the
-    floor alone, which is a lower bound and is labelled so.
+    stored sets contributes its residual pairs to one pool, since no object has enough
+    versions of its own yet. The pool's pairs are binned by lead time
+    (:func:`bin_pairs_by_lead`) and one power law is fitted across the bins with each
+    occupied bin weighted equally (:func:`fit_binned_growth`). The exponents are the prior
+    of :data:`SUPPLEMENTAL_PRIOR_P` until the store reaches
+    :data:`SUPPLEMENTAL_MIN_BINS_FOR_P` bins spanning at least
+    :data:`SUPPLEMENTAL_MIN_LEAD_FOR_P_DAYS` days and a factor of
+    :data:`SUPPLEMENTAL_MIN_SPAN_RATIO`, at which point the in-track exponent is fitted and
+    clipped into ``[SUPPLEMENTAL_P_MIN, SUPPLEMENTAL_P_MAX]``. Every object then gets that
+    growth over its own published RMS as a floor. Objects with no stored history at all get
+    the floor alone, which is a lower bound and is labelled so.
 
     Pairs that span a detected manoeuvre are kept here, unlike the GP fit: a supplemental
     set is fitted to an ephemeris that already contains the planned burns, so the
@@ -760,32 +952,59 @@ def fit_supplemental_covariance(
                 rms_by_id[int(norad_id)] = float(values.iloc[-1])
     median_rms = float(np.median(list(rms_by_id.values()))) if rms_by_id else 0.0
 
-    stats = SufficientStats()
+    dts: list[np.ndarray] = []
+    rics: list[np.ndarray] = []
     n_objects_with_pairs = 0
     by_object = {int(k): g for k, g in hist.groupby("norad_id", sort=False)} if len(hist) else {}
     for norad_id in ids:
         sets = by_object.get(norad_id)
         if sets is None or len(sets) < 2:
             continue
-        fit = analyse_object(sets, dt_min=dt_min, dt_max=dt_max, rng=rng, exclude_jumps=False)
-        if fit.n_pairs:
-            stats.add(fit.stats)
+        fit = analyse_object(sets, dt_min=dt_min, dt_max=dt_max, rng=rng, exclude_jumps=False, collect_pairs=True)
+        if fit.n_pairs and fit.dt_days is not None and fit.ric_km is not None:
+            dts.append(fit.dt_days)
+            rics.append(fit.ric_km)
             n_objects_with_pairs += 1
 
-    span = stats.span_ratio
-    fixed_p = None if span >= SUPPLEMENTAL_MIN_SPAN_RATIO else default_p
-    growth = stats.fit(fixed_p=fixed_p) if stats.n >= MIN_PAIRS_POOLED else None
+    dt_all = np.concatenate(dts) if dts else np.zeros(0)
+    ric_all = np.concatenate(rics) if rics else np.zeros((0, 3))
+    bins = bin_pairs_by_lead(dt_all, ric_all, edges)
+    span = float(dt_all.max() / dt_all.min()) if len(dt_all) and dt_all.min() > 0 else 1.0
+    fit_p = (
+        len(bins) >= SUPPLEMENTAL_MIN_BINS_FOR_P
+        and float(bins["lead_days"].max()) >= SUPPLEMENTAL_MIN_LEAD_FOR_P_DAYS
+        and span >= SUPPLEMENTAL_MIN_SPAN_RATIO
+    )
+    growth, diagnostics = fit_binned_growth(bins, prior_p=prior_p, fit_exponent=fit_p)
     share = _share_from(growth) if growth is not None else (1.0 / np.sqrt(3.0),) * 3
-    zero = PowerLawGrowth((0.0, 0.0, 0.0), (1.0, 1.0, 1.0))
+    zero = PowerLawGrowth((0.0, 0.0, 0.0), prior_p)
+    lead_max = float(dt_all.max()) if len(dt_all) else 0.0
+    horizon = round(lead_max * extrapolation_factor, 4) if lead_max else None
+    if horizon is not None and horizon >= dt_max:
+        horizon = None  # the store covers the whole screening window; nothing to fall back for
+    # A prior exponent anchored at the longest bin passes under the shorter ones: it is
+    # steeper than the residuals actually grow, so it matches at the anchor and falls below
+    # everywhere earlier. The covariance is meant to be a floor on the error, so the
+    # measured consistency at the shortest lead becomes part of the floor and no growth law
+    # is allowed to undercut it.
+    short_lead_km = (
+        float(np.linalg.norm(bins.iloc[0][["rms_r_km", "rms_i_km", "rms_c_km"]].to_numpy(dtype=float)))
+        if len(bins)
+        else 0.0
+    )
 
     models: dict[int, FlooredGrowth] = {}
     sources: dict[int, str] = {}
     rows: list[dict[str, Any]] = []
     for norad_id in ids:
-        floor = rms_by_id.get(norad_id, median_rms)
+        floor = max(rms_by_id.get(norad_id, median_rms), short_lead_km)
         if growth is not None:
             models[norad_id] = FlooredGrowth(growth, floor, share)  # type: ignore[arg-type]
-            label = "supplemental:consistency" if fixed_p is None else f"supplemental:consistency-p{default_p:g}"
+            label = (
+                "supplemental:consistency"
+                if diagnostics.get("exponent_fitted")
+                else f"supplemental:consistency-prior-p{growth.exponent[1]:g}"
+            )
         else:
             models[norad_id] = FlooredGrowth(zero, floor, share)  # type: ignore[arg-type]
             label = "supplemental:rms"
@@ -796,26 +1015,38 @@ def fit_supplemental_covariance(
                 "norad_id": norad_id,
                 "source": label,
                 "n_sets": len(by_object.get(norad_id, [])),
+                "n_pairs": int(len(dt_all)),
+                "dt_min_days": float(dt_all.min()) if len(dt_all) else np.nan,
+                # The validity horizon, not the longest pair: past it the base model serves.
+                "dt_max_days": horizon if horizon is not None else np.nan,
                 **models[norad_id].as_dict(),
             }
         )
 
     table = pd.DataFrame(rows, columns=COVARIANCE_TABLE_COLUMNS)
-    model = SupplementalCovariance(base, models, sources, table=table)
+    model = SupplementalCovariance(base, models, sources, horizon_days=horizon, table=table)
     summary = {
         "n_objects": len(ids),
         "n_versions": int(hist["fetched_at"].nunique()) if len(hist) else 0,
         "n_objects_with_pairs": n_objects_with_pairs,
-        "n_pairs": int(stats.n),
-        "dt_days": [round(float(stats.dt_min), 3), round(float(stats.dt_max), 3)] if stats.n else None,
-        "span_ratio": round(span, 2) if stats.n else None,
-        "exponent_fitted": fixed_p is None,
+        "n_pairs": int(len(dt_all)),
+        "dt_days": [round(float(dt_all.min()), 3), round(float(dt_all.max()), 3)] if len(dt_all) else None,
+        "span_ratio": round(span, 2) if len(dt_all) else None,
+        "horizon_days": horizon,
+        "lead_bins": bins.to_dict("records"),
         "growth": growth.as_dict() if growth is not None else None,
+        **diagnostics,
         "rms_km_median": round(median_rms, 4),
+        "short_lead_floor_km": round(short_lead_km, 4),
         "by_source": {k: sum(1 for v in sources.values() if v == k) for k in sorted(set(sources.values()))},
     }
-    log.info("Supplemental covariance: %s", summary)
-    return SupplementalFit(model, table, summary)
+    log.info("Supplemental covariance: %s", {k: v for k, v in summary.items() if k != "lead_bins"})
+    if len(bins):
+        log.info(
+            "Supplemental lead-time bins (each weighted equally in the fit):\n%s",
+            bins.to_string(index=False, float_format=lambda x: f"{x:.4g}"),
+        )
+    return SupplementalFit(model, table, summary, bins)
 
 
 def label_cov_sources(objects: pd.DataFrame, model: CovarianceModel) -> pd.DataFrame:

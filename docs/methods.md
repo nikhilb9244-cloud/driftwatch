@@ -154,15 +154,19 @@ they enter the chain; each states what is assumed, why, and what it costs.
   `pc_max`, can be applied to the same rows.
 - **A flag in the dilution region is not actionable.** When the maximum of the
   probability over covariance scale factors lies below the covariance used
-  (`pc_max_scale` under one), shrinking the uncertainty would raise the probability: the
-  number is held up by the size of the covariance rather than by the geometry. Those
-  events are labelled `region = dilution` and `confidence = low`, and the report and the
-  viewer present them as statements about the uncertainty rather than about the
-  encounter. The first live run's largest probability, the ISS against YAM-3 at 11.5 km
-  seven days out, is one of these: the encounter-plane uncertainty is 13.9 by 0.50 km
-  against an 11.5 km miss, and shrinking the covariance tenfold drops the probability
-  from 1.6e-4 to 7.1e-7. Better data would clear it rather than confirm it.
-  `docs/screening.md` works that example through.
+  (`pc_max_scale` under one), shrinking the uncertainty *with the miss held fixed* would
+  raise the probability: the number is held up by the size of the covariance rather than
+  by the geometry. Those events are labelled `region = dilution` and `confidence = low`,
+  and the report and the viewer present them as statements about the uncertainty rather
+  than about the encounter. The first live run's largest probability, the ISS against
+  YAM-3 at 11.5 km seven days out, is one of these: the encounter-plane uncertainty is
+  13.9 by 0.50 km against an 11.5 km miss, and shrinking the covariance tenfold at the
+  same miss drops the probability from 1.6e-4 to 7.1e-7. **That is not a prediction
+  about better data.** A better orbit shrinks the covariance and moves the nominal miss
+  at the same time, and the miss can move either way by a distance of the order of the
+  uncertainty being removed. The dilution region means the data in hand cannot support a
+  judgement either way, not that a judgement is coming. `docs/screening.md` works that
+  example through.
 - **A pair's cumulative probability is an upper bound.** One minus the product of the
   complements over the pair's events assumes the events are independent. They are
   repeated passes of the same two objects propagated from the same two element sets, so
@@ -170,15 +174,30 @@ they enter the chain; each states what is assumed, why, and what it costs.
   combined probability is lower. It is labelled as such everywhere it appears.
 - **The Kelvins reconstruction makes two approximations.** The chaser's RTN frame is
   built from the target's with the target's velocity taken as circular, and the
-  covariances are used as position-only matrices. The hard-body radius ESA used is
-  fitted, not known: 9.0 m best reproduces the whole tail, with a median residual of
-  +0.22 in log10 (a factor of 1.7 high) and 43 % of rows within a factor of two. The
-  spread is dominated by ESA having used a radius per object: fitting one radius per
-  quintile of the target's radar cross-section gives 2, 4, 7, 11 and 13 m with the
-  agreement inside each quintile rising to 54 to 66 %, and the dataset gives no size for
-  the chaser at all. Our covariance-scale sweep matches ESA's `max_risk_scaling` exactly
-  as a factor on the covariance (median ratio 0.9999). See `docs/screening.md` and
-  `docs/kelvins-reproduction.md`.
+  covariances are used as position-only matrices. With those two, and with the combined
+  hard-body radius taken as `(t_span + c_span) / 2` — the dataset's own size columns, no
+  parameter fitted — the reconstruction reproduces ESA's risk column to a median residual
+  of -0.0003 in log10 (0.07 % in the probability), 87 % of the tail within a factor of
+  two. What disagreement remains is one-sided: the 5th percentile of the residual is
+  -0.66 against a 95th of +0.13, so where it disagrees it reads the encounter as *safer*
+  than ESA did, and payloads are over-represented in that tail. Our covariance-scale sweep
+  matches ESA's `max_risk_scaling` exactly as a factor on the covariance (median ratio
+  0.9999). See `docs/screening.md` and `docs/kelvins-reproduction.md`.
+- **A hard-body radius from a radar cross-section is biased small.** `sqrt(RCS / pi)` is
+  the radius of the disc that returns the same echo, not the size of the object: it
+  understates anything much larger than the radar wavelength and anything with a
+  low-return geometry. Scored on the Kelvins data against ESA's own radii it needs a
+  multiplier of nearly five and still does no better than one radius for every object.
+  driftwatch uses it for payload, rocket-body and debris secondaries with no published
+  envelope, so those probabilities are biased low.
+- **A supplemental-set covariance is used only over the lead times the stored versions
+  measure.** The growth exponent is a physically bounded prior (`[1, 2]` in-track, one
+  radially and cross-track), not a fit, because the store spans hours; the amplitude is
+  anchored at the longest observed lead. Even so, extrapolating to seven days gives 42 to
+  2,500 km in-track depending on the exponent, against about 18 km measured directly from
+  the same objects' GP sets, so the fit carries a validity horizon at its longest observed
+  pair and the GP model serves beyond it, labelled `supplemental:beyond-horizon`. The
+  horizon moves out as the scheduled fetch accumulates versions.
 
 ## Propagation
 

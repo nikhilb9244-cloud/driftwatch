@@ -45,6 +45,16 @@ SUPPLEMENTAL_FILES: tuple[str, ...] = ("starlink",)
 # A supplemental set older than the GP set by more than this is treated as abandoned and
 # the GP set is used instead.
 SUPPLEMENTAL_MAX_LAG_DAYS = 1.0
+# The scheduled fetch (see `.github/workflows/supplemental.yml` and
+# `scripts/register-supplemental-task.ps1`) stores a version every few hours so that the
+# supplemental covariance fit eventually sees consistency pairs days apart rather than
+# hours apart. Three hours is inside CelesTrak's two-hour floor per group with room to
+# spare, and gives eight versions a day.
+SUPPLEMENTAL_FETCH_INTERVAL_HOURS = 3
+# Every stored version is kept for this long; beyond it only the first of each UTC day
+# survives `driftwatch supplemental --prune`, which bounds the store at a few hundred
+# megabytes while keeping the long lead times the fit needs.
+SUPPLEMENTAL_KEEP_ALL_DAYS = 14
 
 # Space-Track.org: the full public catalogue and element-set history. Needs a free account;
 # credentials are read from the environment only (see catalogue/spacetrack.py).

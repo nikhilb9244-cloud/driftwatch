@@ -20,6 +20,8 @@ from driftwatch.catalogue import history
 from driftwatch.orbit.propagator import WGS72_MU_KM3_S2, satrec_from_elements
 from driftwatch.risk.covariance import (
     DEFAULT_GROWTH,
+    SUPPLEMENTAL_P_MIN,
+    SUPPLEMENTAL_PRIOR_P,
     CovarianceModel,
     EmpiricalCovariance,
     ObjectRef,
@@ -27,6 +29,8 @@ from driftwatch.risk.covariance import (
     ScaledCovariance,
     SupplementalCovariance,
     analyse_object,
+    bin_pairs_by_lead,
+    fit_binned_growth,
     fit_covariance,
     fit_supplemental_covariance,
     label_cov_sources,
@@ -358,14 +362,99 @@ def test_supplemental_covariance_is_fitted_from_successive_versions_not_from_gp_
     model = fit.model
     ref = ObjectRef(ids[0], "starlink", "leo")
     epoch = T0 + timedelta(days=1)
-    at = np.array([np.datetime64((epoch + timedelta(days=3)).replace(tzinfo=None), "us")])
+    at = np.array([np.datetime64((epoch + timedelta(days=2)).replace(tzinfo=None), "us")])
     cov = model.covariance_ric(ref, epoch, at)
     assert cov.source == "supplemental:consistency"
     sigma_i = float(np.sqrt(cov.cov_km2[0, 1, 1]))
-    assert 0.6 < sigma_i < 3.0  # about three days of drift, not the GP history's tens of kilometres
+    assert 0.4 < sigma_i < 2.0  # about two days of drift, not the GP history's tens of kilometres
     other = model.covariance_ric(ObjectRef(4242, "debris", "leo"), epoch, at)
     assert other.source == "default:leo"  # anything outside the supplemental set falls through
     assert isinstance(model, CovarianceModel)
+
+
+def test_supplemental_covariance_defers_to_the_base_model_beyond_its_horizon():
+    """The fit serves only the lead times the stored versions measure; past that the base model does.
+
+    Two versions a few hours apart cannot say what an operator ephemeris is worth a week
+    ahead, and a power law with a prior exponent run out that far gives hundreds of
+    kilometres. So the fit carries a validity horizon at its longest observed pair, and
+    every covariance past it comes from the base model and says so.
+    """
+    rng = np.random.default_rng(13)
+    base = base_orbit(bstar=0.0)
+    ids = list(range(90901, 91001))
+    gap_hours = 6.0
+    v1, v2 = [], []
+    for i in ids:
+        v1.extend(history_records(i, lambda t: base, [T0], rng, bstar=0.0, name=f"SUP {i}"))
+        later = T0 + timedelta(hours=gap_hours)
+        record = history_records(i, lambda t: base, [later], rng, bstar=0.0, name=f"SUP {i}")[0]
+        shift = 0.2 * rng.normal()
+        record["MEAN_ANOMALY"] = (record["MEAN_ANOMALY"] + np.degrees(shift / semi_major_axis_km())) % 360.0
+        v2.append(record)
+    history = pd.concat(
+        [supplemental_history_frame(v1, T0), supplemental_history_frame(v2, T0 + timedelta(hours=gap_hours))],
+        ignore_index=True,
+    )
+    fit = fit_supplemental_covariance(EmpiricalCovariance(), history, ids)
+
+    # Hours of baseline: the exponent stays at the prior and the horizon is the longest pair.
+    assert fit.summary["exponent_fitted"] is False
+    assert fit.summary["growth"]["p_i"] == pytest.approx(SUPPLEMENTAL_PRIOR_P[1])
+    horizon = fit.summary["horizon_days"]
+    assert horizon == pytest.approx(gap_hours / 24.0, abs=0.01)
+    assert fit.model.horizon_days == pytest.approx(horizon)
+
+    ref = ObjectRef(ids[0], "starlink", "leo")
+    inside = np.array([np.datetime64((T0 + timedelta(hours=gap_hours / 2)).replace(tzinfo=None), "us")])
+    outside = np.array([np.datetime64((T0 + timedelta(days=5)).replace(tzinfo=None), "us")])
+    assert fit.model.covariance_ric(ref, T0, inside).source.startswith("supplemental:consistency-prior")
+    beyond = fit.model.covariance_ric(ref, T0, outside)
+    assert beyond.source == "supplemental:beyond-horizon"
+    base_model = EmpiricalCovariance()
+    assert beyond.cov_km2 == pytest.approx(base_model.covariance_ric(ref, T0, outside).cov_km2)
+
+    # A request spanning the horizon gets each time from the right model, and a label that says so.
+    mixed = fit.model.covariance_ric(ref, T0, np.concatenate([inside, outside]))
+    assert mixed.source.endswith("+beyond-horizon")
+    assert mixed.cov_km2[1] == pytest.approx(beyond.cov_km2[0])
+    assert mixed.cov_km2[0, 1, 1] < mixed.cov_km2[1, 1, 1]
+
+    # Rebuilding from the stored table keeps the horizon, so a stored run rescores the same way.
+    rebuilt = SupplementalCovariance.from_frame(EmpiricalCovariance(), fit.table)
+    assert rebuilt.horizon_days == pytest.approx(horizon)
+    assert rebuilt.covariance_ric(ref, T0, outside).source == "supplemental:beyond-horizon"
+
+
+def test_binned_growth_anchors_a_prior_exponent_at_the_longest_bin():
+    """With the exponent a prior, the amplitude comes from the longest bin, not the average of them.
+
+    The residuals over a few hours grow more slowly than any exponent the physics allows,
+    so a law forced through them at ``p >= 1`` sits above every bin but one. Which one it
+    touches decides the extrapolation, and the longest is the bin nearest the lead times
+    the model is asked about.
+    """
+    dt = np.concatenate([np.full(500, 0.04), np.full(500, 0.08), np.full(500, 0.16)])
+    # sigma_i proportional to dt^0.7: the shape actually measured on the first stored versions.
+    ric = np.zeros((len(dt), 3))
+    ric[:, 1] = 2.0 * dt**0.7
+    bins = bin_pairs_by_lead(dt, ric)
+    assert len(bins) == 3
+    growth, diagnostics = fit_binned_growth(bins, fit_exponent=False)
+    assert diagnostics["exponent_fitted"] is False
+    assert "longest bin" in diagnostics["amplitude_from"]
+    # The law passes through the longest bin exactly. Being steeper than the residuals grow,
+    # it falls below the shorter bins, which is why the fit puts the shortest bin's measured
+    # consistency into the floor (see fit_supplemental_covariance).
+    assert growth.sigma_km(np.array([0.16]), dt_floor_days=0.01)[0, 1] == pytest.approx(2.0 * 0.16**0.7, rel=1e-6)
+    assert growth.sigma_km(np.array([0.04]), dt_floor_days=0.01)[0, 1] < 2.0 * 0.04**0.7
+
+    # With the exponent free, the fit follows the bins instead and is clipped into range.
+    fitted, diag = fit_binned_growth(bins, fit_exponent=True)
+    assert diag["exponent_fitted"] is True
+    assert diag["exponent_raw"] == pytest.approx(0.7, abs=0.02)
+    assert diag["exponent_clipped"] is True
+    assert fitted.exponent[1] == pytest.approx(SUPPLEMENTAL_P_MIN)  # 0.7 is below linear, so it clips
 
 
 def test_supplemental_covariance_without_a_second_version_is_the_published_rms():

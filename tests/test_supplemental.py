@@ -158,6 +158,49 @@ def test_every_fetched_version_is_stored_once_and_reads_back(omm_records, tmp_pa
     assert supplemental.load_supplemental_history("starlink", out_dir=tmp_path / "none").empty
 
 
+def test_pruning_keeps_the_recent_versions_and_one_a_day_beyond_them(omm_records, tmp_path):
+    """The scheduled fetch grows the store by megabytes a day; the thinning has to keep the long leads.
+
+    What an old version is worth to the covariance fit is a *long* consistency pair, and the
+    short pairs are already over-represented by every recent fetch. So everything inside the
+    window survives and only the first of each day beyond it does.
+    """
+    records = _with_rms(omm_records[:3])
+    now = datetime(2026, 10, 1, 12, tzinfo=UTC)
+    stamps = [
+        now - timedelta(days=40),  # older than the window: three that day, the first survives
+        now - timedelta(days=40) + timedelta(hours=5),
+        now - timedelta(days=40) + timedelta(hours=9),
+        now - timedelta(days=30),  # a day of its own, kept
+        now - timedelta(days=3),  # inside the window: every one kept
+        now - timedelta(days=3, hours=4),
+        now - timedelta(hours=2),
+    ]
+    for t in stamps:
+        supplemental.store_supplemental(records, name="starlink", fetched_at=t, out_dir=tmp_path)
+    assert len(supplemental.list_supplemental("starlink", tmp_path)) == len(stamps)
+
+    dry = supplemental.prune_supplemental("starlink", out_dir=tmp_path, now=now, dry_run=True)
+    assert len(dry) == 2  # the second and third of the day forty days ago
+    assert len(supplemental.list_supplemental("starlink", tmp_path)) == len(stamps)  # nothing removed yet
+
+    removed = supplemental.prune_supplemental("starlink", out_dir=tmp_path, now=now)
+    assert sorted(p.name for p in removed) == sorted(p.name for p in dry)
+    left = [supplemental.version_of(p) for p in supplemental.list_supplemental("starlink", tmp_path)]
+    assert len(left) == 5
+    assert left[0] == "20260822T120000Z"  # the first of that day, forty days back, kept
+    assert not any(v.startswith("20260822T17") or v.startswith("20260822T21") for v in left)
+
+    status = supplemental.store_status("starlink", out_dir=tmp_path)
+    assert status["n_versions"] == 5 and status["first"] == left[0] and status["last"] == left[-1]
+    assert status["span_days"] == pytest.approx(40.0 - 2.0 / 24.0, abs=0.01)
+    assert status["megabytes"] > 0
+    assert supplemental.store_status("starlink", out_dir=tmp_path / "none")["n_versions"] == 0
+
+    # Nothing is thrown away when the whole store is inside the window.
+    assert supplemental.prune_supplemental("starlink", out_dir=tmp_path, now=now, keep_all_days=365) == []
+
+
 def test_a_stored_version_substitutes_the_same_way_a_fresh_fetch_does(omm_records, tmp_path):
     """Rebuilding a run's elements from the store must reproduce what the run screened."""
     records = _with_rms(omm_records[:6])

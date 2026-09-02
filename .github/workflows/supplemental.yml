@@ -1,0 +1,73 @@
+name: supplemental
+
+# Collect CelesTrak's supplemental (operator-ephemeris) element sets every few hours.
+#
+# Why this exists. The covariance of an object screened on a supplemental set comes from
+# the consistency of successive versions of that set, and CelesTrak serves one version and
+# overwrites it. Two versions two hours apart can only measure the error over two hours, so
+# the growth law has to be extrapolated to the seven-day screening window, which it cannot
+# survive (see docs/screening.md, "The supplemental horizon"). The only fix is time: store
+# a version every few hours and the consistency pairs eventually span days rather than
+# hours, the fit stops being an extrapolation, and the model's validity horizon moves out
+# on its own.
+#
+# One-off setup, because the store lives on its own branch (data/ is gitignored on main):
+#
+#   git switch --orphan supplemental-store
+#   git commit --allow-empty -m "Supplemental element-set store"
+#   git push -u origin supplemental-store
+#   git switch main
+#
+# Nothing else is needed: CelesTrak's supplemental file takes no credentials.
+
+on:
+  schedule:
+    # Every three hours. CelesTrak's floor is one fetch per group per two hours, and their
+    # supplemental files are refitted several times a day, so this is polite and still
+    # catches most versions.
+    - cron: "0 */3 * * *"
+  workflow_dispatch:
+
+concurrency:
+  group: supplemental-store
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  fetch:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check out the store branch
+        uses: actions/checkout@v4
+        with:
+          ref: supplemental-store
+          path: store
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --no-dev
+
+      - name: Fetch, store and thin
+        env:
+          DRIFTWATCH_DATA_DIR: ${{ github.workspace }}/store/data
+          DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
+        run: uv run driftwatch supplemental --fit
+
+      - name: Commit the new version
+        working-directory: store
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add -f data/supplemental
+          if git diff --cached --quiet; then
+            echo "No new version this run (CelesTrak's two-hour floor, or an unchanged file)."
+          else
+            git commit -m "Supplemental element sets, $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi

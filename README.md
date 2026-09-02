@@ -61,11 +61,16 @@ What works today:
   track either side and opens an inset of the encounter plane with the covariance
   ellipse, the hard-body disc, the miss vector and the probabilities. Every number is
   Python's; the browser computes no screening result.
+- `driftwatch supplemental` fetches CelesTrak's operator-ephemeris element sets, stores
+  the version, thins versions older than a fortnight to one a day, and with `--fit`
+  refits the supplemental covariance across the whole store. It runs every three hours
+  from a scheduled task, because that covariance is measured from the consistency of
+  successive versions and CelesTrak keeps only the latest one.
 - `driftwatch kelvins` reproduces the risk column of ESA's Kelvins Collision Avoidance
-  Challenge data from its own inputs, fitting the hard-body radius. On the 162,634-row
-  training set the best single radius is 9.0 m and the median residual is a factor of
-  1.7; the spread is explained by ESA having used a radius per object
-  (`docs/kelvins-reproduction.md`).
+  Challenge data from its own inputs. The hard-body radius ESA used turns out to be in
+  the data: with the combined radius taken as `(t_span + c_span) / 2` and nothing fitted,
+  the 162,634-row training set is reproduced to a median residual of 0.07 % with 87 % of
+  the high-risk tail within a factor of two (`docs/kelvins-reproduction.md`).
 - Tests cover the official SGP4 verification cases, frame conversions against skyfield,
   a real ISS pass over Durban, the cache rules, the snapshot schema, the export, the
   Space-Track client, the fleet files, the screening (synthetic conjunctions with a
@@ -153,10 +158,14 @@ data/                   cache, snapshots, history, supplemental versions, conjun
   element-set consistency and why it is a floor, the manoeuvre flag, the encounter
   plane, the three probability integrators, the dilution maximum and the flags.
 - `docs/methods.md`: the running list of approximations.
-- `docs/kelvins-reproduction.md`: the ESA Kelvins reproduction as the command writes it.
+- `docs/kelvins-reproduction.md`: the ESA Kelvins reproduction as the command writes it,
+  with `docs/kelvins-reproduction.svg`, the residual against ESA's risk.
 - `docs/data-sources.md`: each data provider's terms, the Space-Track redistribution
   clause as checked, and the citation format.
+- `docs/spacex-ephemerides.md`: whether SpaceX's published Starlink ephemerides may be
+  used and how, what their covariance actually is, and the plan for them.
 - `docs/phase2-plan.md`: the Phase 2 plan, the review decisions and the demo fleet.
+- `docs/phase3-plan.md`: the Phase 3 plan and its review decisions.
 
 ## Data sources and their rules
 

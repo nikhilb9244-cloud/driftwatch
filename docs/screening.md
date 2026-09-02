@@ -310,23 +310,76 @@ power law to the scatter. Two differences from the GP fit:
 - **The window starts much lower.** CelesTrak republishes several times a day, so the
   pairs are hours to days apart rather than half a day to seven days. No object has
   enough versions of its own yet, so the residuals are pooled across every supplemental
-  object; because their publication gaps differ, the pool still spans a range of
-  propagation times and the exponent can be fitted. When it does not span a factor of
-  three the exponent is fixed at one and only the scale is fitted, and the label says so.
+  object.
+- **The pairs are binned by lead time and each occupied bin is weighted equally.** A store
+  covering a week holds tens of thousands of pairs a few hours apart and a few hundred six
+  days apart; fitted over the raw pairs the law is set almost entirely by the short leads
+  and then extrapolated over the part of the range that decides a seven-day screen.
+- **The exponent is a prior, not a fit** (see below).
 
 Under the fitted growth sits a floor: CelesTrak publishes the RMS of each fit to the
 operator's ephemeris in the supplemental file itself (a median of 0.20 km, a 90th
 percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02). That
 disagreement between the element set and the trajectory it was fitted to is invisible to
 any comparison between versions, so it is added in quadrature, split across the RIC
-components in the proportions of the fitted growth. The sources are labelled
-`supplemental:consistency` (or `supplemental:consistency-p1` when the exponent was
-fixed) and `supplemental:rms` when there is only one stored version and the floor is all
-there is.
+components in the proportions of the fitted growth. The measured consistency in the
+shortest lead-time bin is taken as a floor too, whichever is larger: a law with a prior
+exponent is steeper than the residuals actually grow, so it passes under the short-lead
+bins, and the covariance is not allowed to fall below a disagreement that was measured.
+
+The sources are labelled `supplemental:consistency` when the exponent was fitted,
+`supplemental:consistency-prior-p<p>` when it was the prior, `supplemental:rms` when there
+is only one stored version and the floor is all there is, and `supplemental:beyond-horizon`
+past the fit's validity.
 
 The floor alone is a lower bound and is treated as one: an event scored on it lands in
 the robust region below, where the maximum-probability sweep shows what a larger
 uncertainty would give.
+
+### The exponent is a prior, and the fit has a horizon
+
+Taken at the Phase 3 Step 0 review, and the most consequential correction in it.
+
+The first two stored versions were two hours apart. Their consistency pairs span lead
+times of 0.02 to 0.24 days, and a free power-law fit over them returned an in-track
+exponent of 0.55. Evaluated at seven days that is an extrapolation by a factor of forty in
+time, from a baseline of hours, at an exponent below anything the physics allows. What the
+physics allows: an unmodelled along-track acceleration — a drag error, or a revised burn
+plan — changes the semi-major axis linearly in time, which moves the object radially as
+`t` and, through the mean motion, in-track as `t^2`; an along-track velocity or epoch
+error moves it in-track as `t`. So the in-track exponent is constrained to `[1, 2]` with
+the prior at 1.5, and the radial and cross-track exponents are held at one. Only the
+amplitudes are fitted. The exponent is fitted, and then clipped into the range, only once
+the store gives pairs across four or more lead-time bins reaching at least a day.
+
+Constraining it does not rescue the extrapolation, and this is the part worth stating
+plainly. With the amplitude anchored on those pairs, the in-track sigma at seven days
+comes out at **42 km at `p = 1`, 321 km at `p = 1.5` and 2,500 km at `p = 2`** — against
+about **18 km measured directly** from the same objects' GP element sets seven days apart.
+There is no exponent in the physical range that makes the extrapolation safe, and choosing
+the one that lands nearest the GP number would be fitting the answer.
+
+So the fit carries a **validity horizon** at its longest observed pair, and past it the GP
+model serves, labelled `supplemental:beyond-horizon`. With the two versions in hand the
+horizon is 0.24 days, so almost the whole seven-day window falls back to the GP fit for
+Starlink secondaries. That is the honest position: two versions two hours apart say
+nothing about a week ahead, and the GP element sets, whose disagreement at seven days is
+dominated by exactly the manoeuvring we cannot predict, are the better estimate at that
+range even though they are the wrong instrument at short range.
+
+The horizon moves out on its own. `driftwatch supplemental` fetches and stores a version
+every three hours, under GitHub Actions (`.github/workflows/supplemental.yml`) or a
+Windows scheduled task (`scripts/register-supplemental-task.ps1`), and thins versions
+older than a fortnight to one a day so the store stays bounded while keeping the long
+leads. Once it spans the screening window the fallback disappears and the exponent becomes
+a measurement. `driftwatch supplemental --fit` refits across the whole store and prints
+the lead-time bins.
+
+Where the amplitude is anchored matters once the exponent is a prior. A law steeper than
+the data can touch the bins at one point only: it is anchored at the **longest** occupied
+bin, which is the bin nearest the lead times being asked about and the one where the
+growing term is least swamped by the publication floor. Anchoring at the mean of the bins
+would put the law a factor of two above its own longest bin.
 
 **History for the fit.** `driftwatch screen` backfills 45 days of `gp_history` before
 the window start for every fleet member and every Stage A survivor, batched into as
@@ -464,8 +517,15 @@ neighbours), and `pc_max_scale` the factor at which it occurs. Because the empir
 covariance is a floor on the true error, `pc_max` is the honest upper bound: a
 `pc_max_scale` above one says the real risk could be higher than `pc` if the fits are
 more consistent than they are accurate, which is the usual case; a scale below one says
-the uncertainty already dilutes the probability and a better orbit would raise it.
-This is Alfano's dilution, and it is what the Phase 3 storm term will move.
+the uncertainty already dilutes the probability, so that shrinking the covariance at the
+same miss would raise it. This is Alfano's dilution, and it is what the Phase 3 storm
+term will move.
+
+The sweep scales the covariance and holds the miss fixed, which is an arithmetic
+operation on the numbers in hand and not a forecast of what a better orbit would give.
+A better orbit changes both: the covariance shrinks and the nominal miss moves, by a
+distance of the order of the uncertainty that was removed, in a direction nothing here
+can predict. Every statement about dilution below is a statement about the sweep.
 
 ## The two regions, and what a flag is worth in each
 
@@ -475,10 +535,12 @@ number worth acting on and a number that only describes the uncertainty:
 - **Robust** (`pc_max_scale` at or above one). The probability is limited by the
   geometry. Shrinking the covariance would lower it, so the value in hand is not being
   propped up by the size of the uncertainty.
-- **Dilution** (`pc_max_scale` below one). Shrinking the covariance would *raise* the
-  probability: the event sits on the falling side of Alfano's curve, where the
-  uncertainty is already large enough to spread the distribution thin. The number says
-  the trajectories are uncertain, not that the objects are likely to meet.
+- **Dilution** (`pc_max_scale` below one). Shrinking the covariance at the same miss
+  would *raise* the probability: the event sits on the falling side of Alfano's curve,
+  where the uncertainty is already large enough to spread the distribution thin. The
+  number says the trajectories are uncertain, not that the objects are likely to meet,
+  and equally not that they are unlikely to: the data cannot support a judgement either
+  way.
 
 Every event carries `region`, and the flag carries a `confidence`: `standard` in the
 robust region, `low` everywhere else. **A red or yellow flag with low confidence is
@@ -496,8 +558,9 @@ uncertainty of 13.9 km by 0.50 km in the plane, against a miss of 11.5 km and a 
 hard-body radius of 73 m. The miss is inside one sigma of the larger axis: the two
 trajectories are, as far as the catalogue can tell, in the same place.
 
-`pc_max_scale` is 0.88, so the covariance is already a little past the peak. Shrinking
-it shows what the flag is worth:
+`pc_max_scale` is 0.88, so the covariance is already a little past the peak. Scaling it
+down, with the miss held at 11.47 km, shows how much of the number the covariance is
+carrying:
 
 | Covariance scale | `pc` |
 | --- | ---: |
@@ -506,13 +569,20 @@ it shows what the flag is worth:
 | 0.1 | 7.1e-7 |
 | 0.01 | 3.6e-36 |
 
-A tenfold better orbit for either object takes the probability down by a factor of two
-hundred; a hundredfold better one, which is what an operational ephemeris would give for
-the ISS, extinguishes it. The flag is a statement about the public catalogue seven days
-ahead, not about the encounter, and better data would almost certainly clear it rather
-than confirm it. That is why the report puts it under a heading that says so and never
-counts it as actionable. The ISS programme screens its own conjunctions against an
-operational ephemeris and covariance for exactly this reason.
+Almost all of it. At a tenth of the covariance the probability is down by a factor of
+two hundred, and at a hundredth it is gone: the flag is produced by an uncertainty of the
+order of the miss, not by the trajectories passing close.
+
+**This is not a forecast of what better tracking would give.** The rows above move the
+covariance and leave the miss where it is, which no real improvement does. A better
+orbit for either object would shrink the covariance *and* move the nominal miss, by a
+distance of the order of the tens of kilometres of in-track uncertainty being removed,
+and the miss can move either way: an 11.5 km miss can become 40 km or 0.5 km, and this
+tool cannot say which. The honest reading is that the public catalogue, seven days
+ahead, cannot tell whether these two objects come close or not. That is why the report
+puts it under a heading that says so and never counts it as actionable, and it is why
+the ISS programme screens its own conjunctions against an operational ephemeris and
+covariance rather than against element sets.
 
 ## Flags
 
@@ -544,12 +614,10 @@ ESA's Kelvins Collision Avoidance Challenge dataset holds anonymised real conjun
 messages with the relative position and velocity in the target's RTN frame, both
 objects' covariances and ESA's computed risk (log10 of the probability), and for many
 rows a maximum risk and its scaling. `driftwatch kelvins` reconstructs the probability
-from those inputs with the code above, treats the hard-body radius ESA used (not
-given) as a fit parameter, and reports the radius that best reproduces the risk column
-over the high-risk tail (`risk >= -6`) together with the distribution of residuals by
-risk bin. Two approximations are stated in `risk/kelvins.py`: the chaser's frame is
-built from the target's with the target's velocity taken as circular, and the
-covariances are used as position-only matrices.
+from those inputs with the code above and reports the distribution of residuals by risk
+bin. Two approximations are stated in `risk/kelvins.py`: the chaser's frame is built from
+the target's with the target's velocity taken as circular, and the covariances are used as
+position-only matrices.
 
 The dataset is not redistributed with driftwatch and has to be downloaded from the
 Kelvins site (registration required) into `data/external/kelvins/`; without it the
@@ -558,55 +626,58 @@ reproduction test is skipped with a message saying where to put the file.
 ### What it gives
 
 Run on `train_data.csv` (162,634 conjunction messages, 10,183 of them in the tail),
-`driftwatch kelvins` writes `docs/kelvins-reproduction.md`. The headline:
+`driftwatch kelvins` writes `docs/kelvins-reproduction.md` and its residual plot.
 
-| | |
-| --- | --- |
-| Best single hard-body radius | **9.0 m** |
-| Median residual, log10 of ours over ESA's | **+0.22** (a factor of 1.7 high) |
-| Within a factor of two | 43 % |
-| Within a factor of ten | 80 % |
-| Best-reproduced bin | risk -4 to -3: median -0.17, 58 % within a factor of two |
-| Worst-reproduced bin | risk -6 to -5: median +0.39, 37 % within a factor of two |
+**The hard-body radius ESA used is in the data.** Phase 2 fitted a single radius, got 9 m
+and agreement within a factor of two on 43 % of the tail, and put the spread down to ESA
+having used a radius per object that the dataset did not publish. It does publish it. Each
+object carries a `span` in metres, and the combined radius `(t_span + c_span) / 2`
+reproduces the risk column with **no fitted parameter at all**:
 
-The median meets the target of a factor of two across the tail, and the agreement is
-best in the bins where an operator would act. The spread of individual rows does not
-meet it, and the reason is worth stating rather than tuning away.
+| | Per-object span | One fitted radius |
+| --- | --- | --- |
+| Combined radius | `(t_span + c_span) / 2`, median 7.0 m | 9.0 m, fitted |
+| Median residual over the tail | **-0.0003** (0.07 % in probability) | +0.22 (a factor of 1.7 high) |
+| Median over risk above 1e-5 | **+0.0005** | +0.21 |
+| Within a factor of two | **87 %** | 43 % |
+| Within a factor of ten | **96 %** | 80 % |
 
-### Where the disagreement comes from
+Which settles the Phase 2 question: the probability integration agrees with ESA's to a
+fraction of a percent, and the earlier spread was entirely the radius.
 
-The residual's strongest correlation in the whole dataset is with the target's radar
-cross-section (Spearman -0.63), far ahead of the time to closest approach (-0.02, so the
-reconstruction is not drifting with propagation), the miss distance (-0.41) or the
-covariance shape (-0.26). A negative correlation with size is what a single fitted
-radius would produce if ESA had used a radius per object: our 9 m is too small for big
-targets, making us under-report, and too large for small ones, making us over-report.
+**The direction of the residual still matters.** The median is zero but the distribution
+is not symmetric. Over the tail that matters the 5th percentile is -0.66 and the 95th is
++0.13: where the reconstruction disagrees it reads the encounter as *safer* than ESA did,
+by up to a factor of ten, which is the dangerous direction. The rows in that tail are
+disproportionately payloads (13 % of them against 4 % of the tail), which is where the
+chaser-frame approximation is worst. Five of the eight rows above a risk of 1e-2 come out
+two orders of magnitude low: at that risk the miss is comparable to the hard-body radius
+and the two-dimensional method is at the edge of its assumptions.
 
-Fitting a radius separately in each quintile of the target's radar cross-section says so
-directly:
+### The radar cross-section is a poor size proxy, and we rely on it
 
-| Radar cross-section (m^2) | Rows | Best radius | Median residual | Within x2 |
-| --- | ---: | ---: | ---: | ---: |
-| 0.01 to 2.35 | 2,020 | 2 m | +0.25 | 59 % |
-| 2.35 to 3.23 | 1,981 | 4 m | -0.28 | 54 % |
-| 3.23 to 4.32 | 1,985 | 7 m | 0.00 | 59 % |
-| 4.32 to 4.98 | 2,001 | 11 m | -0.02 | 66 % |
-| 4.98 to 28.0 | 1,975 | 13 m | +0.11 | 60 % |
+The dataset's other size column is the radar cross-section, and scoring it the same way —
+one free multiplier, fitted like the single radius — it needs a multiplier of nearly five
+and still does no better than one radius for everything (median absolute residual 0.30
+against 0.45, 50 % within a factor of two against 40 %). The radar cross-section is the
+area of the echo rather than of the object: it understates anything much larger than the
+radar wavelength, it depends on aspect and material, and it is missing on a third of the
+chaser rows.
 
-The fitted radius rises monotonically with object size, from 2 m to 13 m, and the
-agreement inside each quintile is markedly better than the 43 % over the pooled tail.
-ESA used a hard-body radius that scaled with the objects; the dataset publishes the
-target's radar cross-section but nothing at all about the chaser's size, so a
-reproduction from its own columns cannot do better than a population compromise. The
-9 m headline stays as the single-radius answer to the question the prompt asked; the
-table above is the explanation of its spread, not a replacement for it.
+**That is a finding about driftwatch, not just about the dataset.** `risk/scenario.py`
+takes a secondary's hard-body radius from `sqrt(RCS / pi)` for payloads, rocket bodies and
+debris, exactly the proxy that fails here, and this says the fallback is biased small — so
+the probabilities for those secondaries are biased low. Categories with a known envelope
+(the station, Starlink, OneWeb) already keep a published dimension instead, and the
+conclusion for Phase 4 is to prefer a published dimension wherever one exists rather than
+the radar return.
 
-One result comes out exactly. Comparing our covariance-scale sweep with ESA's own
+One more result comes out exactly. Comparing our covariance-scale sweep with ESA's own
 `max_risk_scaling` column, the ratio of the two has a median of 0.9999 when ESA's is
 read as a factor on the covariance, and 0.82 when read as a factor on the standard
 deviation. ESA's scaling is a factor on the covariance, as ours is, and the maximum
-probabilities agree to a median of +0.22 in log10, the same offset as the probabilities
-themselves.
+probabilities agree to a median of +0.22 in log10 — the same offset as the probabilities
+themselves, because that comparison is still computed at the single fitted radius.
 
 ## The report and the viewer
 

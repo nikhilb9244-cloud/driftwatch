@@ -228,7 +228,7 @@ inside the watch radius.
 | `manoeuvre_prior`, `manoeuvre_level` | string | The prior (`known`, `possible`, `none`) and the level after the history check (`possible` becomes `observed` when the history shows a burn). |
 | `n_history_sets`, `n_jumps` | int64 | Element sets the fit saw; burns the detector found. |
 | `jump_epochs`, `last_jump` | list<timestamp>, timestamp | Epochs of the first element set after each detected burn, and the latest of them. |
-| `cov_source` | string | Which covariance the model uses for the object: `empirical`, `pooled:<category>/<band>` or `default:<band>`. |
+| `cov_source` | string | Which covariance the model uses for the object: `empirical`, `pooled:<category>/<band>`, `default:<band>`, or, for an object screened on an operator ephemeris, `supplemental:consistency` (exponent fitted), `supplemental:consistency-prior-p<p>` (exponent a prior), `supplemental:rms` (one stored version, the published fit residual alone) or `supplemental:beyond-horizon` (past the supplemental fit's validity; the base model served). A row can carry `<label>+beyond-horizon` when an object's events straddle the horizon. |
 
 ### `covariance.parquet`
 
@@ -237,7 +237,7 @@ inside the watch radius.
 | `kind` | string | `object`, `pool`, `default`, or `supplemental` for an object screened on an operator ephemeris. |
 | `norad_id`, `category`, `altitude_band` | int64, string, string | The object (with its labels), the pool's labels, or the default's band. |
 | `source` | string | For an object row, the label the model uses for it (empirical, pooled or default); for a pool or default row, its own label; empty for a pool with too few pairs. |
-| `n_objects`, `n_fitted`, `n_sets`, `n_pairs`, `dt_min_days`, `dt_max_days` | int64, float64 | What the fit saw: objects in the pool and how many of them have their own fit, element sets, residual pairs and their propagation-time range. |
+| `n_objects`, `n_fitted`, `n_sets`, `n_pairs`, `dt_min_days`, `dt_max_days` | int64, float64 | What the fit saw: objects in the pool and how many of them have their own fit, element sets, residual pairs and their propagation-time range. On a supplemental row `dt_max_days` is the fit's **validity horizon** rather than its longest pair: past it the base model serves (see `docs/screening.md`), and it is empty when the fit covers the whole window. |
 | `sigma_r_1d_km`, `p_r`, `sigma_i_1d_km`, `p_i`, `sigma_c_1d_km`, `p_c` | float64 | The power law per RIC component, `sigma(dt) = sigma_1d * dt^p` with `dt` in days; empty where there is no fit. |
 | `n_jumps`, `n_bad_sets` | int64 | Burns detected and outlier sets dropped for the object. |
 | `rms_km` | float64 | Supplemental rows only: the published fit residual used as the floor under the growth. |
@@ -313,8 +313,10 @@ ignores a bundle whose `bundle_version` it does not know.
 | `conjunction-tracks.bin` | Little-endian float32 TEME positions in km, ordered event, object (primary then secondary), sample, xyz. `conjunctions.json`'s `tracks` block gives the counts, the 20 s step and the 600 s half-window. |
 
 A pair row carries the event count, the number inside the box, the first time of closest
-approach, the closest miss, the highest probability, the cumulative probability (an upper
-bound; the events are not independent), the maximum probability, the region, the flag,
+approach, the closest miss, the highest probability with the miss of the event that
+produced it (`miss_at_max_pc_km`, which is not always the closest pass), the cumulative
+probability (an upper bound; the events are not independent), the maximum probability,
+the region, the flag,
 the confidence, the manoeuvre level, the ephemeris source and the covariance source. An
 event row carries the geometry, the encounter-plane covariance (`enc_cov_*`), the
 probabilities, the region, the flag and the confidence, plus the index of its track or

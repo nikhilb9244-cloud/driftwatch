@@ -70,6 +70,7 @@ PAIR_COLUMNS: tuple[str, ...] = (
     "closest_tca",
     "max_pc",
     "max_pc_tca",
+    "miss_at_max_pc_km",
     "pc_cumulative",
     "max_pc_max",
     "pc_max_scale_at_max_pc",
@@ -145,6 +146,7 @@ def collapse_pairs(conjunctions: pd.DataFrame) -> pd.DataFrame:
                 "closest_tca": closest["tca"],
                 "max_pc": float(worst["pc"]) if pd.notna(worst["pc"]) else float("nan"),
                 "max_pc_tca": worst["tca"],
+                "miss_at_max_pc_km": float(worst["miss_km"]),
                 "pc_cumulative": cumulative_pc(group["pc"].to_numpy()),
                 "max_pc_max": float(pd.to_numeric(group["pc_max"], errors="coerce").max()),
                 "pc_max_scale_at_max_pc": float(worst["pc_max_scale"]) if pd.notna(worst["pc_max_scale"]) else np.nan,
@@ -316,6 +318,7 @@ PAIR_JSON_COLUMNS: list[str] = [
     "first_tca",
     "closest_km",
     "max_pc",
+    "miss_at_max_pc_km",
     "pc_cumulative",
     "max_pc_max",
     "region",
@@ -333,6 +336,7 @@ _ROUND = {
     "miss_i_km": 4,
     "miss_c_km": 4,
     "closest_km": 4,
+    "miss_at_max_pc_km": 4,
     "hbr_m": 2,
     "sigma_r_primary_km": 4,
     "sigma_i_primary_km": 4,
@@ -426,7 +430,8 @@ def build_bundle(
             "The events are repeated passes of the same two objects propagated from the same two element "
             "sets, so they are not independent and the true combined probability is lower.",
             "A flag in the dilution region is reported at low confidence: the probability there is held up "
-            "by the size of the covariance rather than by the geometry, and is not actionable.",
+            "by the size of the covariance rather than by the geometry, and is not actionable. It means the "
+            "data cannot support a judgement either way, not that better data would clear the flag.",
             "Every pair is listed. Individual events are carried for the flagged pairs, the pairs with an "
             "event inside the notification box, and the highest-probability pairs; the parquet in the run "
             "directory holds every event of every pair.",
@@ -470,6 +475,43 @@ def _fmt_flag(flag: str, confidence: str, region: str) -> str:
     if confidence == "low":
         return f"**{flag}** (low confidence, {region})"
     return f"**{flag}**"
+
+
+def _verdicts(flagged: pd.DataFrame) -> list[str]:
+    """One plain sentence per flagged pair saying which region it is in and what that means.
+
+    The Phase 3 Step 0 review asked for this: the tables carry `region` and `confidence`
+    in every row, but a reader should not have to decode a column to learn whether the
+    week's red is a real geometry or an artefact of the uncertainty.
+    """
+    if not len(flagged):
+        return ["## The flags, plainly", "", "No pair is flagged this week.", ""]
+    lines = [
+        "## The flags, plainly",
+        "",
+        "Every flagged pair, with the region of the event that raised the flag. **Robust** means the "
+        "maximum of the probability over covariance scale factors sits at or above the covariance in "
+        "hand, so the number is set by the geometry: worth a second look. **Dilution** means it sits "
+        "below, so the probability is held up by the size of the uncertainty rather than by the "
+        "geometry. A dilution flag is not actionable, and it is not a statement that the pair is safe "
+        "either: at that lead time the catalogue cannot tell whether the two objects come close.",
+        "",
+    ]
+    for _, p in flagged.sort_values("max_pc", ascending=False).iterrows():
+        scale = p["pc_max_scale_at_max_pc"]
+        scale_txt = f"{scale:.2f}×" if np.isfinite(scale) else "an unknown scale"
+        verdict = {
+            "robust": f"**robust** (maximum at {scale_txt} the covariance)",
+            "dilution": f"**dilution**, not robust (maximum at {scale_txt} the covariance)",
+        }.get(str(p["region"]), "**unclassified**: the covariance-scale sweep did not run")
+        miss = p.get("miss_at_max_pc_km", p["closest_km"])
+        lines.append(
+            f"- **{p['primary_name']} versus {p['secondary_name']} ({int(p['secondary_norad_id'])})**: "
+            f"{p['flag']} at `pc` {_fmt_pc(p['max_pc'])}, at a miss of {float(miss):.3f} km on "
+            f"{pd.Timestamp(p['max_pc_tca']).strftime('%Y-%m-%d %H:%M')} UTC. {verdict}."
+        )
+    lines.append("")
+    return lines
 
 
 def _pair_rows(pairs: pd.DataFrame) -> list[str]:
@@ -565,6 +607,7 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         f"| Highest probability | {_fmt_pc(rows['pc'].max())} |",
         "",
     ]
+    lines += _verdicts(flagged)
 
     if len(actionable):
         lines += [
@@ -591,10 +634,12 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
             "## Flagged, dilution region (low confidence, not actionable)",
             "",
             "The maximum of the probability over covariance scale factors lies below the covariance actually "
-            "used, so shrinking the uncertainty would raise the probability. A flag here says the trajectories "
-            "are uncertain, not that the objects are likely to collide, and it must not be acted on. Better "
-            "tracking of either object would move these either way; the operator's own ephemeris would settle "
-            "them.",
+            "used, so shrinking the uncertainty at the same miss would raise the probability. A flag here says "
+            "the trajectories are uncertain, not that the objects are likely to collide, and it must not be "
+            "acted on. It is equally not a statement that they are safe: the data cannot support a judgement "
+            "either way. Better tracking would shrink the covariance and move the nominal miss at the same "
+            "time, by a distance of the order of the uncertainty removed and in a direction nothing here can "
+            "predict, so no claim is made about which way these would go.",
             "",
         ]
         lines += _pair_rows(low)
@@ -641,9 +686,10 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         "element sets disagree after propagation, which is a floor on the error and not a measure of it "
         f"(`docs/screening.md`). Secondaries here: {sources}.",
         "- **Maximum probability and its scale.** `Max Pc` is the largest probability over covariance scale "
-        "factors from 0.1 to 10. Where its scale is above one the covariance is smaller than the miss and a "
-        "larger uncertainty would raise the probability; where it is below one the event is in the dilution "
-        "region and the flag is not actionable.",
+        "factors from 0.1 to 10, with the miss held fixed. Where its scale is above one the covariance is "
+        "smaller than the miss and a larger uncertainty would raise the probability; where it is below one "
+        "the event is in the dilution region and the flag is not actionable. The sweep is arithmetic on the "
+        "numbers in hand, not a forecast of what a better orbit would give.",
         "- **Cumulative probability is an upper bound.** The events of a pair are repeated passes of the same "
         "two objects from the same two element sets, so they are not independent.",
         "- **Manoeuvres are not predicted.** An object marked `known` or `observed` can move at any time, and "

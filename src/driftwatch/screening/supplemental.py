@@ -37,7 +37,7 @@ import json
 import logging
 from collections.abc import Sequence
 from dataclasses import dataclass
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -202,6 +202,73 @@ def list_supplemental(name: str = "starlink", out_dir: Path = config.SUPPLEMENTA
     if not out_dir.exists():
         return []
     return sorted(out_dir.glob(f"{name}_*.parquet"))
+
+
+def prune_supplemental(
+    name: str = "starlink",
+    *,
+    keep_all_days: float = config.SUPPLEMENTAL_KEEP_ALL_DAYS,
+    out_dir: Path = config.SUPPLEMENTAL_DIR,
+    now: datetime | None = None,
+    dry_run: bool = False,
+) -> list[Path]:
+    """Thin the stored versions and return the paths removed (or that would be).
+
+    The scheduled fetch stores a version every few hours, about 0.7 MB each, so the store
+    grows by several megabytes a day and would reach a couple of gigabytes in a year. What
+    the covariance fit actually needs from an old version is a *long* lead time, not a
+    short one: the pairs a few hours apart are already over-represented by every recent
+    fetch. So every version inside ``keep_all_days`` is kept, and beyond that only the
+    first of each UTC day, which leaves the daily spine that carries the long leads.
+
+    Nothing is deleted unless it is older than the window, and the newest version of a day
+    is never the one removed when it is the only one.
+    """
+    now = now or datetime.now(UTC)
+    cutoff = now - timedelta(days=float(keep_all_days))
+    paths = list_supplemental(name, out_dir)
+    kept_day: set[str] = set()
+    removed: list[Path] = []
+    for path in paths:
+        stamp = version_of(path)
+        fetched = datetime.strptime(stamp, "%Y%m%dT%H%M%SZ").replace(tzinfo=UTC)
+        if fetched >= cutoff:
+            continue
+        day = stamp[:8]
+        if day in kept_day:
+            removed.append(path)
+            if not dry_run:
+                path.unlink()
+        else:
+            kept_day.add(day)
+    if removed:
+        log.info("Pruned %d supplemental %s versions older than %g days", len(removed), name, keep_all_days)
+    return removed
+
+
+def store_status(name: str = "starlink", out_dir: Path = config.SUPPLEMENTAL_DIR) -> dict[str, Any]:
+    """What the stored versions of one supplemental file amount to: count, span, size on disk."""
+    paths = list_supplemental(name, out_dir)
+    stamps = [version_of(p) for p in paths]
+    size = sum(p.stat().st_size for p in paths)
+    return {
+        "name": name,
+        "n_versions": len(paths),
+        "first": stamps[0] if stamps else None,
+        "last": stamps[-1] if stamps else None,
+        "span_days": (
+            round(
+                (
+                    datetime.strptime(stamps[-1], "%Y%m%dT%H%M%SZ") - datetime.strptime(stamps[0], "%Y%m%dT%H%M%SZ")
+                ).total_seconds()
+                / 86400.0,
+                3,
+            )
+            if len(stamps) > 1
+            else 0.0
+        ),
+        "megabytes": round(size / 1e6, 1),
+    }
 
 
 def read_supplemental(path: Path) -> pd.DataFrame:
