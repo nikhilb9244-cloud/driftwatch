@@ -105,6 +105,8 @@ uv run driftwatch report latest           # weekly report + the viewer's conjunc
 cd web && npm install && npm run dev      # open the printed URL
 ```
 
+To publish it, see [Deploying the viewer](#deploying-the-viewer).
+
 `uv run driftwatch snapshots` lists what has been fetched. `--offline` on `fetch`
 rebuilds the snapshot from cache without touching the network; `--spacetrack off` skips
 Space-Track and `--spacetrack on` fails without it (the default uses it when the
@@ -114,6 +116,50 @@ Space-Track's `gp_history` into `data/history/`; `screen` does the same for the 
 and its surviving secondaries by itself (`--history off` skips it, `--history on` insists
 on it). Run `uv run pytest` for the tests (the first run downloads IERS Earth-orientation
 data for astropy, about 3 MB).
+
+## Deploying the viewer
+
+Cloudflare Pages, by direct upload. There is no CI and nothing scheduled: the automated
+daily pipeline is Phase 4. One script does the four steps.
+
+```powershell
+pwsh -File scripts/deploy-pages.ps1 -DryRun        # export, build, check; stop before uploading
+pwsh -File scripts/deploy-pages.ps1                # deploy to the `preview` branch
+pwsh -File scripts/deploy-pages.ps1 -Branch main   # deploy to production
+```
+
+1. **Export a fresh bundle.** `driftwatch propagate --at <now>` writes the catalogue side
+   (`manifest.json`, `objects.json`, `elements.bin`, `reference.bin`) and
+   `driftwatch report latest` the conjunctions side (`conjunctions.json`,
+   `conjunction-tracks.bin`). Neither rescreens. `-SkipExport` deploys what is already in
+   `web/public/data`, `-Run` and `-Scenario` choose which stored run and scenario to show.
+2. **Build.** `npm --prefix web run build`, which copies `public/` into `dist/`.
+3. **Check what is about to be published**, over `dist/` rather than the source bundle,
+   because the build is what ships:
+
+   ```bash
+   uv run driftwatch check-bundle --dir web/dist
+   ```
+
+   It refuses to continue if any file is a raw SpaceX ephemeris or a copy of the derived
+   covariance store (analysis only, never redistributed — `docs/spacex-ephemerides.md`), if
+   anything matches a credential pattern or the literal value of `SPACETRACK_USER`,
+   `SPACETRACK_PASS` or `CLOUDFLARE_API_TOKEN` in the environment, or if any file is over
+   Cloudflare Pages' 25 MiB limit. The rules are in `src/driftwatch/export/audit.py` and the
+   tests in `tests/test_audit.py`.
+4. **Upload.** `npx wrangler pages deploy web/dist --project-name driftwatch --branch <branch>`.
+   Pages treats the project's production branch by name and gives every other branch its own
+   preview URL, which is why the branch is an explicit argument rather than a flag.
+
+Authentication is wrangler's: run `npx wrangler login` once, or set `CLOUDFLARE_API_TOKEN`
+and `CLOUDFLARE_ACCOUNT_ID` in the environment. The first deploy creates the project if the
+account has none by that name.
+
+**Current sizes** (2 September 2026): 26 files, 22.9 MiB total, the largest being the 8.2 MiB
+JavaScript source map, then `elements.bin` at 2.7 MiB and `conjunctions.json` at 2.6 MiB. Well
+inside the 25 MiB per-file limit, so nothing is split or compressed; Pages serves gzip and
+brotli itself, and `conjunctions.json` is 544 kB compressed. The source map is published
+deliberately — the source is open, and it makes a bug report from a stranger legible.
 
 ## What you are looking at
 
@@ -143,7 +189,8 @@ src/driftwatch/         Python package (CLI: driftwatch)
   ephemeris/            operator-published ephemerides (SpaceX's Starlink covariance)
   weather/              space weather: CelesTrak SW-All, NOAA SWPC, the three-hourly table, Sun imagery
   risk/                 covariance model and fit, manoeuvre flag, probability of collision, scenarios, Kelvins
-  export/               viewer bundle, conjunction run directory, weekly report
+  export/               viewer bundle, conjunction run directory, weekly report, pre-deploy audit
+scripts/                deploy to Cloudflare Pages, register the supplemental fetch task
 fleets/                 YAML fleet definitions (the primaries to screen)
 tests/                  pytest
 docs/                   physics background, frames and time, data schema, methods, data sources, plans

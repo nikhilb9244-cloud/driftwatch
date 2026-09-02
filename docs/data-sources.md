@@ -121,6 +121,11 @@ they are used **for analysis only**:
 - Fetch politely: one request per satellite per version, only for the satellites a run's
   events actually involve, never a sweep of the constellation. At 2 MB a file the whole
   11,000 would be 22 GB a version. `driftwatch spacex --limit` caps it, at 300 by default.
+- **The rule is checked, not just written down.** `driftwatch check-bundle` runs over the
+  built site before every deploy and refuses to publish a bundle containing a raw ephemeris,
+  a copy of the derived covariance store, or a link into the file service — alongside its
+  credential and file-size checks. `src/driftwatch/export/audit.py`, and the README's
+  deploying section.
 
 **Credit line** (`config.SPACEX_CITATION`):
 

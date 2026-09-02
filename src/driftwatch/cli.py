@@ -23,6 +23,7 @@ import pyarrow.parquet as pq
 from driftwatch import __version__, config
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
 from driftwatch.ephemeris import spacex
+from driftwatch.export.audit import audit_bundle
 from driftwatch.export.conjunctions import RunDirectory
 from driftwatch.export.report import build_bundle, write_bundle, write_report
 from driftwatch.export.viewer import export_viewer_bundle
@@ -862,6 +863,34 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_check_bundle(args: argparse.Namespace) -> int:
+    """Check what is about to be published: no redistributed files, no credentials, nothing oversized.
+
+    Run before every deploy (``scripts/deploy-pages.ps1`` does it for you). The rules and the
+    reasoning are in ``driftwatch/export/audit.py``; the short version is that SpaceX's
+    ephemerides are analysis-only and Space-Track's credentials live in the environment, and
+    neither may reach a CDN.
+    """
+    directory = Path(args.dir) if args.dir else config.VIEWER_DATA_DIR
+    findings, summary = audit_bundle(directory, max_file_bytes=args.max_file_mib * 1024 * 1024)
+    print(f"{summary['n_files']} files, {summary.get('total_mib', 0)} MiB total, in {directory}")
+    for entry in summary.get("largest", []):
+        print(f"  {entry['mib']:8.2f} MiB  {entry['path']}")
+    if summary.get("headroom_mib") is not None:
+        print(
+            f"largest file is {summary['largest'][0]['mib']} MiB against the "
+            f"{summary['limit_mib']} MiB Cloudflare Pages limit "
+            f"({summary['headroom_mib']} MiB of headroom)"
+        )
+    for finding in findings:
+        print(finding)
+    if summary.get("n_errors"):
+        log.error("%d problems would be published; not fit to deploy", summary["n_errors"])
+        return 1
+    print("OK: nothing redistributed, no credentials, every file inside the limit")
+    return 0
+
+
 def weather_sources(
     *, now: datetime, offline: bool, as_of: datetime | None = None
 ) -> tuple[weather_table.WeatherSources, dict[str, Any]]:
@@ -1202,6 +1231,19 @@ def build_parser() -> argparse.ArgumentParser:
     report.add_argument("--scenario", help="scenario to report (default: the first stored)")
     report.add_argument("--no-viewer", action="store_true", help="write the report only")
     report.set_defaults(func=cmd_report)
+
+    check = sub.add_parser(
+        "check-bundle",
+        help="check the viewer bundle before publishing it: redistribution, credentials and file sizes",
+    )
+    check.add_argument("--dir", help=f"directory to check (default {config.VIEWER_DATA_DIR})")
+    check.add_argument(
+        "--max-file-mib",
+        type=float,
+        default=25.0,
+        help="largest single file allowed, in MiB (default 25, the Cloudflare Pages limit)",
+    )
+    check.set_defaults(func=cmd_check_bundle)
 
     sup = sub.add_parser(
         "supplemental",
