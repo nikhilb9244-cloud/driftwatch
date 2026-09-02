@@ -60,6 +60,7 @@ from driftwatch.risk.scenario import (
 )
 from driftwatch.screening import ScreeningConfig, ScreeningError, ScreeningResult, screen_fleet
 from driftwatch.screening import supplemental as supplemental_mod
+from driftwatch.storm import diagnostics, validation
 from driftwatch.storm import scenarios as storm_scenarios
 from driftwatch.storm import term as storm_term
 from driftwatch.weather import celestrak_sw, helioviewer, swpc
@@ -245,6 +246,166 @@ def cmd_history(args: argparse.Namespace) -> int:
     return 0
 
 
+def select_historical_objects(
+    args: argparse.Namespace, as_of: datetime, satcat_frame: pd.DataFrame | None
+) -> tuple[list[int], dict[str, Any]]:
+    """Which objects a historical snapshot should cover, and why each rule kept them.
+
+    Four ways in, and they compose: explicit ids, a launch's international designator prefix,
+    a fleet file, and an altitude range read off the *current* catalogue. The altitude range
+    is what keeps a history pull bounded -- a few hundred objects rather than the catalogue --
+    and it has a bias worth stating plainly: it selects on where an object is **now**, so
+    anything that has decayed since the date is missing from it. That matters most for exactly
+    the storm being validated, because a storm's most affected objects are the ones that came
+    down. The launch and id routes exist to reach those, through SATCAT, which keeps decayed
+    objects and their decay dates.
+    """
+    ids: set[int] = set()
+    why: dict[str, Any] = {}
+    if args.ids:
+        named = {int(x) for x in args.ids.split(",") if x.strip()}
+        ids |= named
+        why["ids"] = len(named)
+    if args.fleet:
+        members = {int(m.norad_id) for m in load_fleet(Path(args.fleet)).members}
+        ids |= members
+        why["fleet"] = len(members)
+    if args.launch:
+        prefixes = tuple(x.strip() for x in args.launch.split(",") if x.strip())
+        raw = pd.read_csv(satcat.satcat_path(config.CACHE_DIR), usecols=["OBJECT_ID", "NORAD_CAT_ID"])
+        matched = raw[raw["OBJECT_ID"].astype(str).str.startswith(prefixes)]
+        ids |= {int(i) for i in matched["NORAD_CAT_ID"]}
+        why["launch"] = {"prefixes": list(prefixes), "n": int(len(matched))}
+    if args.min_perigee_km is not None or args.max_perigee_km is not None:
+        current = snapshot.read_snapshot(snapshot.latest_snapshot(config.SNAPSHOT_DIR))
+        perigee = pd.to_numeric(current["perigee_km"], errors="coerce")
+        keep = pd.Series(True, index=current.index)
+        if args.min_perigee_km is not None:
+            keep &= perigee >= float(args.min_perigee_km)
+        if args.max_perigee_km is not None:
+            keep &= perigee <= float(args.max_perigee_km)
+        if args.category:
+            wanted = {c.strip() for c in args.category.split(",") if c.strip()}
+            keep &= current["category"].astype(str).isin(wanted)
+        band = current.loc[keep, "norad_id"]
+        if args.sample and len(band) > args.sample:
+            # Spread over the range rather than taken at random, so the sample covers the
+            # altitudes and does not clump wherever the catalogue is densest.
+            order = current.loc[keep].sort_values("perigee_km")
+            band = order.iloc[:: max(len(order) // int(args.sample), 1)]["norad_id"].head(int(args.sample))
+        ids |= {int(i) for i in band}
+        why["altitude"] = {
+            "min_perigee_km": args.min_perigee_km,
+            "max_perigee_km": args.max_perigee_km,
+            "category": args.category,
+            "n_in_range": int(keep.sum()),
+            "n_sampled": int(len(band)),
+            "read_from": "the current catalogue, so objects that have decayed since are absent",
+        }
+    # Objects that had not launched, or had already re-entered, cannot be in a snapshot of that day.
+    if satcat_frame is not None and ids:
+        meta = satcat_frame.reindex(sorted(ids))
+        day = as_of.date()
+        launched = meta["launch_date"].isna() | (meta["launch_date"] <= day)
+        alive = meta["decay_date"].isna() | (meta["decay_date"] > day)
+        dropped = sorted({int(i) for i in meta.index[~(launched & alive)]})
+        if dropped:
+            why["not_in_orbit_on_the_day"] = len(dropped)
+            ids -= set(dropped)
+    return sorted(ids), why
+
+
+def cmd_snapshot_as_of(args: argparse.Namespace) -> int:
+    """Rebuild the catalogue as it stood on a past date, from gp_history. Cached permanently."""
+    as_of = parse_utc(args.date)
+    path = snapshot.as_of_path(as_of, config.AS_OF_SNAPSHOT_DIR)
+    if path.exists() and not args.force:
+        df = snapshot.read_snapshot(path)
+        log.info("Using the cached historical snapshot %s: %d objects", path.name, len(df))
+        print(path)
+        return 0
+    now = datetime.now(UTC)
+    try:
+        satcat_path = satcat.fetch_satcat(cache_dir=config.CACHE_DIR, now=now, offline=args.offline)
+        satcat_frame = satcat.load_satcat(satcat_path)
+    except (httpx.HTTPError, FileNotFoundError) as exc:
+        log.warning("No SATCAT (%s); the snapshot will carry no object type or radar cross-section", exc)
+        satcat_frame = None
+
+    ids, why = select_historical_objects(args, as_of, satcat_frame)
+    if not ids:
+        log.error("no objects selected; pass --ids, --launch, --fleet or an altitude range")
+        return 2
+    log.info("Historical snapshot for %s: %d objects selected (%s)", as_of.date(), len(ids), why)
+
+    # The pull has to reach back far enough that every object has a set *before* the date.
+    end = as_of + timedelta(days=1)
+    days = int(args.days)
+    try:
+        result = history.backfill(
+            ids,
+            end=end,
+            days=days,
+            cache_dir=config.CACHE_DIR,
+            history_dir=config.HISTORY_DIR,
+            offline=args.offline,
+            # The window is in the past, so "already held through today" says nothing about it.
+            use_stored=False,
+        )
+        log.info("History: %s", result)
+    except (spacetrack.SpaceTrackAuthError, FileNotFoundError) as exc:
+        log.error("Cannot fetch history: %s", exc)
+        return 2
+
+    sets = history.load_history(norad_ids=ids, start=as_of - timedelta(days=days), end=end)
+    if not len(sets):
+        log.error("no element sets stored for those objects in the %d days to %s", days, as_of.date())
+        return 2
+    current_groups: dict[int, list[str]] = {}
+    try:
+        latest = snapshot.read_snapshot(snapshot.latest_snapshot(config.SNAPSHOT_DIR))
+        current_groups = {int(r.norad_id): list(r.groups) for r in latest.itertuples() if r.groups is not None}
+    except FileNotFoundError:
+        pass
+    try:
+        df = snapshot.snapshot_as_of(
+            sets, satcat_frame, as_of=as_of, groups=current_groups, max_age_days=args.max_age_days
+        )
+    except ValueError as exc:
+        log.error("%s", exc)
+        return 2
+
+    path.parent.mkdir(parents=True, exist_ok=True)
+    table = snapshot.to_arrow(
+        df,
+        extra_metadata={
+            "driftwatch_as_of": as_of.isoformat(),
+            "driftwatch_selection": json.dumps(why),
+            "driftwatch_max_age_days": str(args.max_age_days),
+            "driftwatch_built_at": now.isoformat(),
+        },
+    )
+    pq.write_table(table, path, compression="zstd")
+    ages = (pd.Timestamp(as_of) - pd.to_datetime(df["epoch"], utc=True)).dt.total_seconds() / 86400.0
+    log.info(
+        "Historical snapshot %s: %d of %d objects, element-set age median %.2f d, p90 %.2f d, max %.2f d",
+        path.name,
+        len(df),
+        len(ids),
+        float(ages.median()),
+        float(ages.quantile(0.9)),
+        float(ages.max()),
+    )
+    print(f"{len(df)} objects as of {as_of.isoformat()}")
+    print("by category:", df["category"].value_counts().to_dict())
+    print(
+        f"perigee km: min {df['perigee_km'].min():.0f}, median {df['perigee_km'].median():.0f}, "
+        f"max {df['perigee_km'].max():.0f}"
+    )
+    print(path)
+    return 0
+
+
 def cmd_supplemental(args: argparse.Namespace) -> int:
     """Keep the supplemental store: fetch a version, thin the old ones, and refit the covariance across it.
 
@@ -395,10 +556,24 @@ def fit_from_history(
     snapshot_dir = snapshot_dir or config.SNAPSHOT_DIR
     ids = [int(i) for i in objects["norad_id"]]
     result = None
+    # A window that ended well before now is a historical run (Phase 3 Step 4's replay), and two
+    # things that are right for a live run are wrong for it. The backfill's "already held
+    # through the newest stored set" shortcut is a true statement about an object with a 2026
+    # element set that says nothing about 2024, so it is turned off; and the fit must be given
+    # only the element sets from around that window, or it is fitted to today's behaviour and
+    # merely labelled with the historical window.
+    historical = end < now - timedelta(days=int(days))
     if mode == "on" or (mode == "auto" and history_source_available(cache_dir)):
         try:
             result = history.backfill(
-                ids, end=end, days=days, cache_dir=cache_dir, history_dir=history_dir, now=now, offline=offline
+                ids,
+                end=end,
+                days=days,
+                cache_dir=cache_dir,
+                history_dir=history_dir,
+                now=now,
+                offline=offline,
+                use_stored=not historical,
             )
         except (spacetrack.SpaceTrackAuthError, spacetrack.SpaceTrackError, FileNotFoundError, httpx.HTTPError) as exc:
             if mode == "on":
@@ -407,9 +582,14 @@ def fit_from_history(
     elif mode == "auto":
         log.info("No Space-Track credentials or history cache; fitting from the stored history only")
     window = history.backfill_window(end, days)
-    hist = history.load_history(norad_ids=ids, history_dir=history_dir, snapshot_dir=snapshot_dir)
+    bounds = {"start": end - timedelta(days=int(days) + 1), "end": end} if historical else {}
+    hist = history.load_history(norad_ids=ids, history_dir=history_dir, snapshot_dir=snapshot_dir, **bounds)
     log.info(
-        "History for the fit: %d element sets for %d of %d objects", len(hist), hist["norad_id"].nunique(), len(ids)
+        "History for the fit: %d element sets for %d of %d objects%s",
+        len(hist),
+        hist["norad_id"].nunique(),
+        len(ids),
+        f", bounded to {window[0]} to {window[1]} (a historical run)" if historical else "",
     )
     fit = fit_covariance(hist, objects, now=now, window=window)
     return fit, result
@@ -424,6 +604,22 @@ def supplemental_history(norad_ids: Sequence[int], names: Sequence[str] = config
     return pd.concat(frames, ignore_index=True)
 
 
+def snapshot_file(name: str) -> Path:
+    """The stored snapshot of that name, live or historical.
+
+    A run records its snapshot by file name. Historical snapshots live in their own directory
+    (:data:`driftwatch.config.AS_OF_SNAPSHOT_DIR`) so that they cannot become "the latest
+    snapshot" for the pipeline, which means a run built from one has to be told where to look.
+    """
+    live = Path(config.SNAPSHOT_DIR) / name
+    if live.exists():
+        return live
+    historical = Path(config.AS_OF_SNAPSHOT_DIR) / name
+    if historical.exists():
+        return historical
+    raise FileNotFoundError(f"snapshot {name!r} is in neither {config.SNAPSHOT_DIR} nor {config.AS_OF_SNAPSHOT_DIR}")
+
+
 def elements_for_run(info: dict[str, Any]) -> pd.DataFrame:
     """Rebuild the element sets a stored run screened from: its snapshot plus the supplemental versions it used.
 
@@ -431,7 +627,7 @@ def elements_for_run(info: dict[str, Any]) -> pd.DataFrame:
     immutable and the supplemental versions are stored per fetch, so the table this
     returns is the one the screening propagated, whatever CelesTrak is serving now.
     """
-    df = snapshot.read_snapshot(Path(config.SNAPSHOT_DIR) / str(info["snapshot"]))
+    df = snapshot.read_snapshot(snapshot_file(str(info["snapshot"])))
     df["ephemeris"] = "gp"
     for entry in info.get("supplemental") or []:
         path = Path(config.SUPPLEMENTAL_DIR) / str(entry["file"])
@@ -841,6 +1037,7 @@ def risk_run_record(risk: pd.DataFrame, scenario: str, model: CovarianceModel, n
         "n_events": int(len(risk)),
         "n_red": int((risk["flag"] == "red").sum()) if len(risk) else 0,
         "n_yellow": int((risk["flag"] == "yellow").sum()) if len(risk) else 0,
+        "n_unscoreable": int((risk["flag"] == "unscoreable").sum()) if len(risk) else 0,
         "max_pc": float(risk["pc"].max()) if len(risk) else None,
         "max_pc_variance_only": float(risk["pc_variance_only"].max()) if len(risk) else None,
         "max_abs_shift_km": float(
@@ -983,6 +1180,97 @@ def cmd_risk(args: argparse.Namespace) -> int:
     print_risk_summary(joined, args.scenario, args.show)
     print_scenario_comparison(run_dir, args.scenario, min(args.show, 12))
     print(run_dir.risk_path(args.scenario))
+    return 0
+
+
+def _print_table(title: str, table: dict[str, Any] | list[dict[str, Any]]) -> None:
+    """A dict-of-dicts or list-of-dicts as an aligned block, without pulling in a table library."""
+    rows = (
+        [{"": str(k), **{ck: cv for ck, cv in v.items()}} for k, v in table.items()]
+        if isinstance(table, dict)
+        else list(table)
+    )
+    print(f"\n{title}")
+    if not rows:
+        print("  (nothing)")
+        return
+    columns = list(rows[0])
+    widths = {c: max(len(str(c)), *(len(f"{r.get(c, '')}") for r in rows)) for c in columns}
+    print("  " + "  ".join(str(c).rjust(widths[c]) for c in columns))
+    for row in rows:
+        print("  " + "  ".join(f"{row.get(c, '')}".rjust(widths[c]) for c in columns))
+
+
+def cmd_storm_check(args: argparse.Namespace) -> int:
+    """Verify the common-mode cancellation and report what cannot be scored. See storm/diagnostics.py."""
+    try:
+        run_dir = resolve_run(args.run)
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    info = run_dir.read_run()
+    events = run_dir.read_events()
+    objects = run_dir.read_objects()
+    coefficients = run_dir.read_ballistic() if run_dir.ballistic_path.exists() else pd.DataFrame()
+    try:
+        altitudes = diagnostics.mean_altitudes_km(elements_for_run(info))
+    except FileNotFoundError as exc:
+        log.warning(
+            "Cannot rebuild the run's element sets (%s); splitting on the altitude at closest "
+            "approach instead, which a conjunction makes nearly the same for both objects",
+            exc,
+        )
+        altitudes = None
+    stored = [s for s in run_dir.scenarios() if s != config.SCENARIO_QUIET]
+    names = [args.scenario] if args.scenario else stored
+    if not names:
+        log.error(
+            "run %s has no scored scenario but quiet; run `driftwatch risk %s --scenario storm-g5` first",
+            run_dir.name,
+            run_dir.name,
+        )
+        return 2
+
+    checks: dict[str, Any] = info.get("storm_check", {})
+    for name in names:
+        if not run_dir.risk_path(name).exists():
+            log.error("run %s has no stored risk table for scenario %r", run_dir.name, name)
+            return 2
+        risk = run_dir.read_risk(name)
+        frame = diagnostics.cancellation_frame(risk, events, coefficients, altitudes)
+        cancel = diagnostics.cancellation(frame, min_events=args.min_events)
+        effects = diagnostics.effect_split(frame)
+        bad = diagnostics.unscoreable_objects(risk, events, objects, coefficients)
+        bad_summary = diagnostics.unscoreable_summary(bad)
+
+        print(f"\n=== {name} on {run_dir.name}: {cancel.get('n_events', 0)} scoreable events ===")
+        if cancel.get("n_events"):
+            print(
+                f"\nOverall: relative shift {cancel['overall']['median_relative_km']} km against an absolute "
+                f"{cancel['overall']['median_absolute_km']} km, a ratio of {cancel['overall']['median_ratio']} "
+                f"(p90 {cancel['overall']['p90_ratio']}). Rank correlation of the ratio with the altitude "
+                f"difference: {cancel['spearman_ratio_vs_altitude_difference']}"
+            )
+            _print_table("By ballistic coefficient source pair", cancel["by_b_source_pair"])
+            _print_table("By whether the two sources are the same", cancel["by_shared_source"])
+            print(
+                f"\nBy the difference in *orbital* altitude (their median difference at the encounter "
+                f"itself is only {cancel['median_tca_altitude_difference_km']} km -- a conjunction is a "
+                f"near-coincidence in position, so that axis has no range):"
+            )
+            _print_table("", cancel["by_altitude_difference"])
+            _print_table("Probability: combined, shift only, variance only", effects["bands"])
+        print(f"\nUnscoreable: {bad_summary.get('n_objects', 0)} objects over {bad_summary.get('n_events', 0)} events")
+        if len(bad):
+            print(bad.head(args.show).to_string(index=False))
+            print(f"  by category: {bad_summary.get('by_category')}")
+            print(f"  by coefficient source: {bad_summary.get('by_b_source')}")
+            print(f"  by altitude band: {bad_summary.get('by_alt_band')}")
+        checks[name] = {"cancellation": cancel, "effects": effects, "unscoreable": bad_summary}
+
+    info["storm_check"] = checks
+    run_dir.write_run(info)
+    print(f"\n{run_dir.run_json}")
     return 0
 
 
@@ -1158,6 +1446,449 @@ def weather_for_density(now: datetime, start: datetime, end: datetime, *, offlin
     return table
 
 
+def historical_history(ids: list[int], *, end: datetime, days: int, offline: bool) -> pd.DataFrame:
+    """Pull and load ``gp_history`` for a window in the past, then read it back for those ids.
+
+    ``use_stored=False``: an object with a 2026 element set is "held through 2026", which says
+    nothing at all about 2024 and would skip the pull entirely. See
+    :func:`driftwatch.catalogue.history.backfill`.
+    """
+    result = history.backfill(
+        ids,
+        end=end,
+        days=days,
+        cache_dir=config.CACHE_DIR,
+        history_dir=config.HISTORY_DIR,
+        offline=offline,
+        use_stored=False,
+    )
+    log.info(
+        "History: %d requests, %d cached, %d element sets",
+        result.n_requests,
+        result.n_cached_requests,
+        result.n_records,
+    )
+    sets = history.load_history(norad_ids=ids, start=end - timedelta(days=days + 1), end=end, include_snapshots=False)
+    log.info(
+        "Loaded %d element sets for %d of %d objects over %s to %s",
+        len(sets),
+        sets["norad_id"].nunique() if len(sets) else 0,
+        len(ids),
+        (end - timedelta(days=days)).date(),
+        end.date(),
+    )
+    return sets
+
+
+def gannon_coefficients(pre_storm: pd.DataFrame, sets: pd.DataFrame, grid: Any, pivot: datetime) -> pd.DataFrame:
+    """Ballistic coefficients fitted from **pre-storm** history only.
+
+    The discipline the whole test rests on. A coefficient fitted over a window that includes the
+    storm has absorbed the storm's own drag, and using it to predict that storm would be fitting
+    the answer. So the history is cut at the pivot and the fit is given nothing else.
+    """
+    before = sets[pd.to_datetime(sets["epoch"], utc=True) <= pd.Timestamp(pivot)]
+    log.info("Fitting pre-storm ballistic coefficients from %d element sets", len(before))
+    frame = ballistic_mod.coefficients(
+        pre_storm,
+        grid,
+        before,
+        fit_days=config.BALLISTIC_FIT_DAYS,
+        budget_s=0,
+        store=None,
+        step_scale=config.BALLISTIC_FIT_STEP_SCALE,
+        now=pivot,
+    )
+    log.info("Pre-storm coefficients: %s", ballistic_mod.summary(frame))
+    return frame
+
+
+def gannon_selection(args: argparse.Namespace, pivot: datetime, now: datetime) -> tuple[list[int], pd.DataFrame, int]:
+    """The objects to measure, spread over the altitude range, and the size of what is missing.
+
+    Taken from today's catalogue, which is the bias worth stating before any number is read:
+    every object that has decayed since May 2024 is absent, and a storm's most affected objects
+    are precisely the ones that came down. SATCAT knows how many those are, so the count is
+    reported rather than left as a caveat.
+    """
+    current = snapshot.read_snapshot(snapshot.latest_snapshot(config.SNAPSHOT_DIR))
+    perigee = pd.to_numeric(current["perigee_km"], errors="coerce")
+    band = current[(perigee >= args.min_perigee_km) & (perigee <= args.max_perigee_km)]
+    if args.category:
+        band = band[band["category"].astype(str).isin({c.strip() for c in args.category.split(",")})]
+    order = band.sort_values("perigee_km")
+    step = max(len(order) // max(int(args.sample), 1), 1)
+    chosen = order.iloc[::step].head(int(args.sample))
+    ids = sorted({int(i) for i in chosen["norad_id"]})
+
+    satcat_frame = satcat.load_satcat(satcat.fetch_satcat(cache_dir=config.CACHE_DIR, now=now, offline=True))
+    gone = satcat_frame[
+        satcat_frame["decay_date"].notna()
+        & (satcat_frame["decay_date"] > pivot.date())
+        & (satcat_frame["launch_date"] <= pivot.date())
+    ]
+    log.info(
+        "Selected %d objects with perigee %g to %g km, spread over the range, from today's catalogue. "
+        "SATCAT records %d objects that were in orbit on %s and have decayed since; none of them can "
+        "be in this selection, so it is survivorship-biased against the objects a storm affects most.",
+        len(ids),
+        args.min_perigee_km,
+        args.max_perigee_km,
+        len(gone),
+        pivot.date(),
+    )
+    return ids, current, int(len(gone))
+
+
+def cmd_validate_gannon(args: argparse.Namespace) -> int:
+    """The May 2024 storm: the density enhancement first, then the in-track error it caused."""
+    now = datetime.now(UTC)
+    storm = validation.Window("storm", *(parse_utc(t) for t in config.GANNON_STORM_WINDOW))
+    quiet = validation.Window("quiet", *(parse_utc(t) for t in config.GANNON_QUIET_WINDOW))
+    pivot = parse_utc(config.GANNON_PIVOT)
+    quiet_pivot = parse_utc(config.GANNON_QUIET_PIVOT)
+    end = parse_utc(config.GANNON_HISTORY_END)
+
+    ids, current, n_gone = gannon_selection(args, pivot, now)
+    sets = historical_history(ids, end=end, days=int(args.days), offline=args.offline)
+    if not len(sets):
+        log.error("no element sets came back for the window; nothing to validate against")
+        return 2
+    sets = sets.merge(current[["norad_id", "category"]], on="norad_id", how="left")
+    sets["category"] = sets["category"].astype("string").fillna("unknown")
+
+    table = weather_for_density(now, parse_utc("2024-04-01T00:00:00Z"), end, offline=args.offline)
+    grid = density_mod.weather_grid(table)
+    pre_storm = (
+        sets[pd.to_datetime(sets["epoch"], utc=True) <= pd.Timestamp(pivot)]
+        .sort_values("epoch")
+        .drop_duplicates("norad_id", keep="last")
+        .reset_index(drop=True)
+    )
+
+    # 1. The density enhancement, from the objects' own mean motion. No coefficient needed.
+    rates = validation.decay_rates(sets, [quiet, storm])
+    observed = validation.observed_density_ratio(rates, "storm", "quiet", min_snr=args.min_snr)
+    usable = observed[observed["usable"]]
+    modelled = validation.modelled_density_ratio(
+        pre_storm[pre_storm["norad_id"].isin(usable["norad_id"])], grid, storm, quiet
+    )
+    ratios = validation.density_ratios(usable, modelled)
+    print(f"\n=== May 2024, the density enhancement: {len(ratios)} objects with two usable decay rates ===")
+    print(f"   of {observed['norad_id'].nunique()} with rates at all, from {sets['norad_id'].nunique()} pulled")
+    if len(ratios):
+        for label, column in (("observed", "observed_ratio"), ("NRLMSIS", "modelled_ratio")):
+            print(
+                f"{label:>9} storm/quiet: median {ratios[column].median():.2f}, "
+                f"p10 {ratios[column].quantile(0.1):.2f}, p90 {ratios[column].quantile(0.9):.2f}"
+            )
+        print(f"observed / modelled: median {ratios['ratio_of_ratios'].median():.3f}")
+        bands = pd.cut(ratios["altitude_km"], bins=[0, 350, 450, 550, 650, 800, 2000])
+        by_band = ratios.groupby(bands, observed=True).agg(
+            n=("norad_id", "size"),
+            observed=("observed_ratio", "median"),
+            modelled=("modelled_ratio", "median"),
+            ratio=("ratio_of_ratios", "median"),
+        )
+        print("\nby altitude:")
+        print(by_band.round(3).to_string())
+
+    # 2. The in-track error of the pre-storm element sets, against a quiet control at the same lead.
+    coefficients = gannon_coefficients(pre_storm, sets, grid, pivot)
+    observed_shifts, control_shifts, predicted = [], [], []
+    for norad_id, object_sets in sets.groupby("norad_id"):
+        storm_rows = validation.in_track_errors(object_sets, pivot, storm)
+        control_rows = validation.in_track_errors(object_sets, quiet_pivot, quiet)
+        if len(storm_rows):
+            observed_shifts.append(storm_rows)
+            coefficient = validation.coefficient_for(coefficients, int(norad_id))
+            predicted.append(validation.predicted_shifts(object_sets, coefficient, grid, pivot, storm_rows["epoch"]))
+        if len(control_rows):
+            control_shifts.append(control_rows)
+    if not observed_shifts:
+        log.error("no object had both a pre-storm element set and a set issued during the storm")
+        return 2
+
+    observed_frame = pd.concat(observed_shifts, ignore_index=True)
+    control_frame = pd.concat(control_shifts, ignore_index=True) if control_shifts else pd.DataFrame()
+    predicted_frame = pd.concat([p for p in predicted if len(p)], ignore_index=True)
+    residual = validation.residuals(observed_frame, predicted_frame, control_frame)
+    altitude = observed.set_index("norad_id")["altitude_km"]
+    summary = validation.residual_summary(residual, by_altitude=altitude)
+
+    print(f"\n=== May 2024, the in-track error of pre-storm element sets: {len(residual)} comparisons ===")
+    print(
+        f"pivot {pivot.date()}, storm window {storm.start.date()} to {storm.end.date()}; "
+        f"control pivot {quiet_pivot.date()}, control window {quiet.start.date()} to {quiet.end.date()}"
+    )
+    if len(control_frame):
+        print(
+            f"control: SGP4 alone drifts a median {control_frame['observed_shift_km'].abs().median():.3f} km "
+            f"in track over {control_frame['lead_days'].median():.1f} days, p90 "
+            f"{control_frame['observed_shift_km'].abs().quantile(0.9):.3f} km"
+        )
+    keys = ("n", "n_objects", "median_observed_km", "median_predicted_km", "median_residual_km", "slope")
+    for key in keys:
+        print(f"  {key}: {summary.get(key)}")
+    for label, key in (
+        ("free-flying", "free_flying"),
+        ("free-flying, coefficient measured", "free_flying_measured_coefficient"),
+    ):
+        block = summary.get(key, {})
+        if block:
+            print(
+                f"  {label} ({block.get('n')} comparisons over {block.get('n_objects')} objects): "
+                f"observed {block.get('median_observed_km')} km against a predicted "
+                f"{block.get('median_predicted_km')} km; slope {block.get('slope')}, "
+                f"robust slope {block.get('slope_robust')}, correlation {block.get('correlation')}"
+            )
+    for title, key in (
+        ("by lead time (days)", "by_lead_day"),
+        ("by altitude", "by_altitude_km"),
+        ("by ballistic coefficient source", "by_b_source"),
+    ):
+        if summary.get(key):
+            _print_table(title, {str(k): v for k, v in summary[key].items()})
+
+    out = Path(args.out or config.DATA_DIR / "validation")
+    out.mkdir(parents=True, exist_ok=True)
+    if len(ratios):
+        ratios.to_parquet(out / "gannon_density_ratios.parquet", index=False)
+    residual.to_parquet(out / "gannon_in_track.parquet", index=False)
+    if len(control_frame):
+        control_frame.to_parquet(out / "gannon_control.parquet", index=False)
+    record = {
+        "built_at": now.isoformat(),
+        "windows": {"storm": storm.as_dict(), "quiet": quiet.as_dict()},
+        "pivots": {"storm": pivot.isoformat(), "quiet": quiet_pivot.isoformat()},
+        "selection": {
+            "n_requested": len(ids),
+            "n_with_history": int(sets["norad_id"].nunique()),
+            "min_perigee_km": args.min_perigee_km,
+            "max_perigee_km": args.max_perigee_km,
+            "n_in_orbit_then_and_decayed_since": n_gone,
+        },
+        "coefficients": ballistic_mod.summary(coefficients),
+        "density_enhancement": {
+            "n_objects": int(len(ratios)),
+            "observed_median": round(float(ratios["observed_ratio"].median()), 4) if len(ratios) else None,
+            "modelled_median": round(float(ratios["modelled_ratio"].median()), 4) if len(ratios) else None,
+            "observed_over_modelled_median": round(float(ratios["ratio_of_ratios"].median()), 4)
+            if len(ratios)
+            else None,
+        },
+        "in_track": summary,
+        "control": {
+            "n": int(len(control_frame)),
+            "median_abs_km": round(float(control_frame["observed_shift_km"].abs().median()), 4)
+            if len(control_frame)
+            else None,
+        },
+    }
+    (out / "gannon.json").write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    print(f"\n{out / 'gannon.json'}")
+    return 0
+
+
+def starlink_2022_control(args: argparse.Namespace, end: datetime) -> tuple[pd.DataFrame, list[int]]:
+    """Starlinks already on station near 500 km through the same days, as the control group.
+
+    The prompt asks for one and it earns its place: without it the fall at 210 km could be read
+    as "the storm was large" rather than "the storm was large *down there*". These are payloads
+    from the earlier shells, launched well before the window so they were done raising, and they
+    are filtered on the perigee their own 2022 element sets show rather than on where they are
+    today.
+    """
+    raw = pd.read_csv(
+        satcat.satcat_path(config.CACHE_DIR),
+        usecols=["OBJECT_NAME", "OBJECT_ID", "NORAD_CAT_ID", "OBJECT_TYPE", "LAUNCH_DATE", "DECAY_DATE"],
+    )
+    earlier = raw[
+        raw["OBJECT_NAME"].astype(str).str.startswith("STARLINK")
+        & (raw["OBJECT_TYPE"] == "PAY")
+        & (pd.to_datetime(raw["LAUNCH_DATE"], errors="coerce") < pd.Timestamp("2021-12-01"))
+    ]
+    # Spread over the whole pre-2022 population rather than taken from the front of it: the
+    # lowest catalogue numbers are the v0.9 demonstration batch, most of which was deorbited
+    # long before this window, and a control drawn from them comes back nearly empty.
+    pool = sorted({int(i) for i in earlier["NORAD_CAT_ID"]})
+    wanted = max(int(args.control_sample) * 6, 1)
+    candidates = pool[:: max(len(pool) // wanted, 1)][:wanted]
+    if not candidates:
+        return pd.DataFrame(), []
+    sets = historical_history(candidates, end=end, days=int(config.STARLINK_2022_HISTORY_DAYS), offline=args.offline)
+    if not len(sets):
+        return pd.DataFrame(), []
+    perigee = pd.Series(
+        [
+            ballistic_mod.perigee_altitude_km(float(m), float(e))
+            for m, e in zip(sets["mean_motion"], sets["eccentricity"], strict=True)
+        ],
+        index=sets.index,
+    )
+    half = float(args.control_band_km)
+    band = (perigee >= config.STARLINK_2022_CONTROL_KM - half) & (perigee <= config.STARLINK_2022_CONTROL_KM + half)
+    keep = sets.loc[band, "norad_id"].value_counts()
+    ids = [int(i) for i in keep[keep >= 5].index][: int(args.control_sample)]
+    return sets[sets["norad_id"].isin(ids)].reset_index(drop=True), ids
+
+
+def cmd_validate_starlink_2022(args: argparse.Namespace) -> int:
+    """The February 2022 loss: what the public catalogue saw, and whether the model shows the drag.
+
+    A narrower question than May 2024 and a harder one. The storm was a G1 -- the smallest
+    named level -- and the altitude was about 210 km, low enough that the density is set mostly
+    by the solar cycle and the diurnal bulge rather than by the geomagnetic term. So the test
+    is not "is the enhancement the right size" but "does the model show elevated drag there at
+    all", and the answer is reported either way without adjusting anything.
+    """
+    now = datetime.now(UTC)
+    end = parse_utc(config.STARLINK_2022_HISTORY_END)
+    storm_day = parse_utc(config.STARLINK_2022_STORM_DAY)
+    quiet_day = parse_utc(config.STARLINK_2022_QUIET_DAY)
+
+    raw = pd.read_csv(
+        satcat.satcat_path(config.CACHE_DIR),
+        usecols=["OBJECT_NAME", "OBJECT_ID", "NORAD_CAT_ID", "OBJECT_TYPE", "LAUNCH_DATE", "DECAY_DATE"],
+    )
+    launch = raw[raw["OBJECT_ID"].astype(str).str.startswith(config.STARLINK_2022_LAUNCH)].copy()
+    launch["decayed"] = launch["DECAY_DATE"].notna()
+    ids = sorted({int(i) for i in launch["NORAD_CAT_ID"]})
+
+    # What the public catalogue actually holds about this launch, which is the first finding.
+    payloads = launch[launch["OBJECT_TYPE"] == "PAY"]
+    print("\n=== February 2022, what the catalogue saw ===")
+    print(
+        f"SpaceX launched 49 satellites on 3 February 2022. CelesTrak's SATCAT carries "
+        f"{len(launch)} objects under {config.STARLINK_2022_LAUNCH}: {len(payloads)} payloads and "
+        f"{len(launch) - len(payloads)} pieces of debris. "
+        f"{int(payloads['decayed'].sum())} of the payloads have a decay date."
+    )
+    print(launch.sort_values("NORAD_CAT_ID").to_string(index=False))
+
+    sets = historical_history(ids, end=end, days=int(config.STARLINK_2022_HISTORY_DAYS), offline=args.offline)
+    if not len(sets):
+        log.error("no element sets came back for the launch")
+        return 2
+    names = launch.set_index("NORAD_CAT_ID")["OBJECT_NAME"].to_dict()
+    decay_dates = launch.set_index("NORAD_CAT_ID")["DECAY_DATE"].to_dict()
+
+    tracks, rows = [], []
+    for norad_id, object_sets in sets.groupby("norad_id"):
+        track = validation.decay_history(object_sets)
+        if not len(track):
+            continue
+        track["name"] = names.get(int(norad_id), "")
+        tracks.append(track)
+        rows.append(
+            {
+                **validation.lifetime_from_decay(track),
+                "name": names.get(int(norad_id), ""),
+                "decay_date": decay_dates.get(int(norad_id)),
+            }
+        )
+    decay = pd.DataFrame(rows).sort_values("norad_id")
+    print("\n=== The decay at insertion altitude, from the element sets themselves ===")
+    columns = [
+        "norad_id",
+        "name",
+        "n_sets",
+        "span_days",
+        "first_altitude_km",
+        "last_altitude_km",
+        "drop_km",
+        "mean_rate_km_day",
+        "decay_date",
+    ]
+    print(decay[[c for c in columns if c in decay.columns]].to_string(index=False))
+    brief = decay[decay["span_days"] < 1.0]
+    if len(brief):
+        print(
+            f"  {len(brief)} of these have under a day of element sets before they were lost, so their "
+            "rate column is element-set scatter rather than a decay rate and two of them come out "
+            "rising. The altitudes are still real; the rates are not."
+        )
+
+    # Does the model show elevated drag at the insertion altitude for that G1?
+    table = weather_for_density(now, quiet_day - timedelta(days=5), end, offline=args.offline)
+    print(f"\n=== Does NRLMSIS show elevated drag at {config.STARLINK_2022_INSERTION_KM:g} km for the G1? ===")
+    ratios = []
+    for altitude in (config.STARLINK_2022_INSERTION_KM, 300.0, 400.0, config.STARLINK_2022_CONTROL_KM):
+        value = validation.storm_ratio_at(table, altitude, storm_day, quiet_at=quiet_day)
+        ratios.append(value)
+        print(
+            f"  {altitude:5.0f} km: {storm_day.date()} {value['storm']:.3e} against "
+            f"{quiet_day.date()} {value['quiet']:.3e}, ratio {value['ratio']:.3f}"
+        )
+    kp = weather_table.weather_table(
+        *density_mod.weather_window(quiet_day - timedelta(days=2), end),
+        weather_sources(now=now, offline=args.offline)[0],
+        now=now,
+    )
+    inside = pd.to_datetime(kp["t"], utc=True).between(
+        pd.Timestamp(storm_day) - pd.Timedelta(days=1), pd.Timestamp(storm_day) + pd.Timedelta(days=2)
+    )
+    print(
+        f"  observed Kp over {storm_day.date()} +/- a day: max {kp.loc[inside, 'kp'].max():.2f}, "
+        f"ap max {kp.loc[inside, 'ap'].max():.0f}"
+    )
+
+    # The control group: the same days, the same model, 500 km instead of 210.
+    control, control_ids = starlink_2022_control(args, end)
+    control_rows = []
+    for _, object_sets in control.groupby("norad_id"):
+        track = validation.decay_history(object_sets)
+        if len(track):
+            control_rows.append(validation.lifetime_from_decay(track))
+    control_decay = pd.DataFrame(control_rows)
+    print(f"\n=== The control group at {config.STARLINK_2022_CONTROL_KM:g} km, same days ===")
+    if len(control_decay):
+        print(
+            f"{len(control_decay)} Starlinks launched before December 2021 and flying within "
+            f"{args.control_band_km:g} km of "
+            f"{config.STARLINK_2022_CONTROL_KM:g} km: median fall "
+            f"{control_decay['drop_km'].median():.2f} km over "
+            f"{control_decay['span_days'].median():.1f} days, "
+            f"{control_decay['mean_rate_km_day'].median():.3f} km/day. The insertion group's survivors were "
+            f"climbing and its losses fell at tens of km a day."
+        )
+    else:
+        print("  no control objects came back with enough element sets in the window")
+
+    out = Path(args.out or config.DATA_DIR / "validation")
+    out.mkdir(parents=True, exist_ok=True)
+    if tracks:
+        pd.concat(tracks, ignore_index=True).to_parquet(out / "starlink2022_tracks.parquet", index=False)
+    decay.to_parquet(out / "starlink2022_decay.parquet", index=False)
+    record = {
+        "built_at": now.isoformat(),
+        "catalogue": {
+            "launch": config.STARLINK_2022_LAUNCH,
+            "n_launched": 49,
+            "n_catalogued": int(len(launch)),
+            "n_payloads_catalogued": int(len(payloads)),
+            "n_payloads_with_decay_date": int(payloads["decayed"].sum()),
+            "n_with_element_sets": int(sets["norad_id"].nunique()),
+        },
+        "decay": decay.to_dict(orient="records"),
+        "control": {
+            "target_km": config.STARLINK_2022_CONTROL_KM,
+            "n_objects": int(len(control_decay)),
+            "norad_ids": control_ids,
+            "median_drop_km": round(float(control_decay["drop_km"].median()), 3) if len(control_decay) else None,
+            "median_rate_km_day": round(float(control_decay["mean_rate_km_day"].median()), 4)
+            if len(control_decay)
+            else None,
+        },
+        "density_ratios": ratios,
+        "observed_kp_max": round(float(kp.loc[inside, "kp"].max()), 2),
+        "observed_ap_max": round(float(kp.loc[inside, "ap"].max()), 1),
+    }
+    (out / "starlink2022.json").write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    print(f"\n{out / 'starlink2022.json'}")
+    return 0
+
+
 def cmd_density(args: argparse.Namespace) -> int:
     """The density sanity checks: quiet profile, storm ratios, and the sampling-step convergence."""
     now = parse_utc(args.at) if args.at else datetime.now(UTC)
@@ -1283,8 +2014,18 @@ def cmd_ballistic(args: argparse.Namespace) -> int:
     table = weather_for_density(now, start, end, offline=args.offline)
     hist = None
     if not args.no_history:
-        hist = history.load_history(norad_ids=[int(i) for i in elements["norad_id"]], start=start)
-        log.info("History: %d element sets for %d objects", len(hist), hist["norad_id"].nunique() if len(hist) else 0)
+        # Bounded at both ends. The upper bound is what makes this work on a historical run: the
+        # store also holds today's element sets for most of these objects, and a fit given both
+        # would measure 2026's decay and label it 2024's. For a live run the bound is a no-op,
+        # because the newest set in the store *is* the run's.
+        hist = history.load_history(norad_ids=[int(i) for i in elements["norad_id"]], start=start, end=latest_epoch)
+        log.info(
+            "History: %d element sets for %d objects, %s to %s",
+            len(hist),
+            hist["norad_id"].nunique() if len(hist) else 0,
+            start.date(),
+            latest_epoch.date(),
+        )
     store = None if args.no_cache else CoefficientStore().load()
 
     def progress(done: int, total: int) -> None:
@@ -1594,6 +2335,19 @@ def build_parser() -> argparse.ArgumentParser:
     add_risk_options(risk, scenario_default="quiet")
     risk.set_defaults(func=cmd_risk)
 
+    check_storm = sub.add_parser(
+        "storm-check",
+        help="attack the storm result: split the shift cancellation by coefficient source and altitude "
+        "difference, put the three probabilities side by side, and name the unscoreable objects",
+    )
+    check_storm.add_argument("run", help="run directory, its name under data/conjunctions, or 'latest'")
+    check_storm.add_argument("--scenario", help="scenario to check (default: every stored one but quiet)")
+    check_storm.add_argument(
+        "--min-events", type=int, default=20, help="smallest coefficient-source group to report (default: 20)"
+    )
+    check_storm.add_argument("--show", type=int, default=25, help="unscoreable objects to print (default: 25)")
+    check_storm.set_defaults(func=cmd_storm_check)
+
     report = sub.add_parser("report", help="rewrite a stored run's markdown report and the viewer's conjunction bundle")
     report.add_argument("run", help="run directory, its name under data/conjunctions, or 'latest'")
     report.add_argument("--scenario", help="scenario to report (default: the first stored)")
@@ -1612,6 +2366,65 @@ def build_parser() -> argparse.ArgumentParser:
         help="largest single file allowed, in MiB (default 25, the Cloudflare Pages limit)",
     )
     check.set_defaults(func=cmd_check_bundle)
+
+    validate = sub.add_parser(
+        "validate",
+        help="Phase 3 Step 4: measure the storm term against the May 2024 and February 2022 records",
+    )
+    validate.add_argument("case", choices=("gannon", "starlink-2022"), help="which validation case to run")
+    validate.add_argument("--sample", type=int, default=300, help="objects to measure (gannon; default 300)")
+    validate.add_argument("--min-perigee-km", type=float, default=250.0, help="lower edge of the altitude range")
+    validate.add_argument("--max-perigee-km", type=float, default=750.0, help="upper edge of the altitude range")
+    validate.add_argument("--category", help="comma-separated categories to keep")
+    validate.add_argument(
+        "--days", type=int, default=config.GANNON_HISTORY_DAYS, help="days of history to pull before the end date"
+    )
+    validate.add_argument(
+        "--min-snr",
+        type=float,
+        default=3.0,
+        help="smallest quiet-window decay, in units of its own scatter, worth taking a ratio of (default 3)",
+    )
+    validate.add_argument(
+        "--control-band-km",
+        type=float,
+        default=40.0,
+        help="half-width of the control group's perigee band around 500 km (default 40)",
+    )
+    validate.add_argument(
+        "--control-sample",
+        type=int,
+        default=40,
+        help="control objects near 500 km for the 2022 case (default 40)",
+    )
+    validate.add_argument("--out", help=f"output directory (default {config.DATA_DIR / 'validation'})")
+    validate.add_argument("--offline", action="store_true", help="use only cached history and space weather")
+    validate.set_defaults(
+        func=lambda a: cmd_validate_gannon(a) if a.case == "gannon" else cmd_validate_starlink_2022(a)
+    )
+
+    asof = sub.add_parser(
+        "snapshot-as-of",
+        help="rebuild the catalogue as it stood on a past date from gp_history, and cache it permanently",
+    )
+    asof.add_argument("--date", required=True, help="the date to reconstruct, ISO 8601 UTC")
+    asof.add_argument("--ids", help="comma-separated NORAD ids")
+    asof.add_argument("--launch", help="comma-separated international designator prefixes, e.g. 2022-010")
+    asof.add_argument("--fleet", help="fleet file whose members to include")
+    asof.add_argument("--min-perigee-km", type=float, help="lower edge of the altitude range to sample")
+    asof.add_argument("--max-perigee-km", type=float, help="upper edge of the altitude range to sample")
+    asof.add_argument("--category", help="comma-separated categories to keep within the altitude range")
+    asof.add_argument("--sample", type=int, default=400, help="objects to take from the altitude range (default 400)")
+    asof.add_argument("--days", type=int, default=30, help="days of history to pull before the date (default 30)")
+    asof.add_argument(
+        "--max-age-days",
+        type=float,
+        default=7.0,
+        help="drop objects whose newest set by then is staler than this (default 7)",
+    )
+    asof.add_argument("--force", action="store_true", help="rebuild even if the cached file exists")
+    asof.add_argument("--offline", action="store_true", help="use only cached history and SATCAT")
+    asof.set_defaults(func=cmd_snapshot_as_of)
 
     sup = sub.add_parser(
         "supplemental",

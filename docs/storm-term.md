@@ -236,44 +236,259 @@ precisely the part that moves the TCA rather than the miss at it, and the projec
 plane removes it. What survives the projection is what changes the probability. Nothing
 rescreens, and nothing needs to.
 
-## Two numbers, always
+## Three numbers, always
 
-Every row carries `pc` (shift **and** variance) as the primary number and `pc_variance_only`
-(the same widened covariance, both objects left where their element sets put them) beside it.
-The ratio says how much of a scenario is the displacement and how much is the spread — a
-question the documentation has to answer with a measurement rather than an assertion.
+A scenario does two things at once, and they pull in opposite directions often enough that one
+number hides both. So every row carries all three:
 
-On the demo run's G5 scenario, over the 998 events above a probability of 1e-9: the median
-`pc / pc_variance_only` is **0.68**, and the shift **lowers** the probability on 823 of them
-against raising it on 175. A relative displacement usually separates two objects that were
-going to pass close, so on most events the shift is protective. The screening interest is in
-the minority it raises and in the tail — pairs at 1e-80 under quiet that come back at 1e-7
-because the shift moved one object onto the other, with ratios reaching 3,265.
+| Column | The objects | The covariance |
+| --- | --- | --- |
+| `pc` | moved by the scenario's mean shift | the scenario's, with the shift's uncertainty in it |
+| `pc_shift_only` | moved | the one the run would have had without the storm layer |
+| `pc_variance_only` | left where their element sets put them | the scenario's |
 
-The scale of the inputs behind that: a median absolute shift of 278 km per object, but a median
-*relative* shift of only 32 km between the two objects of a pair, because a storm moves
-neighbouring objects in the same direction by similar amounts. The sigma the term adds is a
-median of 6.5 km per object.
+They are not decomposable into one another — the probability is not linear in either input — so
+all three are computed rather than one being inferred from the other two. Under a model with no
+storm layer the three are the same array, which is what keeps the Phase 2 `quiet` scenario
+unchanged.
 
-Which is why the flag counts **fall** rather than rise:
+(`pc_shift_only` was added at the Step 3 review. The step shipped with `pc` and
+`pc_variance_only`, which separates the two effects only if one is willing to read the shift's
+contribution as a residual.)
 
-| Scenario | red | yellow |
-| --- | ---: | ---: |
-| `quiet` | 1 | 22 |
-| `forecast` | 2 | 11 |
-| `storm-g5` | 1 | 12 |
+On the demo run's G5 scenario, over the 1,104 events above a probability of 1e-9 under `quiet`:
+the median `pc / pc_quiet` is **0.27**, and the storm **lowers** the probability on 972 of them
+against raising it on 132. Split by band on the variance-only probability, the shift alone is
+what does it:
 
-A relative displacement of tens of kilometres applied to a population of near misses separates
-more pairs than it creates. That is a real result and not a bug, and it is the opposite of the
-intuition that a storm must make everything worse. What a storm actually does is make every
-prediction *different*, and different is bad news only for the minority of pairs it pushes
-together — which is exactly why the tail matters more than the count, and why the report shows
+| `pc_variance_only` band | n | median `pc` | median `pc_shift_only` | median `pc_variance_only` | `pc`/variance-only | lowered by the shift | raised |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1e-12 to 1e-9 | 482 | 3.4e-11 | 1.2e-11 | 6.8e-11 | 0.88 | 403 | 79 |
+| 1e-9 to 1e-7 | 521 | 6.2e-9 | 1.5e-9 | 1.7e-8 | 0.66 | 450 | 71 |
+| 1e-7 to 1e-5 | 605 | 1.6e-7 | 3.3e-8 | 4.4e-7 | 0.52 | 512 | 93 |
+| 1e-5 to 1 | 11 | 1.5e-5 | 4.3e-6 | 3.2e-5 | 0.49 | 10 | 1 |
+
+The larger the event, the more the shift lowers it. The screening interest is in the minority it
+raises and in the tail — pairs at 1e-80 under quiet that come back at 1e-7 because the shift
+moved one object onto the other, with `pc / pc_variance_only` reaching 3,270.
+
+So the flag counts **fall** rather than rise:
+
+| Scenario | red | yellow | unscoreable |
+| --- | ---: | ---: | ---: |
+| `quiet` | 1 | 22 | 0 |
+| `forecast` | 2 | 10 | 113 |
+| `storm-g5` | 1 | 11 | 113 |
+
+A displacement of tens of kilometres applied to a population whose misses are a few kilometres
+separates more pairs than it creates. That is a real result and not a bug, and it is the
+opposite of the intuition that a storm must make everything worse. What a storm actually does is
+make every prediction *different*, and different is bad news only for the minority of pairs it
+pushes together — which is why the tail matters more than the count, and why the report shows
 the events that moved most rather than the totals.
 
 Every row also carries `run_id`, `snapshot`, `model_version`, `supplemental_version`,
-`scenario`, both objects' in-track shifts and their sigmas, and the `source` label of the
-ballistic coefficient behind each — so a surprising number can be traced to the coefficient
-that produced it without leaving the output file.
+`scenario`, both objects' in-track shifts and their sigmas, the **relative** shift that actually
+entered the miss, and the `source` label of the ballistic coefficient behind each — so a
+surprising number can be traced to the coefficient that produced it without leaving the output
+file.
+
+`relative_shift_km` is computed as a vector: both objects' in-track displacements are rotated
+out of their own RIC frames and differenced in TEME. The scalar difference of the two in-track
+components, which is the obvious thing to write, is **not** a displacement, because the two
+frames are different — for a crossing geometry they can be nearly perpendicular.
+
+## Attacking the result: is the relative shift what we think it is?
+
+The result above is the project's headline and it is counter-intuitive, so before it is
+published it has to survive being attacked. It was attacked at the Step 3 review, and it
+survived — while the *explanation* attached to it did not. This section is that in full,
+because a result whose stated mechanism turned out to be wrong is exactly the kind of thing a
+reader is entitled to see worked through rather than quietly corrected.
+
+**What was believed.** That a storm displaces both objects of a pair in the same direction by
+similar amounts, so that only a small *relative* shift reaches the miss — a common-mode
+cancellation — and that a relative displacement of that modest size, spread over a population of
+near misses, separates more pairs than it creates.
+
+**The obvious failure mode.** Two objects can also come out with similar shifts because they
+were handed the same coefficient by the same rule: both standing in with the run's `typical`
+median for their category and altitude band, say. If the cancellation were an artefact of shared
+inputs it would be strongest where the inputs are shared and weakest where they are not, and it
+would say nothing about the atmosphere.
+
+`driftwatch storm-check <run>` splits the **relative-to-absolute shift ratio** — the relative
+displacement that enters the miss, over the mean of the two objects' own displacements — two
+ways and lets the split answer. The ratio runs from 0 (the two shifts identical: perfect
+cancellation) to 2 (one shift zero, or the two exactly opposed: none at all).
+
+**By ballistic coefficient source.** A pair whose two coefficients were measured independently
+— `history` against `history`, each fitted from its own object's decay — shares no input beyond
+the density model. If the ratio there is as small as it is for a pair sharing a `typical`
+stand-in, shared values are not what is producing it.
+
+**By the altitude difference between the two objects.** This is the physical prediction and the
+sharper test. The shift goes as `B drho v² t²`, and the density falls by an order of magnitude
+every 50 km or so, so two objects in the same shell see nearly the same excess and two objects
+100 km apart do not. **If the cancellation is physical the ratio must rise with the altitude
+difference. If it is an artefact of shared coefficients it has no reason to depend on altitude
+at all.**
+
+Which altitude matters here, and it is not the obvious one. A conjunction *is* a near-coincidence
+in position, so the two objects are at nearly the same altitude at the moment they pass — a
+median of 8 km apart on the demo run, with no range to show a trend across. The displacement is
+accumulated over the whole window along each object's own orbit, so the axis is the **mean
+altitude of the two orbits**, which does have a range.
+
+### What the splits actually say
+
+Run on the demo run's G5 scenario (5,591 scoreable events) and on the May 2024 replay
+(`docs/storm-validation.md`, 1,721 events of a historical catalogue under the observed record).
+
+**By ballistic coefficient source pair**, demo run under G5:
+
+| Pair | events | median relative | median absolute | median ratio |
+| --- | ---: | ---: | ---: | ---: |
+| `history`+`history` | 2,942 | 30.2 km | 18.0 km | **1.89** |
+| `history`+`typical` | 2,060 | 85.9 km | 44.8 km | **1.93** |
+| `bstar`+`history` | 581 | 8.0 km | 4.2 km | **1.86** |
+| same source | 2,948 | 30.2 km | 18.0 km | 1.89 |
+| different sources | 2,643 | 53.5 km | 29.3 km | 1.92 |
+
+**By the difference in the two objects' orbital altitudes**, same run:
+
+| Difference | events | median ratio |
+| --- | ---: | ---: |
+| 0–2 km | 296 | 1.91 |
+| 2–10 km | 2,252 | 1.92 |
+| 10–30 km | 2,382 | 1.90 |
+| 30–100 km | 513 | 1.89 |
+| 100–300 km | 103 | 1.92 |
+| over 300 km | 45 | 1.86 |
+
+Rank correlation of the ratio with the altitude difference: **−0.10**. Overall ratio **1.91**,
+p90 1.996.
+
+The May 2024 replay, independently — a different catalogue, a different fleet, a different year,
+and observed weather rather than a designed profile — gives **1.87** overall, 1.76 to 1.97
+across source pairs, and across altitude bins:
+
+| Difference | events | median ratio |
+| --- | ---: | ---: |
+| 0–2 km | 39 | 1.35 |
+| 2–10 km | 230 | 1.88 |
+| 10–30 km | 516 | 1.88 |
+| 30–100 km | 805 | 1.87 |
+| 100–300 km | 100 | 1.88 |
+| over 300 km | 31 | 1.85 |
+
+**The one place the physical prediction shows at all** is that first bin: pairs whose orbits are
+within 2 km of each other in mean altitude come out at 1.35 rather than 1.87. That is the right
+direction — genuinely co-altitude objects do see more of the same excess and do cancel more —
+and it is worth reporting rather than smoothing away. But it rests on 39 events, the demo run's
+much larger sample puts the same bin at 1.91 with no trend at all, and 1.35 is still nowhere near
+the small ratio a common mode would need. Whatever cancellation exists is a second-order effect
+in the narrowest bin, not the mechanism behind the headline.
+
+### And the answer is not the one the result was explained by
+
+**There is no common-mode cancellation.** The relative shift is not smaller than the two
+absolute shifts; it is close to **twice** their mean, which is what a ratio of 1.91 out of a
+possible 2 means — the two displacements are nearly independent, not a common mode.
+
+Three measurements say why, and they are consistent with each other:
+
+* The two objects' in-track directions are **not** the same direction. The median angle between
+  them at the encounter is **120°** (p10 46°, p90 160°), with a median relative speed of
+  13.2 km/s. A conjunction between two objects genuinely moving together is rare, because a low
+  relative speed is precisely what stops two objects from closing on each other. The pairs a
+  screener finds are crossing pairs.
+* The two shifts are **uncorrelated**: r = 0.08 across the 5,591 events, with the two in-track
+  components agreeing in sign only 59 per cent of the time. Even at the same altitude, two
+  objects differ in ballistic coefficient by orders of magnitude — a Starlink and a Fengyun 1C
+  fragment at 500 km are a factor of thirty apart.
+* The ratio is **flat** in both splits. That is the real content of the two tables above: a
+  quantity that does not move when the coefficient source changes and does not move when the
+  altitude separation changes by two orders of magnitude is not being set by either. It is being
+  set by the encounter geometry, and 1.91 is what near-independent displacements give.
+
+The earlier reading — that a storm moves neighbouring objects together and only the small
+residual reaches the miss — came from comparing a *per-event relative* shift at the time of
+closest approach against a *per-object absolute* shift at the end of the window, which are not
+comparable quantities. Compared like with like, the mechanism disappears.
+
+**The result survives the loss of its explanation, and needs a simpler one.** The storm still
+lowers the probability on most events, and the reason is that it displaces the objects by tens
+of kilometres while their misses are a few: almost any large displacement applied to a near miss
+separates the pair. Nothing about that requires the two shifts to be alike. It also explains the
+band structure above — the bigger the event, the tighter the miss, the more surely a large
+displacement moves the pair apart.
+
+So the two splits the review asked for did their job twice over. They excluded the artefact:
+independently measured pairs behave exactly like pairs sharing a stand-in, so the ratio is not
+coming from shared inputs. And they falsified the mechanism the result had been attributed to,
+which the aggregate number alone would have gone on hiding.
+
+## Extrapolated events are unscoreable
+
+The derivation holds the semi-major axis fixed and integrates a constant-`v` drift twice. Both
+are small-perturbation statements, and the same arithmetic that gives the ISS a few hundred
+kilometres under a G5 gives a high area-to-mass fragment at 300 km a hundred thousand — a
+faithful evaluation of a formula outside its domain.
+
+Step 3 shipped with that flagged: the number was reported with an `!extrapolated` marker on the
+covariance source. **At the Step 3 review that was changed to a refusal.** Past
+`STORM_MAX_SHIFT_REVOLUTIONS` — a quarter of the orbit's circumference — the term has stopped
+being a correction to a known position and has become a claim about *where in its orbit* the
+object is, and a probability computed from such a position is arithmetic with nothing behind it.
+A marked number is still a number, and a number in a probability column will be read, sorted and
+thresholded.
+
+So every event involving such an object is reported unscoreable:
+
+- `pc`, `pc_shift_only`, `pc_variance_only`, `pc_alfano`, `pc_chan`, `pc_max` and `pc_max_scale`
+  are **NaN**;
+- `region` and `flag` are `unscoreable`, `confidence` is `none`;
+- `scoreable` is false and `unscoreable_reason` names the object and the size of the violation;
+- and the event is excluded from every aggregate — the flag counts, the maxima, the
+  Foster/Alfano comparison, the cancellation split and the effect split alike.
+
+Nothing is dropped. The event keeps its geometry, its covariance, both shifts and their sigmas.
+What is withheld is only the number a reader could act on.
+
+The **cut is the displacement test alone**, which is what the review specified. The decay
+fraction — one part in a thousand of `a` over the window — is the wider test, and it still marks
+the covariance source `!extrapolated` without withdrawing the event, because "this object's
+implied decay was large" is a caveat a reader can weigh while "we do not know where in its orbit
+it is" is not.
+
+### What the 42 objects are
+
+On the demo run's G5 scenario, **42 objects over 113 of the 5,704 events**. (Step 3 reported 53
+under the wider test and the coefficients it had then; the thrust ceiling removed some of them
+by taking a thrusting satellite's implausible coefficient away, and the cut is now the
+displacement test alone.)
+
+They are one population, which is the thing worth knowing:
+
+| | |
+| --- | --- |
+| Category | 40 Starlink, 2 other constellation. No debris, no rocket bodies, no payloads. |
+| Altitude band | 40 at 450–550 km, 2 at 550–650 km. None higher. |
+| Coefficient source | 36 `typical`, 4 `history`, 2 `bstar`. |
+| Displacement | 0.25 to 1.27 revolutions of the orbit. |
+
+So they are **operated satellites in the densest, lowest shell of the constellation**, mostly
+carrying a stand-in coefficient because their own decay history is contaminated by
+station-keeping. Under a G5 the arithmetic puts them a quarter to more than a full revolution
+ahead of their element sets, which is not a position statement — and it is a faithful evaluation
+of the formula, because an object at 450 km under a sustained Kp 9 really is being displaced by
+an amount the linear theory cannot express. The right answer for them is a re-entry-style
+integration, not a bigger number: `ROADMAP.md` carries that as the lifetime-loss item.
+
+On the May 2024 replay, run against the observed record rather than a synthetic G5, **one**
+object crosses the line: STARLINK-30105, 0.67 of a revolution. The count is a property of the
+scenario's severity, not of the code.
 
 ## Limits, stated
 
@@ -283,7 +498,10 @@ that produced it without leaving the output file.
   documents at length as noisy. An object whose `B*` is nonsense has a nonsense implied
   density and therefore a nonsense excess, which is why the coefficient's `source` label
   travels with every row.
-- **The storm-response uncertainty is a prior**, not a measurement, until Step 4.
+- **The storm-response uncertainty was a prior** until Step 4 measured it. Over May 2024 the
+  model **over-predicts** the enhancement by about 22 per cent, consistently across altitude;
+  the 30 per cent carried here is the right magnitude and symmetric where the truth is biased.
+  Nothing is tuned to that — see `docs/storm-validation.md`.
 - **No coefficient means no shift**, which is a statement that we do not know rather than that
   there is none. The label says `storm:none` and the count is in the run record.
 - **The shift is zero at the element set's own epoch** by construction. An object screened

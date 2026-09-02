@@ -379,6 +379,7 @@ def backfill(
     client: spacetrack.SpaceTrackClient | None = None,
     now: datetime | None = None,
     offline: bool = False,
+    use_stored: bool = True,
 ) -> BackfillResult:
     """Pull gp_history for ``norad_ids`` over the ``days`` ending on the day of ``end``, in few large requests.
 
@@ -389,12 +390,18 @@ def backfill(
     are sorted and batched by URL length. Everything fetched is written to one history
     parquet and added to the index. With ``offline`` only cached requests are used and
     nothing new is asked for.
+
+    ``use_stored=False`` turns off the newest-set shortcut, which is required whenever the
+    window is in the **past**: "already held through 2026" is a true statement about an object
+    that is also completely uninformative about 2024, and with the shortcut on such an object is
+    skipped and the historical window comes back empty. The cached-request check still applies,
+    so nothing is re-fetched twice. Phase 3 Step 4's historical snapshots are the caller.
     """
     ids = sorted({int(i) for i in norad_ids})
     start_day, end_day = backfill_window(end, days)
     now = now or datetime.now(UTC)
     coverage = spacetrack.history_coverage(cache_dir)
-    stored = stored_through(ids, history_dir)
+    stored = stored_through(ids, history_dir) if use_stored else {}
     groups = _needed_ranges(coverage, ids, start_day, end_day, stored)
     n_todo = sum(len(v) for v in groups.values())
     log.info(

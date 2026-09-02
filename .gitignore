@@ -17,6 +17,7 @@ data/supplemental/
 data/spacex/
 data/weather/
 data/ballistic/
+data/validation/
 
 # wrangler caches the account id and the account name (an email address) here
 .wrangler/

@@ -7,11 +7,13 @@ import pytest
 
 from driftwatch.catalogue.snapshot import (
     SNAPSHOT_SCHEMA,
+    as_of_path,
     build_snapshot,
     latest_snapshot,
     list_snapshots,
     read_snapshot,
     records_to_frame,
+    snapshot_as_of,
     snapshot_path,
     snapshot_summary,
     write_snapshot,
@@ -144,3 +146,65 @@ def test_latest_snapshot_orders_by_stamp(omm_records, tmp_path):
         write_snapshot(df, snapshot_path(stamp_dt, tmp_path))
     assert [p.name for p in list_snapshots(tmp_path)] == ["gp_20260901T000000Z.parquet", "gp_20260902T000000Z.parquet"]
     assert latest_snapshot(tmp_path).name == "gp_20260902T000000Z.parquet"
+
+
+def test_a_historical_snapshot_takes_the_newest_set_before_the_date_and_nothing_after(omm_records):
+    """The trap this exists to avoid: an element set issued *after* the date already knows.
+
+    A storm validation built on a set from 12 May would "predict" the drag that set was fitted
+    to, and would come out beautifully right for the worst possible reason. So the rule is the
+    one an operator screening on that day was under: the newest fit published by then.
+    """
+    base = records_to_frame(omm_records).iloc[:1]
+    epochs = [
+        datetime(2024, 5, 6, tzinfo=UTC),
+        datetime(2024, 5, 8, 12, tzinfo=UTC),  # the one that should win
+        datetime(2024, 5, 11, tzinfo=UTC),  # after the date: must not be used
+    ]
+    sets = pd.concat([base.assign(epoch=pd.Timestamp(t), mean_motion=15.0 + k) for k, t in enumerate(epochs)])
+    sets["source"] = "gp_history"
+
+    out = snapshot_as_of(sets, None, as_of=datetime(2024, 5, 9, tzinfo=UTC))
+    assert len(out) == 1
+    assert out["epoch"].iloc[0] == pd.Timestamp("2024-05-08 12:00", tz="UTC")
+    assert out["mean_motion"].iloc[0] == pytest.approx(16.0)
+    # The snapshot is stamped with the date it reconstructs, not with when it was built.
+    assert out["fetched_at"].iloc[0] == pd.Timestamp("2024-05-09", tz="UTC")
+
+
+def test_a_historical_snapshot_drops_objects_whose_newest_set_is_too_stale(omm_records):
+    """An object that stopped being tracked long before the date was not screenable on it."""
+    base = records_to_frame(omm_records).iloc[:2].reset_index(drop=True)
+    base["source"] = "gp_history"
+    fresh = base.iloc[[0]].assign(epoch=pd.Timestamp("2024-05-08", tz="UTC"))
+    stale = base.iloc[[1]].assign(epoch=pd.Timestamp("2024-03-01", tz="UTC"))
+    sets = pd.concat([fresh, stale])
+
+    kept = snapshot_as_of(sets, None, as_of=datetime(2024, 5, 9, tzinfo=UTC), max_age_days=5.0)
+    assert list(kept["norad_id"]) == [int(fresh["norad_id"].iloc[0])]
+    # Without the limit both survive, which is what makes the limit a choice rather than a rule.
+    assert len(snapshot_as_of(sets, None, as_of=datetime(2024, 5, 9, tzinfo=UTC))) == 2
+
+    with pytest.raises(ValueError, match="at or before"):
+        snapshot_as_of(sets, None, as_of=datetime(2023, 1, 1, tzinfo=UTC))
+
+
+def test_historical_snapshots_are_kept_out_of_the_live_listing(tmp_path):
+    """`gp_asof_2022...` sorts after `gp_20260901...` because a letter beats a digit.
+
+    Left in the same directory, a reconstruction of an old day silently becomes "the latest
+    snapshot" for the screener, the coefficient fit and the history loader alike. That happened
+    once; this pins the fix.
+    """
+    live = tmp_path / "gp_20260901T204841Z.parquet"
+    live.write_bytes(b"")
+    as_of_dir = tmp_path / "as-of"
+    as_of_dir.mkdir()
+    path = as_of_path(datetime(2022, 2, 6, tzinfo=UTC), as_of_dir)
+    path.write_bytes(b"")
+
+    assert path.parent == as_of_dir
+    assert list_snapshots(tmp_path) == [live]
+    assert latest_snapshot(tmp_path) == live
+    # And the name sorts the wrong way, which is the whole reason for the directory.
+    assert sorted([live.name, path.name])[-1] == path.name

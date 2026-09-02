@@ -372,3 +372,132 @@ def test_an_object_with_no_coefficient_is_not_moved_and_the_label_says_so(monkey
     # The uncertainty is never zero: the density model's own storm-response error is always in it.
     assert with_one.sigma_m[-1] > 0
     assert with_one.sigma_m[-1] >= abs(with_one.shift_m[-1]) * config.DENSITY_STORM_RATIO_SIGMA_REL * 0.5
+
+
+# --------------------------------------------------------------------------------------
+# The Step 3 review corrections
+
+
+def test_an_extrapolated_object_makes_its_events_unscoreable_rather_than_wrong(designed_conjunction):
+    """Past a quarter of a revolution of shift the term is outside its own derivation.
+
+    The review's instruction, and the reason for it: a probability computed from a position
+    the linear theory cannot support is arithmetic with no claim behind it. So it is not
+    reported at all. What must survive is everything that is still true -- the geometry, the
+    covariance, the shift itself and a reason a reader can act on.
+    """
+    from driftwatch.risk.scenario import run_risk
+
+    events, objects = designed_conjunction
+    secondary = int(events["secondary_norad_id"].iloc[0])
+    a_m = 6_778_137.0
+    past = 2.0 * np.pi * a_m * (config.STORM_MAX_SHIFT_REVOLUTIONS + 0.5)
+    series = term.ShiftSeries(
+        norad_id=secondary,
+        seconds=np.array([-86400.0, 86400.0]),
+        shift_m=np.array([0.0, past]),
+        sigma_m=np.array([0.0, past / 10.0]),
+        rho_scenario_kg_m3=5e-12,
+        rho_implied_kg_m3=3e-12,
+        b_m2_kg=0.5,
+        b_source="history",
+        shift_revolutions=config.STORM_MAX_SHIFT_REVOLUTIONS + 0.5,
+        valid=False,
+    )
+    assert not series.scoreable
+    out = run_risk(
+        events,
+        objects,
+        sc.StormCovariance(Isotropic(0.5), {secondary: series}, scenario="storm-g5"),
+        scenario="storm-g5",
+        run_id="r",
+        snapshot="s",
+        sweep=True,
+    )
+    assert (~out["scoreable"]).all()
+    for column in ("pc", "pc_shift_only", "pc_variance_only", "pc_alfano", "pc_chan", "pc_max", "pc_max_scale"):
+        assert out[column].isna().all(), column
+    assert (out["region"] == "unscoreable").all()
+    assert (out["flag"] == "unscoreable").all()
+    assert (out["confidence"] == "none").all()
+    # The reason names the object and the size of the violation, so it can be acted on.
+    reason = out["unscoreable_reason"].iloc[0]
+    assert str(secondary) in reason and "circumference" in reason
+    # And nothing about the event has been thrown away.
+    assert (out["shift_i_secondary_km"] != 0).any()
+    assert out["sigma_i_secondary_km"].notna().all()
+
+
+def test_the_shift_and_the_variance_are_reported_separately_as_well_as_together(designed_conjunction):
+    """Three probabilities on every row, because the two effects pull in opposite directions.
+
+    A storm both moves the objects and widens the ellipse. The combined number alone cannot
+    say which did the work, and on this project the answer -- that the shift usually *lowers*
+    the probability -- is the headline, so it has to be visible per event rather than argued.
+    """
+    from driftwatch.risk.scenario import run_risk
+
+    events, objects = designed_conjunction
+    secondary = int(events["secondary_norad_id"].iloc[0])
+    series = term.ShiftSeries(
+        norad_id=secondary,
+        seconds=np.array([-86400.0, 86400.0]),
+        shift_m=np.array([2_000.0, 8_000.0]),
+        sigma_m=np.array([400.0, 1_600.0]),
+        rho_scenario_kg_m3=5e-12,
+        rho_implied_kg_m3=3e-12,
+        b_m2_kg=0.02,
+        b_source="history",
+    )
+    base = Isotropic(0.5)
+    out = run_risk(
+        events,
+        objects,
+        sc.StormCovariance(base, {secondary: series}, scenario="storm-g5"),
+        scenario="storm-g5",
+        run_id="r",
+        snapshot="s",
+        sweep=False,
+    )
+    quiet = run_risk(events, objects, base, scenario="quiet", run_id="r", snapshot="s", sweep=False)
+
+    # Shift only: the objects moved, scored against the covariance the run would have had. So
+    # it differs from quiet only through the geometry, and from `pc` only through the spread.
+    assert not np.allclose(out["pc_shift_only"], quiet["pc"])
+    assert not np.allclose(out["pc_shift_only"], out["pc"])
+    assert not np.allclose(out["pc_variance_only"], out["pc"])
+    # Variance only leaves the objects where their element sets put them, so its miss is quiet's.
+    assert (out["relative_shift_km"] > 0).any()
+    # And a model with no storm layer gives one number three times over, which is what keeps
+    # the Phase 2 quiet scenario unchanged.
+    assert np.allclose(quiet["pc"], quiet["pc_shift_only"], equal_nan=True)
+    assert np.allclose(quiet["pc"], quiet["pc_variance_only"], equal_nan=True)
+    assert (quiet["relative_shift_km"] == 0).all()
+    assert quiet["scoreable"].all()
+
+
+def test_a_weather_table_that_does_not_reach_the_oldest_epoch_fails_loudly():
+    """The one failure here that looks like a result: a silently understated storm term.
+
+    Every shift is integrated from its own object's epoch and NRLMSIS wants its ap history
+    behind that. A table built over the screening window alone is short by however stale the
+    oldest element set is, and what comes back is not an error but a smaller number. So the
+    short table is refused rather than used.
+    """
+    from driftwatch.drag import density as dn
+
+    epoch = T0 - timedelta(days=5)
+    short = weather(T0, 8.0)
+    with pytest.raises(sc.WeatherTableTooShort, match="silently understated"):
+        sc.check_table_reaches(short, epoch, scenario="storm-g5")
+
+    # Long enough once the epoch and NRLMSIS's own lead are both allowed for.
+    long_enough = weather(epoch - dn.WEATHER_LEAD - timedelta(hours=3), 16.0)
+    sc.check_table_reaches(long_enough, epoch, scenario="storm-g5")
+
+    # And the check is wired into the path that would otherwise understate: a run whose
+    # elements reach back past the table cannot compute shifts at all.
+    scenario = sc.Scenario("storm-g5", short, sc.raise_ap_by_sigma(short))
+    elements = pd.DataFrame({"norad_id": [90001], "epoch": [pd.Timestamp(epoch)]})
+    with pytest.raises(sc.WeatherTableTooShort):
+        sc.shifts_for_objects(scenario, elements, pd.DataFrame(), end=T0 + timedelta(days=2))

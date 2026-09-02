@@ -46,6 +46,11 @@ STORE_NAME = "coefficients.parquet"
 
 # What a cached row carries beyond the coefficient itself: the span of history the fit saw,
 # when it was made and against which model.
+# How far a cached fit's history may end *after* the run asking for it before it is refused.
+# A day, not zero: element sets arrive through the day and a run's newest epoch is a few hours
+# behind the store's without either being wrong.
+FUTURE_TOLERANCE_DAYS = 1.0
+
 PROVENANCE_COLUMNS: tuple[str, ...] = (
     "history_start",
     "history_end",
@@ -103,11 +108,22 @@ class CoefficientStore:
             grown_days = (pd.Timestamp(history_end).tz_convert("UTC") - cached_end).total_seconds() / 86400.0
             if grown_days > config.BALLISTIC_REFIT_SPAN_GROWTH_DAYS:
                 return None
+            # And the other direction, which a live-only pipeline never sees and a historical run
+            # hits immediately: a fit made from element sets *later* than the ones this run is
+            # allowed to know about. Rescoring 9 May 2024 must not be handed a coefficient fitted
+            # in 2026 -- it would be a measurement of a different atmosphere, and for a satellite
+            # that has since changed shell, of a different orbit. See Phase 3 Step 4's replay.
+            if grown_days < -FUTURE_TOLERANCE_DAYS:
+                return None
         return dict(row)
 
     def put(self, row: dict[str, Any], *, history_start: Any, history_end: Any, now: datetime) -> None:
-        """Store one fit outcome. Only history fits and history rejections belong here."""
-        if str(row.get("source")) not in ("history", "none"):
+        """Store one fit outcome. Only history fits and history rejections belong here.
+
+        A ``thrust`` refusal is a rejection like any other -- an outcome of the fit rules over
+        this object's own element sets -- so it is cached and reread rather than recomputed.
+        """
+        if str(row.get("source")) not in ("history", "none", "thrust"):
             return
         self.rows[int(row["norad_id"])] = {
             **row,

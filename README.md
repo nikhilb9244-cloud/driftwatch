@@ -51,6 +51,22 @@ What works today:
   covariance model without rescreening (today a scale factor; Phase 3's storm model
   uses the same interface), so a quiet row and a storm row for the same event sit side
   by side in the export.
+- `driftwatch storm-check <run>` attacks the storm result rather than reporting it. It splits
+  the relative-to-absolute shift ratio by ballistic coefficient source and by the altitude
+  difference between their two orbits — the first says whether the pair's shifts are alike only
+  because their coefficients came from the same rule, the second is the physical prediction,
+  since the density falls by an order of magnitude every 50 km and two objects far apart in
+  altitude cannot see the same excess — puts the combined, shift-only and variance-only
+  probabilities side by side over probability
+  bands, and names the objects whose storm term ran outside the linear theory. Those events carry
+  no probability at all: `unscoreable`, with the reason on the row and excluded from every
+  aggregate.
+- `driftwatch snapshot-as-of --date <when>` rebuilds the catalogue as it stood on a past date
+  from `gp_history`, taking each object's newest element set **at or before** that date and
+  nothing later, bounded by an altitude range or a launch's international designator to keep the
+  pull proportionate. Cached permanently under `data/snapshots/as-of/`.
+- `driftwatch validate gannon` and `driftwatch validate starlink-2022` measure the storm term
+  against the record. See below.
 - `driftwatch report <run>` writes the weekly markdown report and the viewer's
   conjunction bundle. Repeated encounters of one pair are collapsed to a single row with
   the event count, the closest miss, the highest probability and the first time of
@@ -78,8 +94,13 @@ What works today:
   step checked against one-second brute force), the probability of collision (closed
   forms, brute-force quadrature, the three integrators against each other, the dilution
   maximum), the covariance fit and the manoeuvre detector on synthetic element-set
-  histories, the history index and batched backfill, and the scenario mechanism end to
-  end.
+  histories, the history index and batched backfill, the scenario mechanism end to end, the
+  storm term's closed form against an independent Runge-Kutta integration and its sign against a
+  case where the answer is obvious, the refusal to score an event whose displacement has left
+  the linear theory, the thrust ceiling on a satellite fitting above what its own geometry
+  allows, the loud failure of a weather table that does not reach the oldest element-set epoch
+  in a run, the historical snapshot builder's refusal to use an element set from after the date
+  it reconstructs, and Step 4's own measurements.
 
 ## Quick start
 
@@ -103,6 +124,10 @@ uv run driftwatch spacex latest           # optional: SpaceX's own covariance fo
 uv run driftwatch weather --days 7        # space weather for the window, with its provenance
 uv run driftwatch density                 # NRLMSIS sanity check: quiet density and the storm ratios
 uv run driftwatch ballistic latest        # a ballistic coefficient per object, from decay or B*
+uv run driftwatch risk latest --scenario storm-g5
+                                          # rescore under a synthetic G5 built from May 2024
+uv run driftwatch storm-check latest      # attack the storm result; name what cannot be scored
+uv run driftwatch validate gannon         # measure the term against the May 2024 storm
 uv run driftwatch report latest           # weekly report + the viewer's conjunctions bundle
 cd web && npm install && npm run dev      # open the printed URL
 ```

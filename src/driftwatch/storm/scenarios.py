@@ -339,6 +339,42 @@ class StormCovariance:
         return self.base.to_frame() if hasattr(self.base, "to_frame") else pd.DataFrame()
 
 
+class WeatherTableTooShort(ValueError):
+    """The scenario's weather does not reach back to the oldest element set it has to integrate from."""
+
+
+def check_table_reaches(table: pd.DataFrame, earliest_epoch: datetime, *, scenario: str = "") -> None:
+    """Fail loudly when the weather table starts after the oldest element-set epoch needs it to.
+
+    Every shift is integrated from its **own object's** epoch, and NRLMSIS wants
+    :data:`driftwatch.drag.density.WEATHER_LEAD` of ap history behind the first sample. A table
+    built over the screening window alone is short by however stale the oldest element set is,
+    and the failure it produces is the quiet kind: the early part of those objects' density
+    tracks comes back NaN, :func:`~driftwatch.storm.term.object_shift` zeroes the unusable
+    samples, and the shift is *understated* with nothing on the row to say so.
+
+    That is exactly how the reach-back was found during the first real run, and the reason this
+    is an exception rather than a warning: a silently small storm term on the stalest element
+    sets in the run is the one error here that looks like a result.
+    """
+    if table is None or not len(table):
+        raise WeatherTableTooShort(f"scenario {scenario!r} has no weather table at all")
+    first = pd.to_datetime(table["t"], utc=True).min()
+    needed = pd.Timestamp(earliest_epoch)
+    needed = needed.tz_localize("UTC") if needed.tzinfo is None else needed.tz_convert("UTC")
+    needed = needed - dn.WEATHER_LEAD
+    if first > needed:
+        short_days = (first - needed).total_seconds() / 86400.0
+        raise WeatherTableTooShort(
+            f"the weather table for scenario {scenario!r} starts at {first.isoformat()}, which is "
+            f"{short_days:.2f} days after the {needed.isoformat()} the oldest element-set epoch "
+            f"({pd.Timestamp(earliest_epoch).isoformat()}) needs once NRLMSIS's "
+            f"{dn.WEATHER_LEAD.total_seconds() / 3600:.0f} hours of ap history are allowed for; "
+            "those objects' shifts would be silently understated. Pass `earliest_epoch` to "
+            "`build_scenario`, or fetch more weather with `driftwatch weather`"
+        )
+
+
 def shifts_for_objects(
     scenario: Scenario,
     elements: pd.DataFrame,
@@ -356,6 +392,8 @@ def shifts_for_objects(
     """
     if scenario.table is None:
         return {}
+    if len(elements):
+        check_table_reaches(scenario.table, pd.to_datetime(elements["epoch"], utc=True).min(), scenario=scenario.name)
     by_id = coefficients.set_index("norad_id") if len(coefficients) else pd.DataFrame()
     grid = dn.weather_grid(scenario.table)
     perturbed = dn.weather_grid(scenario.perturbed_table) if scenario.perturbed_table is not None else None

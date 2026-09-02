@@ -17,6 +17,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[2]
 DATA_DIR = Path(os.environ.get("DRIFTWATCH_DATA_DIR", PROJECT_ROOT / "data"))
 CACHE_DIR = DATA_DIR / "cache"
 SNAPSHOT_DIR = DATA_DIR / "snapshots"
+# Historical snapshots (Phase 3 Step 4) live in a subdirectory of their own rather than beside
+# the live ones. `list_snapshots` globs `gp_*.parquet`, and a file named for 2022 sorts *after*
+# every 2026 file because "a" beats a digit -- so a reconstruction of an old day would become
+# "the latest snapshot" for the whole pipeline. It is also simply a different kind of object:
+# a live snapshot is what the catalogue said at a fetch, a historical one is what it said on a
+# date we chose, rebuilt from gp_history afterwards.
+AS_OF_SNAPSHOT_DIR = SNAPSHOT_DIR / "as-of"
 PROPAGATED_DIR = DATA_DIR / "propagated"
 HISTORY_DIR = DATA_DIR / "history"
 SUPPLEMENTAL_DIR = DATA_DIR / "supplemental"
@@ -230,6 +237,23 @@ BALLISTIC_FIT_DAYS = 45.0
 # not from a satellite, and is refused with its label.
 BALLISTIC_MIN_M2_KG = 1e-4
 BALLISTIC_MAX_M2_KG = 1.0
+# Continuous thrust, added at the Step 3 review. An object that can fire an engine and whose
+# decay history fits a coefficient above this is not being fitted for drag: a satellite's
+# area-to-mass is bounded by its own geometry, and the largest operated low Earth orbit
+# satellites reach A/m of about 0.05 m^2/kg even broadside, so B = C_D A/m tops out near
+# 0.11. A manoeuvring object fitting above this is under thrust, its measured fall is not
+# atmospheric, and the fit is refused in favour of the run's typical value for its class.
+#
+# The cut is scoped to objects that *can* thrust, and that scoping is what lets the number be
+# physical rather than arbitrary. Applied to the whole catalogue the same rule would have to
+# sit near the 1 m^2/kg plausibility cap to avoid discarding high area-to-mass debris, and it
+# would then catch almost none of the real cases: on the demo run the objects fitting near
+# the cap are Fengyun 1C, NOAA 16, DMSP and Meteor fragments with radar cross-sections of a
+# few hundredths of a square metre and B* a hundred times a satellite's, where a high
+# area-to-mass ratio is exactly what is expected, while the thrusting objects sit between 0.2
+# and 0.7 with B* *ten times smaller* than a normal member of their own constellation and
+# negative for two of them. See docs/density-and-drag.md.
+BALLISTIC_THRUST_M2_KG = 0.1
 # Where neither the object's own decay nor its B* gives a usable coefficient, the run's own
 # median stands in, labelled `typical`. A category median needs at least this many fitted
 # objects to be worth more than the overall one.
@@ -290,7 +314,7 @@ BALLISTIC_CACHE_DIR = DATA_DIR / "ballistic"
 # under the old ones. Without it a rule change would reach new objects and silently leave the
 # cached ones as they were, which is the worst of both: a store whose rows were decided by
 # different rules and whose rows do not say which.
-BALLISTIC_RULES_VERSION = "3"
+BALLISTIC_RULES_VERSION = "5"
 BALLISTIC_REFIT_AFTER_DAYS = 30.0
 BALLISTIC_REFIT_SPAN_GROWTH_DAYS = 7.0
 
@@ -347,6 +371,38 @@ SCENARIO_REPLAY_PREFIX = "replay"
 # a faithful extrapolation from being read as a prediction.
 STORM_MAX_DECAY_FRACTION = 1e-3
 STORM_MAX_SHIFT_REVOLUTIONS = 0.25
+
+# ---------------------------------------------------------------------------------------
+# Phase 3 Step 4: the two validation storms. See docs/storm-validation.md.
+
+# The May 2024 Gannon storm. The main phase ran from the sudden commencement late on 10 May
+# through 11 May with a long recovery; Kp reached 9- for the first time since November 2003.
+# The storm window is the three days over which the drag enhancement is unambiguous.
+GANNON_STORM_WINDOW = ("2024-05-10T00:00:00Z", "2024-05-13T00:00:00Z")
+# The quiet control. Late April 2024 was not perfectly quiet -- nothing in solar cycle 25's
+# maximum is -- but Kp stayed at or under 4 across it, and it is close enough in time that the
+# solar flux and the objects' altitudes are nearly the same, which is what the control needs.
+GANNON_QUIET_WINDOW = ("2024-04-25T00:00:00Z", "2024-04-28T00:00:00Z")
+# The pivots: the last instant an element set may have been issued and still count as "before".
+# 9 May is before the sudden commencement and after the first flares, which is exactly the
+# position an operator was in.
+GANNON_PIVOT = "2024-05-09T00:00:00Z"
+GANNON_QUIET_PIVOT = "2024-04-24T00:00:00Z"
+# The history pull that covers both windows and leaves room for a pre-storm coefficient fit.
+GANNON_HISTORY_DAYS = 36
+GANNON_HISTORY_END = "2024-05-25T00:00:00Z"
+
+# The February 2022 Starlink loss. The launch's international designator; SATCAT resolves it
+# to NORAD ids, including the ones that have since decayed, which is the point.
+STARLINK_2022_LAUNCH = "2022-010"
+STARLINK_2022_HISTORY_END = "2022-03-20T00:00:00Z"
+STARLINK_2022_HISTORY_DAYS = 45
+# The storm was a G1: a minor one, which is what makes it the harder test. The insertion
+# altitude SpaceX flew, and the shell the survivors were raised to.
+STARLINK_2022_INSERTION_KM = 210.0
+STARLINK_2022_CONTROL_KM = 500.0
+STARLINK_2022_STORM_DAY = "2022-02-04T00:00:00Z"
+STARLINK_2022_QUIET_DAY = "2022-01-25T00:00:00Z"
 
 # Helioviewer: Sun imagery for the Step 5 replay. Public API, no account. Credit is asked
 # for in the API documentation rather than required by a licence.

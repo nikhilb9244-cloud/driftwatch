@@ -216,12 +216,24 @@ def sample_tracks(events: pd.DataFrame, elements: pd.DataFrame) -> Tracks:
     return Tracks([str(e) for e in events["event_id"]], out)
 
 
+# The two flag values that mean "somebody should look at this". `unscoreable` is a third value
+# and is deliberately not one of them: an event whose storm term ran outside the linear theory
+# has no probability at all, so it can be neither flagged nor cleared, and counting it as flagged
+# would put a pair with no number into a table of pairs ranked by their numbers.
+ACTIONABLE_FLAGS: tuple[str, ...] = ("red", "yellow")
+
+
+def is_flagged(flag: pd.Series) -> pd.Series:
+    """Whether each row carries a flag a reader is meant to act on."""
+    return flag.isin(ACTIONABLE_FLAGS)
+
+
 def events_for_tracks(rows: pd.DataFrame, limit: int = MAX_TRACKED_EVENTS) -> pd.DataFrame:
     """The events the viewer carries tracks for: every flagged one, then the rest by probability."""
     if rows.empty:
         return rows
     ranked = rows.assign(
-        _flagged=(rows["flag"] != "none").astype(int),
+        _flagged=is_flagged(rows["flag"]).astype(int),
         _pc=pd.to_numeric(rows["pc"], errors="coerce").fillna(-1.0),
     ).sort_values(["_flagged", "_pc"], ascending=False)
     return ranked.head(limit).drop(columns=["_flagged", "_pc"]).reset_index(drop=True)
@@ -235,7 +247,7 @@ def detail_pairs(pairs: pd.DataFrame, limit: int = MAX_DETAIL_PAIRS) -> pd.DataF
     """The pairs the viewer carries individual events for: flagged, in the box, or highest probability."""
     if pairs.empty:
         return pairs
-    keep = (pairs["flag"] != "none") | (pairs["n_in_box"] > 0)
+    keep = is_flagged(pairs["flag"]) | (pairs["n_in_box"] > 0)
     ranked = pairs.sort_values("max_pc", ascending=False)
     top = ranked.head(limit).index
     return pairs[keep | pairs.index.isin(top)]
@@ -476,6 +488,8 @@ def _fmt_pc(value: float) -> str:
 def _fmt_flag(flag: str, confidence: str, region: str) -> str:
     if flag == "none":
         return "—"
+    if flag == "unscoreable":
+        return "**unscoreable**"
     if confidence == "low":
         return f"**{flag}** (low confidence, {region})"
     return f"**{flag}**"
@@ -579,7 +593,8 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
 
     start = pd.Timestamp(info.get("start")).strftime("%Y-%m-%d %H:%M")
     end = pd.Timestamp(info.get("end")).strftime("%Y-%m-%d %H:%M")
-    flagged = pairs[pairs["flag"] != "none"]
+    flagged = pairs[is_flagged(pairs["flag"])]
+    n_unscoreable = int((rows["flag"] == "unscoreable").sum())
     actionable = flagged[flagged["confidence"] == "standard"]
     low = flagged[flagged["confidence"] == "low"]
 
@@ -607,6 +622,7 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         f"| Pairs flagged yellow | {int((pairs['flag'] == 'yellow').sum())} |",
         f"| Flagged pairs in the dilution region (low confidence) | {len(low)} |",
         f"| Flagged pairs in the robust region | {len(actionable)} |",
+        f"| Events not scored (the storm term left its own derivation) | {n_unscoreable} |",
         f"| Closest approach | {rows['miss_km'].min():.3f} km |",
         f"| Highest probability | {_fmt_pc(rows['pc'].max())} |",
         "",
@@ -712,7 +728,7 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         )
     slow = rows[rows["slow_encounter"]] if "slow_encounter" in rows.columns else rows.iloc[:0]
     if len(slow):
-        flagged_slow = int((slow["flag"] != "none").sum())
+        flagged_slow = int(is_flagged(slow["flag"]).sum())
         lines.append(
             f"- **{len(slow)} of these events are slow encounters**, below "
             f"{SLOW_ENCOUNTER_KMS:g} km/s relative (slowest {slow['rel_speed_kms'].min():.3f} km/s), and "

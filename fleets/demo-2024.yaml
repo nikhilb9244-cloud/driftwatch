@@ -1,0 +1,119 @@
+# The demo fleet as it stood on 9 May 2024, for the Phase 3 Step 4 replay run.
+#
+# Identical to fleets/demo.yaml except for the Sentinel. Sentinel-1C (62261) launched on
+# 5 December 2024 and did not exist during the Gannon storm, so the replay uses Sentinel-1A
+# (39634), which is the satellite the first draft of the demo fleet carried and which was
+# operational and station-kept in the same 693 km sun-synchronous orbit throughout May 2024.
+# It was swapped out of the live fleet on 2026-09-02 because ESA ended its operations on
+# 29 June 2026 and began lowering it for re-entry -- a reason that does not apply to 2024.
+#
+# The other five members were all in orbit and operational on 9 May 2024: ISS (25544),
+# CubeSat XI-IV (27848, launched 2003), UWE-3 (39446, launched 2013), ZACube-1 (39417,
+# launched 2013) and EOS SAT-1 (55053, launched 16 January 2023).
+#
+# This file is only for the historical replay. `driftwatch fleet` checks members against the
+# *latest* snapshot, so it will report Sentinel-1A as no longer operational, which is correct
+# and is the reason the live fleet does not use it.
+schema_version: 1
+name: demo-2024
+description: >
+  The demo fleet as of 9 May 2024: ISS, Sentinel-1A standing in for Sentinel-1C, two
+  university cubesats (XI-IV and UWE-3) and the two active South African objects
+  (ZACube-1 and EOS SAT-1).
+members:
+  - norad_id: 25544
+    name: ISS (Zarya)
+    role: station
+    hard_body_radius_m: 70
+    radius_source: >
+      NASA's facts and figures give the station as 109 m across the solar arrays and 73 m
+      long, about 20 m tall. Half the diagonal of a 109 x 73 x 20 m box is 66 m, rounded up
+      to 70 m. Very conservative for a body this flat: most approach directions see far
+      less than a 70 m disc.
+    manoeuvres: true
+    notes: >
+      Performs debris-avoidance manoeuvres a few times a year and periodic reboosts, so its
+      element set can be stale within hours of a burn. Category `station` in the snapshot.
+      The 1e-4 (red) and 1e-5 (yellow) probability thresholds used in Step 3 are the ones
+      NASA applies to this object.
+
+  - norad_id: 39634
+    name: Sentinel-1A
+    role: sentinel
+    hard_body_radius_m: 13
+    radius_source: >
+      ESA facts and figures: 21 m long, 2.5 m wide, 4 m high with two 10 m solar arrays and a
+      12.3 m by 0.82 m C-band radar antenna, about 2300 kg. Deployed envelope taken as 21 x
+      12.3 x 4 m; half the diagonal is 12.3 m, rounded up to 13 m. The same bus and instrument
+      as Sentinel-1C, so the same radius.
+    manoeuvres: true
+    notes: >
+      Launched 3 April 2014 (2014-016A). Operational and station-kept in the 693 km
+      sun-synchronous Sentinel-1 orbit through May 2024, with collision-avoidance manoeuvres
+      run by ESA's Space Debris Office. Stands in for Sentinel-1C in the historical replay
+      because 1C did not launch until December 2024. ESA ended 1A's operations on 29 June
+      2026; that is why the live fleet no longer carries it, and it has no bearing on 2024.
+
+  - norad_id: 27848
+    name: CubeSat XI-IV (CO-57)
+    role: university_cubesat
+    hard_body_radius_m: 0.4
+    radius_source: >
+      University of Tokyo 1U cubesat: a 10 cm cube of 1 kg with a 56 cm monopole (144 MHz
+      uplink) set perpendicular to a 35 cm tip-to-tip dipole (430 MHz downlink), per the
+      MDPI Electronics 2022 survey of cubesat antenna designs. Envelope about 0.66 x 0.35
+      x 0.10 m; half the diagonal is 0.38 m, rounded up to 0.4 m.
+    manoeuvres: false
+    notes: >
+      No propulsion. Launched 30 June 2003 into an 805 x 815 km sun-synchronous orbit,
+      inside the altitude band where the Fengyun-1C and Iridium 33 / Cosmos 2251 fragments
+      are densest, which is why it is in the demo. SATCAT lists it operational ("+") and
+      CelesTrak's active group carries it.
+
+  - norad_id: 39446
+    name: UWE-3
+    role: university_cubesat
+    hard_body_radius_m: 0.25
+    radius_source: >
+      University of Wuerzburg 1U cubesat, 10 x 10 x 10 cm and about 1 kg, with UHF
+      (437 MHz) communications. No deployed dimension is published: a quarter-wave dipole
+      at 437 MHz is 2 x 0.17 m, so the envelope is assumed to be 0.45 x 0.10 x 0.10 m,
+      half the diagonal 0.24 m, rounded up to 0.25 m.
+    manoeuvres: false
+    notes: >
+      Attitude control by magnetorquers and one reaction wheel; no propulsion. Launched on
+      the same Dnepr as ZACube-1 (21 November 2013) into a similar 540 x 605 km
+      sun-synchronous orbit, so the two share most of their secondaries. SATCAT status "+".
+
+  - norad_id: 39417
+    name: ZACube-1 (TshepisoSat)
+    role: safr
+    hard_body_radius_m: 5.1
+    radius_source: >
+      1U cubesat (10 x 10 x 11 cm, 1.2 kg) built by F'SATI at the Cape Peninsula University
+      of Technology, carrying a deployable HF wire antenna of about 10 m, half a wavelength
+      at 14 MHz (eoPortal). The wire sets the envelope: half the diagonal of 10.1 x 0.1 x
+      0.1 m is 5.05 m, rounded up to 5.1 m. A strike on the wire would cut it rather than
+      fragment the satellite, so this is conservative; the bus with its VHF/UHF antennas
+      alone would be about 0.3 m.
+    manoeuvres: false
+    notes: >
+      No propulsion. Owner SAFR. SATCAT lists it operational ("+") and CelesTrak's active
+      group carries it, which is the criterion used here; eoPortal records the primary
+      mission as complete in November 2021. Also a university cubesat, listed under the
+      SAFR rule. 530 x 587 km sun-synchronous orbit.
+
+  - norad_id: 55053
+    name: EOS SAT-1
+    role: safr
+    hard_body_radius_m: 1.5
+    radius_source: >
+      Bus 1.13 x 1.39 x 0.82 m and 177 kg (Dragonfly Aerospace figures via eoPortal and
+      Wikipedia); half the diagonal is 1.0 m. Deployable solar panels rated 220 W peak,
+      so roughly half a square metre of cells, add at most about a metre of span. No
+      deployed dimension is published, so 1.5 m is assumed.
+    manoeuvres: true
+    notes: >
+      SETS SPS-25 Hall-effect thruster (5 to 11 mN) used for orbit maintenance and
+      collision avoidance (eoPortal). Built by Dragonfly Aerospace, Stellenbosch, for EOS
+      Data Analytics; owner SAFR, SATCAT status "+". 454 x 466 km sun-synchronous orbit.

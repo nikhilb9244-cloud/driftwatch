@@ -19,10 +19,30 @@ perpendicular to the relative velocity, and the component of a shift along that 
 precisely the part that moves the time of closest approach rather than the miss at it; the
 projection removes it. What survives the projection is what changes the answer.
 
-Every scenario also reports ``pc_variance_only``: the same probability with the covariance the
-scenario gives but the objects left where their element sets put them. The difference between
-it and ``pc`` is how much of the scenario is the shift and how much is the spread, which is a
-question the docs have to answer rather than assert.
+**Three probabilities, side by side.** A scenario does two things at once and they pull in
+opposite directions often enough that one number hides both, so every row carries all three:
+
+``pc``
+    Both effects. The objects are moved by the scenario's mean shift and the covariance carries
+    the shift's uncertainty. The primary number.
+``pc_shift_only``
+    The objects are moved, but scored against the covariance the run would have had without the
+    storm layer. What the displacement alone does to the geometry.
+``pc_variance_only``
+    The covariance is the scenario's, but the objects are left where their element sets put
+    them. What the added uncertainty alone does.
+
+Under a model with no storm layer the three are the same array and the quiet scenario is
+unchanged from Phase 2.
+
+**And some events carry none of them.** The storm term is derived under a small-perturbation
+linearisation. An object whose in-track displacement has run past
+:data:`driftwatch.config.STORM_MAX_SHIFT_REVOLUTIONS` of its orbit's circumference is outside
+it, and a probability computed from such a position would be arithmetic without a claim behind
+it. Those events are reported **unscoreable**: NaN in every probability column, ``unscoreable``
+as the region and the flag, the reason on the row, and excluded from every aggregate. Nothing
+is dropped -- the event, its geometry, its covariance and its shift all stay -- but no number
+is offered that a reader could act on. See :func:`unscoreable_events`.
 """
 
 from __future__ import annotations
@@ -35,7 +55,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 
-from driftwatch import __version__
+from driftwatch import __version__, config
 from driftwatch.catalogue.classify import rcs_class
 from driftwatch.fleet import Fleet
 from driftwatch.orbit.time import stamp
@@ -313,6 +333,7 @@ RISK_COLUMNS: tuple[str, ...] = (
     "enc_cov_xy_km2",
     "enc_cov_yy_km2",
     "pc",
+    "pc_shift_only",
     "pc_variance_only",
     "pc_alfano",
     "pc_chan",
@@ -321,6 +342,7 @@ RISK_COLUMNS: tuple[str, ...] = (
     "miss_shifted_km",
     "shift_i_primary_km",
     "shift_i_secondary_km",
+    "relative_shift_km",
     "sigma_shift_i_primary_km",
     "sigma_shift_i_secondary_km",
     "storm_source_primary",
@@ -328,6 +350,8 @@ RISK_COLUMNS: tuple[str, ...] = (
     "region",
     "flag",
     "confidence",
+    "scoreable",
+    "unscoreable_reason",
     "slow_encounter",
     "computed_at",
 )
@@ -382,6 +406,34 @@ def _storm_label(source: np.ndarray) -> np.ndarray:
     return np.array([str(s).split("+storm:")[-1] if "+storm:" in str(s) else "none" for s in source], dtype=object)
 
 
+def unscoreable_events(model: CovarianceModel, primary: np.ndarray, secondary: np.ndarray) -> np.ndarray:
+    """One reason string per event, empty where the event can be scored.
+
+    An event is unscoreable when either object's storm term has run outside the linear theory
+    it was derived under -- an in-track displacement past
+    :data:`driftwatch.config.STORM_MAX_SHIFT_REVOLUTIONS` of the orbit's circumference. Past
+    that the term is no longer a small correction to a known position, and a probability
+    computed from it would be a number with no claim behind it. So none is reported: the row
+    keeps its geometry, its covariance and its reason, and carries NaN where the probabilities
+    would have been.
+
+    Models with no storm layer -- every Phase 2 one, and ``quiet`` -- return no reasons at all,
+    which is what keeps them unchanged.
+    """
+    shifts = getattr(model, "shifts", None)
+    reasons = np.full(len(primary), "", dtype=object)
+    if not shifts:
+        return reasons
+    per_object = {int(k): v.unscoreable_reason() for k, v in shifts.items() if not v.scoreable}
+    if not per_object:
+        return reasons
+    for index, (p, s) in enumerate(zip(primary, secondary, strict=True)):
+        parts = [per_object[int(o)] for o in (p, s) if int(o) in per_object]
+        if parts:
+            reasons[index] = "; ".join(parts)
+    return reasons
+
+
 def run_risk(
     events: pd.DataFrame,
     objects: pd.DataFrame,
@@ -425,15 +477,35 @@ def run_risk(
     # rows are the R, I and C unit vectors, so the transpose takes RIC components to TEME.
     dr_shift = np.einsum("nji,nj->ni", basis_s, shift_s) - np.einsum("nji,nj->ni", basis_p, shift_p)
     dr_shift = np.nan_to_num(dr_shift, nan=0.0)
+    shifted = bool(np.any(dr_shift))
+    # What the covariance would have been without the storm layer. It serves two purposes: the
+    # report can say how much in-track sigma the scenario added rather than only what it is
+    # now, and it is the covariance the *shift-only* probability is computed against.
+    base = getattr(model, "base", None) if hasattr(model, "shifts") else None
+    if base is not None:
+        cov_p_base, _, _ = _covariances(base, objects, p, tca)
+        cov_s_base, _, _ = _covariances(base, objects, s, tca)
+        combined_base = rotate_ric_to_teme(basis_p, cov_p_base) + rotate_ric_to_teme(basis_s, cov_s_base)
+    else:
+        cov_p_base, cov_s_base, combined_base = cov_p, cov_s, combined
+
+    # Three probabilities, so a reader never has to take on trust which half of a scenario did
+    # the work: the shift moves the objects and the variance widens the ellipse, and they pull
+    # in opposite directions often enough that the combined number alone hides both.
+    #   pc                 both: the objects moved and the covariance grew.  The primary number.
+    #   pc_shift_only      the objects moved, the covariance is the one the run would have had.
+    #   pc_variance_only   the covariance grew, the objects are where their element sets put them.
     plane = encounter_plane(dr + dr_shift, dv, combined)
-    # The same covariance with both objects left where their element sets put them: the
-    # comparison that says how much of a scenario is the shift and how much is the spread.
-    plane_unshifted = encounter_plane(dr, dv, combined) if np.any(dr_shift) else plane
+    plane_shift_only = encounter_plane(dr + dr_shift, dv, combined_base) if base is not None else plane
+    plane_unshifted = encounter_plane(dr, dv, combined) if shifted else plane
 
     hbr = objects.set_index("norad_id")["hbr_m"]
     hbr_m = hbr.reindex(p).to_numpy(dtype=float) + hbr.reindex(s).to_numpy(dtype=float)
     radius_km = hbr_m / 1000.0
     pc = pc_foster(plane.miss_km, plane.cov_km2, radius_km)
+    pc_shift_only = (
+        pc if plane_shift_only is plane else pc_foster(plane_shift_only.miss_km, plane_shift_only.cov_km2, radius_km)
+    )
     pc_variance_only = (
         pc if plane_unshifted is plane else pc_foster(plane_unshifted.miss_km, plane_unshifted.cov_km2, radius_km)
     )
@@ -447,17 +519,25 @@ def run_risk(
 
     sig = np.sqrt(np.stack([cov_p[:, 0, 0], cov_p[:, 1, 1], cov_p[:, 2, 2]], axis=1))
     sig_s = np.sqrt(np.stack([cov_s[:, 0, 0], cov_s[:, 1, 1], cov_s[:, 2, 2]], axis=1))
-    # What the covariance would have been without the storm layer, so the report can say how
-    # much of each object's in-track sigma the scenario added rather than only what it is now.
-    base = getattr(model, "base", None) if hasattr(model, "shifts") else None
-    if base is not None:
-        cov_p_base, _, _ = _covariances(base, objects, p, tca)
-        cov_s_base, _, _ = _covariances(base, objects, s, tca)
-    else:
-        cov_p_base, cov_s_base = cov_p, cov_s
     region = regions(scale)
     flag = flags(pc)
     slow = slow_encounters(np.linalg.norm(dv, axis=1))
+
+    # Events whose storm term ran outside the linear theory carry no probability at all. The
+    # geometry, the covariance, the shift and the reason stay on the row; every probability
+    # column goes to NaN and the flag says `unscoreable`, so nothing downstream can sum, rank
+    # or threshold them by accident. Under quiet there are none and nothing below runs.
+    reason = unscoreable_events(model, p, s)
+    unscoreable = reason != ""
+    if unscoreable.any():
+        # `np.where` rather than assignment: several of these are the *same array* when a
+        # scenario applies no shift, and masking in place would reach further than intended.
+        pc, pc_shift_only, pc_variance_only, pc_a, pc_c, pc_max, scale = (
+            np.where(unscoreable, np.nan, values)
+            for values in (pc, pc_shift_only, pc_variance_only, pc_a, pc_c, pc_max, scale)
+        )
+        region = np.where(unscoreable, "unscoreable", region).astype(object)
+        flag = np.where(unscoreable, "unscoreable", flag).astype(object)
     out = pd.DataFrame(
         {
             "run_id": run_id,
@@ -479,6 +559,7 @@ def run_risk(
             "enc_cov_xy_km2": plane.cov_km2[:, 0, 1],
             "enc_cov_yy_km2": plane.cov_km2[:, 1, 1],
             "pc": pc,
+            "pc_shift_only": pc_shift_only,
             "pc_variance_only": pc_variance_only,
             "pc_alfano": pc_a,
             "pc_chan": pc_c,
@@ -487,13 +568,16 @@ def run_risk(
             "miss_shifted_km": plane.miss_km[:, 0],
             "shift_i_primary_km": shift_p[:, 1],
             "shift_i_secondary_km": shift_s[:, 1],
+            "relative_shift_km": np.linalg.norm(dr_shift, axis=1),
             "sigma_shift_i_primary_km": np.sqrt(np.maximum(cov_p[:, 1, 1] - cov_p_base[:, 1, 1], 0.0)),
             "sigma_shift_i_secondary_km": np.sqrt(np.maximum(cov_s[:, 1, 1] - cov_s_base[:, 1, 1], 0.0)),
             "storm_source_primary": _storm_label(src_p),
             "storm_source_secondary": _storm_label(src_s),
             "region": region.astype(str),
             "flag": flag.astype(str),
-            "confidence": confidences(region).astype(str),
+            "confidence": np.where(unscoreable, "none", confidences(region)).astype(str),
+            "scoreable": ~unscoreable,
+            "unscoreable_reason": reason.astype(str),
             "slow_encounter": slow,
             "computed_at": pd.Timestamp(now).tz_convert("UTC"),
         }
@@ -501,33 +585,54 @@ def run_risk(
     with np.errstate(invalid="ignore", divide="ignore"):
         disagreement = np.abs(pc_a / pc - 1.0)
     meaningful = np.isfinite(disagreement) & (pc > 1e-12)
-    flagged = out["flag"] != "none"
+    flagged = out["flag"].isin(("red", "yellow"))
+    if unscoreable.any():
+        log.warning(
+            "Unscoreable (%s): %d of %d events involve an object whose in-track shift ran past "
+            "%g of its orbit's circumference; they carry no probability and are excluded from "
+            "every aggregate below. %d distinct objects, %d events. First reason: %s",
+            scenario,
+            int(unscoreable.sum()),
+            n,
+            config.STORM_MAX_SHIFT_REVOLUTIONS,
+            len({int(o) for o in np.concatenate([p[unscoreable], s[unscoreable]])}),
+            int(unscoreable.sum()),
+            reason[unscoreable][0],
+        )
     log.info(
-        "Risk (%s): %d events; %d red, %d yellow (%d of the %d flagged are in the dilution region, "
-        "reported at low confidence); max pc %.2e; "
+        "Risk (%s): %d events scored of %d; %d red, %d yellow (%d of the %d flagged are in the "
+        "dilution region, reported at low confidence); max pc %.2e; "
         "Foster/Alfano disagreement max %.2e over %d events with pc > 1e-12",
         scenario,
+        int((~unscoreable).sum()),
         n,
         int((out["flag"] == "red").sum()),
         int((out["flag"] == "yellow").sum()),
         int((flagged & (out["region"] == "dilution")).sum()),
         int(flagged.sum()),
-        float(np.nanmax(pc)) if n else float("nan"),
+        float(np.nanmax(pc)) if np.isfinite(pc).any() else float("nan"),
         float(disagreement[meaningful].max()) if meaningful.any() else 0.0,
         int(meaningful.sum()),
     )
-    moved = np.abs(shift_p[:, 1]) + np.abs(shift_s[:, 1])
-    if np.any(moved > 0):
+    relative = out["relative_shift_km"].to_numpy(dtype=float)
+    if np.any(relative > 0):
         with np.errstate(invalid="ignore", divide="ignore"):
             ratio = np.where(pc_variance_only > 0, pc / pc_variance_only, np.nan)
-        interesting = np.isfinite(ratio) & (pc_variance_only > 1e-12)
+            absolute = 0.5 * (np.abs(shift_p[:, 1]) + np.abs(shift_s[:, 1]))
+            cancellation = np.where(absolute > 0, relative / absolute, np.nan)
+        interesting = np.isfinite(ratio) & (pc_variance_only > 1e-12) & ~unscoreable
+        moved = (relative > 0) & ~unscoreable
+    if np.any(relative > 0) and moved.any():
         log.info(
-            "Storm term (%s): the in-track shift moves %d of %d events by a median %.3f km relative; "
+            "Storm term (%s): the in-track shift moves %d of %d scoreable events by a median %.3f km "
+            "relative against a median %.3f km absolute, a relative-to-absolute ratio of %.3f; "
             "pc/pc_variance_only over the %d events above 1e-12 runs %.2f to %.2f",
             scenario,
-            int((moved > 0).sum()),
-            n,
-            float(np.median(moved[moved > 0])),
+            int(moved.sum()),
+            int((~unscoreable).sum()),
+            float(np.median(relative[moved])),
+            float(np.median(absolute[moved])),
+            float(np.nanmedian(cancellation[moved])),
             int(interesting.sum()),
             float(np.nanmin(ratio[interesting])) if interesting.any() else float("nan"),
             float(np.nanmax(ratio[interesting])) if interesting.any() else float("nan"),

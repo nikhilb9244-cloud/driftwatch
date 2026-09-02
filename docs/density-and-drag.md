@@ -238,6 +238,54 @@ a decay under an absolute 20 m floor (below which the difference of two mean sem
 systematics rather than noise), an answer outside 1e-4 to 1 m²/kg, and — see below — more than a
 quarter of the intervals excluded as manoeuvres.
 
+#### The thrust ceiling, added at the Phase 3 Step 3 review
+
+A continuous low thrust is a **ramp**, not a jump. The manoeuvre detector compares consecutive
+element sets and finds a step; a satellite lowering itself a few hundred metres a day produces
+no step at all, and the fit reads the whole fall as atmosphere. The exclusion-fraction rule
+above catches an object that is *also* making discrete burns; it does not catch one that is
+simply thrusting.
+
+What does catch it is the size of the answer. **A satellite's area-to-mass is bounded by its own
+geometry.** The largest operated low Earth orbit satellites reach A/m near 0.05 m²/kg even
+broadside, so `B = C_D A/m` tops out near 0.11. A **manoeuvring** object coming out above
+`config.BALLISTIC_THRUST_M2_KG = 0.1` is therefore not being measured for drag, and takes the
+run's typical value for its class instead, marked `thrust = True` with the reason in its `note`.
+
+Three things about the rule matter.
+
+**It is scoped to objects that can thrust**, by the same category-and-group test the manoeuvre
+prior uses: operated constellations and stations always, payloads and untyped objects only while
+they are in CelesTrak's `active` group, debris and rocket bodies never. That scoping is what
+lets the threshold be *physical* rather than arbitrary. Applied to the whole catalogue the cut
+would have to sit near the 1 m²/kg plausibility cap to spare the genuinely high coefficients,
+and it would then catch almost none of the real cases.
+
+**Debris near the cap is high area-to-mass, not thrust, and the data says so three ways.** The
+demo run's objects fitting above 0.8 m²/kg are Fengyun 1C, NOAA 16, DMSP 5D-2 F13 and Meteor 2
+fragments — thin plate and insulation from the big fragmentation clouds. Their radar
+cross-sections are 0.002 to 0.03 m², their B\* values are 0.001 to 0.004, a hundred times a
+satellite's, and their fits rest on 13 to 90 element sets at signal-to-noise ratios of 25 to
+110. Nothing about them says thrust, and nothing about them *can*: "mark it as manoeuvring" is
+not a statement that can be made about a fragment.
+
+**It applies to the B\* route as well as to the decay fit**, which the first refit showed was
+necessary. With the ceiling on the fit alone, 66 objects were caught and Starlinks whose *B\**
+inverted to 0.9 m²/kg — seventy times the constellation's own median fit — came through the
+fallback untested. B\* is fitted by the element-set producer to the object's observed fall, so
+a fall driven by an engine lands in B\* exactly as it lands in a decay fit; it is not a second,
+independent opinion. With both routes covered the count is 452 on the demo run, and the largest
+coefficient held by any object that can manoeuvre is 0.0995 m²/kg, which is the ceiling doing
+what it was set to do.
+
+The thrusting population is what one would expect: 416 Starlink, 18 other constellation
+members, 15 untyped and 3 payloads, and 394 of the 452 sit in the 450–550 km band — satellites
+changing shell or being deorbited. Their fitted or B\*-implied coefficients ran from 0.1 to
+0.7 m²/kg against a Starlink population median of 0.0129, and seventeen of the decay-fitted ones
+carried a B\* *ten times smaller* than a normal member of the constellation, two of them
+negative. A negative B\* is SGP4 saying the orbit is being raised while the element sets show it
+visibly falling, which is as clear a signature of thrust as public data offers.
+
 #### An object under continuous control is not measuring drag
 
 Excluding a burn assumes the intervals *around* it are free flight. That fails for an object

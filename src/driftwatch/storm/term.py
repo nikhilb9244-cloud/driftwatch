@@ -227,7 +227,35 @@ class ShiftSeries:
     note: str = ""
     decay_fraction: float = 0.0  # the scenario's implied decay over the span, as a fraction of a
     shift_revolutions: float = 0.0  # the displacement at the end, in orbit circumferences
-    valid: bool = True  # whether the linearisation still holds; see `validity`
+    valid: bool = True  # whether the linearisation still holds at all; see `validity`
+
+    @property
+    def scoreable(self) -> bool:
+        """Whether a probability may be reported for an event this object takes part in.
+
+        The cut set at the Step 3 review, and it is the *displacement* one alone: past
+        :data:`driftwatch.config.STORM_MAX_SHIFT_REVOLUTIONS` of the orbit's circumference the
+        term has stopped being a small perturbation of a known position and has become a
+        statement about where in its orbit the object is, which nothing here can support. An
+        event with such an object is reported with its reason and no number.
+
+        ``valid`` is the wider test -- this one *and* the decay fraction -- and it stays the
+        label on the covariance source, so the reader of a scored event can still see that its
+        implied decay was large without the event being withdrawn.
+        """
+        limit = config.STORM_MAX_SHIFT_REVOLUTIONS
+        return bool(np.isfinite(self.shift_revolutions) and self.shift_revolutions <= limit)
+
+    def unscoreable_reason(self) -> str:
+        """Why this object cannot be scored, or ``""`` when it can."""
+        if self.scoreable:
+            return ""
+        if not np.isfinite(self.shift_revolutions):
+            return f"{self.norad_id}: the storm term did not evaluate"
+        return (
+            f"{self.norad_id}: in-track shift {self.shift_revolutions:.3g} of the orbit's "
+            f"circumference, past the {config.STORM_MAX_SHIFT_REVOLUTIONS:g} the linear theory allows"
+        )
 
     def at(self, dt_s: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
         """``(shift, sigma)`` in metres at the given seconds since the epoch, clamped to the track."""
@@ -241,6 +269,7 @@ class ShiftSeries:
         return {
             "norad_id": self.norad_id,
             "valid": self.valid,
+            "scoreable": self.scoreable,
             "decay_fraction": float(f"{self.decay_fraction:.3g}"),
             "shift_revolutions": round(self.shift_revolutions, 3),
             "b_m2_kg": round(self.b_m2_kg, 6),
@@ -458,6 +487,8 @@ def shift_summary(series: dict[int, ShiftSeries]) -> dict[str, Any]:
             str(k): int(v) for k, v in pd.Series([s.b_source for s in series.values()]).value_counts().items()
         },
         "n_outside_linear_theory": int(sum(1 for s in series.values() if len(s.shift_m) and not s.valid)),
+        "n_unscoreable": int(sum(1 for s in series.values() if len(s.shift_m) and not s.scoreable)),
+        "n_decay_only": int(sum(1 for s in series.values() if len(s.shift_m) and s.scoreable and not s.valid)),
     }
 
 

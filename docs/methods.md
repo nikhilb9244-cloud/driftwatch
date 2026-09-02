@@ -338,6 +338,18 @@ they enter the chain; each states what is assumed, why, and what it costs.
   radiation pressure. A Starlink turning its panel edge-on to ride out a storm — a documented
   operational response — changes its coefficient by a factor of several, invisibly.
 
+- **A manoeuvring object fitting above `BALLISTIC_THRUST_M2_KG` is under continuous thrust and
+  is refused a coefficient**, taking the run's typical value for its class instead. A
+  continuous low thrust is a ramp rather than a jump, so the manoeuvre detector cannot see it
+  and a drag fit reads the whole fall as atmosphere. A satellite's area-to-mass is bounded by
+  its own geometry — the largest operated low Earth orbit satellites reach A/m near
+  0.05 m²/kg broadside, so `B = C_D A/m` tops out near 0.11 — and the cut is scoped to objects
+  that *can* thrust, which is what lets the number be physical rather than arbitrary. It
+  applies to the B\* route as well as to the decay fit, because B\* is fitted by the
+  element-set producer to the same thrust-driven fall. Debris fitting near the 1 m²/kg
+  plausibility cap is high area-to-mass, which is real and common for a fragmentation cloud,
+  and is kept. (Added at the Step 3 review; `docs/density-and-drag.md` carries the evidence.)
+
 ## The storm term (Phase 3, Step 3)
 
 - **The displacement is derived for a near-circular orbit.** Equation (2) of
@@ -358,13 +370,18 @@ they enter the chain; each states what is assumed, why, and what it costs.
   which the entry above describes as noisy. An object whose B\* is nonsense has a nonsense
   implied density and therefore a nonsense excess. The coefficient's source label travels with
   every risk row for this reason.
-- **The linear theory is checked for validity and flagged where it fails.** The derivation
-  holds the semi-major axis fixed, so it is a small-perturbation statement. Every object's
-  shift carries the implied decay as a fraction of `a` and the displacement in orbit
-  circumferences, and is flagged `!extrapolated` past one part in a thousand or a quarter of a
-  revolution. The G5 scenario puts high area-to-mass debris at 300 km past both by orders of
-  magnitude — those objects would be re-entering rather than conjuncting — and the flag is what
-  keeps a faithful evaluation of a formula outside its domain from being read as a prediction.
+- **Past the linear theory an event is unscoreable and carries no probability at all.** The
+  derivation holds the semi-major axis fixed, so it is a small-perturbation statement. Every
+  object's shift carries the implied decay as a fraction of `a` and the displacement in orbit
+  circumferences. Past a quarter of a revolution of displacement the term has stopped being a
+  correction to a known position and has become a claim about where in its orbit the object is,
+  which nothing here can support — so every event involving such an object is reported
+  **unscoreable**: NaN in `pc`, `pc_shift_only`, `pc_variance_only`, `pc_alfano`, `pc_chan` and
+  `pc_max`, `unscoreable` as the region and the flag, the reason on the row, and excluded from
+  every aggregate. The geometry, the covariance and the shift stay; only the number a reader
+  could act on is withheld. The decay-fraction test, one part in a thousand, is the wider one
+  and still labels the covariance source `!extrapolated` without withdrawing the event.
+  (Changed at the Step 3 review: it was a label on a reported number.)
 - **The density model's uncertainty is entered as a *storm-response* error, not an absolute
   one.** The absolute part cancels against a coefficient fitted through the same model, so
   30 % of the scenario density is carried for a fitted coefficient and that in quadrature with
@@ -383,6 +400,52 @@ they enter the chain; each states what is assumed, why, and what it costs.
   is correct and is worth knowing when comparing two runs.
 - **No coefficient means no shift**, labelled `storm:none`. That is a statement that the
   displacement is unknown, not that it is zero, and the two must not be read alike.
+- **Three probabilities per row, because the scenario does two things.** `pc` (the objects
+  moved and the covariance grew), `pc_shift_only` (moved, scored against the covariance the run
+  would otherwise have had) and `pc_variance_only` (covariance grown, objects left where their
+  element sets put them). They are not decomposable into each other — the probability is not
+  linear in either input — so all three are computed rather than one being inferred.
+- **The relative shift, not either absolute shift, is what changes a miss.** Both objects'
+  in-track displacements are rotated out of their own RIC frames and differenced in TEME; the
+  scalar difference of the two in-track components is *not* a displacement, because the two
+  frames are different. `relative_shift_km` on every row is the vector norm of the difference.
+- **The weather table must reach behind the oldest element-set epoch in a run**, not merely
+  cover the screening window: the shift is integrated from each object's own epoch, and NRLMSIS
+  wants 57 hours of ap history behind the first sample. A short table returns part-NaN density
+  tracks whose unusable samples are zeroed, which *understates* the shift silently. It is now an
+  exception rather than a warning (`storm.scenarios.WeatherTableTooShort`) and a test pins it.
+
+## Validation against the record (Phase 3, Step 4)
+
+Full account in `docs/storm-validation.md`. What is approximate about the *measurements*:
+
+- **The later element set is not truth.** The in-track error measured is the disagreement
+  between two fits, each with its own error of hundreds of metres to kilometres. It is a floor
+  on the propagation error, not a measurement of it. Over the storm the disagreement runs to
+  tens of kilometres and the floor is far below it; in the quiet control it is not, and the
+  control's numbers are an upper bound on what SGP4 alone contributes.
+- **The observed density ratio assumes `B` is constant between the two windows.** Over three
+  weeks with the manoeuvre intervals excluded that is good. For an object whose attitude mode
+  changed it is not, and nothing in public element sets can see an attitude change.
+- **The modelled ratio integrates along each object's pre-storm orbit for both windows.** Over
+  three days of storm the semi-major axis moves a few kilometres at these altitudes, small
+  against a 50 km scale height.
+- **The quiet control window was not perfectly quiet.** Kp stayed at or under 4 across 25 to
+  28 April 2024, which is a quieter atmosphere than the storm and is not a solar-minimum
+  baseline. The measured enhancement is correspondingly conservative.
+- **Both samples are survivorship-biased against the objects a storm affects most.** The May
+  2024 selection is drawn from today's catalogue, so the 3,891 objects that were in orbit on
+  9 May 2024 and have decayed since cannot be in it. The February 2022 case has the same bias
+  arriving from the other direction: 32 of the 49 satellites lost were never assigned catalogue
+  numbers at all, so the public record holds 17 of them.
+- **The control subtraction is matched on lead time in whole days**, taking the median of each
+  object's control comparisons at that lead. An object with one control comparison contributes
+  a single number as its median.
+- **The in-track error is measured in the later element set's RIC frame.** The two frames differ
+  by the angle the disagreement subtends, under a milliradian for a shift of tens of kilometres.
+- **Nothing in the storm term was tuned to any of it.** The measurements are reported and the
+  code is unchanged, because adjusting a model against the data that measured it destroys the
+  measurement.
 
 ## Propagation
 
@@ -451,9 +514,9 @@ they enter the chain; each states what is assumed, why, and what it costs.
 
 - Manoeuvres, beyond the three-valued flag, the history check and the Starlink
   supplemental sets.
-- The storm term itself: the in-track displacement a density excess produces, and its
-  variance (Phase 3 Step 3). Step 2 supplies the density and the coefficient; nothing yet
-  moves a covariance or a miss distance.
+- Thrust as a *modelled* force. An object under continuous low thrust is detected and refused a
+  drag coefficient (below), which keeps the wrong number out; it does not put the right one in.
+  A satellite raising or lowering itself is not predictable from public element sets at all.
 - Thermospheric winds, attitude changes, radiation pressure, and any density model other
   than NRLMSIS.
 - Velocity covariance, cross-terms between RIC components, long-encounter corrections.

@@ -36,16 +36,40 @@ left is fitted over windows that carry the **observed** ap of those days, so the
 in the window are modelled as storms rather than averaged into a quiet mean.
 
 **And when it is refused outright.** A fit assumes the intervals around an excluded burn are
-free flight. An object that is manoeuvring in more than
+free flight. A continuous low thrust is a *ramp* rather than a jump, which a jump detector
+cannot see and a drag fit therefore reads as atmosphere. Two rules catch it, and both are
+needed because either alone leaks.
+
+*On the exclusions.* An object manoeuvring in more than
 :data:`driftwatch.config.BALLISTIC_MAX_MANOEUVRE_FRACTION` of its intervals is under continuous
-control, and a continuous low thrust is a *ramp* rather than a jump, which a jump detector
-cannot see and a drag fit therefore reads as atmosphere. The Starlinks being deorbited are the
-case: 48 km of decay in 45 days at 400 km, which inverts to B near 1 m^2/kg, an area-to-mass a
-satellite does not have. The rule is on the exclusions rather than on the coefficient because
-the genuinely high coefficients -- the debris fragments at 0.5 to 0.8, thin plate and
-insulation from the big fragmentation clouds -- have no exclusions at all and have to survive.
-It is a proxy and it is set from the measured break in the population; ``config`` carries the
-measurement and names the case it still lets through.
+control and is refused whatever it fitted.
+
+*On the coefficient, for objects that can thrust* (``thrust = True``, added at the Step 3
+review). A satellite's area-to-mass is bounded by its own geometry: the largest operated low
+Earth orbit satellites reach A/m near 0.05 m^2/kg broadside, so ``B = C_D A/m`` tops out near
+0.11. A **manoeuvring** object coming out above
+:data:`driftwatch.config.BALLISTIC_THRUST_M2_KG` is therefore not being measured for drag, and
+takes the run's typical value for its class instead.
+
+The ceiling applies to **both** routes, which the first refit showed was necessary: with it on
+the decay fit alone, Starlinks whose *B* inverted to 0.9 m^2/kg -- seventy times the
+constellation's own median fit -- came through the fallback untested. B* is fitted by the
+element-set producer to the object's observed fall, so a fall driven by an engine or by a
+deliberate high-drag attitude lands in B* exactly as it lands in a decay fit, and neither is a
+drag coefficient.
+
+The scoping to objects that can thrust is what lets that number be physical. Applied to the
+whole catalogue the cut would have to sit near the 1 m^2/kg plausibility cap to spare the
+genuinely high coefficients, and would then catch almost none of the real cases. On the demo
+run the objects fitting near the cap are Fengyun 1C, NOAA 16, DMSP and Meteor fragments with
+radar cross-sections of a few hundredths of a square metre and B* a hundred times a
+satellite's -- thin plate and insulation from the big fragmentation clouds, where a high
+area-to-mass ratio is exactly what is expected and where nothing can thrust. The thrusting
+objects sit between 0.2 and 0.7: seventeen Starlinks at 450 to 550 km, 12 to 43 km of fall in
+45 days, carrying a B* *ten times smaller* than a normal member of their own constellation and
+a negative one for two of them, which is SGP4 saying the orbit is being raised while it
+visibly falls. Debris cannot manoeuvre, so "mark it as manoeuvring" is not a statement that
+could be made about it.
 
 **When a fit is accepted.** Not on a fixed decay threshold, which cannot know whether fifty
 metres is a measurement or a wobble, but on the object's own element-set scatter. Excluding
@@ -124,7 +148,11 @@ from driftwatch.drag import density as dn
 from driftwatch.drag.store import CoefficientStore
 from driftwatch.orbit.propagator import WGS72_EARTH_RADIUS_KM, build_satrecs
 from driftwatch.orbit.time import julian_date, julian_dates
-from driftwatch.risk.manoeuvre import detect_jumps
+from driftwatch.risk.manoeuvre import (
+    KNOWN_MANOEUVRING_CATEGORIES,
+    POSSIBLY_MANOEUVRING_CATEGORIES,
+    detect_jumps,
+)
 
 log = logging.getLogger(__name__)
 
@@ -149,6 +177,7 @@ COEFFICIENT_COLUMNS: tuple[str, ...] = (
     "rho_mean_kg_m3",
     "n_intervals",
     "n_manoeuvre_excluded",
+    "thrust",
     "note",
 )
 
@@ -159,7 +188,7 @@ class Coefficient:
 
     norad_id: int
     b_m2_kg: float
-    source: str  # 'history', 'bstar', 'typical' or 'none'
+    source: str  # 'history', 'bstar', 'typical', 'thrust' or 'none'
     b_sigma_m2_kg: float = float("nan")
     n_sets: int = 0
     span_days: float = 0.0
@@ -171,6 +200,7 @@ class Coefficient:
     rho_mean_kg_m3: float = float("nan")
     n_intervals: int = 0
     n_manoeuvre_excluded: int = 0
+    thrust: bool = False  # the fall this object showed is an engine, not the atmosphere
     note: str = ""
 
     def as_row(self) -> dict[str, Any]:
@@ -332,10 +362,29 @@ def element_set_scatter_m(seconds: np.ndarray, a_m: np.ndarray, runs: list[tuple
     return float("nan")
 
 
+def can_manoeuvre(category: str, in_active_group: bool = True) -> bool:
+    """Whether this object can fire an engine at all.
+
+    The thrust test below only means anything for an object that has thrust. Debris and rocket
+    bodies fitting a large coefficient are high area-to-mass, which is a real and common thing
+    for a fragment; a satellite fitting the same number is under control.
+
+    The same rule as :func:`driftwatch.risk.manoeuvre.manoeuvre_prior` and for the same reason:
+    an operated constellation or a crewed station manoeuvres as a matter of course, a payload or
+    an untyped object can only be manoeuvring if it is still operational, and a dead payload
+    fitting a large coefficient is telling us about its area-to-mass just as a fragment is.
+    """
+    if str(category) in KNOWN_MANOEUVRING_CATEGORIES:
+        return True
+    return bool(in_active_group) and str(category) in POSSIBLY_MANOEUVRING_CATEGORIES
+
+
 def fit_from_history(
     sets: pd.DataFrame,
     table: pd.DataFrame | dn.WeatherGrid,
     *,
+    category: str = "unknown",
+    in_active_group: bool = True,
     step_s: float | None = None,
     step_scale: float = 1.0,
     max_interval_days: float = 14.0,
@@ -402,11 +451,11 @@ def fit_from_history(
         snr = float(total_decay / decay_sigma) if np.isfinite(decay_sigma) and decay_sigma > 0 else float("nan")
     clean_span_days = seconds / DAY_S
 
-    def refused(note: str) -> Coefficient:
+    def refused(note: str, *, source: str = "none", thrust: bool = False) -> Coefficient:
         return Coefficient(
             norad_id,
             float("nan"),
-            "none",
+            source,
             n_sets=len(sets),
             span_days=span_days,
             clean_span_days=clean_span_days,
@@ -417,6 +466,7 @@ def fit_from_history(
             rho_mean_kg_m3=rho_mean,
             n_intervals=int(keep.sum()),
             n_manoeuvre_excluded=n_excluded,
+            thrust=thrust,
             note=note,
         )
 
@@ -444,6 +494,14 @@ def fit_from_history(
         )
     if not _plausible(b):
         return refused(f"fitted B {b:.3g} m^2/kg is outside the plausible range")
+    if can_manoeuvre(category, in_active_group) and b >= config.BALLISTIC_THRUST_M2_KG:
+        return refused(
+            f"fitted B {b:.3g} m^2/kg is over the {config.BALLISTIC_THRUST_M2_KG:g} m^2/kg ceiling an "
+            f"operated satellite's own geometry allows; this {category} object is under continuous "
+            "thrust and its fall is not drag",
+            source="thrust",
+            thrust=True,
+        )
 
     sigma = abs(b) * max(1.0 / snr, config.BALLISTIC_SIGMA_REL_FLOOR)
     return Coefficient(
@@ -508,6 +566,8 @@ def from_bstar(
     element_row: pd.Series,
     table: pd.DataFrame | dn.WeatherGrid,
     *,
+    category: str = "unknown",
+    in_active_group: bool = True,
     days: float | None = None,
     step_s: float | None = None,
     step_scale: float = 1.0,
@@ -548,6 +608,28 @@ def from_bstar(
             rho_mean_kg_m3=rho,
             n_intervals=1,
             note=note,
+        )
+    if can_manoeuvre(category, in_active_group) and b >= config.BALLISTIC_THRUST_M2_KG:
+        # The same ceiling as the history fit, and for the same reason. B* is fitted by the
+        # element-set producer to the object's *observed* fall, so a fall driven by an engine
+        # or by a deliberate high-drag attitude lands in B* exactly as it lands in a decay fit.
+        # The demo run has Starlinks whose B* inverts to 0.9 m^2/kg, seventy times what the
+        # constellation's own median fit gives, which is not an area-to-mass ratio.
+        return Coefficient(
+            norad_id,
+            float("nan"),
+            "thrust",
+            n_sets=1,
+            span_days=days,
+            decay_m=decay,
+            rho_mean_kg_m3=rho,
+            n_intervals=1,
+            thrust=True,
+            note=(
+                f"B* implies B {b:.3g} m^2/kg, over the {config.BALLISTIC_THRUST_M2_KG:g} m^2/kg ceiling "
+                f"an operated satellite's own geometry allows; this {category} object is under "
+                "continuous thrust and its fall is not drag"
+            ),
         )
     return Coefficient(
         norad_id,
@@ -688,6 +770,8 @@ def coefficients(
     for position, (_, row) in enumerate(elements.iterrows()):
         norad_id = int(row["norad_id"])
         category = str(row.get("category", "unknown"))
+        groups = row.get("groups")
+        active = "active" in (list(groups) if groups is not None else [])
         band = band_for_row(row)
         sets = by_id.get(norad_id)
         history_end = pd.to_datetime(sets["epoch"], utc=True).max() if sets is not None and len(sets) else None
@@ -704,20 +788,39 @@ def coefficients(
                 over_budget = True
                 budget.n_skipped += 1
             else:
-                fitted = fit_from_history(sets, grid, step_s=step_s, step_scale=step_scale)
+                fitted = fit_from_history(
+                    sets,
+                    grid,
+                    category=category,
+                    in_active_group=active,
+                    step_s=step_s,
+                    step_scale=step_scale,
+                )
                 budget.n_fitted += 1
                 if store is not None:
                     store.put(fitted.as_row(), history_start=history_start, history_end=history_end, now=now)
 
         if fitted is not None and fitted.source == "history":
             rows.append(fitted.as_row())
+        elif fitted is not None and fitted.source == "thrust":
+            # Straight past the B* route to the typical value. B* is fitted by the element-set
+            # producer to the same thrust-driven fall, so it is no more a drag coefficient than
+            # the history fit is -- on the demo run the thrusting Starlinks carry a B* ten times
+            # *smaller* than a normal member of the constellation, and two of them a negative
+            # one, which is SGP4 saying the orbit is being raised while it visibly falls.
+            # `none` is what the typical pass below fills; the thrust flag and the reason travel.
+            rows.append({**fitted.as_row(), "source": "none"})
         else:
-            fallback = from_bstar(row, grid, step_s=step_s, step_scale=step_scale)
+            fallback = from_bstar(
+                row, grid, category=category, in_active_group=active, step_s=step_s, step_scale=step_scale
+            )
             extra = f"history: {fitted.note}" if fitted is not None and fitted.note else ""
             if over_budget:
                 extra = "the history fit did not fit inside the run's budget"
             if extra:
                 fallback = Coefficient(**{**fallback.as_row(), "note": f"{fallback.note}; {extra}".lstrip("; ")})
+            if fallback.source == "thrust":
+                fallback = Coefficient(**{**fallback.as_row(), "source": "none"})
             rows.append(fallback.as_row())
         meta.append((category, band))
         if progress is not None and (position % 100 == 99 or position == total - 1):
@@ -753,6 +856,7 @@ def summary(frame: pd.DataFrame) -> dict[str, Any]:
     out: dict[str, Any] = {
         "n": int(len(frame)),
         "by_source": {str(k): int(v) for k, v in frame["source"].value_counts().items()},
+        "n_continuous_thrust": int(frame["thrust"].fillna(False).astype(bool).sum()) if "thrust" in frame else 0,
         "b_m2_kg": {
             "median": round(float(good["b_m2_kg"].median()), 6) if len(good) else None,
             "p10": round(float(good["b_m2_kg"].quantile(0.1)), 6) if len(good) else None,

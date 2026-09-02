@@ -168,6 +168,18 @@ def build_snapshot(
     df["groups"] = [g if isinstance(g, list) else [] for g in groups.reindex(df.index)]
     df = df.reset_index()
 
+    return enrich(df, satcat, fetched_at=fetched_at)
+
+
+def enrich(df: pd.DataFrame, satcat: pd.DataFrame | None, *, fetched_at: datetime) -> pd.DataFrame:
+    """Join SATCAT metadata, derive the orbit geometry and classify, into the snapshot schema.
+
+    Split out of :func:`build_snapshot` so a snapshot can also be built from stored element
+    sets rather than from live records -- see :func:`snapshot_as_of`, which is how a
+    historical storm window is reconstructed. Everything from here down is a function of one
+    element set per object plus static metadata, so both routes share it exactly.
+    """
+    df = df.copy()
     if satcat is not None:
         meta = satcat[~satcat.index.duplicated(keep="last")].reindex(df["norad_id"].to_numpy())
         df["object_type"] = meta["object_type"].fillna("UNK").astype("string").to_numpy()
@@ -198,6 +210,71 @@ def build_snapshot(
     )
     df = df[[f.name for f in SNAPSHOT_SCHEMA]].sort_values("norad_id").reset_index(drop=True)
     return df
+
+
+def snapshot_as_of(
+    sets: pd.DataFrame,
+    satcat: pd.DataFrame | None,
+    *,
+    as_of: datetime,
+    groups: Mapping[int, Sequence[str]] | None = None,
+    max_age_days: float | None = None,
+) -> pd.DataFrame:
+    """The catalogue as it stood on ``as_of``: each object's newest element set at or before it.
+
+    ``sets`` is a history frame (``catalogue/history.py``) -- every element set we hold for the
+    objects in question -- and this picks one per object exactly the way an operator screening
+    on that day would have: the newest fit published by then, and nothing later. Using a set
+    from *after* the date is the failure mode this exists to prevent, and it is the one that
+    would quietly make a storm validation come out right: an element set issued on 12 May
+    already contains the storm's effect, so propagating it would "predict" the drag it was
+    fitted to.
+
+    ``max_age_days`` drops objects whose newest set by then is staler than that, which is how
+    an object that stopped being tracked long before the date is kept out of the snapshot
+    rather than carried in on a fit nobody would have used. ``groups`` supplies the CelesTrak
+    group membership, which history does not carry: pass the current snapshot's, understanding
+    that group membership is being read from today rather than from then.
+    """
+    if not len(sets):
+        raise ValueError("no element sets to build a snapshot from")
+    at = pd.Timestamp(as_of)
+    at = at.tz_localize("UTC") if at.tzinfo is None else at.tz_convert("UTC")
+    epochs = pd.to_datetime(sets["epoch"], utc=True)
+    before = sets[epochs <= at].copy()
+    if not len(before):
+        raise ValueError(f"no element set in the history is at or before {at.isoformat()}")
+    before["epoch"] = pd.to_datetime(before["epoch"], utc=True)
+    latest = before.sort_values(["norad_id", "epoch"]).drop_duplicates("norad_id", keep="last")
+    if max_age_days is not None:
+        age_days = (at - latest["epoch"]).dt.total_seconds() / 86400.0
+        latest = latest[age_days <= float(max_age_days)]
+    if not len(latest):
+        raise ValueError(f"no element set within {max_age_days} days of {at.isoformat()}")
+    latest = latest.reset_index(drop=True)
+    latest["norad_id"] = latest["norad_id"].astype("int64")
+    lookup = {int(k): list(v) for k, v in (groups or {}).items()}
+    latest["groups"] = [lookup.get(int(i), []) for i in latest["norad_id"]]
+    if "source" not in latest.columns:
+        latest["source"] = "gp_history"
+    return enrich(latest, satcat, fetched_at=at)
+
+
+def as_of_path(as_of: datetime, snapshot_dir: Path = config.AS_OF_SNAPSHOT_DIR) -> Path:
+    """Where a historical snapshot lives. Named by the date it reconstructs, not by when it was built.
+
+    Cached permanently: the input is ``gp_history``, which does not change, so the file is a
+    pure function of the date and the object list and rebuilding it is waste.
+
+    In :data:`driftwatch.config.AS_OF_SNAPSHOT_DIR`, deliberately not beside the live snapshots.
+    :func:`list_snapshots` globs one directory for ``gp_*.parquet`` and takes the last by name,
+    and ``gp_asof_2022...`` sorts after ``gp_20260901...`` because a letter beats a digit -- so
+    a reconstruction of an old day would silently become "the latest snapshot" for the screener,
+    the coefficient fit and the history loader alike. It is also a different kind of file: a
+    live snapshot is what the catalogue said at a fetch, this is what it said on a chosen date,
+    rebuilt afterwards from history.
+    """
+    return Path(snapshot_dir) / f"gp_asof_{stamp(as_of)}.parquet"
 
 
 def to_arrow(df: pd.DataFrame, extra_metadata: Mapping[str, str] | None = None) -> pa.Table:

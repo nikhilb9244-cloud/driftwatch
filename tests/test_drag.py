@@ -229,6 +229,7 @@ def designed_sets(
     raise_at: int | None = None,
     raise_m: float = 0.0,
     scatter_m: float = 0.0,
+    norad_id: int = 90000,
 ) -> pd.DataFrame:
     """One element set a day for an orbit decaying at exactly the rate ``b_true`` implies.
 
@@ -249,8 +250,8 @@ def designed_sets(
         if raise_at is not None and k > raise_at:
             a_k += raise_m
         a_k += scatter_m * (1.0 if k % 2 else -1.0)
-        sat = circular_satrec(90000 + k, (a_k - 6378.137e3) / 1000.0, epoch, bstar=bstar)
-        rows.append(element_row(sat, epoch))
+        sat = circular_satrec(norad_id + k, (a_k - 6378.137e3) / 1000.0, epoch, bstar=bstar)
+        rows.append(element_row(sat, epoch, norad_id=norad_id))
     return pd.DataFrame(rows)
 
 
@@ -578,3 +579,76 @@ def test_the_seven_element_ap_mode_is_the_one_that_answers_a_storm():
     at_storm, stormy = reference_case("78279", 63960.0, 156.5, 138.7, 80.0)
     storm = dn.density([at_storm], [-8.1], [14.2], [379.2], dn.msis_inputs([at_storm], stormy))[0]
     assert storm > 1.3 * quiet, "a sustained Ap of 80 has to move the density"
+
+
+def test_a_satellite_falling_faster_than_its_own_geometry_allows_is_thrust_not_drag(monkeypatch):
+    """The Step 3 review correction: an object under continuous low thrust is not a drag measurement.
+
+    A continuous thrust is a *ramp*, not a jump, so the manoeuvre detector cannot see it and the
+    fit reads the whole fall as atmosphere. What gives it away is the size of the answer: a
+    satellite's area-to-mass is bounded by its own geometry, and a fit far above that ceiling is
+    an engine. The rule is scoped to objects that *can* thrust, which is what lets the threshold
+    be physical -- the same coefficient on a debris fragment is a high area-to-mass ratio, which
+    is real, common, and exactly what a fragmentation cloud produces.
+    """
+    monkeypatch.setattr(frames, "EARTH_ROTATION_RATE", 0.0)
+    rho = 3e-12
+    monkeypatch.setattr(dn, "density", lambda times, lat, lon, alt, inputs: np.full(len(np.asarray(alt)), rho))
+
+    b_thrust = 2.0 * config.BALLISTIC_THRUST_M2_KG
+    sets = designed_sets(b_true=b_thrust, rho=rho, altitude_km=450.0, days=12)
+    table = weather(T0 - timedelta(days=4), 20.0)
+
+    thrusting = bal.fit_from_history(sets, table, category="starlink", step_s=300.0)
+    assert thrusting.source == "thrust"
+    assert thrusting.thrust is True
+    assert np.isnan(thrusting.b_m2_kg)
+    assert "continuous thrust" in thrusting.note
+
+    # The identical decay on a fragment is a measurement and is kept: debris cannot thrust.
+    fragment = bal.fit_from_history(sets, table, category="debris", step_s=300.0)
+    assert fragment.source == "history"
+    assert fragment.b_m2_kg == pytest.approx(b_thrust, rel=0.05)
+    assert fragment.thrust is False
+
+    # And a satellite under the ceiling is untouched.
+    ordinary = designed_sets(b_true=0.02, rho=rho, altitude_km=450.0, days=12)
+    assert bal.fit_from_history(ordinary, table, category="starlink", step_s=300.0).source == "history"
+
+
+def test_a_thrusting_object_takes_the_typical_value_and_never_its_own_bstar(monkeypatch):
+    """B* is fitted by the element-set producer to the same thrust-driven fall, so it is no better.
+
+    Through the whole ``coefficients`` path rather than the single fit, because the routing is
+    the part that matters: a thrust refusal must skip the B* fallback that every other refusal
+    falls through to, and land on the run's typical value for its class, still marked.
+    """
+    monkeypatch.setattr(frames, "EARTH_ROTATION_RATE", 0.0)
+    rho = 3e-12
+    monkeypatch.setattr(dn, "density", lambda times, lat, lon, alt, inputs: np.full(len(np.asarray(alt)), rho))
+    table = weather(T0 - timedelta(days=4), 30.0)
+
+    b_thrust = 2.0 * config.BALLISTIC_THRUST_M2_KG
+    thruster = designed_sets(b_true=b_thrust, rho=rho, altitude_km=450.0, days=12, norad_id=90101)
+    peers = [
+        designed_sets(b_true=0.02, rho=rho, altitude_km=450.0, days=12, norad_id=90110 + i)
+        for i in range(config.BALLISTIC_TYPICAL_MIN_OBJECTS)
+    ]
+    history = pd.concat([thruster, *peers], ignore_index=True)
+    elements = (
+        history.sort_values("epoch")
+        .drop_duplicates("norad_id", keep="last")
+        .reset_index(drop=True)
+        .assign(category="starlink")
+    )
+    frame = bal.coefficients(elements, table, history, step_s=300.0, budget_s=0)
+    row = frame.set_index("norad_id").loc[90101]
+
+    assert bool(row["thrust"]) is True
+    assert row["source"] == "typical"
+    assert "continuous thrust" in str(row["note"])
+    assert "stood in with" in str(row["note"])
+    # The value it stood in with is its own class's median, not its own fitted number.
+    assert float(row["b_m2_kg"]) == pytest.approx(0.02, rel=0.2)
+    assert float(row["b_m2_kg"]) < config.BALLISTIC_THRUST_M2_KG
+    assert bal.summary(frame)["n_continuous_thrust"] == 1
