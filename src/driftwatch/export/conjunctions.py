@@ -71,6 +71,7 @@ EXPORT_COLUMNS: tuple[str, ...] = (
     "region",
     "flag",
     "confidence",
+    "slow_encounter",
     "stale_primary",
     "stale_secondary",
     "manoeuvre_primary",

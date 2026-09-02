@@ -37,6 +37,22 @@ contributes one row, not two. Step 3 fits the covariance of supplemental-screene
 from that table; `driftwatch report` and `driftwatch risk` rebuild a run's element sets
 from its snapshot plus the versions it recorded.
 
+## SpaceX ephemeris covariance: `data/spacex/ephemerides_<YYYYMMDDTHHMMSSZ>.parquet`
+
+One row per satellite per stored sample of SpaceX's own published covariance, written by
+`driftwatch spacex`. **Derived data, not the files**: only the position covariance is kept,
+and only every ten minutes of it, and neither this nor the raw files are ever redistributed
+(`docs/data-sources.md`).
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `norad_id`, `name` | int64, string | From the manifest file name. |
+| `created` | timestamp[us, UTC] | When SpaceX generated this version. Identifies the version; the newest per satellite is the one used. |
+| `ephemeris_start`, `ephemeris_stop` | timestamp[us, UTC] | The file's validity, 72 hours apart. Outside it the base covariance model serves. |
+| `ephemeris_source` | string | SpaceX's own label, e.g. `blend`: a blend of the fitted past and the planned future. |
+| `t` | timestamp[us, UTC] | The sample time. |
+| `cov_rr_km2`, `cov_ri_km2`, `cov_ii_km2`, `cov_rc_km2`, `cov_ic_km2`, `cov_cc_km2` | float64 | The six independent entries of the RIC (their UVW) position covariance in km^2, used as published. |
+
 ## Cache: `data/cache/spacetrack/`
 
 Raw Space-Track downloads. Nothing here ever contains the credentials; the metadata
@@ -224,11 +240,11 @@ inside the watch radius.
 | `ephemeris`, `source` | string | `gp` or `supplemental`; `celestrak` or `spacetrack`. |
 | `in_active_group` | bool | In CelesTrak's `active` group (the manoeuvre prior's second rule). |
 | `rcs_m2` | float64 | SATCAT radar cross-section, NaN if unpublished. |
-| `hbr_m`, `hbr_source` | float64, string | The hard-body radius used and its rule: `fleet` (the fleet file), `rcs` (`sqrt(RCS / pi)`, clipped to 0.1 to 20 m) or `category` (the default for the category). |
+| `hbr_m`, `hbr_source` | float64, string | The hard-body radius used and the rule that gave the largest value, every rule being a lower bound on an unpublished size: `fleet` (the fleet file, which wins outright), `span` (the median radius of the object's type and radar cross-section class, derived from ESA's Kelvins data — see `docs/kelvins-reproduction.md`), `rcs` (`sqrt(RCS / pi)`, clipped to 0.1 to 20 m) or `category` (the default for the category). A rescore rebaselines these from the current rules, so a stored run scores with the radii the code holds now. |
 | `manoeuvre_prior`, `manoeuvre_level` | string | The prior (`known`, `possible`, `none`) and the level after the history check (`possible` becomes `observed` when the history shows a burn). |
 | `n_history_sets`, `n_jumps` | int64 | Element sets the fit saw; burns the detector found. |
 | `jump_epochs`, `last_jump` | list<timestamp>, timestamp | Epochs of the first element set after each detected burn, and the latest of them. |
-| `cov_source` | string | Which covariance the model uses for the object: `empirical`, `pooled:<category>/<band>`, `default:<band>`, or, for an object screened on an operator ephemeris, `supplemental:consistency` (exponent fitted), `supplemental:consistency-prior-p<p>` (exponent a prior), `supplemental:rms` (one stored version, the published fit residual alone) or `supplemental:beyond-horizon` (past the supplemental fit's validity; the base model served). A row can carry `<label>+beyond-horizon` when an object's events straddle the horizon. |
+| `cov_source` | string | Which covariance the model uses for the object: `empirical`, `pooled:<category>/<band>`, `default:<band>`, or, for an object screened on an operator ephemeris, `supplemental:consistency` (exponent fitted), `supplemental:consistency-prior-p<p>` (exponent a prior), `supplemental:rms` (one stored version, the published fit residual alone) or `supplemental:beyond-horizon` (past the supplemental fit's validity; the base model served). A row can carry `<label>+beyond-horizon` when an object's events straddle the horizon. This column names the *growth law* an object gets; SpaceX's published covariance is a time series rather than a law, so `spacex-ephemeris` appears only in the risk table's per-event `cov_source_secondary`. |
 
 ### `covariance.parquet`
 
@@ -254,7 +270,7 @@ run id.
 | `event_id` | string | Joins to `events.parquet`. |
 | `sigma_r_primary_km`, `sigma_i_primary_km`, `sigma_c_primary_km` | float64 | The primary's RIC standard deviations at `tca` under this scenario's model. |
 | `sigma_r_secondary_km`, `sigma_i_secondary_km`, `sigma_c_secondary_km` | float64 | The same for the secondary. |
-| `cov_source_primary`, `cov_source_secondary` | string | The model's source label for each (a scenario wrapper prefixes its own, e.g. `scaled:4:default:leo`). |
+| `cov_source_primary`, `cov_source_secondary` | string | The model's source label for each, per event (a scenario wrapper prefixes its own, e.g. `scaled:4:default:leo`). `spacex-ephemeris` where SpaceX's own published covariance served, and `spacex-ephemeris+<base label>` where an event straddled the 72-hour horizon of their file; past it the base model serves and reports its own label, so this column says which of the three models covered each event. |
 | `hbr_m` | float64 | The combined hard-body radius, primary plus secondary. |
 | `enc_cov_xx_km2`, `enc_cov_xy_km2`, `enc_cov_yy_km2` | float64 | The combined covariance projected onto the encounter plane, x along the miss vector. Enough to draw the ellipse. |
 | `pc` | float64 | Probability of collision, Foster's integration. |
@@ -263,6 +279,7 @@ run id.
 | `region` | string | `dilution` when `pc_max_scale` is below one (shrinking the covariance would raise the probability), `robust` at or above one, `unknown` when the sweep did not run. |
 | `flag` | string | `red` (`pc >= 1e-4`), `yellow` (`>= 1e-5`) or `none`. |
 | `confidence` | string | `standard` in the robust region, `low` elsewhere. A red or yellow flag with `low` confidence is not actionable; see `docs/screening.md`. |
+| `slow_encounter` | bool | True below 0.1 km/s relative, where the two-dimensional method's straight-line assumption no longer holds and the probability is a **known underestimate**. Not a correction: nothing rescales `pc`. See `driftwatch.risk.pc.slow_encounters`. |
 | `computed_at` | timestamp[us, UTC] | When this scenario was scored. |
 
 ### `conjunctions.parquet`

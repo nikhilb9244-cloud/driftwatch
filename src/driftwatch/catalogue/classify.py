@@ -60,6 +60,40 @@ GEO_TOLERANCE_KM = 200.0
 LEO_CEILING_KM = 2_000.0
 HEO_ECCENTRICITY = 0.25
 
+# Space-Track's radar cross-section size classes, which SATCAT publishes as SMALL, MEDIUM
+# and LARGE and CelesTrak publishes as the number behind them: small below 0.1 m^2, medium
+# from 0.1 to 1.0 m^2, large above. Used to look up a hard-body radius for objects whose
+# actual dimensions are not published (see :mod:`driftwatch.risk.scenario`), and to bin ESA's
+# Kelvins rows the same way so the lookup and the objects it serves are classed alike.
+RCS_CLASSES: tuple[str, ...] = ("small", "medium", "large", "unknown")
+RCS_SMALL_MAX_M2 = 0.1
+RCS_MEDIUM_MAX_M2 = 1.0
+
+
+def rcs_class(rcs_m2: float | None) -> str:
+    """``small``, ``medium``, ``large`` or ``unknown`` for one radar cross-section in square metres."""
+    if rcs_m2 is None:
+        return "unknown"
+    value = float(rcs_m2)
+    if not np.isfinite(value) or value <= 0:
+        return "unknown"
+    if value < RCS_SMALL_MAX_M2:
+        return "small"
+    if value <= RCS_MEDIUM_MAX_M2:
+        return "medium"
+    return "large"
+
+
+def rcs_classes(rcs_m2: np.ndarray) -> np.ndarray:
+    """Vectorised :func:`rcs_class`."""
+    values = pd.to_numeric(pd.Series(np.asarray(rcs_m2, dtype=object)), errors="coerce").to_numpy(dtype=float)
+    out = np.full(values.shape, "unknown", dtype=object)
+    valid = np.isfinite(values) & (values > 0)
+    out[valid & (values < RCS_SMALL_MAX_M2)] = "small"
+    out[valid & (values >= RCS_SMALL_MAX_M2) & (values <= RCS_MEDIUM_MAX_M2)] = "medium"
+    out[valid & (values > RCS_MEDIUM_MAX_M2)] = "large"
+    return out
+
 
 def categorise(name: str, object_type: str | None, groups: Iterable[str]) -> str:
     """Return the category for one object.

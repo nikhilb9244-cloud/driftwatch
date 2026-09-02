@@ -33,6 +33,7 @@ from driftwatch.risk.scenario import (
     hard_body_radius_m,
     new_run_id,
     objects_from_snapshot,
+    refresh_hard_body_radii,
     run_risk,
 )
 from driftwatch.screening import ScreeningConfig, screen_fleet
@@ -182,16 +183,40 @@ def objects_ref(objects: pd.DataFrame, norad_id: int):
 
 
 def test_hard_body_radius_rules():
-    assert hard_body_radius_m("debris", 0.5, 13.0) == (13.0, "fleet")
+    """The largest of the rules wins, because each of them is a lower bound on an unpublished size."""
+    assert hard_body_radius_m("debris", 0.5, 13.0) == (13.0, "fleet")  # the fleet file wins outright
+    # A known envelope is not overruled by a population median.
     assert hard_body_radius_m("starlink", 2.0) == (10.0, "category")
     assert hard_body_radius_m("station", None) == (30.0, "category")
-    r, source = hard_body_radius_m("debris", 0.5)
-    assert source == "rcs" and r == pytest.approx(np.sqrt(0.5 / np.pi))
-    assert hard_body_radius_m("payload", 5000.0) == (20.0, "rcs")  # clipped
-    assert hard_body_radius_m("rocket_body", 1e-6) == (0.1, "rcs")  # clipped
-    assert hard_body_radius_m("debris", float("nan")) == (0.5, "category")
+    # A small fragment: the radar echo says 0.4 m, ESA's catalogue convention says 1 m.
+    assert hard_body_radius_m("debris", 0.5) == (1.0, "span")
+    assert hard_body_radius_m("debris", float("nan")) == (1.0, "span")
+    # A large payload: the median span of that class beats both the category default and the echo.
+    assert hard_body_radius_m("payload", 12.0) == (4.55, "span")
+    assert hard_body_radius_m("payload", 0.39) == (3.0, "category")
+    # A cross-section large enough to beat the lookup is still used, and still clipped.
+    assert hard_body_radius_m("payload", 5000.0) == (20.0, "rcs")
+    r, source = hard_body_radius_m("debris", 5.0)
+    assert source == "rcs" and r == pytest.approx(np.sqrt(5.0 / np.pi))
+    assert hard_body_radius_m("rocket_body", 1e-6) == (5.0, "category")
     assert hard_body_radius_m("unknown", None) == (1.0, "category")
     assert hard_body_radius_m("never-heard-of-it", None) == (1.0, "category")
+
+
+def test_hard_body_radii_are_rebaselined_over_a_stored_run(designed):
+    """A stored run rescores with the radius rules the code holds now, not the ones it ran under."""
+    _, _, _, objects, _, _ = designed
+    stale = objects.copy()
+    stale["hbr_m"] = 0.1
+    stale["hbr_source"] = "rcs"
+    stale.loc[stale["is_primary"], "hbr_m"] = 7.0
+    stale.loc[stale["is_primary"], "hbr_source"] = "fleet"
+    refreshed, summary = refresh_hard_body_radii(stale)
+    assert summary["n_changed"] == int((~stale["is_primary"]).sum())
+    # The fleet's own numbers are left alone; everything else comes back from the rules.
+    assert (refreshed.loc[refreshed["is_primary"], "hbr_m"] == 7.0).all()
+    assert (refreshed.loc[~refreshed["is_primary"], "hbr_m"] >= 0.5).all()
+    assert (refreshed.loc[~refreshed["is_primary"], "hbr_source"] != "rcs").any()
 
 
 def test_objects_table_priors_and_promotion(designed):

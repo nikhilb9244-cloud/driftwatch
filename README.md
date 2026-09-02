@@ -98,6 +98,8 @@ uv run driftwatch screen --fleet fleets/demo.yaml --days 7
                                           # ~4 min + the history backfill; writes data/conjunctions/demo_<stamp>/
 uv run driftwatch risk latest --scenario test --scale 3
                                           # rescore the same events with every covariance tripled
+uv run driftwatch spacex latest           # optional: SpaceX's own covariance for the run's Starlink
+                                          #   secondaries, inside their 72-hour horizon
 uv run driftwatch report latest           # weekly report + the viewer's conjunctions bundle
 cd web && npm install && npm run dev      # open the printed URL
 ```
@@ -137,13 +139,15 @@ src/driftwatch/         Python package (CLI: driftwatch)
   catalogue/            CelesTrak and Space-Track fetch, SATCAT, classification, parquet snapshots, history
   orbit/                time, SGP4 propagation, frame conversions
   screening/            three-stage conjunction screening, RIC frame, supplemental Starlink sets
+  ephemeris/            operator-published ephemerides (SpaceX's Starlink covariance)
   risk/                 covariance model and fit, manoeuvre flag, probability of collision, scenarios, Kelvins
   export/               viewer bundle, conjunction run directory, weekly report
 fleets/                 YAML fleet definitions (the primaries to screen)
 tests/                  pytest
 docs/                   physics background, frames and time, data schema, methods, data sources, plans
 web/                    Vite + TypeScript + globe.gl + satellite.js viewer
-data/                   cache, snapshots, history, supplemental versions, conjunction runs (git-ignored)
+data/                   cache, snapshots, history, supplemental and SpaceX ephemeris versions,
+                        conjunction runs (git-ignored)
 ```
 
 ## Docs
@@ -182,6 +186,14 @@ data/                   cache, snapshots, history, supplemental versions, conjun
   with citation, which the viewer bundle carries; conjunction messages and the emergency
   and advanced tiers are not covered and are never fetched. See `docs/data-sources.md`
   for the quoted text, the date it was checked and the citation format.
+
+- [SpaceX Starlink ephemerides](https://api.starlink.com/public-files/ephemerides/). No
+  account, no stated licence, published so that other operators can screen against
+  Starlink. driftwatch uses their covariance for Starlink secondaries inside the 72-hour
+  horizon of each file. Because no licence is stated the rule is **analysis only**: the
+  raw files are never redistributed, only one satellite's file is fetched per satellite a
+  run actually needs, and the store holds a thinned covariance series rather than the
+  file. See `docs/spacex-ephemerides.md` and `docs/data-sources.md`.
 
 ## Licence
 

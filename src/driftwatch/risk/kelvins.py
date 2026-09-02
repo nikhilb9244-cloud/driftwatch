@@ -38,6 +38,7 @@ The data are not redistributed with driftwatch; download them from the Kelvins s
 from __future__ import annotations
 
 import logging
+from collections.abc import Iterable
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
@@ -81,6 +82,10 @@ TAIL_RISK = -6.0
 # by the rows nobody would act on, so the headline number is quoted over this tail too.
 TAIL_RISK_TIGHT = -5.0
 DEFAULT_RADII_M: np.ndarray = np.arange(1.0, 50.01, 0.5)
+# Bin edges in km/s for the residual against relative speed. The interesting end is the slow
+# one: the two-dimensional method assumes the pair passes in a straight line at constant
+# velocity, which is what fails first as the relative speed falls.
+RELATIVE_SPEED_EDGES_KMS: tuple[float, ...] = (0.0, 1.0, 4.0, 10.0, 14.0, 20.0)
 
 
 def find_dataset(kelvins_dir: Path = config.KELVINS_DIR) -> Path | None:
@@ -191,6 +196,81 @@ def combined_radius_m(df: pd.DataFrame, source: str) -> np.ndarray:
         c = np.sqrt(np.maximum(df["c_rcs_estimate"].to_numpy(dtype=float), 0.0) / np.pi)
         return t + c
     raise ValueError(f"unknown size proxy {source!r}")
+
+
+# --------------------------------------------------------------------------------------
+# The radius lookup driftwatch's own screening uses, derived from these rows
+
+
+# ESA's own object-type labels for the chaser, mapped onto driftwatch's coarse types.
+KELVINS_OBJECT_TYPES: dict[str, str] = {
+    "PAYLOAD": "payload",
+    "ROCKET BODY": "rocket_body",
+    "DEBRIS": "debris",
+    "UNKNOWN": "unknown",
+    "TBA": "unknown",  # "to be assigned": a fresh object not yet correlated to a launch
+}
+# A cell of the lookup needs this many rows before its median is used rather than the
+# object type's overall median.
+MIN_ROWS_PER_CELL = 100
+
+
+def chaser_radius_table(df: pd.DataFrame, *, min_rows: int = MIN_ROWS_PER_CELL) -> pd.DataFrame:
+    """Median chaser radius by object type and radar cross-section class, from ``c_span``.
+
+    This is where :data:`driftwatch.risk.scenario.SPAN_RADIUS_M` comes from. ESA publishes
+    each object's largest dimension as ``span`` in metres and computes its risk column with
+    the combined radius ``(t_span + c_span) / 2``, so half a span is one object's radius —
+    the reconstruction in :func:`reproduce_tail` confirms that with no fitted parameter.
+    The chaser column is the one worth mining: it covers the debris, rocket bodies and
+    uncorrelated objects a screening tool meets as secondaries, whereas the target column is
+    a few dozen ESA missions.
+
+    Two columns of the result carry the caveat. ``median_radius_m`` is a **median over a
+    population**, not a measurement of any one object, and on most cells it is exactly 1.0 m
+    because ESA's catalogue defaults an unknown span to 2.0 m. That default is a screening
+    convention, deliberately generous for an object whose size nobody knows, and adopting it
+    is what makes driftwatch's probabilities comparable with ESA's.
+    """
+    from driftwatch.catalogue.classify import rcs_classes
+
+    for column in ("c_span", "c_object_type", "c_rcs_estimate"):
+        if column not in df.columns:
+            raise ValueError(f"the dataset lacks {column}")
+    rows = pd.DataFrame(
+        {
+            "object_type": df["c_object_type"].map(KELVINS_OBJECT_TYPES).fillna("unknown"),
+            "rcs_class": rcs_classes(df["c_rcs_estimate"].to_numpy()),
+            "radius_m": df["c_span"].to_numpy(dtype=float) / 2.0,
+        }
+    )
+    rows = rows[np.isfinite(rows["radius_m"]) & (rows["radius_m"] > 0)]
+    per_type = rows.groupby("object_type")["radius_m"].median()
+    table = rows.groupby(["object_type", "rcs_class"])["radius_m"].agg(["count", "median"]).reset_index()
+    table = table.rename(columns={"count": "n", "median": "median_radius_m"})
+    table["used"] = table["n"] >= int(min_rows)
+    table["fallback_radius_m"] = table["object_type"].map(per_type)
+    table["radius_m"] = np.where(table["used"], table["median_radius_m"], table["fallback_radius_m"])
+    return table.sort_values(["object_type", "rcs_class"]).reset_index(drop=True)
+
+
+def compare_span_radius_lookup(radii: pd.DataFrame) -> dict[str, tuple[float, float]]:
+    """Cells where :data:`driftwatch.risk.scenario.SPAN_RADIUS_M` disagrees with a fresh derivation.
+
+    The lookup is baked into the code so that screening does not depend on a dataset behind a
+    registration wall. That makes it a copy, and a copy has to be checkable: this returns
+    ``{"<type>/<class>": (in the code, in the data)}`` for every cell that has drifted, and an
+    empty mapping when the two agree. ``driftwatch kelvins`` warns on a non-empty result.
+    """
+    from driftwatch.risk.scenario import SPAN_RADIUS_M
+
+    derived = {(str(r.object_type), str(r.rcs_class)): round(float(r.radius_m), 2) for r in radii.itertuples()}
+    out: dict[str, tuple[float, float]] = {}
+    for key in sorted(set(derived) | set(SPAN_RADIUS_M)):
+        theirs, ours = derived.get(key), SPAN_RADIUS_M.get(key)
+        if ours is None or theirs is None or abs(round(ours, 2) - theirs) > 0.005:
+            out["/".join(key)] = (float("nan") if ours is None else ours, float("nan") if theirs is None else theirs)
+    return out
 
 
 @dataclass
@@ -330,6 +410,48 @@ def fit_hbr(df: pd.DataFrame, *, radii_m: np.ndarray = DEFAULT_RADII_M, tail_ris
     return HbrFit(best[1], len(tail), by_radius, best[2], report)
 
 
+def residual_by_relative_speed(
+    tail: pd.DataFrame, residuals: np.ndarray, *, edges: Iterable[float] = RELATIVE_SPEED_EDGES_KMS
+) -> pd.DataFrame | None:
+    """The residual binned by relative speed, to test the straight-line assumption.
+
+    The two-dimensional method assumes the objects pass each other in a straight line at
+    constant velocity. That fails for a slow encounter, where the transit takes minutes
+    instead of a fraction of a second and the relative path curves through it, and the
+    failure is one-sided: a slow pair lingers near the closest approach, so more of the
+    uncertainty is in play than the one-plane integral sees and the probability comes out
+    too low. If that is what the one-sided disagreement with ESA is made of, it should
+    concentrate at the slow end.
+
+    Returns None when the dataset has no ``relative_speed`` column.
+    """
+    if "relative_speed" not in tail.columns:
+        return None
+    speed = tail["relative_speed"].to_numpy(dtype=float) / 1000.0  # the column is m/s
+    res = np.asarray(residuals, dtype=float)
+    edges = list(edges)
+    rows: list[dict[str, Any]] = []
+    for lo, hi in zip(edges[:-1], edges[1:], strict=False):
+        sel = (speed >= lo) & (speed < hi)
+        if not sel.any():
+            continue
+        x = res[sel]
+        rows.append(
+            {
+                "speed_lo_kms": float(lo),
+                "speed_hi_kms": float(hi),
+                "n": int(sel.sum()),
+                "median": float(np.median(x)),
+                "p05": float(np.percentile(x, 5)),
+                "p95": float(np.percentile(x, 95)),
+                "within_factor_two": float(np.mean(np.abs(x) <= np.log10(2.0))),
+                # The dangerous direction: our probability an order of magnitude below ESA's.
+                "share_low_by_three": float(np.mean(x < -np.log10(3.0))),
+            }
+        )
+    return pd.DataFrame(rows)
+
+
 def residual_report(tail: pd.DataFrame, residuals: np.ndarray) -> dict[str, Any]:
     """Percentiles of the residual overall and per risk bin, and the share within a factor of two."""
     res = np.asarray(residuals, dtype=float)
@@ -352,10 +474,12 @@ def residual_report(tail: pd.DataFrame, residuals: np.ndarray) -> dict[str, Any]
     risk = tail["risk"].to_numpy(dtype=float)
     bins = [(-6.0, -5.0), (-5.0, -4.0), (-4.0, -3.0), (-3.0, -2.0), (-2.0, 0.0)]
     by_bin = {f"[{lo:g}, {hi:g})": stats(res[(risk >= lo) & (risk < hi)]) for lo, hi in bins}
+    by_speed = residual_by_relative_speed(tail, res)
     return {
         "overall": stats(res),
         "tight_tail": stats(res[risk >= TAIL_RISK_TIGHT]),
         "by_risk_bin": by_bin,
+        "by_relative_speed": None if by_speed is None else by_speed.to_dict("records"),
     }
 
 
@@ -505,6 +629,7 @@ def to_markdown(
     *,
     primary: Reproduction | None = None,
     proxies: list[dict[str, Any]] | None = None,
+    radii: pd.DataFrame | None = None,
     plot_path: str | None = None,
 ) -> str:
     """The reproduction as a markdown page for the docs.
@@ -569,6 +694,51 @@ def to_markdown(
             "rather than tuned away.",
             "",
         ]
+        by_speed = primary.report.get("by_relative_speed")
+        if by_speed:
+            slow, fast = by_speed[0], by_speed[-1]
+            lines += [
+                "### Is the one-sided tail the slow encounters?",
+                "",
+                "The obvious suspect for a one-sided disagreement is the two-dimensional method itself. It "
+                "assumes the pair passes in a straight line at constant velocity, which fails as the "
+                "relative speed falls: a slow pair lingers near the closest approach, more of the "
+                "uncertainty is in play than the one-plane integral sees, and the probability comes out "
+                "too low. That is exactly the direction of the tail. So the residual is binned by "
+                "relative speed.",
+                "",
+                "| Relative speed | n | median | p05 | p95 | within x2 | more than 3x low |",
+                "| --- | ---: | ---: | ---: | ---: | ---: | ---: |",
+            ]
+            for row in by_speed:
+                lines.append(
+                    f"| {row['speed_lo_kms']:g} to {row['speed_hi_kms']:g} km/s | {row['n']} | "
+                    f"{row['median']:+.4f} | {row['p05']:+.2f} | {row['p95']:+.2f} | "
+                    f"{row['within_factor_two']:.0%} | {row['share_low_by_three']:.1%} |"
+                )
+            lines += [
+                "",
+                "**It is not.** The slowest bin is unremarkable: "
+                f"{slow['within_factor_two']:.0%} of it agrees within a factor of two against "
+                f"{fast['within_factor_two']:.0%} of the fastest bin, and its 5th percentile of "
+                f"{slow['p05']:+.2f} is no worse than the middle of the range. What the table does show is "
+                "that agreement improves monotonically towards head-on encounters at 14 km/s and above, "
+                "where the geometry is least ambiguous.",
+                "",
+                "The null result is worth reading carefully, because it does **not** clear the method. This "
+                "comparison is against ESA's own operational risk column, and the reconstruction reproduces "
+                "it to a fraction of a percent overall -- including on the slow rows. That agreement is "
+                "itself the evidence: if ESA had integrated the slow encounters in three dimensions and "
+                "driftwatch had not, the slow bin would stand out, and it does not. Both are computing the "
+                "same two-dimensional integral, so a bias they share is invisible here whatever its size.",
+                "",
+                "So the slow-encounter underestimate remains a known property of the method rather than a "
+                "measured disagreement, and driftwatch flags it directly instead of inferring it from these "
+                "rows: `slow_encounter` in every risk table marks the events whose transit takes more than "
+                "a hundredth of an orbital period, and their probability is reported as a known "
+                "underestimate. See `driftwatch.risk.pc.encounter_duration_ratio`.",
+                "",
+            ]
 
     if plot_path:
         lines += [
@@ -652,10 +822,38 @@ def to_markdown(
             "convention rather than a lucky fit. `rcs` needs a multiplier of nearly five and still does no "
             "better than a single radius: the radar cross-section is the area of the echo rather than of "
             "the object, it understates anything much larger than the radar wavelength, and it is missing "
-            "on a third of the chaser rows. **This bears directly on driftwatch's own screening**: the "
-            "secondary radii in `risk/scenario.py` fall back to `sqrt(RCS / pi)` for payloads, rocket "
-            "bodies and debris, and this says that fallback is biased small and that a published dimension "
-            "should be preferred wherever there is one.",
+            "on a third of the chaser rows. **This bore directly on driftwatch's own screening**, whose "
+            "secondary radii used to come from `sqrt(RCS / pi)` for payloads, rocket bodies and debris. "
+            "That formula has been replaced by the lookup below.",
+        ]
+
+    if radii is not None and len(radii):
+        lines += [
+            "",
+            "## The radius lookup driftwatch screens with",
+            "",
+            "`sqrt(RCS / pi)` is gone from `risk/scenario.py`, replaced by the median chaser radius of "
+            "each object type and radar cross-section class in these rows -- half the median `c_span`, "
+            "since ESA's own risk column is reproduced by `(t_span + c_span) / 2` with nothing fitted. The "
+            "cross-section survives as a *class* (small below 0.1 m2, medium to 1 m2, large above), which "
+            "is the part of it that carries size information; its use as a length does not.",
+            "",
+            "| Object type | RCS class | Rows | Median radius | Used |",
+            "| --- | --- | ---: | ---: | --- |",
+        ]
+        for row in radii.itertuples():
+            note = "yes" if row.used else f"too few rows; the type median, {row.fallback_radius_m:.2f} m"
+            lines.append(f"| {row.object_type} | {row.rcs_class} | {row.n} | {row.median_radius_m:.2f} m | {note} |")
+        lines += [
+            "",
+            "Read these as a population median, not a measurement of any one object, and note that most "
+            "cells come out at exactly 1.0 m because ESA defaults an unpublished span to 2.0 m. That "
+            "default is a screening convention, deliberately generous for an object whose size nobody "
+            "knows. Adopting it is what makes driftwatch's probabilities comparable with ESA's, and it is "
+            "the conservative direction: a conjunction with a small fragment, which `sqrt(RCS / pi)` "
+            "clipped to a 0.1 m radius, now carries a 1 m radius and a probability two orders of magnitude "
+            "larger. The current value is kept as a lower bound, so a large cross-section or a known "
+            "envelope -- a Starlink's 10 m, the ISS's 30 m -- is never reduced to a population median.",
         ]
 
     if extra:

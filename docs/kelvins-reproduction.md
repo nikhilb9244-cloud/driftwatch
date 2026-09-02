@@ -20,6 +20,24 @@ That settles the question the Phase 2 review left open. The probability code agr
 
 The eight rows above 1e-2 are the exception: five of them come out two orders of magnitude low. At that risk the miss is comparable to the hard-body radius and the two-dimensional method is at the edge of its assumptions, so the disagreement is expected there. It is stated rather than tuned away.
 
+### Is the one-sided tail the slow encounters?
+
+The obvious suspect for a one-sided disagreement is the two-dimensional method itself. It assumes the pair passes in a straight line at constant velocity, which fails as the relative speed falls: a slow pair lingers near the closest approach, more of the uncertainty is in play than the one-plane integral sees, and the probability comes out too low. That is exactly the direction of the tail. So the residual is binned by relative speed.
+
+| Relative speed | n | median | p05 | p95 | within x2 | more than 3x low |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 to 1 km/s | 238 | +0.0014 | -0.85 | +0.28 | 85% | 7.1% |
+| 1 to 4 km/s | 1071 | +0.0002 | -0.85 | +0.28 | 84% | 9.5% |
+| 4 to 10 km/s | 2603 | -0.0006 | -1.20 | +0.17 | 83% | 10.8% |
+| 10 to 14 km/s | 3282 | -0.0005 | -0.83 | +0.30 | 85% | 8.4% |
+| 14 to 20 km/s | 2989 | -0.0002 | -0.29 | +0.10 | 93% | 4.3% |
+
+**It is not.** The slowest bin is unremarkable: 85% of it agrees within a factor of two against 93% of the fastest bin, and its 5th percentile of -0.85 is no worse than the middle of the range. What the table does show is that agreement improves monotonically towards head-on encounters at 14 km/s and above, where the geometry is least ambiguous.
+
+The null result is worth reading carefully, because it does **not** clear the method. This comparison is against ESA's own operational risk column, and the reconstruction reproduces it to a fraction of a percent overall -- including on the slow rows. That agreement is itself the evidence: if ESA had integrated the slow encounters in three dimensions and driftwatch had not, the slow bin would stand out, and it does not. Both are computing the same two-dimensional integral, so a bias they share is invisible here whatever its size.
+
+So the slow-encounter underestimate remains a known property of the method rather than a measured disagreement, and driftwatch flags it directly instead of inferring it from these rows: `slow_encounter` in every risk table marks the events whose transit takes more than a hundredth of an orbital period, and their probability is reported as a known underestimate. See `driftwatch.risk.pc.encounter_duration_ratio`.
+
 ## The residual against the risk
 
 ![Residual against ESA's risk](kelvins-reproduction.svg)
@@ -53,7 +71,32 @@ The dataset carries two size columns per object: `*_span`, the largest dimension
 | `span` | 10183 | 7.00 m | 1x | 0.010 | 87% | 9.0 m: 0.431, 43% |
 | `rcs` | 6758 | 1.11 m | 4.75x | 0.303 | 50% | 9.0 m: 0.447, 40% |
 
-`span` wins at a multiplier of exactly one, which is what identifies it as ESA's own convention rather than a lucky fit. `rcs` needs a multiplier of nearly five and still does no better than a single radius: the radar cross-section is the area of the echo rather than of the object, it understates anything much larger than the radar wavelength, and it is missing on a third of the chaser rows. **This bears directly on driftwatch's own screening**: the secondary radii in `risk/scenario.py` fall back to `sqrt(RCS / pi)` for payloads, rocket bodies and debris, and this says that fallback is biased small and that a published dimension should be preferred wherever there is one.
+`span` wins at a multiplier of exactly one, which is what identifies it as ESA's own convention rather than a lucky fit. `rcs` needs a multiplier of nearly five and still does no better than a single radius: the radar cross-section is the area of the echo rather than of the object, it understates anything much larger than the radar wavelength, and it is missing on a third of the chaser rows. **This bore directly on driftwatch's own screening**, whose secondary radii used to come from `sqrt(RCS / pi)` for payloads, rocket bodies and debris. That formula has been replaced by the lookup below.
+
+## The radius lookup driftwatch screens with
+
+`sqrt(RCS / pi)` is gone from `risk/scenario.py`, replaced by the median chaser radius of each object type and radar cross-section class in these rows -- half the median `c_span`, since ESA's own risk column is reproduced by `(t_span + c_span) / 2` with nothing fitted. The cross-section survives as a *class* (small below 0.1 m2, medium to 1 m2, large above), which is the part of it that carries size information; its use as a length does not.
+
+| Object type | RCS class | Rows | Median radius | Used |
+| --- | --- | ---: | ---: | --- |
+| debris | large | 771 | 1.25 m | yes |
+| debris | medium | 1889 | 1.00 m | yes |
+| debris | small | 89628 | 1.00 m | yes |
+| debris | unknown | 2182 | 1.00 m | yes |
+| payload | large | 8427 | 4.55 m | yes |
+| payload | medium | 2111 | 1.00 m | yes |
+| payload | small | 4919 | 1.00 m | yes |
+| payload | unknown | 41 | 1.00 m | too few rows; the type median, 1.50 m |
+| rocket_body | large | 1792 | 1.90 m | yes |
+| rocket_body | medium | 95 | 1.00 m | too few rows; the type median, 1.50 m |
+| rocket_body | small | 25 | 1.00 m | too few rows; the type median, 1.50 m |
+| rocket_body | unknown | 35 | 3.19 m | too few rows; the type median, 1.50 m |
+| unknown | large | 15 | 4.50 m | too few rows; the type median, 1.00 m |
+| unknown | medium | 73 | 1.00 m | too few rows; the type median, 1.00 m |
+| unknown | small | 48 | 1.00 m | too few rows; the type median, 1.00 m |
+| unknown | unknown | 50583 | 1.00 m | yes |
+
+Read these as a population median, not a measurement of any one object, and note that most cells come out at exactly 1.0 m because ESA defaults an unpublished span to 2.0 m. That default is a screening convention, deliberately generous for an object whose size nobody knows. Adopting it is what makes driftwatch's probabilities comparable with ESA's, and it is the conservative direction: a conjunction with a small fragment, which `sqrt(RCS / pi)` clipped to a 0.1 m radius, now carries a 1 m radius and a probability two orders of magnitude larger. The current value is kept as a lower bound, so a large cross-section or a known envelope -- a Starlink's 10 m, the ISS's 30 m -- is never reduced to a population median.
 
 ## Maximum probability and its scaling, against ESA's own columns
 

@@ -19,11 +19,13 @@ import numpy as np
 import pandas as pd
 
 from driftwatch import __version__
+from driftwatch.catalogue.classify import rcs_class
 from driftwatch.fleet import Fleet
 from driftwatch.orbit.time import stamp
 from driftwatch.risk.covariance import CovarianceModel, ObjectRef
 from driftwatch.risk.manoeuvre import manoeuvre_prior
 from driftwatch.risk.pc import (
+    SLOW_ENCOUNTER_KMS,
     confidences,
     encounter_plane,
     flags,
@@ -33,6 +35,7 @@ from driftwatch.risk.pc import (
     pc_foster,
     regions,
     rotate_ric_to_teme,
+    slow_encounters,
 )
 from driftwatch.screening.ric import ric_basis
 from driftwatch.screening.stages import STATE_COLUMNS
@@ -40,14 +43,13 @@ from driftwatch.screening.stages import STATE_COLUMNS
 log = logging.getLogger(__name__)
 
 # Hard-body radius for secondaries: the circumscribing sphere of a typical member of the
-# category in metres, and whether a published radar cross-section should replace it.
-# The RCS-derived radius, sqrt(RCS / pi), is the equivalent sphere of the radar return; it
-# understates bodies much larger than the radar wavelength (a Starlink returns a few
-# square metres from a 10 m envelope), so categories with a known envelope keep it.
+# category in metres, and whether the objects in it have a known envelope at all.
 # Starlink: V1.5 spans about 11 m, V2 Mini about 30 m with both arrays; 10 m is between.
 # OneWeb and the other constellations: 1 m buses with 3 to 5 m arrays. Payload: a wide
 # class; 3 m is a small bus with panels. Rocket body: half the length of a typical upper
 # stage. Debris: fragments are mostly well under a metre. Unknown: analyst objects.
+# The four categories flagged True are the ones whose members have no known envelope; they
+# are the ones SPAN_RADIUS_M below serves, and the ones the radar cross-section was used for.
 SECONDARY_HBR_M: dict[str, tuple[float, bool]] = {
     "station": (30.0, False),
     "starlink": (10.0, False),
@@ -61,15 +63,76 @@ SECONDARY_HBR_M: dict[str, tuple[float, bool]] = {
 RCS_RADIUS_MIN_M = 0.1
 RCS_RADIUS_MAX_M = 20.0
 
+# The radius of a typical object of each type and radar cross-section class, in metres,
+# derived from ESA's Kelvins collision-avoidance data by
+# :func:`driftwatch.risk.kelvins.chaser_radius_table` (2026-09-02, 162,634 rows; re-derive it
+# with ``driftwatch kelvins``). Half the median chaser span of the cell, because ESA's own
+# risk column is reproduced by the combined radius ``(t_span + c_span) / 2`` with no fitted
+# parameter at all. Cells with fewer than a hundred rows take the object type's overall
+# median instead.
+#
+# Why this replaced ``sqrt(RCS / pi)``. That formula gives the radius of the disc that would
+# return the same radar echo, which is not the size of the object: it understates anything
+# much larger than the radar wavelength and anything with a low-return geometry. Tested
+# against these same rows at the Phase 3 Step 0 review it needed a free multiplier of nearly
+# five and still did no better than one radius for everything, while ESA's spans reproduced
+# their risk column exactly. The cross-section survives here only as a *class* -- small,
+# medium, large -- which is the part of it that does carry size information.
+#
+# Read these as a population median, not a measurement of any one object. Most cells come out
+# at exactly 1.0 m because ESA defaults an unpublished span to 2.0 m; that default is a
+# screening convention, deliberately generous for an object whose size nobody knows, and
+# adopting it is what makes these probabilities comparable with ESA's. It raises the
+# probability of a conjunction with a small fragment by two orders of magnitude against the
+# radar-cross-section formula. ``docs/kelvins-reproduction.md`` carries the derivation.
+SPAN_RADIUS_M: dict[tuple[str, str], float] = {
+    ("debris", "small"): 1.00,
+    ("debris", "medium"): 1.00,
+    ("debris", "large"): 1.25,
+    ("debris", "unknown"): 1.00,
+    ("payload", "small"): 1.00,
+    ("payload", "medium"): 1.00,
+    ("payload", "large"): 4.55,
+    ("payload", "unknown"): 1.50,
+    ("rocket_body", "small"): 1.50,
+    ("rocket_body", "medium"): 1.50,
+    ("rocket_body", "large"): 1.90,
+    ("rocket_body", "unknown"): 1.50,
+    ("unknown", "small"): 1.00,
+    ("unknown", "medium"): 1.00,
+    ("unknown", "large"): 1.00,
+    ("unknown", "unknown"): 1.00,
+}
+
+
+def span_radius_m(category: str, rcs_m2: float | None) -> float | None:
+    """The looked-up radius for a category with no known envelope, or None for a category that has one."""
+    return SPAN_RADIUS_M.get((str(category), rcs_class(rcs_m2)))
+
 
 def hard_body_radius_m(category: str, rcs_m2: float | None, fleet_radius_m: float | None = None) -> tuple[float, str]:
-    """The hard-body radius for one object and where it came from: ``fleet``, ``rcs`` or ``category``."""
+    """The hard-body radius for one object and where it came from.
+
+    The fleet file's own value wins outright. Otherwise the object gets the largest of what
+    the remaining rules say, because every one of them is a lower bound on a size nobody has
+    published: the category default, the radar cross-section's equivalent radius, and the
+    population median span of the object's type and cross-section class
+    (:data:`SPAN_RADIUS_M`). The label says which won: ``fleet``, ``category``, ``rcs`` or
+    ``span``.
+    """
     if fleet_radius_m is not None:
         return float(fleet_radius_m), "fleet"
-    default, prefer_rcs = SECONDARY_HBR_M.get(str(category), SECONDARY_HBR_M["unknown"])
-    if prefer_rcs and rcs_m2 is not None and np.isfinite(rcs_m2) and rcs_m2 > 0:
-        return float(np.clip(np.sqrt(rcs_m2 / np.pi), RCS_RADIUS_MIN_M, RCS_RADIUS_MAX_M)), "rcs"
-    return default, "category"
+    default, unknown_envelope = SECONDARY_HBR_M.get(str(category), SECONDARY_HBR_M["unknown"])
+    radius, source = default, "category"
+    if unknown_envelope:
+        if rcs_m2 is not None and np.isfinite(rcs_m2) and rcs_m2 > 0:
+            from_rcs = float(np.clip(np.sqrt(rcs_m2 / np.pi), RCS_RADIUS_MIN_M, RCS_RADIUS_MAX_M))
+            if from_rcs > radius:
+                radius, source = from_rcs, "rcs"
+        from_span = span_radius_m(category, rcs_m2)
+        if from_span is not None and from_span > radius:
+            radius, source = float(from_span), "span"
+    return radius, source
 
 
 OBJECT_COLUMNS: tuple[str, ...] = (
@@ -146,6 +209,44 @@ def objects_from_snapshot(norad_ids: list[int], snapshot: pd.DataFrame, fleet: F
     return df
 
 
+def refresh_hard_body_radii(objects: pd.DataFrame) -> tuple[pd.DataFrame, dict[str, Any]]:
+    """Recompute ``hbr_m`` and ``hbr_source`` for a stored run from the current rules.
+
+    The radius is a model parameter, not a measurement of the run, so rescoring stored events
+    has to use the rules the code holds now rather than the ones it held when the events were
+    screened; otherwise a change to :data:`SPAN_RADIUS_M` would never reach a stored run.
+    Rows whose radius came from the fleet file are left alone -- that is the operator's own
+    number, and the fleet file is not part of the stored run. Returns the objects and a
+    summary of what moved, for the log.
+    """
+    out = objects.copy()
+    if not len(out):
+        return out, {"n_changed": 0}
+    before = pd.to_numeric(out["hbr_m"], errors="coerce").to_numpy(dtype=float)
+    radii, sources = [], []
+    for row in out.itertuples():
+        if str(row.hbr_source) == "fleet":
+            radii.append(float(row.hbr_m))
+            sources.append("fleet")
+            continue
+        rcs = float(row.rcs_m2) if pd.notna(row.rcs_m2) else None
+        radius, source = hard_body_radius_m(str(row.category), rcs)
+        radii.append(radius)
+        sources.append(source)
+    out["hbr_m"] = radii
+    out["hbr_source"] = sources
+    after = np.asarray(radii, dtype=float)
+    changed = ~np.isclose(before, after, rtol=1e-9, atol=1e-12)
+    summary: dict[str, Any] = {
+        "n_objects": int(len(out)),
+        "n_changed": int(changed.sum()),
+        "by_source": out["hbr_source"].value_counts().to_dict(),
+    }
+    if changed.any():
+        summary["median_ratio"] = round(float(np.median(after[changed] / np.maximum(before[changed], 1e-9))), 3)
+    return out, summary
+
+
 def apply_history(objects: pd.DataFrame, fit: Any) -> pd.DataFrame:
     """Fill the history-derived columns from a :class:`~driftwatch.risk.covariance.CovarianceFit`."""
     from driftwatch.risk.manoeuvre import promote
@@ -201,9 +302,18 @@ RISK_COLUMNS: tuple[str, ...] = (
     "region",
     "flag",
     "confidence",
+    "slow_encounter",
     "computed_at",
 )
-__all__ = ["OBJECT_COLUMNS", "RISK_COLUMNS", "STATE_COLUMNS", "apply_history", "objects_from_snapshot", "run_risk"]
+__all__ = [
+    "OBJECT_COLUMNS",
+    "RISK_COLUMNS",
+    "STATE_COLUMNS",
+    "apply_history",
+    "objects_from_snapshot",
+    "refresh_hard_body_radii",
+    "run_risk",
+]
 
 
 def new_run_id(now: datetime | None = None) -> str:
@@ -287,6 +397,7 @@ def run_risk(
     sig_s = np.sqrt(np.stack([cov_s[:, 0, 0], cov_s[:, 1, 1], cov_s[:, 2, 2]], axis=1))
     region = regions(scale)
     flag = flags(pc)
+    slow = slow_encounters(np.linalg.norm(dv, axis=1))
     out = pd.DataFrame(
         {
             "run_id": run_id,
@@ -314,6 +425,7 @@ def run_risk(
             "region": region.astype(str),
             "flag": flag.astype(str),
             "confidence": confidences(region).astype(str),
+            "slow_encounter": slow,
             "computed_at": pd.Timestamp(now).tz_convert("UTC"),
         }
     )[list(RISK_COLUMNS)]
@@ -335,4 +447,14 @@ def run_risk(
         float(disagreement[meaningful].max()) if meaningful.any() else 0.0,
         int(meaningful.sum()),
     )
+    if slow.any():
+        log.info(
+            "Slow encounters (%s): %d of %d events are below %g km/s relative, %d of them flagged; "
+            "their probability is a known underestimate of the two-dimensional method",
+            scenario,
+            int(slow.sum()),
+            n,
+            SLOW_ENCOUNTER_KMS,
+            int((slow & flagged.to_numpy()).sum()),
+        )
     return out

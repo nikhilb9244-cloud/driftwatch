@@ -19,6 +19,7 @@ from driftwatch.risk.pc import (
     principal_axes,
     regions,
     rotate_ric_to_teme,
+    slow_encounters,
 )
 from driftwatch.screening.ric import ric_basis
 
@@ -251,3 +252,17 @@ def test_principal_axes_diagonalise_the_covariance():
     sx, sy, mx, my = principal_axes(cov, np.array([[0.2, 0.1]]))
     assert sorted([sx[0], sy[0]]) == pytest.approx([0.1, 0.5])
     assert mx[0] ** 2 + my[0] ** 2 == pytest.approx(0.2**2 + 0.1**2)
+
+
+def test_slow_encounters_are_flagged_by_relative_speed_not_by_a_large_covariance():
+    """The flag catches co-orbital passes, and deliberately does not catch a big in-track sigma.
+
+    A seven-day-old element set can be hundreds of kilometres uncertain along track without
+    the two-dimensional method being in any trouble: that error is mostly a timing error, and
+    projecting onto the plane perpendicular to the relative velocity discards it. What breaks
+    the method is the relative path curving during the passage, which is a matter of speed.
+    """
+    speeds = np.array([0.0229, 0.05, 0.0999, 0.1, 0.5, 7.0, 14.5, np.nan])
+    slow = slow_encounters(speeds)
+    assert slow.tolist() == [True, True, True, False, False, False, False, False]
+    assert slow_encounters(speeds, threshold_kms=1.0)[:5].all()

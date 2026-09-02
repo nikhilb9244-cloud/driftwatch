@@ -20,6 +20,7 @@ SNAPSHOT_DIR = DATA_DIR / "snapshots"
 PROPAGATED_DIR = DATA_DIR / "propagated"
 HISTORY_DIR = DATA_DIR / "history"
 SUPPLEMENTAL_DIR = DATA_DIR / "supplemental"
+SPACEX_DIR = DATA_DIR / "spacex"
 CONJUNCTION_DIR = DATA_DIR / "conjunctions"
 EXTERNAL_DIR = DATA_DIR / "external"
 # ESA's Kelvins Collision Avoidance Challenge data, if downloaded (see risk/kelvins.py).
@@ -55,6 +56,28 @@ SUPPLEMENTAL_FETCH_INTERVAL_HOURS = 3
 # survives `driftwatch supplemental --prune`, which bounds the store at a few hundred
 # megabytes while keeping the long lead times the fit needs.
 SUPPLEMENTAL_KEEP_ALL_DAYS = 14
+
+# SpaceX's own Starlink ephemerides, with covariance, 72 hours ahead at a 60-second step,
+# refreshed every eight hours. Served without an account and without a stated licence, for
+# the express purpose of letting other operators screen against Starlink; Space-Track stopped
+# hosting them on 28 July 2025, so its user agreement does not govern them. The rule adopted
+# is analysis only: compute with them and publish the results crediting SpaceX, never
+# republish the raw files. See docs/spacex-ephemerides.md and ephemeris/spacex.py.
+SPACEX_EPHEMERIS_URL = "https://api.starlink.com/public-files/ephemerides/"
+SPACEX_CITATION = (
+    "Starlink ephemerides published by SpaceX (api.starlink.com/public-files/ephemerides/), "
+    "used for analysis; the raw files are not redistributed."
+)
+# The manifest names one file per satellite and the names do not change between versions, so
+# a few hours old is fine; the contents behind them are what refresh.
+SPACEX_MANIFEST_MAX_AGE = timedelta(hours=4)
+# Only the position covariance is kept, and only every this many seconds of it. The published
+# covariance is smooth for the first ten hours and piecewise constant afterwards, so a
+# ten-minute grid holds it to a fraction of a percent and turns a 2 MB file into tens of
+# kilobytes. Each file is one request; the whole constellation would be 22 GB a version, so a
+# fetch is bounded to the objects a run's events actually involve.
+SPACEX_COVARIANCE_STEP_S = 600.0
+SPACEX_MAX_OBJECTS = 300
 
 # Space-Track.org: the full public catalogue and element-set history. Needs a free account;
 # credentials are read from the environment only (see catalogue/spacetrack.py).

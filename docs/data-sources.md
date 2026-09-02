@@ -91,6 +91,42 @@ In prose, for a paper, a talk or a README:
 The unit name is the one Space-Track uses on its own pages; update both strings if it
 changes.
 
+## SpaceX Starlink ephemerides (api.starlink.com)
+
+**Used for.** The covariance of Starlink secondaries inside the operator's own 72-hour
+horizon (`driftwatch spacex`, `ephemeris/spacex.py`). SpaceX publishes a predicted
+trajectory with covariance for every Starlink satellite, refreshed every eight hours, at
+`https://api.starlink.com/public-files/ephemerides/`. These are the same files CelesTrak
+fits its supplemental element sets to, so driftwatch is taking the uncertainty of the
+trajectory it is already propagating rather than inferring one from how much successive
+fits to it disagree. `docs/spacex-ephemerides.md` carries the full finding.
+
+**Rules (read 2026-09-02).** No account, no authentication, no stated licence and no
+stated attribution requirement. Published for the express purpose of letting other
+operators screen against Starlink. Space-Track stopped hosting them on 28 July 2025 and
+directed users to SpaceX, so **the Space-Track user agreement does not govern them** — and
+would not have helped if it did, since an owner/operator ephemeris is not "basic SSA data"
+and the blanket approval would not have covered it.
+
+**What driftwatch does with them, and the rule adopted.** Because no licence is stated,
+they are used **for analysis only**:
+
+- Read them, compute with them, and publish the results, crediting SpaceX.
+- **Never redistribute the raw files**, or a repackaged copy of them. Nothing grants that
+  right, and nothing is gained by it: the files are one unauthenticated HTTP request away
+  for anyone. `data/spacex/` is git-ignored, holds only a thinned covariance series (a
+  derived product, not the file), and is not published in the viewer bundle either.
+- Fetch politely: one request per satellite per version, only for the satellites a run's
+  events actually involve, never a sweep of the constellation. At 2 MB a file the whole
+  11,000 would be 22 GB a version. `driftwatch spacex --limit` caps it, at 300 by default.
+
+**Credit line** (`config.SPACEX_CITATION`):
+
+```
+Starlink ephemerides published by SpaceX (api.starlink.com/public-files/ephemerides/),
+used for analysis; the raw files are not redistributed.
+```
+
 ## Sources used in later steps and phases
 
 - **ESA Kelvins Collision Avoidance Challenge dataset** (Step 3). Anonymised real

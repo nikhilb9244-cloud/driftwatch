@@ -191,3 +191,37 @@ def test_kelvins_risk_column_is_reproduced_within_a_factor_of_two_across_the_tai
     operational = fit.report["by_risk_bin"]["[-4, -3)"]
     assert abs(operational["median"]) <= np.log10(2.0), operational
     assert operational["within_factor_two"] >= overall["within_factor_two"], operational
+
+
+@pytest.mark.skipif(kelvins.find_dataset() is None, reason=SKIP_MESSAGE)
+def test_the_radius_lookup_driftwatch_screens_with_is_still_what_the_data_says():
+    """`SPAN_RADIUS_M` is a baked copy of a derivation, so the derivation has to still give it."""
+    path = kelvins.find_dataset()
+    assert path is not None
+    radii = kelvins.chaser_radius_table(kelvins.load_kelvins(path))
+    assert kelvins.compare_span_radius_lookup(radii) == {}
+    # Every cell of the lookup is at least the metre ESA defaults an unpublished span to.
+    assert (radii["radius_m"] >= 1.0).all()
+
+
+@pytest.mark.skipif(kelvins.find_dataset() is None, reason=SKIP_MESSAGE)
+def test_the_residual_does_not_localise_in_the_slow_encounter_bin():
+    """The slow-encounter underestimate is real but invisible here, because ESA's column shares it.
+
+    Recorded as a test because the conclusion drawn from it -- that the flag has to come from
+    the method rather than from these rows -- rests on the slow bin being unremarkable.
+    """
+    path = kelvins.find_dataset()
+    assert path is not None
+    df = kelvins.load_kelvins(path)
+    primary = kelvins.reproduce_tail(df, source="span")
+    assert primary is not None
+    by_speed = primary.report["by_relative_speed"]
+    assert by_speed is not None
+    slowest, fastest = by_speed[0], by_speed[-1]
+    assert slowest["speed_lo_kms"] == 0.0
+    # The slow bin is no worse than the middle of the range, and better than the 4-10 km/s bin.
+    middle = min(by_speed, key=lambda row: row["within_factor_two"])
+    assert slowest["within_factor_two"] >= middle["within_factor_two"]
+    assert slowest["within_factor_two"] < fastest["within_factor_two"]
+    assert abs(slowest["median"]) < 0.01  # and it is not biased either way

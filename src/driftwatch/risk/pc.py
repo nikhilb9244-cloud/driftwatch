@@ -30,6 +30,22 @@ factors from 0.1 to 10 and reports the largest probability and the factor at whi
 occurs. When the empirical covariance is a floor on the true error (see ``covariance``)
 the maximum is the honest upper bound.
 
+Where the straight-line assumption stops. It holds because the encounter is over in a
+fraction of a second while the geometry turns over on an orbital period. Two objects in
+nearly the same orbit -- two members of one constellation, a satellite and its own upper
+stage -- pass each other at metres per second instead of kilometres, and then the passage
+takes minutes and the relative path curves through it. :func:`slow_encounters` flags the
+events below :data:`SLOW_ENCOUNTER_KMS`. Their probability is a known underestimate: the
+pair lingers near the closest approach and can re-approach, so more of the uncertainty is in
+play than one plane sees. Nothing here corrects it -- the fix is a three-dimensional
+integration -- so the flag is carried through to the output and the report instead.
+
+Note what a large in-track uncertainty is *not*. A seven-day-old element set can be hundreds
+of kilometres uncertain along track, but that is mostly a timing error: the object is on the
+same track, early or late. Projecting the covariance onto the plane perpendicular to the
+relative velocity discards exactly that component, which is why the method survives a large
+in-track sigma and fails on a low relative speed instead.
+
 Flags follow NASA's practice for the ISS: red at a probability of 1e-4 or above, yellow
 at 1e-5 (the level at which the ISS programme starts planning an avoidance manoeuvre).
 
@@ -55,6 +71,14 @@ RED_PC = 1e-4
 YELLOW_PC = 1e-5
 DEFAULT_SCALES: np.ndarray = np.logspace(-1.0, 1.0, 61)
 TWO_PI = 2.0 * np.pi
+# Below this relative speed the straight-line assumption is gone. At 0.1 km/s a pair takes
+# 100 seconds to cross 10 km of separation, and in 100 seconds a low Earth orbit turns
+# through about 6 degrees, so the relative path curves appreciably over the passage. At the
+# 7 to 15 km/s of an ordinary crossing conjunction the same traverse takes about a second and
+# the rotation is under a twentieth of a degree, which is why the method works at all. Slow
+# encounters in low Earth orbit are almost always two members of one constellation, or a
+# satellite and its own upper stage, in nearly the same orbit.
+SLOW_ENCOUNTER_KMS = 0.1
 
 
 def rotate_ric_to_teme(basis: np.ndarray, cov_ric: np.ndarray) -> np.ndarray:
@@ -295,6 +319,26 @@ def max_pc_sweep(
         pc_max = np.where(worse, evaluate(miss2, cov2 * scales[idx][:, None, None], radius), pc_max)
         scale_at_max = np.where(worse, scales[idx], scale_at_max)
     return pc_max, scale_at_max, curve
+
+
+def slow_encounters(rel_speed_kms: np.ndarray, *, threshold_kms: float = SLOW_ENCOUNTER_KMS) -> np.ndarray:
+    """Which encounters are too slow for the straight-line assumption to hold.
+
+    A true flag says the probability reported for that event is a **known underestimate**.
+    The two-dimensional method projects the covariance onto one plane and integrates once,
+    which is right only if the pair passes in a straight line at constant velocity. A slow
+    pair does not: the relative path curves through the passage, the two can re-approach, and
+    more of the uncertainty is in play than the single plane sees.
+
+    It is a flag and not a correction. Nothing here rescales the probability; the fix is a
+    three-dimensional integration over the encounter, and that is not in this phase. Note
+    also that the reproduction of ESA's Kelvins risk column cannot confirm the size of the
+    underestimate, because ESA's own column is computed the same way and the two share the
+    approximation exactly (``docs/kelvins-reproduction.md``).
+    """
+    speed = np.asarray(rel_speed_kms, dtype=float)
+    with np.errstate(invalid="ignore"):
+        return np.asarray(np.isfinite(speed) & (speed < float(threshold_kms)))
 
 
 def flags(pc: np.ndarray, *, red: float = RED_PC, yellow: float = YELLOW_PC) -> np.ndarray:

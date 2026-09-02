@@ -22,6 +22,7 @@ import pyarrow.parquet as pq
 
 from driftwatch import __version__, config
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
+from driftwatch.ephemeris import spacex
 from driftwatch.export.conjunctions import RunDirectory
 from driftwatch.export.report import build_bundle, write_bundle, write_report
 from driftwatch.export.viewer import export_viewer_bundle
@@ -41,7 +42,14 @@ from driftwatch.risk.covariance import (
     label_cov_sources,
     sigma_table,
 )
-from driftwatch.risk.scenario import apply_history, model_version_string, new_run_id, objects_from_snapshot, run_risk
+from driftwatch.risk.scenario import (
+    apply_history,
+    model_version_string,
+    new_run_id,
+    objects_from_snapshot,
+    refresh_hard_body_radii,
+    run_risk,
+)
 from driftwatch.screening import ScreeningConfig, ScreeningError, ScreeningResult, screen_fleet
 from driftwatch.screening import supplemental as supplemental_mod
 
@@ -675,6 +683,29 @@ def cmd_screen(args: argparse.Namespace) -> int:
     return rc
 
 
+def layer_spacex_ephemerides(model: CovarianceModel, objects: pd.DataFrame, info: dict[str, Any]) -> CovarianceModel:
+    """Serve the Starlink objects a stored SpaceX ephemeris covers from SpaceX's own covariance.
+
+    Everything else, and every time past a file's 72-hour horizon, stays with ``model``: the
+    ephemeris is the operator's plan for the next three days and says nothing about day four.
+    """
+    ids = [int(i) for i in objects.loc[objects["category"] == "starlink", "norad_id"]]
+    if not ids:
+        return model
+    table = spacex.load_store(ids)
+    if not len(table):
+        return model
+    layered = spacex.SpacexEphemerisCovariance(model, table)
+    info["spacex_covariance"] = {
+        "n_objects": len(layered.series),
+        "n_starlink_in_run": len(ids),
+        "window": [str(table["ephemeris_start"].min()), str(table["ephemeris_stop"].max())],
+        "source": "spacex-ephemeris",
+    }
+    log.info("SpaceX ephemeris covariance: %s", info["spacex_covariance"])
+    return layered
+
+
 def risk_run_record(risk: pd.DataFrame, scenario: str, model: CovarianceModel, now: datetime) -> dict[str, Any]:
     """What ``run.json`` keeps about one scoring: when, which model, how many flags."""
     return {
@@ -716,6 +747,12 @@ def cmd_risk(args: argparse.Namespace) -> int:
     events = run_dir.read_events()
     objects = run_dir.read_objects()
     log.info("Run %s: %d stored events from %s", run_dir.name, len(events), info["snapshot"])
+    # The hard-body radius is a model parameter, so a rescore uses the rules the code holds
+    # now rather than the ones the screening ran under.
+    objects, hbr_summary = refresh_hard_body_radii(objects)
+    if hbr_summary["n_changed"]:
+        log.info("Hard-body radii rebaselined: %s", hbr_summary)
+        info["hard_body_radii"] = hbr_summary
 
     model: CovarianceModel
     if args.refit:
@@ -764,6 +801,10 @@ def cmd_risk(args: argparse.Namespace) -> int:
         model = EmpiricalCovariance.from_frame(table)
         if (table["kind"] == "supplemental").any():
             model = SupplementalCovariance.from_frame(model, table)
+    if hbr_summary["n_changed"] and not args.refit:
+        run_dir.write_objects(objects)
+    if not args.no_spacex:
+        model = layer_spacex_ephemerides(model, objects, info)
     if args.scale != 1.0:
         model = ScaledCovariance(model, args.scale)
 
@@ -814,6 +855,58 @@ def cmd_report(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_spacex(args: argparse.Namespace) -> int:
+    """Fetch SpaceX's own ephemeris covariance for a run's Starlink secondaries and store it.
+
+    One request per satellite, bounded to the objects the run's events actually involve, and
+    only the thinned position covariance is kept. The raw files are never stored or
+    redistributed (see ``docs/spacex-ephemerides.md``).
+    """
+    try:
+        run_dir = resolve_run(args.run)
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    info = run_dir.read_run()
+    events = run_dir.read_events()
+    objects = run_dir.read_objects()
+    ids = args.ids and [int(i) for i in args.ids.split(",") if i.strip()]
+    if not ids:
+        ids = spacex.select_objects(events, objects, limit=args.limit)
+    if not ids:
+        log.error("Run %s has no Starlink secondaries to fetch ephemerides for", run_dir.name)
+        return 2
+    log.info("Fetching SpaceX ephemerides for %d of the run's Starlink secondaries", len(ids))
+
+    now = datetime.now(UTC)
+    try:
+        table, summary = spacex.fetch_ephemerides(ids, now=now, offline=args.offline, limit=args.limit)
+    except (httpx.HTTPError, FileNotFoundError) as exc:
+        log.error("Cannot fetch SpaceX ephemerides: %s", exc)
+        return 2
+    if not len(table):
+        log.error("No SpaceX ephemerides were retrieved")
+        return 2
+    path = spacex.write_store(table, spacex.store_path(now))
+    summary["file"] = path.name
+
+    # The cross-check: their covariance against ours, at matched leads. Two different
+    # quantities, kept side by side rather than merged (see ephemeris/spacex.py).
+    covariance_table = run_dir.read_covariance()
+    base = EmpiricalCovariance.from_frame(covariance_table)
+    model: CovarianceModel = base
+    if (covariance_table["kind"] == "supplemental").any():
+        model = SupplementalCovariance.from_frame(base, covariance_table)
+    comparison = spacex.cross_check(table, model)
+    if len(comparison):
+        print(comparison.to_string(index=False, float_format=lambda x: f"{x:.4g}"))
+        summary["cross_check"] = comparison.to_dict("records")
+    info["spacex"] = summary
+    run_dir.write_run(info)
+    print(path)
+    return 0
+
+
 def cmd_kelvins(args: argparse.Namespace) -> int:
     """Reproduce the risk column of ESA's Kelvins dataset and report the fitted hard-body radius and residuals."""
     data = Path(args.data) if args.data else kelvins_mod.find_dataset()
@@ -840,6 +933,13 @@ def cmd_kelvins(args: argparse.Namespace) -> int:
     proxies = [p for p in (kelvins_mod.test_size_proxy(tail, s) for s in ("span", "rcs")) if p is not None]
     for proxy in proxies:
         log.info("Kelvins size proxy: %s", proxy)
+    # The lookup driftwatch screens with, re-derived from these rows so the constant in
+    # risk/scenario.py can be checked against its source rather than trusted.
+    radii = kelvins_mod.chaser_radius_table(df)
+    log.info("Kelvins radius lookup:\n%s", radii.to_string(index=False))
+    stale = kelvins_mod.compare_span_radius_lookup(radii)
+    if stale:
+        log.warning("SPAN_RADIUS_M no longer matches the data: %s", stale)
 
     out = Path(args.out) if args.out else None
     plot_name = None
@@ -854,7 +954,7 @@ def cmd_kelvins(args: argparse.Namespace) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         (out.parent / plot_name).write_text(svg, encoding="utf-8")
         log.info("Wrote %s", out.parent / plot_name)
-    text = kelvins_mod.to_markdown(fit, data, extra, primary=primary, proxies=proxies, plot_path=plot_name)
+    text = kelvins_mod.to_markdown(fit, data, extra, primary=primary, proxies=proxies, radii=radii, plot_path=plot_name)
     print(text)
     if out is not None:
         out.write_text(text + "\n", encoding="utf-8")
@@ -969,6 +1069,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--scale", type=float, default=1.0, help="multiply every covariance by this factor (a stand-in scenario knob)"
     )
     risk.add_argument("--offline", action="store_true", help="use only cached history data when refitting")
+    risk.add_argument(
+        "--no-spacex",
+        action="store_true",
+        help="ignore any stored SpaceX ephemeris covariance (see `driftwatch spacex`)",
+    )
     add_risk_options(risk, scenario_default="quiet")
     risk.set_defaults(func=cmd_risk)
 
@@ -989,6 +1094,21 @@ def build_parser() -> argparse.ArgumentParser:
     sup.add_argument("--fit", action="store_true", help="refit the supplemental covariance over the whole store")
     sup.add_argument("--offline", action="store_true", help="use only the cached supplemental response")
     sup.set_defaults(func=cmd_supplemental)
+
+    spx = sub.add_parser(
+        "spacex",
+        help="fetch SpaceX's own ephemeris covariance for a run's Starlink secondaries (analysis only)",
+    )
+    spx.add_argument("run", nargs="?", default="latest", help="run directory, its name, or 'latest'")
+    spx.add_argument(
+        "--limit",
+        type=int,
+        default=config.SPACEX_MAX_OBJECTS,
+        help=f"most satellites to request, closest approach first (default {config.SPACEX_MAX_OBJECTS})",
+    )
+    spx.add_argument("--ids", help="comma-separated NORAD ids to fetch instead of choosing from the run")
+    spx.add_argument("--offline", action="store_true", help="use the cached manifest only (cannot fetch files)")
+    spx.set_defaults(func=cmd_spacex)
 
     kelvins = sub.add_parser("kelvins", help="reproduce ESA's Kelvins risk column and report the fitted radius")
     kelvins.add_argument("--data", help=f"the challenge CSV (default: the first CSV under {config.KELVINS_DIR})")

@@ -92,25 +92,75 @@ times smaller. The two are not measuring the same thing — ours includes the re
 plan between versions, theirs is the uncertainty within one plan — and the difference is
 roughly the size of that revision. For screening, the revision is the part that matters.
 
-## Plan for the later step
+## As built (Step 0 revision, 2026-09-02)
 
-Not built now. When it is built:
+`ephemeris/spacex.py` and `driftwatch spacex`.
 
-1. Fetch the ephemeris only for Starlink secondaries that appear in a run's events, from the
-   manifest, and cache by the file's `created` stamp. At 2.0 MB each this is the binding
-   constraint: the 1,744 supplemental-screened secondaries of the first live run would be
-   3.5 GB per version. Restrict it to the events that could plausibly be flagged, a few
-   hundred objects at most, and store only the states near each time of closest approach.
-2. Inside the 72-hour horizon, use their covariance directly for the Starlink object,
-   rotated from UVW into the object's RIC frame (they are the same frame), and label the
-   source `spacex:ephemeris`. Add the version-to-version revision measured from our stored
-   supplemental versions, because their covariance does not contain it.
-3. **The horizon problem for days four to seven.** The file stops at 72 hours and a
-   seven-day screening window does not. There is no version of their covariance for days
-   four to seven, and extrapolating a saturated envelope is meaningless. Those days keep the
-   supplemental-consistency model, and past its own validity horizon the GP model, exactly as
-   now. The report and the viewer must show which of the three served each event, because the
-   covariance source changes discontinuously partway through the window.
+1. **The fetch is bounded.** One request per satellite, only for the Starlink secondaries a
+   run's events involve, ranked by closest approach and capped by `--limit` (300 by
+   default). At 2.0 MB a file this is the binding constraint: the 1,744
+   supplemental-screened secondaries of the first live run would be 3.5 GB a version, and
+   the whole constellation 22 GB. Only the position covariance is kept, thinned to a
+   ten-minute grid, which turns each 2 MB file into tens of kilobytes; the raw file is not
+   stored at all.
+2. **Their covariance is used as published**, for the Starlink object, inside the file's
+   72-hour validity, labelled `spacex-ephemeris`. The 21 published numbers are the lower
+   triangle of the 6x6, row-major, in their UVW frame, which is our RIC, so no rotation is
+   needed; the position block is interpolated linearly between the stored samples.
+   Nothing inflates it. In particular the version-to-version revision measured from our
+   stored supplemental versions is **not** added: the supplemental-consistency fit is kept
+   as a cross-check instead (`spacex.cross_check`), because the two are different quantities
+   and merging them would hide that.
+   The fetch is a **separate command rather than part of `screen`**, deliberately: 120
+   satellites took eight minutes and 240 MB, and a screening run should not carry that
+   silently. `driftwatch risk` picks up whatever the store holds unless `--no-spacex` is
+   given, so the layer is automatic once the data are there.
+3. **Days four to seven.** The file stops at 72 hours and a seven-day screening window does
+   not. Past a file's `ephemeris_stop`, and for any Starlink object with no stored file, the
+   base model serves and reports **its own** source label rather than a SpaceX one, so
+   `cov_source_secondary` says which of the three models covered each event. A request
+   spanning the horizon comes back labelled `spacex-ephemeris+<what the base said>`.
+
+### The cross-check, measured
+
+`driftwatch spacex` prints their sigma beside ours at matched leads. Measured on 120
+satellites of the demo run on 2026-09-02:
+
+| Lead | SpaceX in-track | driftwatch in-track | Ratio | Which model of ours |
+| ---: | ---: | ---: | ---: | --- |
+| 1 h | 6.7 m | 489 m | 73 | supplemental consistency |
+| 3 h | 24 m | 700 m | 29 | supplemental consistency |
+| 8 h | 257 m | 4.54 km | 18 | GP (past the supplemental horizon) |
+| 24 h | 2.81 km | 8.47 km | 3.0 | GP |
+| 48 h | 2.51 km | 15.8 km | 6.3 | GP |
+| 72 h | 3.80 km | 22.8 km | 6.0 | GP |
+
+Ours is three to seventy times larger, and the sign is the expected one throughout: theirs
+is the uncertainty *within* one published plan, ours is the uncertainty *of the plan being
+revised*. The gap is widest at the short leads, where a published plan is nearly exact and a
+revision is the whole error. Past eight hours ours is not even the supplemental fit any more
+but the GP element sets, which measure the manoeuvring itself, and the ratio settles around
+six. The number to watch is that ratio: if it ever fell to one, either the plans had stopped
+being revised or our fit had stopped measuring the revision.
+
+Two things the table shows about their own numbers. The in-track sigma is **not monotonic**
+across the constellation — the median is 2.81 km at 24 hours and 2.51 km at 48 — which is
+what an envelope on round figures looks like when different satellites sit on different
+steps, and is another reminder that past about ten hours this is a control box rather than a
+propagated covariance. And the envelope is not the same for every satellite: the file
+measured for the terms question sat at 1,000 m in-track from 12 to 48 hours, well below the
+constellation median here.
+
+### What was not done, and why it is a review question
+
+The geometry driftwatch propagates is CelesTrak's SGP4 **fit** to this ephemeris, not the
+ephemeris itself, and CelesTrak publishes that fit's residual as a median of about 0.2 km.
+SpaceX's own in-track sigma is 62 m at three hours and 576 m at eight. So for roughly the
+first eight hours the covariance in use is tighter than the disagreement between the
+trajectory we are propagating and the trajectory the covariance describes. Applying the fit
+residual as a floor is implemented (`add_fit_rms_floor` on `SpacexEphemerisCovariance`) and
+**off by default**, because the instruction was to use their covariance as published. It is
+on the Step 0 revision review list.
 
 ## Sources
 

@@ -138,8 +138,20 @@ they enter the chain; each states what is assumed, why, and what it costs.
 - **The encounter is a straight line.** The two-dimensional method assumes constant
   relative velocity through the encounter and no velocity uncertainty, which holds for
   crossings at kilometres per second and fails for co-orbital pairs at metres per second
-  (long encounters). Those pairs are visible by their `rel_speed_kms`; no long-encounter
-  correction is applied.
+  (long encounters).
+- **A slow encounter's probability is a known underestimate, and is flagged as one.** Below
+  0.1 km/s relative the pair takes minutes rather than a second to cross its separation, the
+  relative path curves through the passage and the two can re-approach, so more of the
+  uncertainty is in play than the one-plane integral sees. `slow_encounter` marks those
+  events in every risk table and the report counts them; **nothing rescales the
+  probability**, and the fix is a three-dimensional integration, which is not in this phase.
+  Ten of the demo run's 5,704 events qualify, the slowest at 23 m/s, none flagged. Note two
+  things. A large in-track uncertainty is not this problem — it is mostly a timing error and
+  the projection discards it, which is why the method survives hundreds of kilometres of
+  in-track sigma. And the Kelvins reproduction cannot measure the size of the underestimate,
+  because ESA's own risk column uses the same two-dimensional method: the residual binned by
+  relative speed is flat at the slow end, which says the two share the approximation, not
+  that there is no error.
 - **Three integrators, one value.** Foster's polar grid (the reported `pc`) and Alfano's
   one-dimensional form agree to about 1e-8 over the tested range and must agree within
   one percent; Chan's series is exact for an isotropic covariance and drifts by tens of
@@ -183,21 +195,48 @@ they enter the chain; each states what is assumed, why, and what it costs.
   than ESA did, and payloads are over-represented in that tail. Our covariance-scale sweep
   matches ESA's `max_risk_scaling` exactly as a factor on the covariance (median ratio
   0.9999). See `docs/screening.md` and `docs/kelvins-reproduction.md`.
-- **A hard-body radius from a radar cross-section is biased small.** `sqrt(RCS / pi)` is
-  the radius of the disc that returns the same echo, not the size of the object: it
-  understates anything much larger than the radar wavelength and anything with a
-  low-return geometry. Scored on the Kelvins data against ESA's own radii it needs a
-  multiplier of nearly five and still does no better than one radius for every object.
-  driftwatch uses it for payload, rocket-body and debris secondaries with no published
-  envelope, so those probabilities are biased low.
-- **A supplemental-set covariance is used only over the lead times the stored versions
-  measure.** The growth exponent is a physically bounded prior (`[1, 2]` in-track, one
-  radially and cross-track), not a fit, because the store spans hours; the amplitude is
-  anchored at the longest observed lead. Even so, extrapolating to seven days gives 42 to
+- **A secondary's hard-body radius is a population median, not a measurement.** Nobody
+  publishes the size of most catalogue objects. `sqrt(RCS / pi)`, which driftwatch used to
+  fall back on, is the radius of the disc that returns the same echo rather than the size of
+  the object: it understates anything much larger than the radar wavelength and anything
+  with a low-return geometry, and scored on the Kelvins data against ESA's own radii it
+  needs a multiplier of nearly five and still does no better than one radius for everything.
+  It has been replaced by the median radius of the object's type and cross-section class in
+  those same rows (4.55 m for a large-return payload, 1.90 m for a large-return rocket body,
+  1.25 m for large-return debris, 1.0 m otherwise), with the previous value kept as a lower
+  bound. Two caveats travel with it. Most cells are 1.0 m because ESA defaults an
+  unpublished span to 2.0 m, so the radius of an unknown object is a **screening
+  convention** — deliberately generous, and the reason these probabilities are comparable
+  with ESA's. And a median is not a measurement: any individual fragment may be a tenth of
+  it or ten times it, and nothing here knows which.
+- **A supplemental-set covariance is a floor plus a growth term, used only over the lead
+  times the stored versions resolve.** The floor per component is the larger of the shortest
+  resolved lead-time bin's measured disagreement and CelesTrak's published fit residual —
+  the larger, not the quadrature sum, because two versions an hour apart already disagree by
+  both their fit residuals. The growth is fitted to the excess over that floor, so the model
+  reproduces the bin it is anchored at instead of standing above it by the floor again. The
+  in-track exponent is a physically bounded prior (`[1, 2]`, at 1.5) rather than a fit,
+  because the store spans hours; radial and cross-track are floor-only until the bins
+  resolve a trend, and linear when they do. Even so, extrapolating to seven days gives 42 to
   2,500 km in-track depending on the exponent, against about 18 km measured directly from
-  the same objects' GP sets, so the fit carries a validity horizon at its longest observed
-  pair and the GP model serves beyond it, labelled `supplemental:beyond-horizon`. The
-  horizon moves out as the scheduled fetch accumulates versions.
+  the same objects' GP sets, so the fit carries a validity horizon — the top of the longest
+  bin holding 30 pairs, not the single longest pair — and the GP model serves beyond it,
+  labelled `supplemental:beyond-horizon`. The horizon moves out as the scheduled fetch
+  accumulates versions.
+- **SpaceX's published covariance is used as published, and it is not the same quantity as
+  ours.** Inside a file's 72-hour validity a Starlink secondary's covariance is SpaceX's own,
+  interpolated on a ten-minute grid and labelled `spacex-ephemeris`; outside it the base
+  model serves and reports its own label. Three things to hold on to. Past about ten hours
+  their numbers are a stated envelope on round figures (100 m radial, 1,000 m in-track, 10 m
+  cross-track) rather than a propagated covariance. It is the uncertainty *within* one
+  published plan, while the supplemental-consistency fit measures the uncertainty *of the
+  plan being revised*, which is roughly eleven times larger at three hours and is the part a
+  seven-day screen depends on; the two are reported side by side rather than merged. And the
+  geometry driftwatch propagates is CelesTrak's SGP4 fit to that ephemeris, not the
+  ephemeris itself, and that fit's own published residual of about 0.2 km is larger than
+  SpaceX's sigma for the first several hours — so inside that range the covariance is
+  tighter than the trajectory it is attached to. Applying the fit residual as a floor is
+  implemented (`add_fit_rms_floor`) and off by default; it is a Step 0 review question.
 
 ## Propagation
 

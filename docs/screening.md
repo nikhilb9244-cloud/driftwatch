@@ -365,6 +365,46 @@ The floor alone is a lower bound and is treated as one: an event scored on it la
 the robust region below, where the maximum-probability sweep shows what a larger
 uncertainty would give.
 
+### The operator's own covariance, where it reaches
+
+SpaceX publishes the ephemerides CelesTrak fits those supplemental sets to, with a
+covariance at every state, 72 hours ahead. `driftwatch spacex` fetches them for the Starlink
+secondaries of a run — one request per satellite, ranked by closest approach and capped, at
+2 MB a file — keeps only the position covariance thinned to a ten-minute grid, and
+`driftwatch risk` serves those objects from it inside each file's validity, labelled
+`spacex-ephemeris`. Past the file, and for a Starlink object with no stored file, the base
+model serves and reports **its own** label, so `cov_source_secondary` says which of the three
+models covered each event; an event straddling the horizon reads
+`spacex-ephemeris+<what the base said>`.
+
+It is used **as published**. Nothing inflates it, and the version-to-version revision the
+supplemental fit measures is deliberately not added to it — the two are different quantities
+and `driftwatch spacex` prints them side by side instead:
+
+| Lead | SpaceX in-track | driftwatch in-track | Ratio |
+| ---: | ---: | ---: | ---: |
+| 1 h | 6.7 m | 489 m | 73 |
+| 3 h | 24 m | 700 m | 29 |
+| 8 h | 257 m | 4.54 km | 18 |
+| 24 h | 2.81 km | 8.47 km | 3.0 |
+| 72 h | 3.80 km | 22.8 km | 6.0 |
+
+Theirs is the uncertainty *within* one published plan; ours is the uncertainty *of the plan
+being revised*, and past eight hours it is the GP element sets, which measure the manoeuvring
+itself. Both numbers are real and they answer different questions. Two caveats travel with
+theirs: past about ten hours it is a stated envelope on round figures rather than a
+propagated covariance, and the trajectory driftwatch actually propagates is CelesTrak's SGP4
+fit to that ephemeris, whose own published residual of about 0.2 km is larger than SpaceX's
+sigma for the first several hours. `docs/spacex-ephemerides.md` has the terms, the format and
+the full argument.
+
+**What it did to the demo run.** 499 of 5,704 events served, the median secondary in-track
+sigma on them falling from 24.8 km to 2.5 km. Of those events 111 were in the dilution region
+and 37 now are — which is the point of a better covariance. Yellow pairs rise from 10 to 18,
+because at a miss of one to three kilometres a tighter covariance concentrates the
+probability on the disc instead of spreading it thin, and ZACube-1 against STARLINK-6053
+drops from red to yellow while moving *out* of the dilution region.
+
 ### The exponent is a prior, and the fit has a horizon
 
 Taken at the Phase 3 Step 0 review, and the most consequential correction in it.
@@ -501,14 +541,52 @@ probability of collision is the mass of the projected two-dimensional Gaussian i
 that disc.
 
 The combined hard-body radius is the primary's radius from the fleet file plus the
-secondary's. Secondaries carry a category default: 30 m for a station, 10 m for a
-Starlink (V1.5 spans about 11 m, V2 Mini about 30 m with both arrays), 3 m for OneWeb,
-the other constellations and payloads, 5 m for a rocket body, 0.5 m for debris, 1 m for
-an untyped object. For payloads, rocket bodies, debris and untyped objects a published
-radar cross-section replaces the default with the equivalent sphere, `sqrt(RCS / pi)`,
-clipped to 0.1 to 20 m; the constellations and stations keep their envelope because a
-radar return understates a body much larger than the wavelength. The objects table
-records which rule produced each radius.
+secondary's. Nobody publishes the size of most secondaries, so the rules for one are all
+lower bounds and the **largest of them wins**; the objects table records which.
+
+- **The category default.** 30 m for a station, 10 m for a Starlink (V1.5 spans about
+  11 m, V2 Mini about 30 m with both arrays), 3 m for OneWeb, the other constellations
+  and payloads, 5 m for a rocket body, 0.5 m for debris, 1 m for an untyped object.
+- **The span lookup** (`span`), for payloads, rocket bodies, debris and untyped objects,
+  the four categories with no known envelope. The median radius of the object's type and
+  radar cross-section class, derived from ESA's Kelvins data: 4.55 m for a large-return
+  payload, 1.90 m for a large-return rocket body, 1.25 m for large-return debris, 1.0 m
+  for everything else. See below and `docs/kelvins-reproduction.md`.
+- **The radar cross-section** (`rcs`), `sqrt(RCS / pi)` clipped to 0.1 to 20 m, for the
+  same four categories. It survives only where a cross-section is large enough to beat
+  the lookup, which is the regime where it is least misleading.
+
+The radius is a model parameter rather than a property of the run, so `driftwatch risk`
+rebaselines it from the current rules before rescoring a stored run; a radius that came
+from the fleet file is left alone.
+
+### Slow encounters, where the straight line fails
+
+The projection onto one plane holds because the pair passes in a straight line at constant
+velocity: at 13 km/s a 10 km separation is crossed in under a second, in which a low Earth
+orbit turns through a twentieth of a degree. Two objects in nearly the same orbit — two
+members of one constellation, a satellite and its own upper stage — pass at metres per
+second instead, and then the passage takes minutes, the relative path curves through it,
+and the two can re-approach. More of the uncertainty is in play than one plane sees, so the
+probability comes out **too low**.
+
+Every event below 0.1 km/s relative carries `slow_encounter` in the risk table, and the
+report says how many there are and whether any is flagged. It is a flag and not a
+correction: nothing rescales the probability, and the fix is a three-dimensional
+integration over the encounter, which is not in this phase. The demo run has 10 such events
+out of 5,704, the slowest at 23 m/s, none of them flagged.
+
+A large in-track uncertainty is *not* the same problem, and is deliberately not flagged. A
+seven-day-old element set can be hundreds of kilometres uncertain along track, but that is
+mostly a timing error — the object is on the same track, early or late — and projecting onto
+the plane perpendicular to the relative velocity discards exactly that component. The
+method survives a large in-track sigma and fails on a low relative speed.
+
+The reproduction of ESA's risk column cannot measure the size of the underestimate, and it
+is worth being clear about why: ESA's own column is computed the same way, so the residual
+binned by relative speed shows nothing at the slow end (`docs/kelvins-reproduction.md`).
+The two share the approximation exactly. The flag therefore comes from the method rather
+than from the comparison.
 
 ## Probability of collision, three ways
 
@@ -698,13 +776,38 @@ area of the echo rather than of the object: it understates anything much larger 
 radar wavelength, it depends on aspect and material, and it is missing on a third of the
 chaser rows.
 
-**That is a finding about driftwatch, not just about the dataset.** `risk/scenario.py`
-takes a secondary's hard-body radius from `sqrt(RCS / pi)` for payloads, rocket bodies and
-debris, exactly the proxy that fails here, and this says the fallback is biased small — so
-the probabilities for those secondaries are biased low. Categories with a known envelope
-(the station, Starlink, OneWeb) already keep a published dimension instead, and the
-conclusion for Phase 4 is to prefer a published dimension wherever one exists rather than
-the radar return.
+**That was a finding about driftwatch, not just about the dataset, and it has been acted
+on.** `risk/scenario.py` used to take a secondary's hard-body radius from `sqrt(RCS / pi)`
+for payloads, rocket bodies and debris, exactly the proxy that fails here, so those
+probabilities were biased low. The formula is gone, replaced by the median chaser radius of
+each object type and cross-section class in these same rows — half the median `c_span`,
+since `(t_span + c_span) / 2` is what reproduces ESA's column with nothing fitted. The
+cross-section survives as a *class* (small below 0.1 m2, medium to 1 m2, large above),
+which is the part of it that carries size information.
+
+| Object type | Small | Medium | Large | Unknown |
+| --- | ---: | ---: | ---: | ---: |
+| Payload | 1.00 m | 1.00 m | **4.55 m** | 1.50 m |
+| Rocket body | 1.50 m | 1.50 m | **1.90 m** | 1.50 m |
+| Debris | 1.00 m | 1.00 m | **1.25 m** | 1.00 m |
+| Untyped | 1.00 m | 1.00 m | 1.00 m | 1.00 m |
+
+Most cells are exactly 1.0 m because ESA defaults an unpublished span to 2.0 m. That
+default is a screening convention, deliberately generous for an object whose size nobody
+knows, and adopting it is what makes these probabilities comparable with ESA's. It moves in
+the conservative direction: a fragment that `sqrt(RCS / pi)` clipped to a 0.1 m radius now
+carries 1 m, and a hundred times the probability. The previous value is kept as a lower
+bound, so a known envelope — a Starlink's 10 m, the station's 30 m — is never reduced to a
+population median, and a cross-section large enough to beat the lookup still wins.
+
+**What it did to the week in hand.** Rescoring the demo run's 5,704 stored events moved 756
+of the 2,993 objects' radii, by a median factor of ten. 391 events gained more than a factor
+of two of probability and 122 more than a factor of ten, with debris secondaries up by a
+median factor of 2.4 and rocket bodies by 1.3. **No flag moved**: red stayed at 2 pairs,
+yellow at 12, and the flagged pairs are all Starlink secondaries, whose 10 m envelope the
+change does not touch. The events it did move were three or more orders of magnitude below
+the yellow threshold. So the correction is real and it is in the safe direction, and this
+week's headline numbers do not depend on it.
 
 One more result comes out exactly. Comparing our covariance-scale sweep with ESA's own
 `max_risk_scaling` column, the ratio of the two has a median of 0.9999 when ESA's is

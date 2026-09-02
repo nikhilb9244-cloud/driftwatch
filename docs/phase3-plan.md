@@ -208,6 +208,221 @@ median and 5th/95th percentiles per decade, and the old single-radius median in 
 contrast. Drawn as hand-written SVG so the repository keeps no plotting dependency and the
 file diffs.
 
+## Step 0 revision (the review's four changes, 2026-09-02)
+
+Step 0 was approved with four changes before Step 1. All four are built. Each is written
+up with what it did to the numbers, because three of the four move probabilities and one
+of them moves them by two orders of magnitude.
+
+### 1. Every covariance component is a floor plus a growth term
+
+The supplemental fit had a scalar floor split across the components in the shape of the
+fitted growth, and the growth was fitted to the raw residual and then had the floor added
+in quadrature on top — which counts the floor twice and puts the model above every bin it
+was fitted to. Now:
+
+- **The floor is per component**, and it is the larger of two measurements: the shortest
+  lead-time bin that resolves, and CelesTrak's published RMS of the fit to the operator
+  ephemeris split in the shape that bin has. The larger, not the quadrature sum, because
+  they are not independent — two versions published an hour apart already disagree by both
+  their fit residuals. On the store in hand the floor is `(0.047, 0.471, 0.026)` km and the
+  published RMS (median 0.197 km) does not bind anywhere.
+- **The growth is fitted to the excess over the floor**, `sqrt(rms^2 - floor^2)` per bin.
+  The model now lands on its anchor bin: in-track 0.678 km against a measured 0.673 km at a
+  lead of 0.119 days, where before it stood above it.
+- **In-track always carries a growth term**, exponent prior 1.5 constrained to `[1, 2]`,
+  because in-track growth is the mechanism and its absence from a few hours of pairs is a
+  measurement limit rather than a physical statement. **Radial and cross-track are
+  floor-only** until the longest resolved bin stands at least 1.5 times its floor, and then
+  the growth is capped at linear — a semi-major-axis or node error grows linearly and
+  nothing accelerates it. On the store in hand all three resolve.
+- **A bin is used only when it holds 30 pairs.** The shortest bin of the current store has
+  13 and is dropped, which is right: its root-mean-square is noise, and the floor, the
+  growth and the horizon all hang off the bins.
+- **The horizon is the top of the longest resolved bin**, capped at the longest pair
+  actually seen, rather than the single longest pair. On the current store both give 0.157
+  days (the 0.24 quoted in Step 0 above was measured on a slightly different set of pairs
+  from the same two versions, before the 30-pair minimum dropped the thin first bin); the difference matters when one lonely late pair would otherwise carry the model
+  across the whole window. A regression test builds exactly that case (200 objects six
+  hours apart, two objects five days apart) and checks the horizon stays under a day.
+
+**Effect on the run: none.** Rescoring the 5,704 stored events leaves red at 2 pairs and
+yellow at 12, because almost every Starlink secondary is past the horizon and served by the
+GP model either way. The change is about the model being honest at the leads it does serve.
+
+### 2. The secondary radius: the radar-cross-section formula is gone
+
+`sqrt(RCS / pi)` is the radius of the disc that returns the same echo, not the size of the
+object. It is replaced by a lookup derived from the Kelvins data —
+`kelvins.chaser_radius_table`, the median chaser span halved, by object type and radar
+cross-section class — with the previous value kept as a lower bound so that a known
+envelope or a large cross-section is never reduced to a population median.
+
+| Object type | Small | Medium | Large | Unknown |
+| --- | ---: | ---: | ---: | ---: |
+| Payload | 1.00 m | 1.00 m | **4.55 m** | 1.50 m |
+| Rocket body | 1.50 m | 1.50 m | **1.90 m** | 1.50 m |
+| Debris | 1.00 m | 1.00 m | **1.25 m** | 1.00 m |
+| Untyped | 1.00 m | 1.00 m | 1.00 m | 1.00 m |
+
+The lookup is baked into `risk/scenario.py` so that screening does not depend on a dataset
+behind a registration wall, and `driftwatch kelvins` re-derives it and warns if the code
+has drifted from the data. A test asserts they agree.
+
+**The rebaseline.** `driftwatch risk latest --refit --offline` over the same 5,704 events.
+The hard-body radius is a model parameter rather than a property of the run, so a rescore
+now recomputes it from the current rules (leaving fleet-file radii alone) and logs what
+moved.
+
+| | Before | After |
+| --- | ---: | ---: |
+| Object radii changed | — | 756 of 2,993, median factor 10 |
+| Events whose probability rose by more than 2x | — | 391 |
+| ... by more than 10x | — | 122 |
+| Median factor, debris secondaries | — | 2.44 |
+| Median factor, rocket-body secondaries | — | 1.28 |
+| Red pairs | 2 | 2 |
+| Yellow pairs | 12 | 12 |
+| Flagged pairs in the dilution region | 8 | 8 |
+| Highest probability | 1.58e-4 | 1.58e-4 |
+
+**No flag moved**, and the reason is worth stating: every flagged pair this week has a
+Starlink secondary, whose 10 m envelope the change does not touch, and the events that did
+move were three or more orders of magnitude below the yellow threshold. So the correction is
+real, it is in the safe direction, and this week's headline numbers do not rest on it.
+
+The caveat travels with the number. Most cells are exactly 1.0 m because ESA defaults an
+unpublished span to 2.0 m; the radius of an unknown object is a **screening convention**,
+deliberately generous, and adopting it is what makes these probabilities comparable with
+ESA's. A median is not a measurement — any individual fragment may be a tenth of it.
+
+### 3. The Kelvins residual against relative speed: a null result, and why it is not a clearance
+
+Asked: does the one-sided residual correlate with relative speed, since the two-dimensional
+method assumes straight-line relative motion and fails for slow encounters?
+
+| Relative speed | n | median | p05 | within x2 | more than 3x low |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| 0 to 1 km/s | 238 | +0.0014 | -0.85 | 85 % | 7.1 % |
+| 1 to 4 km/s | 1,071 | +0.0002 | -0.85 | 84 % | 9.5 % |
+| 4 to 10 km/s | 2,603 | -0.0006 | -1.20 | 83 % | 10.8 % |
+| 10 to 14 km/s | 3,282 | -0.0005 | -0.83 | 85 % | 8.4 % |
+| 14 to 20 km/s | 2,989 | -0.0002 | -0.29 | 93 % | 4.3 % |
+
+**The slow bin is not where the disagreement lives.** It is unremarkable, and slightly
+better than the 4 to 10 km/s band. Agreement improves monotonically towards head-on
+encounters instead.
+
+That null result does **not** clear the method, and the reason is the interesting part. The
+comparison is against ESA's own operational risk column, which this reconstruction
+reproduces to a fraction of a percent *including on the slow rows*. That agreement is
+itself the evidence: if ESA had integrated the slow encounters in three dimensions and
+driftwatch had not, the slow bin would stand out. It does not, so both are computing the
+same two-dimensional integral and a bias they share is invisible here whatever its size.
+
+**So the flag was added anyway, on the method rather than on the measurement.** This goes
+one step beyond the conditional instruction, and deliberately: the failure of the
+rectilinear assumption at low relative speed is a documented property of the integral, not
+a hypothesis the Kelvins rows were able to test. `slow_encounter` marks every event below
+0.1 km/s relative — at that speed a pair takes 100 s to cross 10 km, in which a low orbit
+turns through about 6 degrees, against a twentieth of a degree at 13 km/s — and the report
+says how many there are and whether any is flagged. It is a flag and not a correction:
+nothing rescales the probability, and the fix is a three-dimensional integration, which is
+not in this phase. **The demo run has 10 such events out of 5,704, the slowest at 23 m/s
+(CubeSat XI-IV against CZ-6A debris), none of them flagged.**
+
+One thing the flag deliberately does not catch: a large in-track uncertainty. A seven-day-old
+element set can be hundreds of kilometres uncertain along track, but that is mostly a timing
+error — the object is on the same track, early or late — and projecting onto the plane
+perpendicular to the relative velocity discards exactly that component. An earlier version of
+this flag used the encounter duration from the along-velocity sigma, the textbook Coppola
+criterion, and it flagged 225 events at 14 km/s while missing the 23 m/s pass. Relative speed
+is the right discriminator.
+
+### 4. SpaceX ephemerides, integrated
+
+`ephemeris/spacex.py` and `driftwatch spacex`. Their covariance is used **as published** for
+Starlink secondaries inside each file's 72-hour validity, labelled `spacex-ephemeris`;
+outside it the base model serves and reports its own label, so the report shows exactly where
+the covariance changed hands. The supplemental-consistency fit stays as a cross-check rather
+than being merged in, since the two measure different things: theirs is the uncertainty
+*within* one published plan, ours is the uncertainty *of the plan being revised*.
+
+What the module does and does not do:
+
+- One request per satellite, only for the satellites a run's events involve, ranked by
+  closest approach and capped (`--limit`, 300 by default). At 2 MB a file the whole
+  constellation would be 22 GB a version.
+- Only the position covariance is kept, thinned to a ten-minute grid: 2 MB becomes tens of
+  kilobytes. The 21 published numbers are the lower triangle of the 6x6, row-major, in their
+  UVW frame, which is our RIC.
+- **Analysis only.** No licence is stated, so the raw files are never redistributed and
+  neither is the derived store; `data/spacex/` is git-ignored and out of the viewer bundle.
+  `docs/data-sources.md` carries the standing rule and the credit line.
+
+**The cross-check, measured on 120 satellites of the demo run.** `driftwatch spacex` prints
+their sigma beside ours at matched leads:
+
+| Lead | SpaceX in-track | driftwatch in-track | Ratio | Which model of ours |
+| ---: | ---: | ---: | ---: | --- |
+| 1 h | 6.7 m | 489 m | 73 | supplemental consistency |
+| 3 h | 24 m | 700 m | 29 | supplemental consistency |
+| 8 h | 257 m | 4.54 km | 18 | GP (past the supplemental horizon) |
+| 24 h | 2.81 km | 8.47 km | 3.0 | GP |
+| 48 h | 2.51 km | 15.8 km | 6.3 | GP |
+| 72 h | 3.80 km | 22.8 km | 6.0 | GP |
+
+The sign is right everywhere and the gap is widest at short lead, which is what the two
+quantities predict: a published plan is nearly exact an hour ahead and the revision is then
+the whole error. Their in-track sigma is not monotonic across the constellation (2.81 km at
+24 hours against 2.51 at 48), which is what a control box on round figures looks like when
+different satellites sit on different steps.
+
+**This is the change that moves the numbers.** `driftwatch risk latest` with and without
+`--no-spacex`, same events, same radii:
+
+| | Without SpaceX | With SpaceX |
+| --- | ---: | ---: |
+| Events served by their covariance | 0 | 499 of 5,704 (245 fully, 254 straddling the horizon) |
+| Median secondary in-track sigma on those events | 24.8 km | **2.5 km** |
+| Of those events, in the robust region | 388 | **462** |
+| ... in the dilution region | 111 | **37** |
+| Red pairs | 2 | **1** |
+| Yellow pairs | 10 | **18** |
+| Flagged pairs in the dilution region | 7 | 8 |
+| Highest probability | 1.58e-4 | 1.58e-4 |
+
+Both directions are visible and both are right. **Fewer events sit in the dilution region**,
+because a covariance three to ten times smaller stops being the thing holding the
+probability up — that is the point of using it. **More pairs are flagged yellow**, because at
+a miss of a kilometre or two a tighter covariance concentrates the probability mass on the
+disc instead of spreading it thin: eleven events go from unflagged to yellow, every one of
+them EOS SAT-1 against a Starlink, ten of the eleven at a miss under three kilometres, with
+the probability rising by factors of three to three thousand. Two events go the other way,
+where the miss is large enough that the narrower Gaussian pulls away from the disc. And
+ZACube-1 against STARLINK-6053, the Phase 2 red, drops to yellow at 8.4e-5 *and moves from
+the dilution region to the robust one* (scale 0.88 to 1.05), which is a better outcome than
+the number falling: it is now a statement about the geometry rather than about the
+uncertainty.
+
+EOS SAT-1 dominating the new flags is not an accident of the fetch. It is a 177 kg
+microsatellite in a 454 by 466 km sun-synchronous orbit, right where the Starlink shells sit,
+so it has more events with Starlink secondaries than any other fleet member and its numbers
+were dominated by the secondary's uncertainty. Replacing that uncertainty with the
+operator's own is exactly the case this layer was built for.
+
+The remaining red is the ISS against YAM-3 at 1.58e-4, untouched — YAM-3 is not a Starlink,
+so nothing here reaches it, and it stays a dilution flag.
+
+**One thing not done, and it is a review question.** The geometry driftwatch propagates is
+CelesTrak's SGP4 fit to this ephemeris, not the ephemeris itself, and that fit's own
+published residual is about 0.2 km — larger than SpaceX's own sigma for the first several
+hours (24 m in-track at 3 hours, measured across the constellation). Used as published, the
+covariance inside that range is tighter than the trajectory it is attached to. Applying the
+fit residual as a floor is implemented and off by default (`add_fit_rms_floor`), because
+"use their covariance as published" was the instruction. Given how much the layer moves the
+flags, this one matters more than it looked before the numbers were in.
+
 ### Questions for the Step 0 review
 
 1. **The horizon is the big one.** It withdraws the tight Starlink covariance that Step 3
@@ -228,6 +443,27 @@ file diffs.
    Kelvins result says a published dimension beats a radar cross-section. Changing
    `SECONDARY_HBR_M` would move every probability in the catalogue, which is a Phase 4
    decision rather than a Phase 3 one, so nothing was changed.
+   *Answered by the review: change it now. Done, above; no flag moved.*
+
+### Questions for the Step 0 revision
+
+1. **Should SpaceX's covariance carry the SGP4 fit residual as a floor?** As published it
+   is tighter than CelesTrak's fit to the same ephemeris, which is the trajectory we
+   actually propagate. The switch exists and is off. Turning it on would raise every
+   Starlink secondary's covariance inside about the first eight hours to 0.2 km, roughly
+   eight times their published in-track sigma at three hours. This is now the biggest open
+   question of the four, because the SpaceX layer is what moves the flag counts.
+2. **Only 120 satellites were fetched, of 1,751 Starlink objects in the run.** The cap is
+   politeness and disk: 2 MB a file, 8 minutes for 120. The 120 were chosen by closest
+   approach, which is the ranking available before scoring. Is that the right selection
+   rule, and is 300 the right default cap?
+3. **The slow-encounter flag was added on a null result.** The Kelvins rows could not
+   confirm the underestimate, because ESA's reference shares the approximation. The flag
+   rests on the method instead. Is that the call you want, or should it wait for a
+   three-dimensional integration that can measure it?
+4. **`slow_encounter` is a new column in every risk table and in `conjunctions.parquet`,**
+   and `floor_r_km`, `floor_i_km` and `floor_c_km` are new in `covariance.parquet`. Both
+   are additive. The viewer does not read either yet.
 
 ## Later steps in one paragraph each
 
