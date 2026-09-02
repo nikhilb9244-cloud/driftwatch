@@ -31,13 +31,24 @@ accuracy. Every covariance reports which was used.
 Objects screened on a supplemental set are a special case. Their GP history measures
 how much the satellite manoeuvred between fits, not how well it is tracked, so it says
 nothing about the set actually used. :func:`fit_supplemental_covariance` fits those
-objects from the consistency of successive stored supplemental versions instead, with
-CelesTrak's published fit residual as a floor, and :class:`SupplementalCovariance`
-wraps a base model to serve them. That fit differs from the GP one in two ways, both
-taken at the Phase 3 Step 0 review: its pairs are binned by lead time so that the
-thousands of pairs a few hours apart do not outweigh the few days apart, and its
-exponents are a physically bounded prior rather than a free fit, because a power law
-fitted over hours cannot be extrapolated to a seven-day screening window.
+objects from the consistency of successive stored supplemental versions instead, and
+:class:`SupplementalCovariance` wraps a base model to serve them. That fit differs from
+the GP one in four ways, all taken at the Phase 3 Step 0 review:
+
+* Its pairs are binned by lead time, so that the thousands of pairs a few hours apart do
+  not outweigh the few days apart, and a bin is used only when it holds enough pairs for
+  its root-mean-square to mean anything.
+* Every component is **a floor plus a growth term**. The floor is what the disagreement
+  already is at the shortest lead the store resolves, or CelesTrak's published RMS of the
+  fit to the operator ephemeris, whichever is larger; the growth is fitted to what is left
+  over that floor, so the model lands on the bin it is anchored at instead of standing
+  above it by the floor again.
+* Its exponents are a physically bounded prior rather than a free fit, because a power law
+  fitted over hours cannot be extrapolated to a seven-day screening window. In-track keeps
+  a growth term always, with the exponent constrained to [1, 2]; radial and cross-track are
+  floor-only until the bins resolve a trend, and linear when they do.
+* It carries a validity horizon at the longest lead the bins resolve, past which the base
+  model serves and the source label says so.
 
 The covariance is diagonal in the object's own RIC frame in Phase 2. Phase 3 will wrap
 this model and add a storm term to the in-track variance, which is why the interface
@@ -104,7 +115,23 @@ SUPPLEMENTAL_LEAD_BIN_EDGES_DAYS: tuple[float, ...] = (0.02, 0.05, 0.1, 0.25, 0.
 # reaching at least this far, over at least :data:`SUPPLEMENTAL_MIN_SPAN_RATIO` in lead time.
 SUPPLEMENTAL_MIN_BINS_FOR_P = 4
 SUPPLEMENTAL_MIN_LEAD_FOR_P_DAYS = 1.0
-# How far past its longest observed pair the supplemental fit may be used: not at all.
+# Enough pairs in a lead-time bin for its root-mean-square to mean anything. Three things
+# hang off it: the floor comes from the shortest bin that has this many pairs, the growth is
+# anchored at the longest, and the longest is where the validity horizon sits. Anchoring on a
+# bin holding a handful of pairs would let one late pair set the model for the whole window.
+SUPPLEMENTAL_MIN_PAIRS_PER_BIN = 30
+# Radial and cross-track are floor-only until the bins actually show growth: the longest
+# qualifying bin's residual has to stand this far above the floor before a growth term is
+# fitted for that component at all. In-track always carries one, because in-track growth is
+# the mechanism (a semi-major-axis error becomes an along-track error through the mean
+# motion) and its absence from a few hours of pairs is a measurement limit, not a physical
+# statement. Radial and cross-track have no such amplifier, so a flat floor is the right
+# default there and any growth has to be earned.
+SUPPLEMENTAL_TREND_FACTOR = 1.5
+# ... and when it is earned, it is capped at linear: a radial or cross-track error grows from
+# a semi-major-axis or node error, which is linear in time. Nothing makes it accelerate.
+SUPPLEMENTAL_RC_P = 1.0
+# How far past the lead time the store resolves the supplemental fit may be used: not at all.
 # A prior exponent anchored on pairs hours apart cannot be run out to a seven-day screening
 # window. Measured on the first two stored versions (leads of 0.02 to 0.24 days), the
 # constrained law gives an in-track sigma at seven days of 42 km at p = 1, 321 km at
@@ -113,8 +140,11 @@ SUPPLEMENTAL_MIN_LEAD_FOR_P_DAYS = 1.0
 # that makes that extrapolation safe, and picking the one that happens to land near the GP
 # number would be fitting the answer. So the fit serves only the lead times the store
 # actually measures, the base model serves the rest, and every covariance says which it
-# got. The horizon moves out on its own as the scheduled fetch accumulates versions: a
-# store spanning seven days covers the whole screening window and the fallback disappears.
+# got. The horizon sits at the top of the longest bin holding
+# :data:`SUPPLEMENTAL_MIN_PAIRS_PER_BIN` pairs, not at the single longest pair, so that one
+# late pair cannot carry the model past the range the store resolves. It moves out on its own
+# as the scheduled fetch accumulates versions: a store spanning seven days covers the whole
+# screening window and the fallback disappears.
 # Raise this only with a reason, and record it: every step above one is unmeasured growth.
 SUPPLEMENTAL_EXTRAPOLATION_FACTOR = 1.0
 # Pairs per object are capped (random subsample) so that objects with several element sets
@@ -494,22 +524,30 @@ class EmpiricalCovariance:
 
 @dataclass(frozen=True)
 class FlooredGrowth:
-    """A power law over a floor: ``sigma_k(dt)^2 = (share_k * floor)^2 + (s_k dt^p_k)^2``.
+    """A per-component floor with a growth term over it: ``sigma_k(dt)^2 = floor_k^2 + (s_k dt^p_k)^2``.
 
-    The floor is CelesTrak's published RMS of the fit of a supplemental element set to
-    the operator ephemeris: the disagreement between the set and the trajectory it was
-    fitted to, which no amount of consistency between versions can see. ``share`` splits
-    that scalar across the RIC components; it is the shape of the fitted growth, or an
-    equal split when there is no growth to take a shape from.
+    Every component is a floor plus a growth term, and the two come from different
+    measurements. The floor is what the error is at essentially no lead: the
+    root-mean-square disagreement of the shortest lead-time bin the store resolves, and
+    CelesTrak's published RMS of the fit of this element set to the operator ephemeris,
+    whichever is larger. Those two are not independent — the disagreement between two
+    versions published an hour apart already contains both versions' fit residuals — so
+    the floor is the larger of them rather than their sum in quadrature. The growth is the
+    part that is left once the floor is taken out: it is fitted to
+    ``sqrt(rms_k^2 - floor_k^2)`` across the bins, so the model reproduces the bin it is
+    anchored at instead of standing above it by the floor again.
+
+    ``rms_km`` keeps CelesTrak's published residual for the record even where the measured
+    short-lead disagreement is larger and the floor came from that instead.
     """
 
     growth: PowerLawGrowth
-    floor_km: float
-    share: tuple[float, float, float]
+    floor_km: tuple[float, float, float]
+    rms_km: float = 0.0
 
     def sigma_km(self, dt_days: np.ndarray, *, dt_floor_days: float = SUPPLEMENTAL_DT_FLOOR_DAYS) -> np.ndarray:
         grown = self.growth.sigma_km(dt_days, dt_floor_days=dt_floor_days)
-        floor = np.asarray(self.share, dtype=float)[None, :] * self.floor_km
+        floor = np.asarray(self.floor_km, dtype=float)[None, :]
         return np.sqrt(grown**2 + floor**2)
 
     def covariance_km2(self, dt_days: np.ndarray, *, dt_floor_days: float = SUPPLEMENTAL_DT_FLOOR_DAYS) -> np.ndarray:
@@ -519,7 +557,21 @@ class FlooredGrowth:
         return out
 
     def as_dict(self) -> dict[str, float]:
-        return {**self.growth.as_dict(), "rms_km": float(self.floor_km)}
+        return {
+            **self.growth.as_dict(),
+            "rms_km": float(self.rms_km),
+            **{f"floor_{k}_km": float(v) for k, v in zip(RIC, self.floor_km, strict=True)},
+        }
+
+    @classmethod
+    def from_row(cls, row: Mapping[str, Any]) -> FlooredGrowth:
+        """Rebuild from a stored covariance-table row, tolerating a table written before the floors were split."""
+        rms = float(row.get("rms_km") or 0.0)
+        if all(pd.notna(row.get(f"floor_{k}_km")) for k in RIC):
+            floor = tuple(float(row[f"floor_{k}_km"]) for k in RIC)
+        else:  # a Phase 2 table: one scalar floor, split in the proportions of the growth
+            floor = tuple(s * rms for s in _share_from(PowerLawGrowth.from_row(row)))
+        return cls(PowerLawGrowth.from_row(row), floor, rms)  # type: ignore[arg-type]
 
 
 class SupplementalCovariance:
@@ -605,8 +657,7 @@ class SupplementalCovariance:
         sources: dict[int, str] = {}
         for _, row in rows.iterrows():
             norad_id = int(row["norad_id"])
-            share = _share_from(PowerLawGrowth.from_row(row))
-            models[norad_id] = FlooredGrowth(PowerLawGrowth.from_row(row), float(row.get("rms_km") or 0.0), share)
+            models[norad_id] = FlooredGrowth.from_row(row)
             sources[norad_id] = str(row["source"])
         if "horizon_days" not in kwargs and len(rows) and "dt_max_days" in rows.columns:
             horizon = pd.to_numeric(rows["dt_max_days"], errors="coerce").dropna()
@@ -614,13 +665,21 @@ class SupplementalCovariance:
         return cls(base, models, sources, table=rows.reset_index(drop=True), **kwargs)
 
 
-def _share_from(growth: PowerLawGrowth) -> tuple[float, float, float]:
-    """Split a scalar floor across R, I and C in the proportions of a growth law at one day."""
-    s = np.asarray(growth.sigma_1d_km, dtype=float)
+def _unit_share(components: np.ndarray) -> tuple[float, float, float]:
+    """``components`` scaled to unit norm, or an equal split when it has no length to take a shape from."""
+    s = np.asarray(components, dtype=float)
     total = float(np.linalg.norm(s))
     if not np.isfinite(total) or total <= 0:
         return (1.0 / np.sqrt(3.0),) * 3  # type: ignore[return-value]
     return tuple(float(x) for x in s / total)  # type: ignore[return-value]
+
+
+def _share_from(growth: PowerLawGrowth) -> tuple[float, float, float]:
+    """Split a scalar floor across R, I and C in the proportions of a growth law at one day.
+
+    Only used to read a Phase 2 covariance table, which stored one scalar floor per object.
+    """
+    return _unit_share(np.asarray(growth.sigma_1d_km, dtype=float))
 
 
 class ScaledCovariance:
@@ -665,6 +724,9 @@ COVARIANCE_TABLE_COLUMNS: tuple[str, ...] = (
     "n_jumps",
     "n_bad_sets",
     "rms_km",
+    "floor_r_km",
+    "floor_i_km",
+    "floor_c_km",
 )
 
 
@@ -855,55 +917,116 @@ def bin_pairs_by_lead(
     return pd.DataFrame(rows, columns=list(LEAD_BIN_COLUMNS))
 
 
+def usable_bins(bins: pd.DataFrame, *, min_pairs: int = SUPPLEMENTAL_MIN_PAIRS_PER_BIN) -> pd.DataFrame:
+    """The bins whose root-mean-square is worth believing: those holding ``min_pairs`` pairs.
+
+    Falls back to every occupied bin when none qualifies, so a thin store still produces a
+    model — a floor and no growth — rather than nothing at all.
+    """
+    if not len(bins):
+        return bins
+    enough = bins[bins["n_pairs"] >= int(min_pairs)]
+    return enough.reset_index(drop=True) if len(enough) else bins.reset_index(drop=True)
+
+
 def fit_binned_growth(
     bins: pd.DataFrame,
     *,
+    floor_km: tuple[float, float, float] = (0.0, 0.0, 0.0),
     prior_p: tuple[float, float, float] = SUPPLEMENTAL_PRIOR_P,
     fit_exponent: bool = False,
     p_min: float = SUPPLEMENTAL_P_MIN,
     p_max: float = SUPPLEMENTAL_P_MAX,
     fit_component: int = SUPPLEMENTAL_FIT_P_COMPONENT,
+    min_pairs: int = SUPPLEMENTAL_MIN_PAIRS_PER_BIN,
+    trend_factor: float = SUPPLEMENTAL_TREND_FACTOR,
+    rc_exponent: float = SUPPLEMENTAL_RC_P,
 ) -> tuple[PowerLawGrowth, dict[str, Any]] | tuple[None, dict[str, Any]]:
-    """Fit ``sigma_k(dt) = s1_k dt^p_k`` to binned residuals, each occupied bin weighted equally.
+    """Fit the growth term that sits over ``floor_km``, one bin one vote.
 
-    The exponents come from :data:`SUPPLEMENTAL_PRIOR_P` unless ``fit_exponent`` is set,
-    in which case the one component named by ``fit_component`` is fitted by least squares
-    in log space and clipped into ``[p_min, p_max]``.
+    The model is a floor plus a growth term per component, so what the growth has to
+    reproduce is the part of each bin's residual that the floor does not already carry,
+    ``excess_k = sqrt(max(rms_k^2 - floor_k^2, 0))``. Fitting the raw residual instead and
+    then adding the floor in quadrature would count the floor twice and put the model above
+    every bin it was fitted to.
 
-    The amplitude then depends on which of the two it was. With a fitted exponent the law
-    follows the bins, and the amplitude is the equal-weight least-squares intercept in log
-    space. With a prior exponent the law does *not* follow the bins — the residuals over a
-    few hours grow more slowly than any exponent the physics allows, so a law forced
-    through them at ``p >= 1`` is above the data everywhere except at one point, and where
-    that point sits decides the extrapolation. It is anchored at the longest occupied bin:
-    the bin nearest the lead times being extrapolated to, and the one where the growing
-    term is least swamped by the publication floor. Anchoring at the mean of the bins
-    instead would put the law a factor of two above its own longest bin.
+    Only the bins with at least ``min_pairs`` pairs are used (:func:`usable_bins`).
+
+    **In-track** always carries a growth term. Its exponent is
+    ``prior_p[fit_component]`` unless ``fit_exponent`` is set, in which case it is fitted by
+    least squares in log space across the bins and clipped into ``[p_min, p_max]``.
+
+    **Radial and cross-track** default to the floor alone. A growth term is fitted for them
+    only once the bins resolve one — the longest usable bin standing at least
+    ``trend_factor`` times its floor — and it is capped at ``rc_exponent``, which is linear.
+    A radial or cross-track error grows out of a semi-major-axis or node error and has no
+    mechanism that accelerates it, so nothing steeper is allowed however the bins look.
+
+    The amplitude depends on which of the two the exponent was. With a fitted exponent the
+    law follows the bins and the amplitude is the equal-weight least-squares intercept in log
+    space. With a prior exponent the law does *not* follow the bins — residuals over a few
+    hours grow more slowly than any exponent the physics allows, so a law forced through them
+    at ``p >= 1`` is above the data everywhere except at one point, and where that point sits
+    decides the extrapolation. It is anchored at the longest usable bin: the bin nearest the
+    lead times being extrapolated to, and the one where the growing term is least swamped by
+    the floor.
     """
-    if not len(bins):
-        return None, {"n_bins": 0}
-    dt = bins["lead_days"].to_numpy(dtype=float)
-    rms = bins[["rms_r_km", "rms_i_km", "rms_c_km"]].to_numpy(dtype=float)
+    used = usable_bins(bins, min_pairs=min_pairs)
+    if not len(used):
+        return None, {"n_bins": 0, "n_bins_used": 0}
+    dt = used["lead_days"].to_numpy(dtype=float)
+    rms = used[["rms_r_km", "rms_i_km", "rms_c_km"]].to_numpy(dtype=float)
+    floor = np.asarray(floor_km, dtype=float)
+    excess = np.sqrt(np.maximum(rms**2 - floor[None, :] ** 2, 0.0))
+    anchor = int(np.argmax(dt))
     p = list(prior_p)
-    diagnostics: dict[str, Any] = {"n_bins": int(len(bins)), "exponent_fitted": False}
-    if fit_exponent and len(bins) >= 2:
-        k = int(fit_component)
+    diagnostics: dict[str, Any] = {
+        "n_bins": int(len(bins)),
+        "n_bins_used": int(len(used)),
+        "exponent_fitted": False,
+        "anchor_lead_days": round(float(dt[anchor]), 4),
+        "floor_km": [round(float(x), 4) for x in floor],
+    }
+
+    k = int(fit_component)
+    if fit_exponent and len(used) >= 2:
         with np.errstate(divide="ignore", invalid="ignore"):
-            x, y = np.log(dt), np.log(rms[:, k])
+            x, y = np.log(dt), np.log(excess[:, k])
         good = np.isfinite(x) & np.isfinite(y)
         if good.sum() >= 2:
             slope = float(np.polyfit(x[good], y[good], 1)[0])
             diagnostics.update(exponent_fitted=True, exponent_raw=round(slope, 3))
             p[k] = float(np.clip(slope, p_min, p_max))
             diagnostics["exponent_clipped"] = not (p_min <= slope <= p_max)
+
+    # Radial and cross-track: floor only unless the longest usable bin stands clear of it.
+    resolved = [False, True, False]
+    for j in (0, 2):
+        p[j] = float(rc_exponent)
+        resolved[j] = bool(
+            len(used) >= 2 and floor[j] > 0 and rms[anchor, j] >= trend_factor * floor[j] and excess[anchor, j] > 0
+        )
+    diagnostics["growth_resolved"] = {c: bool(v) for c, v in zip(RIC, resolved, strict=True)}
+
     p_arr = np.asarray(p, dtype=float)
-    per_bin = rms / dt[:, None] ** p_arr[None, :]  # the one-day amplitude each bin implies
-    if diagnostics["exponent_fitted"]:
-        s1 = np.exp(np.mean(np.log(np.maximum(per_bin, 1e-12)), axis=0))
-        diagnostics["amplitude_from"] = "log-mean of bins"
-    else:
-        s1 = per_bin[int(np.argmax(dt))]
-        diagnostics["amplitude_from"] = f"longest bin ({dt.max():.4g} d)"
+    per_bin = excess / dt[:, None] ** p_arr[None, :]  # the one-day amplitude each bin implies
+    # Only the bins that have something left over the floor say anything about the growth.
+    # The shortest bin never does: the floor is its own residual, so its excess is zero by
+    # construction, and averaging it in would drag the amplitude to nothing.
+    s1 = np.zeros(3)
+    for j in range(3):
+        above = excess[:, j] > 0
+        if not (resolved[j] and above.any()):
+            continue
+        if diagnostics["exponent_fitted"] and j == k:
+            s1[j] = float(np.exp(np.mean(np.log(per_bin[above, j]))))
+        else:
+            s1[j] = float(per_bin[np.flatnonzero(above)[int(np.argmax(dt[above]))], j])
+    diagnostics["amplitude_from"] = (
+        "log-mean of the bins above the floor"
+        if diagnostics["exponent_fitted"]
+        else f"longest bin above the floor (of {dt[anchor]:.4g} d)"
+    )
     return PowerLawGrowth(tuple(float(x) for x in s1), tuple(float(x) for x in p)), diagnostics
 
 
@@ -969,44 +1092,58 @@ def fit_supplemental_covariance(
     dt_all = np.concatenate(dts) if dts else np.zeros(0)
     ric_all = np.concatenate(rics) if rics else np.zeros((0, 3))
     bins = bin_pairs_by_lead(dt_all, ric_all, edges)
+    used = usable_bins(bins)
     span = float(dt_all.max() / dt_all.min()) if len(dt_all) and dt_all.min() > 0 else 1.0
     fit_p = (
-        len(bins) >= SUPPLEMENTAL_MIN_BINS_FOR_P
-        and float(bins["lead_days"].max()) >= SUPPLEMENTAL_MIN_LEAD_FOR_P_DAYS
+        len(used) >= SUPPLEMENTAL_MIN_BINS_FOR_P
+        and float(used["lead_days"].max()) >= SUPPLEMENTAL_MIN_LEAD_FOR_P_DAYS
         and span >= SUPPLEMENTAL_MIN_SPAN_RATIO
     )
-    growth, diagnostics = fit_binned_growth(bins, prior_p=prior_p, fit_exponent=fit_p)
-    share = _share_from(growth) if growth is not None else (1.0 / np.sqrt(3.0),) * 3
-    zero = PowerLawGrowth((0.0, 0.0, 0.0), prior_p)
-    lead_max = float(dt_all.max()) if len(dt_all) else 0.0
-    horizon = round(lead_max * extrapolation_factor, 4) if lead_max else None
-    if horizon is not None and horizon >= dt_max:
-        horizon = None  # the store covers the whole screening window; nothing to fall back for
-    # A prior exponent anchored at the longest bin passes under the shorter ones: it is
-    # steeper than the residuals actually grow, so it matches at the anchor and falls below
-    # everywhere earlier. The covariance is meant to be a floor on the error, so the
-    # measured consistency at the shortest lead becomes part of the floor and no growth law
-    # is allowed to undercut it.
-    short_lead_km = (
-        float(np.linalg.norm(bins.iloc[0][["rms_r_km", "rms_i_km", "rms_c_km"]].to_numpy(dtype=float)))
-        if len(bins)
-        else 0.0
+    # The floor per component: what the disagreement already is at the shortest lead the
+    # store resolves. A prior exponent anchored at the longest bin is steeper than the
+    # residuals actually grow, so it matches at the anchor and falls below everything
+    # earlier; the covariance is meant to be a floor on the error, so the shortest bin's
+    # measured consistency holds it up and no growth law can undercut it.
+    pool_floor = (
+        used.iloc[0][["rms_r_km", "rms_i_km", "rms_c_km"]].to_numpy(dtype=float)
+        if len(used)
+        else np.zeros(3, dtype=float)
     )
+    # The shape the floor has, used to split CelesTrak's scalar fit residual across the
+    # components. An SGP4 fit to an ephemeris misses mostly along-track, which is what the
+    # measured shape says too; with no bins to take a shape from, it is split equally.
+    shape = _unit_share(pool_floor)
+    growth, diagnostics = fit_binned_growth(bins, floor_km=tuple(pool_floor), prior_p=prior_p, fit_exponent=fit_p)
+    zero = PowerLawGrowth((0.0, 0.0, 0.0), prior_p)
+    # The horizon: the top of the longest bin the store resolves, never past the longest pair
+    # actually seen. Not the single longest pair, which can be one lonely late pair in an
+    # otherwise empty bin.
+    lead_max = float(dt_all.max()) if len(dt_all) else 0.0
+    horizon = None
+    if len(used) and lead_max:
+        resolved_to = min(float(used.iloc[-1]["lead_hi_days"]), lead_max)
+        horizon = round(resolved_to * extrapolation_factor, 4)
+        if horizon >= dt_max:
+            horizon = None  # the store covers the whole screening window; nothing to fall back for
 
     models: dict[int, FlooredGrowth] = {}
     sources: dict[int, str] = {}
     rows: list[dict[str, Any]] = []
     for norad_id in ids:
-        floor = max(rms_by_id.get(norad_id, median_rms), short_lead_km)
+        rms = rms_by_id.get(norad_id, median_rms)
+        # The two floor sources are not independent: the disagreement between two versions an
+        # hour apart already contains both versions' fit residuals. So the floor is the larger
+        # of them, component by component, not their sum in quadrature.
+        floor = tuple(float(max(pool_floor[k], shape[k] * rms)) for k in range(3))
         if growth is not None:
-            models[norad_id] = FlooredGrowth(growth, floor, share)  # type: ignore[arg-type]
+            models[norad_id] = FlooredGrowth(growth, floor, rms)  # type: ignore[arg-type]
             label = (
                 "supplemental:consistency"
                 if diagnostics.get("exponent_fitted")
                 else f"supplemental:consistency-prior-p{growth.exponent[1]:g}"
             )
         else:
-            models[norad_id] = FlooredGrowth(zero, floor, share)  # type: ignore[arg-type]
+            models[norad_id] = FlooredGrowth(zero, floor, rms)  # type: ignore[arg-type]
             label = "supplemental:rms"
         sources[norad_id] = label
         rows.append(
@@ -1037,7 +1174,7 @@ def fit_supplemental_covariance(
         "growth": growth.as_dict() if growth is not None else None,
         **diagnostics,
         "rms_km_median": round(median_rms, 4),
-        "short_lead_floor_km": round(short_lead_km, 4),
+        "pool_floor_km": {k: round(float(v), 4) for k, v in zip(RIC, pool_floor, strict=True)},
         "by_source": {k: sum(1 for v in sources.values() if v == k) for k in sorted(set(sources.values()))},
     }
     log.info("Supplemental covariance: %s", {k: v for k, v in summary.items() if k != "lead_bins"})

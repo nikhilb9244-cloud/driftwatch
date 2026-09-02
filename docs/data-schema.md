@@ -238,9 +238,10 @@ inside the watch radius.
 | `norad_id`, `category`, `altitude_band` | int64, string, string | The object (with its labels), the pool's labels, or the default's band. |
 | `source` | string | For an object row, the label the model uses for it (empirical, pooled or default); for a pool or default row, its own label; empty for a pool with too few pairs. |
 | `n_objects`, `n_fitted`, `n_sets`, `n_pairs`, `dt_min_days`, `dt_max_days` | int64, float64 | What the fit saw: objects in the pool and how many of them have their own fit, element sets, residual pairs and their propagation-time range. On a supplemental row `dt_max_days` is the fit's **validity horizon** rather than its longest pair: past it the base model serves (see `docs/screening.md`), and it is empty when the fit covers the whole window. |
-| `sigma_r_1d_km`, `p_r`, `sigma_i_1d_km`, `p_i`, `sigma_c_1d_km`, `p_c` | float64 | The power law per RIC component, `sigma(dt) = sigma_1d * dt^p` with `dt` in days; empty where there is no fit. |
+| `sigma_r_1d_km`, `p_r`, `sigma_i_1d_km`, `p_i`, `sigma_c_1d_km`, `p_c` | float64 | The power law per RIC component, `sigma(dt) = sigma_1d * dt^p` with `dt` in days; empty where there is no fit. On a supplemental row this is the **growth term only**, which sits over the floor: `sigma_k(dt)^2 = floor_k^2 + (sigma_1d_k * dt^p_k)^2`. An amplitude of zero means that component is floor-only, which is the default for radial and cross-track until the bins resolve a trend. |
 | `n_jumps`, `n_bad_sets` | int64 | Burns detected and outlier sets dropped for the object. |
-| `rms_km` | float64 | Supplemental rows only: the published fit residual used as the floor under the growth. |
+| `rms_km` | float64 | Supplemental rows only: CelesTrak's published residual of the fit of this element set to the operator's ephemeris. Kept for the record; it is one of the two things the floor is taken from. |
+| `floor_r_km`, `floor_i_km`, `floor_c_km` | float64 | Supplemental rows only: the floor per RIC component, the larger of the shortest resolved lead-time bin's measured disagreement and `rms_km` split across the components in the shape that bin has. The two are not independent — the disagreement between two versions an hour apart already contains both versions' fit residuals — so the floor is the larger of them, not their sum in quadrature. |
 
 The parquet metadata records the model version (`driftwatch_model_version`) and the
 run id.

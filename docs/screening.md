@@ -311,21 +311,50 @@ power law to the scatter. Two differences from the GP fit:
   pairs are hours to days apart rather than half a day to seven days. No object has
   enough versions of its own yet, so the residuals are pooled across every supplemental
   object.
-- **The pairs are binned by lead time and each occupied bin is weighted equally.** A store
-  covering a week holds tens of thousands of pairs a few hours apart and a few hundred six
-  days apart; fitted over the raw pairs the law is set almost entirely by the short leads
-  and then extrapolated over the part of the range that decides a seven-day screen.
+- **The pairs are binned by lead time and each bin that holds enough pairs is weighted
+  equally.** A store covering a week holds tens of thousands of pairs a few hours apart and
+  a few hundred six days apart; fitted over the raw pairs the law is set almost entirely by
+  the short leads and then extrapolated over the part of the range that decides a seven-day
+  screen. A bin with fewer than 30 pairs is not used at all: its root-mean-square is noise,
+  and three separate things hang off the bins (the floor, the growth and the horizon).
 - **The exponent is a prior, not a fit** (see below).
 
-Under the fitted growth sits a floor: CelesTrak publishes the RMS of each fit to the
-operator's ephemeris in the supplemental file itself (a median of 0.20 km, a 90th
-percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02). That
-disagreement between the element set and the trajectory it was fitted to is invisible to
-any comparison between versions, so it is added in quadrature, split across the RIC
-components in the proportions of the fitted growth. The measured consistency in the
-shortest lead-time bin is taken as a floor too, whichever is larger: a law with a prior
-exponent is steeper than the residuals actually grow, so it passes under the short-lead
-bins, and the covariance is not allowed to fall below a disagreement that was measured.
+### A floor plus a growth term, per component
+
+Every RIC component of a supplemental covariance is a floor with a growth term over it:
+
+```
+sigma_k(dt)^2  =  floor_k^2  +  (s_k * dt^p_k)^2
+```
+
+**The floor** is what the disagreement already is at essentially no lead. Two measurements
+give it. CelesTrak publishes the RMS of each fit to the operator's ephemeris in the
+supplemental file itself (a median of 0.20 km, a 90th percentile of 0.27 km and a worst
+case of 10.8 km when read on 2026-09-02): the disagreement between the element set and the
+trajectory it was fitted to, invisible to any comparison between versions. And the shortest
+lead-time bin that resolves gives the version-to-version disagreement at a lead of an hour
+or two, which on the store in hand is 0.047 km radial, 0.471 km in-track and 0.026 km
+cross-track — larger than the published residual, so it is the floor that binds.
+
+The floor is the **larger** of the two per component, not their sum in quadrature, because
+they are not independent: the disagreement between two versions published an hour apart
+already contains both versions' fit residuals. The published RMS is a scalar, and it is
+split across the components in the shape the shortest bin has, which is in-track dominated
+— which is what an SGP4 fit to an ephemeris should look like.
+
+**The growth** is fitted to what is left over the floor, `sqrt(rms_k^2 - floor_k^2)` in
+each bin, not to the raw residual. Fitting the raw residual and then adding the floor in
+quadrature counts the floor twice and puts the model above every bin it was fitted to; with
+the excess, the model lands on the bin it is anchored at. On the store in hand the in-track
+sigma at the anchor bin's lead of 0.119 days is 0.678 km against a measured 0.673 km.
+
+**In-track always carries a growth term; radial and cross-track have to earn one.**
+In-track growth is the mechanism — a semi-major-axis error becomes an along-track error
+through the mean motion — so its absence from a few hours of pairs is a limit of the
+measurement, not a statement about the physics. Radial and cross-track have no such
+amplifier, so they are floor-only unless the longest resolved bin stands at least 1.5 times
+its floor, and when they do earn a growth term it is capped at linear, which is how a
+semi-major-axis or node error grows. Nothing makes it accelerate.
 
 The sources are labelled `supplemental:consistency` when the exponent was fitted,
 `supplemental:consistency-prior-p<p>` when it was the prior, `supplemental:rms` when there
@@ -359,10 +388,13 @@ about **18 km measured directly** from the same objects' GP element sets seven d
 There is no exponent in the physical range that makes the extrapolation safe, and choosing
 the one that lands nearest the GP number would be fitting the answer.
 
-So the fit carries a **validity horizon** at its longest observed pair, and past it the GP
-model serves, labelled `supplemental:beyond-horizon`. With the two versions in hand the
-horizon is 0.24 days, so almost the whole seven-day window falls back to the GP fit for
-Starlink secondaries. That is the honest position: two versions two hours apart say
+So the fit carries a **validity horizon**, and past it the GP model serves, labelled
+`supplemental:beyond-horizon`. The horizon sits at the top of the longest lead-time bin
+that holds enough pairs to resolve a trend, capped at the longest pair actually seen — not
+at the single longest pair, which can be one lonely late pair in an otherwise empty bin
+carrying the model across the whole window. With the two versions in hand the horizon is
+0.16 days, so almost the whole seven-day window falls back to the GP fit for Starlink
+secondaries. That is the honest position: two versions two hours apart say
 nothing about a week ahead, and the GP element sets, whose disagreement at seven days is
 dominated by exactly the manoeuvring we cannot predict, are the better estimate at that
 range even though they are the wrong instrument at short range.
@@ -377,9 +409,11 @@ the lead-time bins.
 
 Where the amplitude is anchored matters once the exponent is a prior. A law steeper than
 the data can touch the bins at one point only: it is anchored at the **longest** occupied
-bin, which is the bin nearest the lead times being asked about and the one where the
-growing term is least swamped by the publication floor. Anchoring at the mean of the bins
-would put the law a factor of two above its own longest bin.
+bin that resolves, which is the bin nearest the lead times being asked about and the one
+where the growing term is least swamped by the floor. Anchoring at the mean of the bins
+would put the law a factor of two above its own longest bin. The shortest bin never
+contributes an amplitude: the floor is its own residual, so its excess over the floor is
+zero by construction.
 
 **History for the fit.** `driftwatch screen` backfills 45 days of `gp_history` before
 the window start for every fleet member and every Stage A survivor, batched into as

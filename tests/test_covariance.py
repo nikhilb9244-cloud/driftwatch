@@ -20,10 +20,12 @@ from driftwatch.catalogue import history
 from driftwatch.orbit.propagator import WGS72_MU_KM3_S2, satrec_from_elements
 from driftwatch.risk.covariance import (
     DEFAULT_GROWTH,
+    SUPPLEMENTAL_MIN_PAIRS_PER_BIN,
     SUPPLEMENTAL_P_MIN,
     SUPPLEMENTAL_PRIOR_P,
     CovarianceModel,
     EmpiricalCovariance,
+    FlooredGrowth,
     ObjectRef,
     PowerLawGrowth,
     ScaledCovariance,
@@ -37,6 +39,7 @@ from driftwatch.risk.covariance import (
     median_growth,
     sigma_table,
     sufficient_stats,
+    usable_bins,
 )
 from driftwatch.risk.manoeuvre import detect_jumps, manoeuvre_prior, promote
 from driftwatch.screening import supplemental as sup_mod
@@ -332,7 +335,9 @@ def test_supplemental_covariance_is_fitted_from_successive_versions_not_from_gp_
     base = base_orbit(bstar=0.0)
     ids = list(range(90601, 90901))
     v1_epochs = {i: T0 + timedelta(hours=float(rng.uniform(0, 12))) for i in ids}
-    gaps = {i: float(rng.uniform(0.2, 3.0)) for i in ids}  # days between the two published epochs
+    # Days between the two published epochs, log-uniform so that the fit's lead-time bins,
+    # which are spaced by factors of two, each end up with enough pairs to be used.
+    gaps = {i: float(np.exp(rng.uniform(np.log(0.15), np.log(3.0)))) for i in ids}
     sigma_per_day = 0.4  # km of in-track drift per day of separation, by construction
     v1, v2 = [], []
     for i in ids:
@@ -455,6 +460,109 @@ def test_binned_growth_anchors_a_prior_exponent_at_the_longest_bin():
     assert diag["exponent_raw"] == pytest.approx(0.7, abs=0.02)
     assert diag["exponent_clipped"] is True
     assert fitted.exponent[1] == pytest.approx(SUPPLEMENTAL_P_MIN)  # 0.7 is below linear, so it clips
+
+
+def lead_bins(rows: list[tuple[float, int, float, float, float]]) -> pd.DataFrame:
+    """A lead-time bin table straight from numbers: (lead_days, n_pairs, rms_r, rms_i, rms_c)."""
+    return pd.DataFrame(
+        [
+            {
+                "lead_lo_days": lead / 2.0,
+                "lead_hi_days": lead * 2.0,
+                "lead_days": lead,
+                "n_pairs": n,
+                "rms_r_km": r,
+                "rms_i_km": i,
+                "rms_c_km": c,
+            }
+            for lead, n, r, i, c in rows
+        ]
+    )
+
+
+def test_every_component_is_a_floor_plus_growth_and_the_model_reproduces_its_anchor_bin():
+    """The growth is fitted to what is left over the floor, so it lands on the bin it is anchored at.
+
+    Fitting the raw residual and then adding the floor in quadrature would count the floor
+    twice and put the model above every bin it was fitted to.
+    """
+    floor = (0.05, 0.40, 0.03)
+    bins = lead_bins([(0.06, 800, 0.05, 0.40, 0.03), (0.12, 900, 0.09, 0.70, 0.05)])
+    growth, diagnostics = fit_binned_growth(bins, floor_km=floor)
+    assert growth is not None
+    assert diagnostics["n_bins_used"] == 2
+    floored = FlooredGrowth(growth, floor, rms_km=0.2)
+    sigma = floored.sigma_km(np.array([0.12]), dt_floor_days=0.01)[0]
+    np.testing.assert_allclose(sigma, [0.09, 0.70, 0.05], rtol=1e-9)
+    # And below the anchor it never dips under the floor, whatever the exponent does.
+    assert (floored.sigma_km(np.array([1e-6]), dt_floor_days=1e-9)[0] >= np.array(floor) - 1e-12).all()
+
+
+def test_radial_and_cross_track_are_floor_only_until_the_bins_resolve_a_trend():
+    """In-track always grows; radial and cross-track have to earn a growth term, and it is linear."""
+    floor = (0.05, 0.40, 0.03)
+    # Radial and cross-track barely move off the floor; in-track climbs.
+    flat = lead_bins([(0.06, 800, 0.05, 0.40, 0.03), (0.12, 900, 0.052, 0.70, 0.031)])
+    growth, diagnostics = fit_binned_growth(flat, floor_km=floor)
+    assert growth is not None
+    assert diagnostics["growth_resolved"] == {"r": False, "i": True, "c": False}
+    assert growth.sigma_1d_km[0] == 0.0 and growth.sigma_1d_km[2] == 0.0
+    assert growth.sigma_1d_km[1] > 0.0
+    # Flat in R and C at every lead inside the horizon, so the floor is the whole story there.
+    sigma = FlooredGrowth(growth, floor).sigma_km(np.array([0.02, 0.12]), dt_floor_days=0.01)
+    np.testing.assert_allclose(sigma[:, 0], floor[0], rtol=1e-9)
+    np.testing.assert_allclose(sigma[:, 2], floor[2], rtol=1e-9)
+
+    # Now let them climb well clear of the floor: growth appears, capped at linear.
+    climbing = lead_bins([(0.06, 800, 0.05, 0.40, 0.03), (0.12, 900, 0.15, 0.70, 0.09)])
+    grown, diag = fit_binned_growth(climbing, floor_km=floor)
+    assert grown is not None
+    assert diag["growth_resolved"] == {"r": True, "i": True, "c": True}
+    assert grown.exponent[0] == 1.0 and grown.exponent[2] == 1.0
+    assert grown.exponent[1] == pytest.approx(SUPPLEMENTAL_PRIOR_P[1])
+
+
+def test_a_bin_with_too_few_pairs_is_not_used_for_the_floor_the_growth_or_the_horizon():
+    thin_then_thick = lead_bins([(0.03, 4, 0.02, 0.20, 0.01), (0.06, 800, 0.05, 0.40, 0.03)])
+    assert len(usable_bins(thin_then_thick)) == 1
+    assert usable_bins(thin_then_thick).iloc[0]["lead_days"] == pytest.approx(0.06)
+    # With nothing qualifying, every occupied bin is used rather than none: a thin store still
+    # gives a floor, just not a trend.
+    all_thin = lead_bins([(0.03, 4, 0.02, 0.20, 0.01)])
+    assert len(usable_bins(all_thin)) == 1
+
+
+def test_the_horizon_is_the_longest_resolved_bin_not_the_longest_pair():
+    """One lonely late pair must not carry the model across the whole screening window."""
+    rng = np.random.default_rng(17)
+    base = base_orbit(bstar=0.0)
+    crowd = list(range(91101, 91301))  # 200 objects six hours apart: a bin that resolves
+    stragglers = [91301, 91302]  # two objects five days apart: a bin that does not
+    v1, v2 = [], []
+    for i, gap_days in [(i, 0.25) for i in crowd] + [(i, 5.0) for i in stragglers]:
+        v1.extend(history_records(i, lambda t: base, [T0], rng, bstar=0.0, name=f"SUP {i}"))
+        later = T0 + timedelta(days=gap_days)
+        record = history_records(i, lambda t: base, [later], rng, bstar=0.0, name=f"SUP {i}")[0]
+        record["MEAN_ANOMALY"] = (
+            record["MEAN_ANOMALY"] + np.degrees(0.2 * rng.normal() / semi_major_axis_km())
+        ) % 360.0
+        v2.append(record)
+    ids = crowd + stragglers
+    history = pd.concat(
+        [supplemental_history_frame(v1, T0), supplemental_history_frame(v2, T0 + timedelta(days=5))],
+        ignore_index=True,
+    )
+    fit = fit_supplemental_covariance(EmpiricalCovariance(), history, ids)
+
+    bins = fit.bins
+    assert bins["n_pairs"].max() >= SUPPLEMENTAL_MIN_PAIRS_PER_BIN
+    assert bins["n_pairs"].iloc[-1] < SUPPLEMENTAL_MIN_PAIRS_PER_BIN  # the stragglers' bin
+    assert fit.summary["dt_days"][1] == pytest.approx(5.0, abs=0.05)  # the longest pair is five days
+    assert fit.summary["horizon_days"] < 1.0  # the model stops where the pairs stop resolving
+
+    ref = ObjectRef(crowd[0], "starlink", "leo")
+    at = np.array([np.datetime64((T0 + timedelta(days=3)).replace(tzinfo=None), "us")])
+    assert fit.model.covariance_ric(ref, T0, at).source == "supplemental:beyond-horizon"
 
 
 def test_supplemental_covariance_without_a_second_version_is_the_published_rms():
