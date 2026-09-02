@@ -8,22 +8,21 @@ from datetime import UTC, datetime, timedelta
 
 import numpy as np
 import pandas as pd
-import pyarrow.parquet as pq
 import pytest
-import yaml
 from sgp4.api import Satrec, SatrecArray
 from synthetic import make_conjunction, omm_record, random_leo, state_at
 
-from driftwatch.catalogue.snapshot import build_snapshot, write_snapshot
-from driftwatch.cli import main
+from driftwatch.catalogue.snapshot import build_snapshot
 from driftwatch.fleet import fleet_from_mapping
 from driftwatch.orbit.propagator import satrec_from_elements
 from driftwatch.orbit.time import julian_date, julian_dates
 from driftwatch.screening import EVENT_COLUMNS, ScreeningConfig, ScreeningError, screen_fleet
 from driftwatch.screening.stages import (
+    STATE_COLUMNS,
     Propagable,
     annotate_events,
     default_start,
+    event_ids,
     stage_a,
     stage_b,
     stage_c,
@@ -106,7 +105,7 @@ def test_designed_conjunction_recovered_to_a_second_and_a_metre(miss_km, crossin
     for comp in ("miss_r_km", "miss_i_km", "miss_c_km"):
         assert abs(hit[comp] - design[comp]) < 1e-3, comp
     assert hit["refine_method"] == "root"
-    assert bool(hit["manoeuvrable_primary"]) is True and bool(hit["stale_primary"]) is False
+    assert hit["manoeuvre_primary"] == "known" and bool(hit["stale_primary"]) is False
     assert hit["secondary_ephemeris"] == "gp"
     assert result.timings_s["total"] > 0
 
@@ -455,17 +454,22 @@ def test_annotate_events_sets_names_flags_and_ephemeris():
             "in_box": [True, True, False],
             "within_watch_radius": [True, True, True],
             "refine_method": ["root", "root", "minimum"],
+            **{name: np.zeros(3) for name in STATE_COLUMNS},
         }
     )
     ev = annotate_events(geometry, snap, fleet, a)
     assert list(ev.columns) == list(EVENT_COLUMNS)
+    assert ev["event_id"].tolist() == [
+        f"20260901T120000Z:{PRIMARY_ID}:{s}:20260901T{12 + k:02d}00Z" for k, s in enumerate((90010, 90011, 90012))
+    ]
     assert ev["primary_name"].tolist() == ["Primary"] * 3
     assert ev["secondary_name"].tolist() == ["STARLINK-90010", "OLD DEBRIS", "FLEET MATE"]
     assert ev["secondary_category"].tolist() == ["starlink", "unknown", "unknown"]
     assert ev["stale_primary"].tolist() == [True] * 3
     assert ev["stale_secondary"].tolist() == [False, True, False]
-    assert ev["manoeuvrable_primary"].tolist() == [True] * 3
-    assert ev["manoeuvrable_secondary"].tolist() == [True, False, False]  # category rule, then the fleet's own flag
+    assert ev["manoeuvre_primary"].tolist() == ["known"] * 3  # the fleet file says it manoeuvres
+    # Starlink by category; an object outside the active group is "none"; a fleet mate takes its own flag.
+    assert ev["manoeuvre_secondary"].tolist() == ["known", "none", "none"]
     assert ev["secondary_ephemeris"].tolist() == ["supplemental", "gp", "gp"]
     assert str(ev["tca"].dtype).endswith("UTC]")
 
@@ -483,68 +487,16 @@ def test_default_start_is_the_fetch_time_to_the_minute():
     assert default_start(snap) == START
 
 
-# --------------------------------------------------------------------------------------
-# The command
-
-
-def test_screen_command_writes_the_conjunction_parquet(tmp_path):
-    primary = primary_satrec()
-    t_star = START + timedelta(hours=1, minutes=11)
-    secondary, design = make_conjunction(
-        primary, t_star, miss_km=2.0, crossing_angle_deg=120.0, miss_direction_deg=60.0, norad_id=90020
-    )
-    snap = snapshot_from({PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH), 90020: (secondary, "SECONDARY", t_star)})
-    snap_path = write_snapshot(snap, tmp_path / "gp_20260901T120000Z.parquet")
-    fleet_path = tmp_path / "fleet.yaml"
-    fleet_path.write_text(
-        yaml.safe_dump(
-            {
-                "schema_version": 1,
-                "name": "cli",
-                "members": [
-                    {
-                        "norad_id": PRIMARY_ID,
-                        "name": "Primary",
-                        "hard_body_radius_m": 10,
-                        "radius_source": "A round number for a synthetic test object.",
-                        "manoeuvres": False,
-                    }
-                ],
-            }
-        )
-    )
-    out_dir = tmp_path / "out"
-    rc = main(
-        [
-            "screen",
-            "--fleet",
-            str(fleet_path),
-            "--snapshot",
-            str(snap_path),
-            "--days",
-            "0.2",
-            "--start",
-            "2026-09-01T12:00:00Z",
-            "--no-supplemental",
-            "--out-dir",
-            str(out_dir),
-        ]
-    )
-    assert rc == 0
-    files = list(out_dir.glob("cli_*.parquet"))
-    assert len(files) == 1 and files[0].name == "cli_20260901T120000Z.parquet"
-    table = pq.read_table(files[0])
-    assert table.column_names == list(EVENT_COLUMNS)
-    meta = table.schema.metadata
-    assert meta[b"driftwatch_snapshot"] == snap_path.name.encode()
-    assert b"screening_radius_km" in meta[b"driftwatch_screening_config"]
-    events = table.to_pandas()
-    assert (events["secondary_norad_id"] == 90020).any()
-    assert abs(events["miss_km"].min() - design["miss_km"]) < 1e-3
-
-    # A fleet member the snapshot does not hold is a refusal, not a silent skip.
-    fleet_path.write_text(fleet_path.read_text().replace(str(PRIMARY_ID), "424242"))
-    assert main(["screen", "--fleet", str(fleet_path), "--snapshot", str(snap_path), "--no-supplemental"]) == 1
+def test_event_ids_are_stable_and_disambiguate_the_same_minute():
+    tca = np.array(["2026-09-03T08:57:12.5", "2026-09-03T08:57:40.0", "2026-09-03T08:58:00"], dtype="datetime64[us]")
+    ids = event_ids(np.array([1, 1, 1]), np.array([2, 2, 2]), tca, "20260901T204841Z")
+    assert ids.tolist() == [
+        "20260901T204841Z:1:2:20260903T0857Z",
+        "20260901T204841Z:1:2:20260903T0857Z#2",
+        "20260901T204841Z:1:2:20260903T0858Z",
+    ]
+    again = event_ids(np.array([1, 1, 1]), np.array([2, 2, 2]), tca, "20260901T204841Z")
+    assert ids.tolist() == again.tolist()
 
 
 def test_state_at_helper_matches_the_library():

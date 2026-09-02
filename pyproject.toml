@@ -13,6 +13,7 @@ dependencies = [
     "pandas>=3.0.5",
     "pyarrow>=25.0.1",
     "pyyaml>=6.0",
+    "scipy>=1.17.1",
     "sgp4>=2.27",
     "skyfield>=1.55",
 ]

@@ -1,13 +1,17 @@
-"""Command-line interface: ``driftwatch fetch``, ``propagate``, ``snapshots``, ``history``, ``fleet`` and ``screen``."""
+"""Command-line interface: fetch, propagate, snapshots, history, fleet, screen, risk and kelvins."""
 
 from __future__ import annotations
 
 import argparse
 import json
 import logging
+import os
 import sys
+import time
+from dataclasses import asdict
 from datetime import UTC, date, datetime
 from pathlib import Path
+from typing import Any
 
 import httpx
 import numpy as np
@@ -17,11 +21,23 @@ import pyarrow.parquet as pq
 
 from driftwatch import __version__, config
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
+from driftwatch.export.conjunctions import RunDirectory
 from driftwatch.export.viewer import export_viewer_bundle
-from driftwatch.fleet import FleetError, load_fleet, resolve_fleet
+from driftwatch.fleet import Fleet, FleetError, load_fleet, resolve_fleet
 from driftwatch.orbit import frames, propagator
 from driftwatch.orbit.time import parse_utc, stamp
-from driftwatch.screening import ScreeningConfig, ScreeningError, screen_fleet
+from driftwatch.risk import kelvins as kelvins_mod
+from driftwatch.risk.covariance import (
+    CovarianceFit,
+    CovarianceModel,
+    EmpiricalCovariance,
+    ObjectRef,
+    ScaledCovariance,
+    fit_covariance,
+    sigma_table,
+)
+from driftwatch.risk.scenario import apply_history, model_version_string, new_run_id, objects_from_snapshot, run_risk
+from driftwatch.screening import ScreeningConfig, ScreeningError, ScreeningResult, screen_fleet
 from driftwatch.screening import supplemental as supplemental_mod
 
 log = logging.getLogger("driftwatch")
@@ -170,7 +186,14 @@ def cmd_snapshots(args: argparse.Namespace) -> int:
 
 
 def cmd_history(args: argparse.Namespace) -> int:
-    """Fetch Space-Track gp_history for a list of NORAD ids and write a history parquet."""
+    """Fetch Space-Track gp_history for a list of NORAD ids and write a history parquet; or rebuild the index."""
+    if args.rebuild_index:
+        index = history.rebuild_index(config.HISTORY_DIR)
+        print(f"{history.index_path(config.HISTORY_DIR)}: {len(index)} element sets in {index['file'].nunique()} files")
+        return 0
+    if not (args.ids and args.start and args.end):
+        log.error("history needs --ids, --start and --end (or --rebuild-index)")
+        return 2
     ids = sorted({int(x) for x in args.ids.split(",") if x.strip()})
     start = date.fromisoformat(args.start)
     end = date.fromisoformat(args.end)
@@ -185,7 +208,7 @@ def cmd_history(args: argparse.Namespace) -> int:
     df = history.frame_from_records(records, fetched_at=now)
     path = history.write_history(
         df,
-        history.history_path(now, config.HISTORY_DIR),
+        history.unique_history_path(now, config.HISTORY_DIR),
         metadata={"norad_ids": ",".join(map(str, ids)), "start": start.isoformat(), "end": end.isoformat()},
     )
     summary = history.history_summary(df)
@@ -252,8 +275,126 @@ def cmd_fleet(args: argparse.Namespace) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------------------
+# History backfill and the covariance fit, shared by ``screen`` and ``risk --refit``
+
+
+class HistoryUnavailable(RuntimeError):
+    """The backfill was required (``--history on``) and could not run."""
+
+
+def history_source_available(cache_dir: Path) -> bool:
+    """Whether a backfill can be attempted: Space-Track credentials in the environment or a history cache."""
+    has_creds = bool(os.environ.get(config.SPACETRACK_USER_ENV)) and bool(os.environ.get(config.SPACETRACK_PASS_ENV))
+    return has_creds or spacetrack.history_cache_dir(cache_dir).exists()
+
+
+def fit_from_history(
+    objects: pd.DataFrame,
+    *,
+    end: datetime,
+    days: int,
+    mode: str,
+    offline: bool,
+    now: datetime,
+    cache_dir: Path | None = None,
+    history_dir: Path | None = None,
+    snapshot_dir: Path | None = None,
+) -> tuple[CovarianceFit, history.BackfillResult | None]:
+    """Backfill ``days`` of history for ``objects`` (``norad_id``, ``category``, ``altitude_band``) and fit the model.
+
+    ``mode`` is ``auto`` (backfill when credentials or a cache exist, warn and carry on
+    otherwise), ``on`` (raise :class:`HistoryUnavailable` if the backfill fails) or
+    ``off`` (fit from whatever the history store and the snapshots already hold). The
+    directories default to the configured ones at call time.
+    """
+    cache_dir = cache_dir or config.CACHE_DIR
+    history_dir = history_dir or config.HISTORY_DIR
+    snapshot_dir = snapshot_dir or config.SNAPSHOT_DIR
+    ids = [int(i) for i in objects["norad_id"]]
+    result = None
+    if mode == "on" or (mode == "auto" and history_source_available(cache_dir)):
+        try:
+            result = history.backfill(
+                ids, end=end, days=days, cache_dir=cache_dir, history_dir=history_dir, now=now, offline=offline
+            )
+        except (spacetrack.SpaceTrackAuthError, spacetrack.SpaceTrackError, FileNotFoundError, httpx.HTTPError) as exc:
+            if mode == "on":
+                raise HistoryUnavailable(f"history backfill required (--history on) but failed: {exc}") from exc
+            log.warning("History backfill skipped (%s); fitting from the stored history only", exc)
+    elif mode == "auto":
+        log.info("No Space-Track credentials or history cache; fitting from the stored history only")
+    window = history.backfill_window(end, days)
+    hist = history.load_history(norad_ids=ids, history_dir=history_dir, snapshot_dir=snapshot_dir)
+    log.info(
+        "History for the fit: %d element sets for %d of %d objects", len(hist), hist["norad_id"].nunique(), len(ids)
+    )
+    fit = fit_covariance(hist, objects, now=now, window=window)
+    return fit, result
+
+
+def survivor_labels(df: pd.DataFrame, fleet: Fleet, result: ScreeningResult) -> pd.DataFrame:
+    """``norad_id``, ``category``, ``altitude_band`` for the fleet and every Stage A survivor."""
+    ids = sorted({int(i) for i in fleet.norad_ids} | {int(i) for i in result.stage_a.secondary_ids})
+    by_id = df.drop_duplicates("norad_id").set_index("norad_id")
+    labels = by_id.loc[ids, ["category", "altitude_band"]].reset_index()
+    labels["norad_id"] = labels["norad_id"].astype("int64")
+    return labels
+
+
+def print_risk_summary(joined: pd.DataFrame, scenario: str, show: int) -> None:
+    """The top events by probability and a per-primary table for one scenario of a run."""
+    rows = joined[joined["scenario"] == scenario]
+    if rows.empty:
+        print(f"No events to score for scenario {scenario!r}.")
+        return
+    cols = [
+        "primary_name",
+        "secondary_norad_id",
+        "secondary_name",
+        "secondary_category",
+        "tca",
+        "miss_km",
+        "rel_speed_kms",
+        "pc",
+        "pc_max",
+        "pc_max_scale",
+        "flag",
+        "cov_source_secondary",
+        "manoeuvre_secondary",
+    ]
+    top = rows.sort_values("pc", ascending=False).head(show)
+    print(f"Top {len(top)} of {len(rows)} events by probability, scenario {scenario!r}")
+    with pd.option_context("display.width", 240, "display.max_columns", 30, "display.precision", 3):
+        print(top[cols].to_string(index=False, float_format=lambda x: f"{x:.3g}"))
+    per_primary = rows.groupby("primary_name").agg(
+        events=("miss_km", "size"),
+        in_box=("in_box", "sum"),
+        closest_km=("miss_km", "min"),
+        red=("flag", lambda f: int((f == "red").sum())),
+        yellow=("flag", lambda f: int((f == "yellow").sum())),
+        max_pc=("pc", "max"),
+        max_pc_max=("pc_max", "max"),
+    )
+    with pd.option_context("display.width", 240, "display.precision", 3):
+        print(per_primary.to_string(float_format=lambda x: f"{x:.3g}"))
+
+
+def print_fleet_sigmas(model: CovarianceModel, objects: pd.DataFrame) -> None:
+    """Standard deviations at 1, 3 and 7 days for the fleet members under ``model``."""
+    if not isinstance(model, EmpiricalCovariance):
+        return
+    members = objects[objects["is_primary"]]
+    refs = [ObjectRef(int(r.norad_id), str(r.category), str(r.altitude_band)) for r in members.itertuples()]
+    table = sigma_table(model, refs).merge(members[["norad_id", "name"]], on="norad_id")
+    cols = ["name", "source"] + [c for c in table.columns if c.startswith("sigma_")]
+    print("Fleet covariance (km, RIC standard deviations at 1, 3 and 7 days of propagation)")
+    with pd.option_context("display.width", 240, "display.max_columns", 30):
+        print(table[cols].to_string(index=False, float_format=lambda x: f"{x:.3f}"))
+
+
 def cmd_screen(args: argparse.Namespace) -> int:
-    """Screen a fleet against the latest (or given) snapshot and write the conjunction parquet."""
+    """Screen a fleet against the latest (or given) snapshot, fit the covariance, score the quiet scenario."""
     try:
         fleet = load_fleet(args.fleet)
     except FleetError as exc:
@@ -299,54 +440,229 @@ def cmd_screen(args: argparse.Namespace) -> int:
     except ScreeningError as exc:
         log.error("%s", exc)
         return 1
-
     summary = result.summary()
     log.info("Summary: %s", json.dumps(summary))
+
+    # Geometry first: the events are written before anything about uncertainty is known.
     out_dir = Path(args.out_dir) if args.out_dir else config.CONJUNCTION_DIR
-    out_dir.mkdir(parents=True, exist_ok=True)
-    out_path = out_dir / f"{fleet.name}_{stamp(result.start)}.parquet"
-    table = pa.Table.from_pandas(result.events, preserve_index=False)
-    table = table.replace_schema_metadata(
+    run_dir = RunDirectory.for_run(fleet.name, result.start, out_dir)
+    run_id = new_run_id(now)
+    run_dir.write_events(
+        result.events,
+        snapshot=path.name,
+        metadata={
+            "driftwatch_run_id": run_id,
+            "driftwatch_fleet": str(fleet.path or fleet.name),
+            "driftwatch_screening_config": json.dumps(cfg.to_dict()),
+            "driftwatch_screening_summary": json.dumps(summary),
+        },
+    )
+    log.info("Wrote %d events to %s", len(result.events), run_dir.events_path)
+    timings = dict(result.timings_s)
+
+    # Then the history, the covariance fit and the quiet scenario.
+    t0 = time.perf_counter()
+    labels = survivor_labels(df, fleet, result)
+    rc = 0
+    try:
+        fit, backfill = fit_from_history(
+            labels, end=result.start, days=args.history_days, mode=args.history, offline=args.offline, now=now
+        )
+    except HistoryUnavailable as exc:
+        log.error(
+            "%s. Scoring with the stored history only; run `driftwatch risk %s --refit --history on` "
+            "to redo the history and the fit without rescreening",
+            exc,
+            run_dir.path,
+        )
+        fit, backfill = fit_from_history(
+            labels, end=result.start, days=args.history_days, mode="off", offline=True, now=now
+        )
+        rc = 2
+    timings["history_and_fit"] = time.perf_counter() - t0
+    model = fit.model
+    run_dir.write_covariance(
+        fit.table,
+        metadata={"driftwatch_model_version": model_version_string(model), "driftwatch_run_id": run_id},
+    )
+    ev = result.events
+    involved = sorted({int(i) for i in ev["primary_norad_id"]} | {int(i) for i in ev["secondary_norad_id"]})
+    objects = apply_history(objects_from_snapshot(involved + fleet.norad_ids, df, fleet), fit)
+    run_dir.write_objects(objects)
+
+    t1 = time.perf_counter()
+    risk = run_risk(
+        ev, objects, model, scenario=args.scenario, run_id=run_id, snapshot=path.name, sweep=not args.no_sweep, now=now
+    )
+    run_dir.write_risk(risk, args.scenario)
+    timings["risk"] = time.perf_counter() - t1
+    timings["total"] = time.perf_counter() - t0 + result.timings_s["total"]
+    run_dir.write_run(
         {
-            **(table.schema.metadata or {}),
-            b"driftwatch_snapshot": path.name.encode(),
-            b"driftwatch_version": __version__.encode(),
-            b"driftwatch_fleet": str(fleet.path or fleet.name).encode(),
-            b"driftwatch_screening_config": json.dumps(cfg.to_dict()).encode(),
-            b"driftwatch_screening_summary": json.dumps(summary).encode(),
+            "run_id": run_id,
+            "snapshot": path.name,
+            "fleet": str(fleet.path or fleet.name),
+            "fleet_name": fleet.name,
+            "start": result.start.isoformat(),
+            "end": result.end.isoformat(),
+            "config": cfg.to_dict(),
+            "summary": summary,
+            "timings_s": {k: round(v, 2) for k, v in timings.items()},
+            "history": {
+                "mode": args.history if rc == 0 else "off",
+                "days": args.history_days,
+                "backfill": asdict(backfill) if backfill is not None else None,
+                "backfill_failed": rc != 0,
+            },
+            "covariance": {
+                **fit.summary,
+                "model_version": model_version_string(model),
+                "window": list(fit.model.window or ()),
+            },
+            "scenarios": [args.scenario],
+            "risk_runs": [risk_run_record(risk, args.scenario, model, now)],
         }
     )
-    pq.write_table(table, out_path, compression="zstd")
-    log.info("Wrote %d events to %s", len(result.events), out_path)
+    joined = run_dir.rebuild_conjunctions()
+    log.info(
+        "Timings: screening %.1f s, history and fit %.1f s, risk %.1f s, total %.1f s",
+        result.timings_s["total"],
+        timings["history_and_fit"],
+        timings["risk"],
+        timings["total"],
+    )
+    print_fleet_sigmas(model, objects)
+    print_risk_summary(joined, args.scenario, args.show)
+    print(run_dir.path)
+    return rc
 
-    ev = result.events
-    if len(ev):
-        shown = ev.sort_values("miss_km").head(args.show)
-        cols = [
-            "primary_name",
-            "secondary_norad_id",
-            "secondary_name",
-            "secondary_category",
-            "tca",
-            "miss_km",
-            "rel_speed_kms",
-            "miss_r_km",
-            "miss_i_km",
-            "miss_c_km",
-            "in_box",
-            "manoeuvrable_secondary",
-            "secondary_ephemeris",
-        ]
-        print(f"Closest {len(shown)} of {len(ev)} events, {result.start.isoformat()} + {cfg.days:g} days")
-        with pd.option_context("display.width", 220, "display.max_columns", 30, "display.precision", 3):
-            print(shown[cols].to_string(index=False))
-        per_primary = ev.groupby("primary_name").agg(
-            events=("miss_km", "size"), in_box=("in_box", "sum"), closest_km=("miss_km", "min")
+
+def risk_run_record(risk: pd.DataFrame, scenario: str, model: CovarianceModel, now: datetime) -> dict[str, Any]:
+    """What ``run.json`` keeps about one scoring: when, which model, how many flags."""
+    return {
+        "scenario": scenario,
+        "computed_at": now.isoformat(),
+        "model_version": model_version_string(model),
+        "n_events": int(len(risk)),
+        "n_red": int((risk["flag"] == "red").sum()) if len(risk) else 0,
+        "n_yellow": int((risk["flag"] == "yellow").sum()) if len(risk) else 0,
+        "max_pc": float(risk["pc"].max()) if len(risk) else None,
+    }
+
+
+def resolve_run(arg: str, out_dir: Path | None = None) -> RunDirectory:
+    """A run directory from a path, a directory name under ``data/conjunctions`` or ``latest``."""
+    out_dir = Path(out_dir or config.CONJUNCTION_DIR)
+    if arg == "latest":
+        runs = sorted(p for p in Path(out_dir).glob("*_*Z") if p.is_dir() and (p / "run.json").exists())
+        if not runs:
+            raise FileNotFoundError(f"no runs under {out_dir}")
+        return RunDirectory(runs[-1])
+    path = Path(arg)
+    if not path.is_dir():
+        path = Path(out_dir) / arg
+    if not (path / "run.json").exists():
+        raise FileNotFoundError(f"{path} is not a run directory (no run.json)")
+    return RunDirectory(path)
+
+
+def cmd_risk(args: argparse.Namespace) -> int:
+    """Rescore the stored events of a run for one scenario: covariance and probability only, no rescreening."""
+    try:
+        run_dir = resolve_run(args.run)
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    info = run_dir.read_run()
+    now = datetime.now(UTC)
+    events = run_dir.read_events()
+    objects = run_dir.read_objects()
+    log.info("Run %s: %d stored events from %s", run_dir.name, len(events), info["snapshot"])
+
+    model: CovarianceModel
+    if args.refit:
+        table = run_dir.read_covariance()
+        labels = table.loc[table["kind"] == "object", ["norad_id", "category", "altitude_band"]].reset_index(drop=True)
+        labels["norad_id"] = labels["norad_id"].astype("int64")
+        try:
+            fit, backfill = fit_from_history(
+                labels,
+                end=parse_utc(info["start"]),
+                days=args.history_days,
+                mode=args.history,
+                offline=args.offline,
+                now=now,
+            )
+        except HistoryUnavailable as exc:
+            log.error("%s", exc)
+            return 2
+        model = fit.model
+        run_dir.write_covariance(
+            fit.table,
+            metadata={"driftwatch_model_version": model_version_string(model), "driftwatch_run_id": info["run_id"]},
         )
-        print(per_primary.to_string())
+        objects = apply_history(objects, fit)
+        run_dir.write_objects(objects)
+        info["covariance"] = {
+            **fit.summary,
+            "model_version": model_version_string(model),
+            "window": list(model.window or ()),
+        }
+        info["history"] = {
+            "mode": args.history,
+            "days": args.history_days,
+            "backfill": asdict(backfill) if backfill is not None else None,
+        }
     else:
-        print("No events inside the watch radius or the box.")
-    print(out_path)
+        model = EmpiricalCovariance.from_frame(run_dir.read_covariance())
+    if args.scale != 1.0:
+        model = ScaledCovariance(model, args.scale)
+
+    risk = run_risk(
+        events,
+        objects,
+        model,
+        scenario=args.scenario,
+        run_id=info["run_id"],
+        snapshot=info["snapshot"],
+        sweep=not args.no_sweep,
+        now=now,
+    )
+    run_dir.write_risk(risk, args.scenario)
+    runs = [r for r in info.get("risk_runs", []) if r.get("scenario") != args.scenario]
+    runs.append(risk_run_record(risk, args.scenario, model, now))
+    info["risk_runs"] = runs
+    info["scenarios"] = run_dir.scenarios()
+    run_dir.write_run(info)
+    joined = run_dir.rebuild_conjunctions()
+    print_fleet_sigmas(model, objects)
+    print_risk_summary(joined, args.scenario, args.show)
+    print(run_dir.risk_path(args.scenario))
+    return 0
+
+
+def cmd_kelvins(args: argparse.Namespace) -> int:
+    """Reproduce the risk column of ESA's Kelvins dataset and report the fitted hard-body radius and residuals."""
+    data = Path(args.data) if args.data else kelvins_mod.find_dataset()
+    if data is None or not data.exists():
+        log.error(
+            "Kelvins dataset not found under %s. Download train_data.csv from "
+            "https://kelvins.esa.int/collision-avoidance-challenge/data/ (registration required) "
+            "and place it there, or pass --data.",
+            config.KELVINS_DIR,
+        )
+        return 2
+    df = kelvins_mod.load_kelvins(data)
+    log.info("Loaded %d rows from %s", len(df), data)
+    fit = kelvins_mod.fit_hbr(df)
+    extra = kelvins_mod.compare_max_risk(df, fit.hbr_m)
+    text = kelvins_mod.to_markdown(fit, data, extra)
+    print(text)
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        out.write_text(text + "\n", encoding="utf-8")
+        log.info("Wrote %s", out)
     return 0
 
 
@@ -392,10 +708,13 @@ def build_parser() -> argparse.ArgumentParser:
     hist = sub.add_parser(
         "history", help="fetch Space-Track gp_history for NORAD ids over a date range into data/history/"
     )
-    hist.add_argument("--ids", required=True, help="comma-separated NORAD ids, e.g. 25544,39634")
-    hist.add_argument("--start", required=True, help="first epoch day (UTC), YYYY-MM-DD")
-    hist.add_argument("--end", required=True, help="last epoch day inclusive (UTC), YYYY-MM-DD")
+    hist.add_argument("--ids", help="comma-separated NORAD ids, e.g. 25544,39634")
+    hist.add_argument("--start", help="first epoch day (UTC), YYYY-MM-DD")
+    hist.add_argument("--end", help="last epoch day inclusive (UTC), YYYY-MM-DD")
     hist.add_argument("--offline", action="store_true", help="use only cached gp_history responses")
+    hist.add_argument(
+        "--rebuild-index", action="store_true", help="rebuild data/history/index.parquet from the history files"
+    )
     hist.set_defaults(func=cmd_history)
 
     fleet = sub.add_parser("fleet", help="validate a fleet YAML file and show its members in the latest snapshot")
@@ -403,7 +722,30 @@ def build_parser() -> argparse.ArgumentParser:
     fleet.add_argument("--snapshot", help="snapshot parquet path (default: latest)")
     fleet.set_defaults(func=cmd_fleet)
 
-    screen = sub.add_parser("screen", help="screen a fleet against the latest snapshot and write data/conjunctions/")
+    def add_risk_options(p: argparse.ArgumentParser, *, scenario_default: str) -> None:
+        p.add_argument("--scenario", default=scenario_default, help=f"scenario label (default: {scenario_default})")
+        p.add_argument(
+            "--history",
+            choices=("auto", "on", "off"),
+            default="auto",
+            help=(
+                "backfill Space-Track gp_history for the fleet and the Stage A survivors before the covariance fit: "
+                "auto when credentials or a cache exist, on fails without it, off fits from stored history only "
+                "(default: auto)"
+            ),
+        )
+        p.add_argument(
+            "--history-days",
+            type=int,
+            default=config.HISTORY_BACKFILL_DAYS,
+            help=f"days of history before the window start to backfill (default: {config.HISTORY_BACKFILL_DAYS})",
+        )
+        p.add_argument("--no-sweep", action="store_true", help="skip the covariance-scale sweep for pc_max")
+        p.add_argument("--show", type=int, default=20, help="events to print, highest probability first (default: 20)")
+
+    screen = sub.add_parser(
+        "screen", help="screen a fleet against the latest snapshot, fit the covariance and write data/conjunctions/"
+    )
     screen.add_argument("--fleet", required=True, help="fleet file, e.g. fleets/demo.yaml")
     screen.add_argument("--snapshot", help="snapshot parquet path (default: latest)")
     screen.add_argument("--days", type=float, default=7.0, help="window length in days from the start (default: 7)")
@@ -414,10 +756,27 @@ def build_parser() -> argparse.ArgumentParser:
     screen.add_argument(
         "--no-supplemental", action="store_true", help="do not use CelesTrak's supplemental Starlink sets"
     )
-    screen.add_argument("--offline", action="store_true", help="use only cached supplemental data")
+    screen.add_argument("--offline", action="store_true", help="use only cached supplemental and history data")
     screen.add_argument("--out-dir", help="output directory (default: data/conjunctions)")
-    screen.add_argument("--show", type=int, default=20, help="events to print, closest first (default: 20)")
+    add_risk_options(screen, scenario_default="quiet")
     screen.set_defaults(func=cmd_screen)
+
+    risk = sub.add_parser(
+        "risk", help="rescore a stored run's events for a scenario (covariance and probability only, no rescreening)"
+    )
+    risk.add_argument("run", help="run directory, its name under data/conjunctions, or 'latest'")
+    risk.add_argument("--refit", action="store_true", help="refit the covariance from history before scoring")
+    risk.add_argument(
+        "--scale", type=float, default=1.0, help="multiply every covariance by this factor (a stand-in scenario knob)"
+    )
+    risk.add_argument("--offline", action="store_true", help="use only cached history data when refitting")
+    add_risk_options(risk, scenario_default="quiet")
+    risk.set_defaults(func=cmd_risk)
+
+    kelvins = sub.add_parser("kelvins", help="reproduce ESA's Kelvins risk column and report the fitted radius")
+    kelvins.add_argument("--data", help=f"the challenge CSV (default: the first CSV under {config.KELVINS_DIR})")
+    kelvins.add_argument("--out", help="write the markdown report here as well as printing it")
+    kelvins.set_defaults(func=cmd_kelvins)
     return parser
 
 

@@ -12,6 +12,7 @@ in a handful of iterations.
 
 from __future__ import annotations
 
+from collections.abc import Callable, Sequence
 from datetime import datetime
 
 import numpy as np
@@ -182,6 +183,67 @@ def omm_record(sat: Satrec, name: str, epoch: datetime) -> dict:
         "MEAN_MOTION_DOT": 0.0,
         "MEAN_MOTION_DDOT": 0.0,
     }
+
+
+def mean_elements_at(base: Satrec, epoch: datetime, *, bstar: float = 0.0) -> tuple[float, ...]:
+    """SGP4 mean elements (rev/day, e, degrees) that reproduce ``base``'s osculating state at ``epoch``."""
+    r, v = state_at(base, epoch)
+    sat, residual = mean_elements_for_state(r, v, epoch, base.satnum, bstar=bstar)
+    assert residual < 1e-6, residual
+    return (
+        sat.no_kozai * 1440.0 / TWO_PI,
+        sat.ecco,
+        float(np.degrees(sat.inclo)),
+        float(np.degrees(sat.nodeo)),
+        float(np.degrees(sat.argpo)),
+        float(np.degrees(sat.mo)),
+    )
+
+
+def history_records(
+    norad_id: int,
+    truth: Callable[[datetime], Satrec],
+    epochs: Sequence[datetime],
+    rng: np.random.Generator,
+    *,
+    sigma_m_rad: float = 0.0,
+    sigma_n_rel: float = 0.0,
+    bstar: float = 1e-4,
+    name: str = "SYNTHETIC",
+) -> list[dict]:
+    """OMM records for one object's element-set history with designed fit noise.
+
+    Each record holds the mean elements of ``truth(epoch)`` at that epoch, perturbed by
+    Gaussian noise in the mean anomaly (a timing error: a constant in-track offset) and a
+    relative Gaussian error in the mean motion (a period error: an in-track drift that
+    grows linearly with propagation time). ``truth`` may return a different orbit after a
+    burn.
+    """
+    records = []
+    for t in epochs:
+        n, e, i, raan, argp, m = mean_elements_at(truth(t), t, bstar=bstar)
+        if sigma_n_rel:
+            n *= 1.0 + rng.normal(0.0, sigma_n_rel)
+        if sigma_m_rad:
+            m = (m + np.degrees(rng.normal(0.0, sigma_m_rad))) % 360.0
+        sat = satrec_from_elements(norad_id, t, n, e, i, raan, argp, m, bstar)
+        records.append(omm_record(sat, name, t))
+    return records
+
+
+def raised_copy(base: Satrec, t_burn: datetime, delta_a_km: float, *, bstar: float = 1e-4) -> Satrec:
+    """The orbit after a tangential burn at ``t_burn`` that changes the semi-major axis by ``delta_a_km``.
+
+    The position is continuous through the burn; the speed is rescaled by vis-viva so
+    that ``a`` becomes ``a + delta_a_km``.
+    """
+    r, v = state_at(base, t_burn)
+    rn = np.linalg.norm(r)
+    a = 1.0 / (2.0 / rn - np.dot(v, v) / MU)
+    v_new = v * np.sqrt(MU * (2.0 / rn - 1.0 / (a + delta_a_km))) / np.linalg.norm(v)
+    sat, residual = mean_elements_for_state(r, v_new, t_burn, base.satnum, bstar=bstar)
+    assert residual < 1e-6, residual
+    return sat
 
 
 def random_leo(rng: np.random.Generator, norad_id: int, epoch: datetime) -> Satrec:

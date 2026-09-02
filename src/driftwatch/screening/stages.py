@@ -30,8 +30,10 @@ root finder with SGP4 evaluated at each trial time. Fallback candidates are mini
 directly. The result is the time of closest approach, the miss distance, the relative
 speed and the miss vector in the primary's radial, in-track, cross-track frame.
 
-Everything is in TEME. Nothing here knows about uncertainty; Step 3 adds covariance and
-probability on top of the geometry this module produces.
+Everything is in TEME. Nothing here knows about uncertainty: Step 3 adds covariance and
+probability on top of the geometry this module produces, and to keep the two apart every
+event carries both objects' TEME states at the time of closest approach, so the risk
+step never propagates an orbit and a scenario can be rescored without rescreening.
 """
 
 from __future__ import annotations
@@ -49,17 +51,19 @@ from sgp4.api import Satrec, SatrecArray
 
 from driftwatch.fleet import Fleet
 from driftwatch.orbit.propagator import WGS72_EARTH_RADIUS_KM, WGS72_MU_KM3_S2, build_satrecs
-from driftwatch.orbit.time import julian_date, julian_dates, parse_utc
+from driftwatch.orbit.time import julian_date, julian_dates, parse_utc, stamp
+from driftwatch.risk.manoeuvre import manoeuvre_prior
 from driftwatch.screening.ric import ric_basis, to_ric
 
 log = logging.getLogger(__name__)
 
-# Categories whose members are known to manoeuvre: operated constellations and crewed
-# stations. A heuristic, and a warning rather than a model: an active payload outside these
-# categories may also manoeuvre, and nothing here predicts a burn.
-MANOEUVRING_CATEGORIES: frozenset[str] = frozenset({"starlink", "oneweb", "constellation", "station"})
+# Both objects' TEME states at the time of closest approach: position in km, velocity in km/s.
+STATE_COLUMNS: tuple[str, ...] = tuple(
+    f"{who}_{comp}" for who in ("p", "s") for comp in ("x_km", "y_km", "z_km", "vx_kms", "vy_kms", "vz_kms")
+)
 
 EVENT_COLUMNS: tuple[str, ...] = (
+    "event_id",
     "primary_norad_id",
     "primary_name",
     "primary_category",
@@ -76,10 +80,11 @@ EVENT_COLUMNS: tuple[str, ...] = (
     "within_watch_radius",
     "stale_primary",
     "stale_secondary",
-    "manoeuvrable_primary",
-    "manoeuvrable_secondary",
+    "manoeuvre_primary",
+    "manoeuvre_secondary",
     "secondary_ephemeris",
     "refine_method",
+    *STATE_COLUMNS,
 )
 
 
@@ -663,6 +668,7 @@ def stage_c(
             "in_box": in_box,
             "within_watch_radius": within,
             "refine_method": np.where(use_root, "root", "minimum"),
+            **state_columns(r_p, v_p, r_s, v_s),
         }
     )[keep]
     # Two candidates can converge on the same minimum (a sign change and a neighbouring
@@ -698,7 +704,31 @@ _GEOMETRY_DTYPES: dict[str, Any] = {
     "in_box": bool,
     "within_watch_radius": bool,
     "refine_method": str,
+    **{name: float for name in STATE_COLUMNS},
 }
+
+
+def state_columns(r_p: np.ndarray, v_p: np.ndarray, r_s: np.ndarray, v_s: np.ndarray) -> dict[str, np.ndarray]:
+    """The :data:`STATE_COLUMNS` arrays from ``(n, 3)`` positions and velocities of both objects."""
+    stacked = np.hstack([r_p, v_p, r_s, v_s])
+    return {name: stacked[:, k] for k, name in enumerate(STATE_COLUMNS)}
+
+
+def event_ids(primary: np.ndarray, secondary: np.ndarray, tca: np.ndarray, snapshot_stamp: str) -> np.ndarray:
+    """Stable event identities: ``<snapshot stamp>:<primary>:<secondary>:<TCA to the minute>``.
+
+    The Step 0 review's rule, so that the same event carries the same id in every
+    scenario and across reruns of the same snapshot. Two distinct minima of one pair
+    inside one minute (a shallow double approach) get ``#2``, ``#3`` suffixes in time order.
+    """
+    minutes = pd.to_datetime(pd.Series(tca), utc=True).dt.strftime("%Y%m%dT%H%MZ").to_numpy()
+    ids = pd.Series(
+        [f"{snapshot_stamp}:{int(p)}:{int(s)}:{m}" for p, s, m in zip(primary, secondary, minutes, strict=True)],
+        dtype=object,
+    )
+    repeat = ids.groupby(ids).cumcount().to_numpy()
+    suffixed = [f"{i}#{k + 1}" if k > 0 else i for i, k in zip(ids, repeat, strict=True)]
+    return np.asarray(suffixed, dtype=object)
 
 
 # --------------------------------------------------------------------------------------
@@ -793,28 +823,45 @@ def screen_fleet(
     return ScreeningResult(events, start_dt, end_dt, config, a, b, c, timings)
 
 
+def in_active_group(snapshot: pd.DataFrame) -> pd.Series:
+    """Whether each snapshot row is in CelesTrak's ``active`` group (the manoeuvre prior's second rule)."""
+    return snapshot["groups"].map(lambda g: "active" in (list(g) if g is not None else [])).astype(bool)
+
+
 def annotate_events(
     events: pd.DataFrame, snapshot: pd.DataFrame, fleet: Fleet, stage_a_result: StageAResult
 ) -> pd.DataFrame:
-    """Add names, categories and the flags to Stage C's geometry, in ``EVENT_COLUMNS`` order."""
+    """Add the event id, names, categories and the flags to Stage C's geometry, in ``EVENT_COLUMNS`` order.
+
+    The manoeuvre columns carry the prior level of :func:`driftwatch.risk.manoeuvre.manoeuvre_prior`
+    (``known``, ``possible`` or ``none``); Step 3's history check can promote ``possible``
+    to ``observed`` in the objects table and the joined export.
+    """
     by_id = snapshot.drop_duplicates("norad_id").set_index("norad_id")
     flags = stage_a_result.objects.set_index("norad_id")
     p = events["primary_norad_id"].to_numpy()
     s = events["secondary_norad_id"].to_numpy()
     ephemeris = by_id["ephemeris"] if "ephemeris" in by_id.columns else pd.Series("gp", index=by_id.index)
+    active = in_active_group(by_id)
     fleet_flags = {m.norad_id: m.manoeuvres for m in fleet}
     fleet_names = {m.norad_id: m.name for m in fleet}
+    pri_category = by_id["category"].reindex(p).to_numpy()
     sec_category = by_id["category"].reindex(s).to_numpy()
+    snapshot_stamp = stamp(pd.to_datetime(snapshot["fetched_at"], utc=True).max().to_pydatetime())
     out = events.copy()
+    out["event_id"] = event_ids(p, s, events["tca"].to_numpy(), snapshot_stamp)
     out["primary_name"] = [fleet_names.get(int(n), by_id["name"].get(n, "")) for n in p]
-    out["primary_category"] = by_id["category"].reindex(p).to_numpy()
+    out["primary_category"] = pri_category
     out["secondary_name"] = by_id["name"].reindex(s).to_numpy()
     out["secondary_category"] = sec_category
     out["stale_primary"] = flags["stale"].reindex(p).to_numpy(dtype=bool)
     out["stale_secondary"] = flags["stale"].reindex(s).to_numpy(dtype=bool)
-    out["manoeuvrable_primary"] = [bool(fleet_flags[int(n)]) for n in p]
-    out["manoeuvrable_secondary"] = [
-        bool(fleet_flags[int(n)]) if int(n) in fleet_flags else (str(cat) in MANOEUVRING_CATEGORIES)
+    out["manoeuvre_primary"] = [
+        manoeuvre_prior(str(cat), bool(active.get(n, False)), fleet_flags.get(int(n)))
+        for n, cat in zip(p, pri_category, strict=True)
+    ]
+    out["manoeuvre_secondary"] = [
+        manoeuvre_prior(str(cat), bool(active.get(n, False)), fleet_flags.get(int(n)))
         for n, cat in zip(s, sec_category, strict=True)
     ]
     out["secondary_ephemeris"] = ephemeris.reindex(s).fillna("gp").to_numpy()
