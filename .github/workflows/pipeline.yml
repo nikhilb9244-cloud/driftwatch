@@ -61,7 +61,6 @@ env:
   MAX_SNAPSHOT_AGE_HOURS: "6"
   DRIFTWATCH_DATA_DIR: ${{ github.workspace }}/store/data
   PAGES_PROJECT: driftwatch
-  TIMINGS: ${{ runner.temp }}/timings.csv
 
 jobs:
   run:
@@ -138,14 +137,14 @@ jobs:
           DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
         run: |
           uv run driftwatch fetch
-          echo "fetch,$SECONDS" >> "$TIMINGS"
+          echo "fetch,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       - name: Refresh the space weather tables
         env:
           DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
         run: |
           uv run driftwatch weather --days 7
-          echo "weather,$SECONDS" >> "$TIMINGS"
+          echo "weather,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       # `driftwatch spacex` ranks Starlink secondaries by closest approach, so it needs a run to
       # rank. In steady state that is yesterday's, which is why this seeding screen is skipped
@@ -162,7 +161,7 @@ jobs:
           fi
           echo "No previous run: screening once with --no-spacex to seed the ephemeris ranking."
           uv run driftwatch screen --fleet "$FLEET" --no-spacex --no-viewer --no-sweep
-          echo "seed_screen,$SECONDS" >> "$TIMINGS"
+          echo "seed_screen,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       # Writes nothing and exits non-zero if the published states' frame has changed at the
       # source: it propagates the matching supplemental set over the first three hours of every
@@ -173,7 +172,7 @@ jobs:
           DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
         run: |
           uv run driftwatch spacex latest
-          echo "spacex,$SECONDS" >> "$TIMINGS"
+          echo "spacex,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       - name: Screen, fit the covariance and score quiet
         env:
@@ -182,7 +181,7 @@ jobs:
         run: |
           set -o pipefail
           uv run driftwatch screen --fleet "$FLEET" --no-viewer | tee "$RUNNER_TEMP/screen.out"
-          echo "screen,$SECONDS" >> "$TIMINGS"
+          echo "screen,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
           # `driftwatch screen` prints the run directory as its last line.
           echo "RUN_DIR=$(tail -1 "$RUNNER_TEMP/screen.out")" >> "$GITHUB_ENV"
 
@@ -194,7 +193,7 @@ jobs:
       - name: Check the run's provenance and its snapshot's age
         run: |
           uv run driftwatch check-run "$RUN_DIR" --max-snapshot-age-hours "$MAX_SNAPSHOT_AGE_HOURS"
-          echo "check_run,$SECONDS" >> "$TIMINGS"
+          echo "check_run,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       - name: Score every scenario
         env:
@@ -206,13 +205,13 @@ jobs:
             echo "== $name"
             before=$SECONDS
             uv run driftwatch risk "$RUN_DIR" --scenario "$name"
-            echo "risk_$name,$(( SECONDS - before ))" >> "$TIMINGS"
+            echo "risk_$name,$(( SECONDS - before ))" >> "$RUNNER_TEMP/timings.csv"
           done
 
       - name: Storm check
         run: |
           uv run driftwatch storm-check "$RUN_DIR"
-          echo "storm_check,$SECONDS" >> "$TIMINGS"
+          echo "storm_check,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       # Two halves of the bundle: `propagate` writes the catalogue side (elements.bin,
       # reference.bin, objects.json, manifest.json) at a reference time, `report` the
@@ -221,13 +220,13 @@ jobs:
         run: |
           uv run driftwatch propagate --at "$(date -u +%Y-%m-%dT%H:%M:00Z)"
           uv run driftwatch report "$RUN_DIR" --scenario quiet
-          echo "export,$SECONDS" >> "$TIMINGS"
+          echo "export,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       - name: Build the viewer
         run: |
           npm --prefix web ci
           npm --prefix web run build
-          echo "build,$SECONDS" >> "$TIMINGS"
+          echo "build,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       # Over dist/, because dist/ is what is uploaded: the built app plus whatever the build
       # copied out of public/. Refuses on a redistributed SpaceX file, on the literal value of
@@ -241,7 +240,7 @@ jobs:
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
         run: |
           uv run driftwatch check-bundle --dir web/dist
-          echo "check_bundle,$SECONDS" >> "$TIMINGS"
+          echo "check_bundle,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       - name: Deploy to Cloudflare Pages
         if: env.DEPLOY != 'no'
@@ -253,7 +252,7 @@ jobs:
           [ "$DEPLOY" = "preview" ] && branch=preview
           npx --yes wrangler@4 pages deploy web/dist \
             --project-name "$PAGES_PROJECT" --branch "$branch" --commit-dirty=true
-          echo "deploy,$SECONDS" >> "$TIMINGS"
+          echo "deploy,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       # After the deploy, so nothing is archived that was not published. Release assets rather
       # than the store branch: a run is 4.8 MB, so retaining every one is 1.8 GB a year, git
@@ -271,7 +270,7 @@ jobs:
             --notes "Daily pipeline runs, one asset each. Rebuild any of them with \`driftwatch report\`; see docs/pipeline.md."
           gh release upload "$month" "$RUNNER_TEMP/$name.tar.gz" --clobber
           echo "Archived $name.tar.gz ($(du -h "$RUNNER_TEMP/$name.tar.gz" | cut -f1)) to release $month."
-          echo "archive,$SECONDS" >> "$TIMINGS"
+          echo "archive,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       - name: Commit the accumulating stores
         working-directory: store
@@ -289,7 +288,7 @@ jobs:
             git commit -m "Pipeline stores, $(date -u +%Y-%m-%dT%H:%MZ)"
             git push
           fi
-          echo "store,$SECONDS" >> "$TIMINGS"
+          echo "store,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
       - name: Report what the run cost
         if: always()
@@ -297,11 +296,11 @@ jobs:
           {
             echo "### Daily pipeline"
             echo
-            if [ -s "$TIMINGS" ]; then
+            if [ -s "$RUNNER_TEMP/timings.csv" ]; then
               echo "| Step | Seconds | Minutes |"
               echo "| --- | ---: | ---: |"
               awk -F, '{ printf "| `%s` | %d | %.1f |\n", $1, $2, $2/60; t += $2 } \
-                       END { printf "| **total** | **%d** | **%.1f** |\n", t, t/60 }' "$TIMINGS"
+                       END { printf "| **total** | **%d** | **%.1f** |\n", t, t/60 }' "$RUNNER_TEMP/timings.csv"
             else
               echo "The run failed before any step finished."
             fi
