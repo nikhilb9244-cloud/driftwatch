@@ -39,6 +39,11 @@ on:
     # catches most versions.
     - cron: "0 */3 * * *"
   workflow_dispatch:
+    inputs:
+      compact_after:
+        description: "Compact the store branch once it has more commits than this (default 200)"
+        required: false
+        default: ""
 
 concurrency:
   group: supplemental-store
@@ -49,6 +54,16 @@ permissions:
 
 env:
   STORE_BRANCH: supplemental-store
+  # Git keeps every version of every blob for ever, and a supplemental version is 0.74 MB of
+  # zstd parquet that deltas against nothing. Measured: three versions committed in sequence
+  # cost 2.19 MB of .git for 2.22 MB of files, and deleting two of them left .git at 2.19 MB.
+  # So `prune_supplemental` thins the checkout and reclaims nothing at all from the history.
+  # At eight runs a day that is 5.9 MB/day, about 2.2 GB a year, against a tip that settles
+  # near 340 MB -- and every run pays for the fetch. The store branch is therefore rebuilt
+  # from its own tip once it passes this many commits: same tree, one commit, no history.
+  # Nothing is lost that matters, because every stored version is named by its own fetch time,
+  # so the store is its own log.
+  COMPACT_AFTER: 200
 
 jobs:
   fetch:
@@ -133,6 +148,29 @@ jobs:
             git commit -m "Supplemental element sets, $(date -u +%Y-%m-%dT%H:%MZ)"
             git push
           fi
+
+      - name: Compact the store branch when its history outgrows its contents
+        working-directory: store
+        env:
+          COMPACT_AFTER_INPUT: ${{ inputs.compact_after }}
+        run: |
+          limit="${COMPACT_AFTER_INPUT:-$COMPACT_AFTER}"
+          commits="$(git rev-list --count HEAD)"
+          if [ "$commits" -le "$limit" ]; then
+            echo "$commits commits, limit $limit: no compaction."
+            exit 0
+          fi
+          echo "$commits commits over the limit of $limit; rebuilding the branch from its tip."
+          before="$(du -sk .git | cut -f1)"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git checkout -q --orphan compacted
+          git add -A
+          git commit -q -m "Supplemental element-set store, compacted $(date -u +%Y-%m-%dT%H:%MZ)"
+          git branch -q -M "$STORE_BRANCH"
+          git push -q -f origin "$STORE_BRANCH"
+          git reflog expire --expire=now --all && git gc -q --prune=now
+          echo "history $(( before ))K -> $(du -sk .git | cut -f1)K, now $(git rev-list --count HEAD) commit"
 
       - name: What the store holds now
         working-directory: store

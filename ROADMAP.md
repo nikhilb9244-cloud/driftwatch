@@ -156,6 +156,45 @@ ground** and do it far better than a side project would. The interesting, unoccu
 human-made objects between the Earth's surface and the outer planets, which is where this would
 sit.
 
+### Capability targets, not plans
+
+Six things driftwatch cannot currently do, listed as capabilities to acquire rather than
+features to build, because each one opens a class of work rather than a single deliverable.
+**None of these begins before Phase 4 is published.**
+
+The argument that connects them, and the reason they belong on this roadmap rather than
+somebody else's: **solar radiation pressure above low Earth orbit is the same class of problem
+as drag within it.** Both are a weakly known, non-gravitational force whose magnitude depends on
+an object's area-to-mass ratio — the thing driftwatch already fits from an object's own decay —
+and both are driven by the same solar activity. A project that has learned to say honestly which
+objects its solar-driven perturbation model describes and which it does not is most of the way
+to saying the same thing a hundred thousand kilometres further out.
+
+1. **Numerical propagation, through Orekit or tudatpy.** The precondition for everything above
+   geosynchronous orbit and everything beyond Earth orbit. SGP4 is an analytic theory fitted to
+   a specific class of near-Earth orbit and it does not go where the next five items live.
+   Nothing else on this list can start before this one.
+2. **SPICE, through spiceypy.** NAIF's kernels are the standard for planetary ephemerides and
+   for the frames that go with them, and they are the difference between guessing at a
+   selenocentric frame and using the one everybody else uses.
+3. **Orbit determination from observations.** The capability that would lift **the data ceiling
+   this whole project currently sits under**. The dilution region, the empirical
+   covariance fitted from element-set consistency, and the storm-term validity split are all
+   consequences of taking somebody else's fitted orbits and inferring an uncertainty from how
+   much they disagree. A real orbit determination produces a covariance from the fit itself,
+   which is the single change that would move driftwatch from indicative toward operational.
+4. **Ingestion of amateur optical and SatNOGS observations.** The motivation is the **African
+   tracking gap**: the existing sensor networks are concentrated in the northern hemisphere and
+   the Americas, and a southern African longitude sees passes that nobody else is measuring.
+   This is the observational input that item 3 needs and the one place where being here rather
+   than anywhere else is an advantage rather than a constraint.
+5. **Cislunar conjunction screening.** An **unoccupied niche** — the traffic is growing, nobody
+   publishes screening for it, and the three-body dynamics make it a genuinely different problem
+   from the Earth-orbit case rather than the same one at a larger radius. Requires items 1 and 2.
+6. **Near-Earth asteroid close approaches.** An adjacent public-interest application of the same
+   propagation and close-approach machinery, against a population that is already public and
+   already interesting to people who are not satellite operators.
+
 ## Validation cases
 
 - The May 10 to 12, 2024 Gannon storm, the largest in two decades, poorly forecast even a day out, with heavy drag and mass Starlink manoeuvres.
