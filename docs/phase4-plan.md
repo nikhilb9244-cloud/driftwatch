@@ -770,3 +770,262 @@ Every column such an analysis needs is **already written** by `events.parquet` a
 `risk_<scenario>.parquet`, so no schema change is required. What a later phase should add is a
 narrow per-run *stability slice* so the analysis need not open 365 run directories to follow one
 pair. That file is not being created now.
+
+**Built at the Step 2 review, 2026-09-03 (later).** The slice is no longer a later phase: the read
+path is `data/stability/<fleet>/<run_id>.parquet` and `driftwatch stability`. See "The read path
+warning stability needed" below. The analysis is still not built.
+
+---
+
+## The read path warning stability needed (Phase 4, after the Step 2 review, 2026-09-03)
+
+Step 2 reported the schema and built nothing, on the grounds that the storage decision could not be
+made retrospectively but the analysis could wait. The half that could not wait is the **read path**:
+every run is archived as a 4.8 MB release asset, so answering "how did this warning evolve" meant
+downloading a month of archives and opening them one at a time. That is not a question anyone asks
+twice. `src/driftwatch/stability.py`, `driftwatch stability`, `tests/test_stability.py` and the
+schema in `docs/data-schema.md` are the answer; `docs/pipeline.md` carries the design.
+
+### What it is
+
+One narrow file per run, `data/stability/<fleet>/<run_id>.parquet`, on the store branch rather than
+in the release archive, holding one row per encounter per run per scenario: the identity, the lead
+time, the time of closest approach and how far it moved, the miss distance, the probability and the
+flag, with the covariance and trajectory sources beside them. The pipeline writes it after the
+deploy and before the archive, so nothing is indexed that was not published and the archived
+`run.json` records what the run contributed.
+
+### Identity, measured rather than argued
+
+The Step 2 report's substantive finding stands: `event_id` cannot join runs. A series is assembled
+on the object pair plus the time of closest approach within a tolerance, greedily, nearest first,
+one event to one series. The tolerance was set at ten minutes from the half-orbit argument -- and it
+is now checked against two real runs whose windows start 43 hours apart, indexed one after the other:
+
+| | |
+| --- | --- |
+| Series continued | **1,756** |
+| Time of closest approach moved, median | **0.3 s** |
+| 95th percentile | **4.5 s** |
+| Largest | **20.8 s** |
+| Tolerance | 600 s |
+| Gap between successive passes of one pair | ~2,760 s |
+
+Thirty times inside the tolerance and a hundred times clear of the thing the tolerance has to
+separate it from. Every row carries its own `dt_tca_s`, so this stays checkable from the files as
+the pipeline runs rather than resting on this table.
+
+The read path shows the intended thing immediately. `driftwatch stability --pair 55053,61705` over
+those two runs prints EOS SAT-1 against Starlink 61705 as **five distinct series**, one per pass,
+47 minutes apart and never confused with one another -- and one of them is a warning that
+evaporated:
+
+```
+55053-61705-20260904T0844Z  scenario quiet  2 runs
+   20260902T065806Z-38c7    2.50 d   20260904T084455Z       -     16.394   1.052e-05  yellow
+   20260903T175632Z-9a31    0.69 d   20260904T084451Z      -4     22.981   4.323e-25  none
+```
+
+A yellow flag at a two-and-a-half-day lead, gone at seventeen hours, with the time of closest
+approach having moved four seconds. **It is not evidence about warning stability**, and the write-up
+must not use it as such: those two runs differ by more than a day, because Step 1 changed what the
+Starlink secondaries are screened on in between. It is evidence that the read path answers the
+question in the form the question is asked.
+
+### Two decisions worth defending
+
+**Every event is indexed, not the flagged ones.** The tempting saving is to keep only what flags,
+or only what comes within a few kilometres. Measured over these runs, flagged events have miss
+distances from **0.53 km to 28.3 km** -- the whole screening volume, because the flag is decided by
+the covariance and not by the miss. There is no cut that admits the warnings. Worse, an event first
+indexed on the day it flags has no history behind it on that day, which is exactly the failure the
+index exists to prevent, and it cannot be repaired later. What is cut instead is scenarios: `quiet`
+and `forecast`, the two that are statements about the actual window.
+
+**One immutable file per run, not one file rewritten.** Git keeps every version of a rewritten file
+in full, so a monthly file rewritten daily costs roughly fifteen times its own size in branch
+history; a per-run file costs its size once. Measured on the 2026-09-03 run: 231 KB for one
+scenario over 6,224 events and **330 KB for two** -- 27 bytes a row, because the second scenario's
+rows repeat the first's identity columns and compress against them -- against the 8.6 MB a day the
+archive already costs. A test pins the byte budget, because a column added without thinking is a
+year of files.
+
+### The step the pipeline was missing, found by timing it
+
+Timing the steps for the runtime report turned up a plain fault: **`.github/workflows/pipeline.yml`
+never ran `driftwatch ballistic`**, and every scenario but `quiet` refuses without a ballistic
+coefficient per object -- deliberately, since a missing coefficient would otherwise move nothing and
+produce quiet numbers under a stormy label. The first scheduled run would have failed at
+`risk --scenario forecast`, after publishing, on every run. Nothing caught it because the workflow
+had never been run end to end and no test covers the workflow file. The step is now in, before
+`Score every scenario`, and deliberately **not** with `--offline`: the historical ap and F10.7
+table lives in the fetch cache, which the Actions cache may evict, and an offline fit without it
+does not fail -- it returns NaN density and rejects every object, which is the silent degradation
+this project keeps refusing. Fetching hits CelesTrak's two-hour floor and costs nothing warm.
+
+---
+
+## Step 2A preparation: the Office of Space Commerce dataset, read before anything is fetched (2026-09-03)
+
+The prompt requires the user's guide to be read and the terms confirmed **before** anything is
+downloaded or redistributed. This section is that reading, plus the decomposition question the
+20.73 GB tarball forces, and it is written before a byte of the dataset has been fetched.
+
+Source: the download page (`space.commerce.gov/dataset-for-conjunction-assessment-verification/`)
+and the user's guide, *Conjunction Assessment Verification Data and Process*, Auman, Murphy and
+George (The Aerospace Corporation), March 2026, 10 pages, fetched and read in full.
+
+### The terms, confirmed
+
+**CC0-1.0, stated in the guide itself** and not only on the download page: "These data are
+available on a full and open basis, with no restrictions on use or dissemination, under the
+Creative Commons Universal Public Domain Dedication (CC0-1.0)." A derived subset may therefore be
+redistributed -- unlike the SpaceX ephemerides, which `check-bundle` exists to keep out of the
+published site. Access is a Google Drive link behind a Google Form (email address entered by
+hand), with `TraCSS.Outreach@noaa.gov` as the route for anyone who cannot use a Google account.
+
+**The caveat, verbatim, for the write-up**: "This data was not evaluated (nor is it intended) for
+use in live operations or as a tool for formal system certification or validation." The guide adds
+a second one that matters as much: the answer key was generated by Aerospace's own CSieve, "that
+is expected to find nearly all the events within the dataset, but we cannot guarantee exhaustive
+results", and the test set "should only be used as a diagnostic tool for self-evaluation."
+
+### The structure
+
+| File | Guide | Download page |
+| --- | ---: | ---: |
+| `AerospaceIVVDataset_20251009a.tar.gz` (ephemerides) | 21.74 GB | 20.73 GB |
+| `IVV_Releasable_Dataset_Spherical_DefaultHBR.csv.gz` (answer key 1) | 204 MB | 198.8 MB |
+| `IVV_Releasable_Dataset_SFSH_DiscreteHBR.csv.gz` (answer key 2) | 144 MB | **62.4 MB** |
+| `AerospaceIVVDataset_20251009a_Size_ScreeningVolumes.csv.gz` (volumes and HBR per object) | 145 KB | 145 KB |
+| `Conjunction_Screening_Testset_Users_Guide.pdf` | -- | 363 KB |
+
+The first two disagreements are GB-against-GiB. **The SFSH one is not**: 144 MB against 62.4 MB is
+a factor of 2.3, so either the file was reissued after the guide was written or one of the two
+numbers is wrong. Check the file's own size on download before quoting either.
+
+**Inside the tarball**: OCM-formatted ephemerides -- Orbit Comprehensive Message, the format
+TraCSS will itself publish and accept -- spanning roughly the first week of January 2025, with the
+screening window fixed at **2025-01-01T12:00:00Z to 2025-01-08T12:00:00Z**. The guide says the
+ephemerides "may be grouped into different directories based on object type", and object type is
+readable from the catalogue id alone:
+
+| Ids | What | Count |
+| --- | --- | ---: |
+| 00005-62461 | TLE-derived, from the public Space-Track catalogue on/around 1 Jan 2025, with COVGEN covariance | the catalogue |
+| 90006-90190 | Synthetic manoeuvring ephemerides and the "victims" generated to conjunct with them | 185 ids |
+| 95000-95407 | Historical CDMs: the state and covariance at TCA propagated forward and back into an ephemeris | 408 ids |
+| 99000-99008 | Fictitious objects and victims, for requirements the others do not cover | 9 ids |
+| 99996-99999 | OSIRIS-REx sample return capsule (99999) and victims: a reentering, heliocentric object | 4 ids |
+
+Two structural details that will bite an implementation: some ephemerides **start or end inside
+the window** and carry their own usable start/stop times, which a tool must honour; and one object
+designator can have several **candidate OCMs** -- a nominal trajectory plus mitigation manoeuvres --
+which must be screened against everything else but never against each other.
+
+### Does it decompose? Yes by file, no by test.
+
+**By file, yes.** It is one OCM per object (per candidate), so the members can be selected by name.
+But a `.tar.gz` is a single gzip stream with no index, so there is **no random access**: extracting
+a whitelist means streaming the whole archive once and discarding what is not wanted. That makes
+the 20.73 GB a **transfer cost paid once and a storage cost never paid** -- `curl ... | tar -xz`
+with a member list writes only the selected files, and the source sha256 can be computed in the
+same pass. It does not make it free, and a Google Drive object of that size is not reliably
+`curl`-able (confirmation tokens, per-file quotas), which is an argument for doing the one pass
+from a machine that can retry rather than from a runner.
+
+**By test, no, and this is the constraint that actually decides the step.** The guide requires an
+**ALL vs ALL** screening: every ephemeris against every other. driftwatch screens a fleet of
+primaries against a catalogue, and its cost is set by Stage B, measured at **187 to 240 s for six
+primaries against a 22,646-object catalogue over a seven-day window** -- 47,978 pairs surviving
+Stage A out of 135,876 offered. All-vs-all over a catalogue of that size is ~3.4 x 10^8 pairs
+before Stage A and, at the same survival rate, **about 2,500 times the demo run's Stage B**: of
+order a **week** of it on this machine, before a single probability is computed. Even the ~600
+synthetic objects screened as primaries against the whole set is of order five hours, which is a
+shard across jobs rather than a step in a run. A subset is not a saving here; it is the difference
+between a step that exists and one that does not.
+
+### The subset that keeps both directions of the claim honest
+
+The prompt asks for two numbers that fail in different ways: events the key has and driftwatch
+misses, and events driftwatch reports that the key does not have. A subset preserves **both**
+exactly, provided it is closed:
+
+> Choose a set of objects **S**, screen all-vs-all **within S**, and compare against the answer key
+> **restricted to pairs with both objects in S**. Because the key is itself all-vs-all, its
+> restriction to S is the exact truth for S. Nothing is missed by construction and nothing is
+> falsely called extra. What is lost is coverage of pairs that leave S -- not the meaning of either
+> number.
+
+The defensible S, in the order it should be built:
+
+1. **Every synthetic object** -- the 90006-90190, 95000-95407, 99000-99008 and 99996-99999 ranges,
+   about 600 ids. These are the stressing edge cases the dataset was built to carry, and they are
+   the part driftwatch has never been tested on: manoeuvres, a reentering heliocentric object,
+   hyperbolic geometries, ephemerides that start and stop mid-window.
+2. **Every TLE-derived object the key pairs with one of those**, so that each edge case keeps its
+   real screening background.
+3. **A documented random sample of the remaining TLE objects**, to give the extra-event count
+   volume without paying for the whole catalogue.
+
+What is deliberately *not* bought: the TLE-against-TLE bulk of the dataset. Those ephemerides were
+generated from the public catalogue with COVGEN covariance -- which is SGP4-against-SGP4 ground
+that the daily pipeline screens every day and that the Kelvins reproduction already scored. It is
+the least novel part of the most expensive file.
+
+### The cheapest path, in three rounds, and the first needs no tarball at all
+
+**Round 0 -- 200 MB, no ephemerides, and it validates the scorer.** The answer key is not a list of
+identifiers: each row carries both objects' **J2000 state at TCA**, both **UVW covariances** (upper
+triangular), the miss distance, the relative velocity, the Mahalanobis distance, a dilution flag,
+and `prob`. The mappings file carries per-object HBR. Feeding driftwatch's encounter-plane
+construction and probability those exact inputs tests the whole scoring path against a government
+reference **without a byte of the 20.73 GB**, and it is a like-for-like comparison rather than a
+loose one: the key's `prob` is **Alfano (2004)** and driftwatch already computes `pc_alfano` beside
+its default. Do this first. If it disagrees, nothing downstream is worth downloading yet.
+
+**Round 1 -- one streaming pass, keep the closed subset.** Stream the tarball once, extract only
+S's members, convert straight to the project's ephemeris parquet and never keep the OCM text.
+Screen S all-vs-all against the **spherical** key. Round 1 is where the screening claim is made.
+
+**Round 2 -- only if Round 1 earns it.** The SFSH key, with per-object volumes, and a wider sample
+of the TLE background for the extra-event count.
+
+### Configuration the guide fixes, and what driftwatch would have to change
+
+- **Volumes.** The two keys are a **10 km sphere with a constant 0.5 m HBR**, and the SFSH
+  per-object rectangles. Note what the prompt assumed and what is actually true: driftwatch's
+  `box_ric_km = (2, 25, 25)` is a **half-width** box, and SFSH volume ID 7 is `U=2, V=25, W=25` as
+  half-volumes for `period < 225 min`. **driftwatch's box is exactly the SFSH near-Earth volume.**
+  The spherical key is reachable today by setting the watch radius to 10 km and the box to zero,
+  since Stage C keeps an event that is in the box **or** inside the watch radius.
+- **Rules driftwatch does not implement**: only element sets with `OD_EPOCH` within 14 days of the
+  window start; usable start/stop times honoured per ephemeris; candidate OCMs of one designator
+  never screened against each other; no Pc pre-filter; TCA strictly inside the window, and only at
+  a **local minimum** of miss distance inside the volume; for the spherical key both directions of
+  a pair reported.
+- **A parser and a frame.** OCM is not the SpaceX ephemeris format, so it needs a reader, and the
+  frame in the file has to be rotated into TEME rather than assumed -- the MEME/J2000 lesson of
+  Step 1, where getting it wrong was worth 44 km.
+- **A truncation that must not be read as a false positive.** CSieve was run with a 68 km spherical
+  radius but the key keeps only misses **at or under 10 km**. An event driftwatch finds beyond
+  10 km is outside the key by construction.
+
+### The claim this step can actually make
+
+The guide is explicit: the dataset "was devised primarily to evaluate conjunction geometry at the
+time of closest approach", with the emphasis on finding all the same events and computing TCA and
+the states accurately, and "**while Pc metrics do exist in the answer key, direct comparison of Pc
+values requires the same method of Pc computation and is therefore not a key metric of this
+dataset**". So the headline claim is about **screening**: which events are found, where the TCA is
+placed, what the miss distance is. The probability comparison is legitimate only in the Round 0
+form, where the inputs are identical and the method is matched to Alfano (2004) -- and it must be
+reported as a check on the scorer, not as agreement on risk.
+
+### Where it lives
+
+`data/external/osc/` locally, which `.gitignore` already covers via `data/external/`. Never in the
+repository, never in a run directory, never in the viewer bundle, and never through the daily
+pipeline. The reproducible artefact is the **derived subset** -- the parquet ephemerides for S plus
+the key restricted to S -- published as a release asset under CC0 with the source tarball's sha256,
+recorded during the streaming pass, so a reader can reproduce the selection without the 20.73 GB.
