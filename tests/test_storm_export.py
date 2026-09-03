@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -199,6 +200,62 @@ def test_a_baseline_that_does_not_reach_the_quiet_window_is_refused_rather_than_
     table = weather_frame(T0 - timedelta(days=3), 24 * 12, 5.0)
     with pytest.raises(ValueError, match="quiet control window"):
         storm_export.density_ratio_series(table, [T0], baseline=table)
+
+
+def sun_frames(n: int, *, with_thumbs: bool = True, tmp_path: Path | None = None) -> list:
+    """``n`` cached Helioviewer frames six hours apart, with real (tiny) files behind them."""
+    from driftwatch.weather.helioviewer import SunFrame
+
+    out = []
+    for i in range(n):
+        t = T0 + timedelta(hours=6 * i)
+        full = (tmp_path or Path(".")) / f"aia193_{i}.png"
+        full.write_bytes(b"\x89PNG full" + bytes(400))
+        thumb = None
+        if with_thumbs:
+            thumb = (tmp_path or Path(".")) / f"aia193_{i}_thumb32.png"
+            thumb.write_bytes(b"\x89PNG small")
+        out.append(SunFrame(t, t, full, 14, True, thumb))
+    return out
+
+
+def test_the_thumbnail_travels_inline_and_the_full_frame_does_not(tmp_path):
+    """121 kB of placeholders against 10 MiB of pictures: that is the whole trade."""
+    index = storm_export.copy_sun_frames(sun_frames(4, tmp_path=tmp_path), tmp_path / "out")
+    assert len(index) == 4
+    for entry in index:
+        assert entry["thumb"].startswith("data:image/png;base64,")
+        assert entry["path"].startswith("sun/")
+        assert (tmp_path / "out" / entry["path"]).exists(), "the full frame is a file, not inline"
+        assert entry["eager"] is False, "nothing is eager until eager_frames says so"
+
+    # A frame whose thumbnail the export never got still ships, with a null placeholder: the
+    # viewer then waits for the full image rather than showing nothing at all.
+    plain = storm_export.copy_sun_frames(sun_frames(2, with_thumbs=False, tmp_path=tmp_path), tmp_path / "out2")
+    assert [f["thumb"] for f in plain] == [None, None]
+
+
+def test_the_eager_frames_are_the_first_the_peak_and_the_last(tmp_path):
+    """Chosen, not taken in order: where a reader opens, where they scrub to, and the far end."""
+    index = storm_export.copy_sun_frames(sun_frames(9, tmp_path=tmp_path), tmp_path / "out")
+    kp = pd.DataFrame(
+        {
+            "t": pd.date_range(T0, periods=9, freq="6h", tz="UTC"),
+            # The peak sits at index 5, which is neither end.
+            "kp": [2.0, 3.0, 4.0, 5.0, 7.0, 9.0, 6.0, 3.0, 2.0],
+        }
+    )
+    marked = storm_export.eager_frames(index, kp)
+    eager = [i for i, f in enumerate(marked) if f["eager"]]
+    assert eager == [0, 5, 8]
+    assert sum(f["eager"] for f in marked) == config.HELIOVIEWER_EAGER_FRAMES
+
+    # No Kp at all still marks the two ends rather than failing.
+    plain = storm_export.eager_frames(
+        storm_export.copy_sun_frames(sun_frames(4, tmp_path=tmp_path), tmp_path / "out3"),
+        pd.DataFrame({"t": [], "kp": []}),
+    )
+    assert [i for i, f in enumerate(plain) if f["eager"]] == [0, 3]
 
 
 def test_the_replay_window_comes_from_the_scenario_name():

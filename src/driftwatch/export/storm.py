@@ -44,6 +44,7 @@ from the ratio in the validation document would be the worst kind of small incon
 
 from __future__ import annotations
 
+import base64
 import json
 import logging
 import shutil
@@ -452,6 +453,12 @@ def copy_sun_frames(frames: list[helioviewer.SunFrame], out_dir: Path) -> list[d
     Helioviewer returns the nearest image it holds and that can be hours away during a data gap.
     A replay that silently showed yesterday's Sun would be worse than showing none, so the lag is
     carried to the viewer and rendered.
+
+    **The thumbnail travels inline and the full image does not.** A 64 px disc is about 3 kB, so
+    all of them together are a fraction of the timeline JSON and every scrub position has a
+    picture the instant the file parses. The 360 kB full frames stay as files and are fetched as
+    the playhead approaches them. ``eager`` marks the handful worth requesting before the reader
+    scrubs anywhere -- see :func:`eager_frames`.
     """
     sun_dir = out_dir / "sun"
     sun_dir.mkdir(parents=True, exist_ok=True)
@@ -461,6 +468,9 @@ def copy_sun_frames(frames: list[helioviewer.SunFrame], out_dir: Path) -> list[d
             continue
         target = sun_dir / frame.path.name
         shutil.copyfile(frame.path, target)
+        thumb = None
+        if frame.thumb is not None and frame.thumb.exists():
+            thumb = "data:image/png;base64," + base64.b64encode(frame.thumb.read_bytes()).decode("ascii")
         index.append(
             {
                 "requested": frame.requested.isoformat().replace("+00:00", "Z"),
@@ -468,8 +478,33 @@ def copy_sun_frames(frames: list[helioviewer.SunFrame], out_dir: Path) -> list[d
                 "lag_minutes": round(frame.lag.total_seconds() / 60.0, 1) if frame.lag is not None else None,
                 "path": f"sun/{frame.path.name}",
                 "bytes": target.stat().st_size,
+                "thumb": thumb,
+                "eager": False,
             }
         )
+    return index
+
+
+def eager_frames(index: list[dict[str, Any]], kp: pd.DataFrame, *, limit: int | None = None) -> list[dict[str, Any]]:
+    """Mark the few full-resolution frames the viewer should fetch before the reader scrubs.
+
+    Three, by default, and they are chosen rather than taken in order: the **first**, because it
+    is what the replay opens on; the frame nearest the **peak Kp**, because it is where a reader
+    scrubbing to "the storm" lands and it is the picture the whole replay is about; and the
+    **last**, so the far end of the scrubber is not the one position that always waits. Everything
+    else arrives over its thumbnail as the playhead approaches it.
+    """
+    limit = config.HELIOVIEWER_EAGER_FRAMES if limit is None else limit
+    if not index or limit <= 0:
+        return index
+    times = [pd.Timestamp(f["actual"] or f["requested"]) for f in index]
+    wanted = {0, len(index) - 1}
+    values = pd.to_numeric(kp["kp"], errors="coerce") if len(kp) else pd.Series(dtype=float)
+    if values.notna().any():
+        peak = pd.Timestamp(kp.loc[values.idxmax(), "t"])
+        wanted.add(int(np.argmin([abs((t - peak).total_seconds()) for t in times])))
+    for i in sorted(wanted)[:limit]:
+        index[i]["eager"] = True
     return index
 
 
@@ -494,7 +529,7 @@ def build_storm_bundle(
     kp = kp_series(table, start, end)
     times = [t.to_pydatetime() for t in pd.to_datetime(kp["t"], utc=True)]
     ratios = density_ratio_series(table, times, baseline=baseline_table)
-    sun = copy_sun_frames(frames, out_dir)
+    sun = eager_frames(copy_sun_frames(frames, out_dir), kp)
     return {
         "storm_version": STORM_VERSION,
         "generator": f"driftwatch {__version__}",
@@ -528,6 +563,9 @@ def build_storm_bundle(
             "citation": config.HELIOVIEWER_CITATION,
             "frames": sun,
             "total_bytes": sum(int(f["bytes"]) for f in sun),
+            "thumb_px": config.HELIOVIEWER_THUMB_PX,
+            "n_eager": sum(1 for f in sun if f["eager"]),
+            "n_with_thumb": sum(1 for f in sun if f["thumb"]),
         },
         "notes": [
             "Kp and ap are the observed record from CelesTrak's SW-All file; provenance says so per row.",
@@ -538,6 +576,9 @@ def build_storm_bundle(
             "A Sun frame is the nearest image Helioviewer holds to the time asked for. The lag is on "
             "every frame and the viewer shows it, because a stale image with no label would be worse "
             "than none.",
+            "Each frame carries a 64 px thumbnail inline as a data URI and its full 512 px image as a "
+            "file. The viewer draws the thumbnail at once and fetches the full image as the playhead "
+            "approaches; the three marked `eager` are requested up front.",
         ],
     }
 
@@ -547,10 +588,13 @@ def write_storm_bundle(bundle: dict[str, Any], out_dir: Path) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     path.write_text(json.dumps(bundle, separators=(",", ":")), encoding="utf-8")
     log.info(
-        "Replay timeline: %d Kp intervals, %d Sun frames (%.1f MiB), %.1f kB JSON -> %s",
+        "Replay timeline: %d Kp intervals, %d Sun frames (%.1f MiB as files, %d eager, %d with an "
+        "inline thumbnail), %.1f kB JSON -> %s",
         len(bundle["kp"]["t"]),
         len(bundle["sun"]["frames"]),
         bundle["sun"]["total_bytes"] / 1024 / 1024,
+        bundle["sun"]["n_eager"],
+        bundle["sun"]["n_with_thumb"],
         path.stat().st_size / 1024,
         path,
     )

@@ -55,7 +55,12 @@ function orderedPopulations(summary: Record<string, ScenarioFigures>): string[] 
  * Wire the scenario control and the summary. Returns a redraw function the panel calls when
  * the scenario changes; it never re-renders the list itself, which the panel owns.
  */
-export function buildStormControl(bundle: Bundle, state: ScenarioState, onChange: () => void): () => void {
+export function buildStormControl(
+  bundle: Bundle,
+  state: ScenarioState,
+  onChange: () => void,
+  signal?: AbortSignal,
+): () => void {
   const root = document.getElementById("storm");
   if (!root || !bundle.conjunctions) {
     if (root) root.hidden = true;
@@ -67,6 +72,10 @@ export function buildStormControl(bundle: Bundle, state: ScenarioState, onChange
   const note = el<HTMLDivElement>("storm-note");
   const summary = el<HTMLDivElement>("storm-summary");
   const unscoreable = el<HTMLDetailsElement>("storm-unscoreable");
+  // Emptied first: the two controls are rebuilt whenever the catalogue changes, and a replay
+  // offers a different set of scenarios from the live view.
+  segments.replaceChildren();
+  select.replaceChildren();
 
   const scored = new Set(state.scored);
   const isScored = (name: string) => scored.has(name);
@@ -83,9 +92,13 @@ export function buildStormControl(bundle: Bundle, state: ScenarioState, onChange
     button.title = isScored(name)
       ? (SCENARIO_HELP[name] ?? (isReplayScenario(name) ? REPLAY_HELP : ""))
       : `not scored for this run — run \`driftwatch risk <run> --scenario ${name}\``;
-    button.addEventListener("click", () => {
-      state.select(name);
-    });
+    button.addEventListener(
+      "click",
+      () => {
+        state.select(name);
+      },
+      { signal },
+    );
     segments.appendChild(button);
 
     const option = document.createElement("option");
@@ -94,7 +107,7 @@ export function buildStormControl(bundle: Bundle, state: ScenarioState, onChange
     option.disabled = !isScored(name);
     select.appendChild(option);
   }
-  select.addEventListener("change", () => state.select(select.value));
+  select.addEventListener("change", () => state.select(select.value), { signal });
 
   const renderNote = () => {
     if (state.pending) {
@@ -220,6 +233,9 @@ export function buildStormControl(bundle: Bundle, state: ScenarioState, onChange
     onChange();
   });
   render();
+  // A mode switch rebuilds this block, and the browser keeps the old scroll offset -- which
+  // left the heading above the fold and the section looking truncated rather than compact.
+  root.scrollTop = 0;
 
   // Narrow layouts get the dropdown; the media query in the stylesheet does the switching, and
   // this only mirrors it into `aria-hidden` so a screen reader is not offered both.
@@ -228,7 +244,7 @@ export function buildStormControl(bundle: Bundle, state: ScenarioState, onChange
     segments.setAttribute("aria-hidden", String(narrow));
     select.setAttribute("aria-hidden", String(!narrow));
   };
-  window.addEventListener("resize", applyWidth);
+  window.addEventListener("resize", applyWidth, { signal });
   applyWidth();
   return render;
 }

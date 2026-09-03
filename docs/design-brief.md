@@ -536,18 +536,18 @@ storm mode and the replay; `web/dist` and `web/public/data`):
 
 | Asset | Bytes | On the console's critical path? |
 | --- | ---: | --- |
-| `index-*.js` (three.js, globe.gl, the viewer) | 1 931 764 | **No** |
+| `index-*.js` (three.js, globe.gl, the viewer) | 1 935 374 | **No** |
 | `index-*.js` (second chunk) | 308 863 | Partly — the console's own code is carved out of this |
 | `base-release-*.js` | 152 136 | No |
 | `propagator.worker-*.js` | 30 507 | No |
-| `index-*.css` | 8 937 | Yes |
+| `index-*.css` | 9 030 | Yes |
 | `objects.json` | 2 064 926 | No |
 | `elements.bin` | 2 847 768 | No |
 | `conjunctions.json` | 3 531 615 | **No — replaced, see below** |
 | `scenarios.json` (storm mode, lazy) | 1 280 532 | **No — fetched after first paint** |
 | `reference.bin` | 776 664 | No |
 | `conjunction-tracks.bin` | 439 200 | No |
-| `replay/` (catalogue, conjunctions, timeline, 29 Sun frames) | 15 053 168 | **No — only on `?replay`** |
+| `replay/` (catalogue, conjunctions, timeline, 29 Sun frames) | 15 166 904 | **No — and only 1.4 MB of it on entry, see below** |
 | Blue Marble texture (globe.gl default) | ~1 MB | No |
 
 Roughly 13 MB of transfer for the live viewer today, plus 15 MB more that only a reader who
@@ -556,10 +556,19 @@ below is made. That is the whole design: the console is a different, much smalle
 happens to share a repository with the globe.
 
 **Step 5 cost the critical path nothing**, which was the point of building it the way it was
-built. The viewer's own JavaScript grew by 20 KB and its stylesheet by 3.7 KB; `scenarios.json`
-and the whole replay directory are behind an idle callback and a navigation respectively, and
-neither is fetched by a reader who does not use them. The largest single file is 3.5 MB against
+built. The viewer's own JavaScript grew by 24 KB and its stylesheet by 3.8 KB; `scenarios.json`
+is behind an idle callback and the replay directory behind an explicit mode switch, and neither
+is fetched by a reader who does not use them. The largest single file is 3.4 MB against
 Cloudflare Pages' 25 MiB limit, and the largest Sun frame is 380 KB.
+
+**And entering replay costs 1.4 MB of the 15 MB, not 15 MB.** The 10.4 MiB of Sun imagery is 29
+full frames, of which the viewer fetches **three** up front and the rest only as the playhead
+approaches them; every frame's 32 px thumbnail travels inline in the 121 KB `storm.json`, so
+every scrub position has a picture immediately without any of them being requested. What is
+actually fetched on entry is the historical catalogue (2.4 MB of `elements.bin`, `objects.json`
+and `reference.bin` for 13,376 objects, against 5.6 MB for the live 32,361), that run's
+conjunctions and overlays (1.3 MB), the timeline, and three images. The rest is there for a
+reader who scrubs the whole week, which is the only reader who needs it.
 
 **What ships on the critical path:**
 

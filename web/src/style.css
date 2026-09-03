@@ -436,6 +436,10 @@ dd {
   /* The queue is the thing being read, so the scenario block is capped and scrolls rather than
      pushing the list below the fold. `#conjunction-list` is the flex child that should grow. */
   flex: 0 1 auto;
+  /* A floor as well as a ceiling. In replay the scrubber takes 200 px off the panel, and with
+     a ceiling alone the scenario block was squeezed to a sliver with its own heading scrolled
+     out of view -- which reads as broken rather than as compact. */
+  min-height: 190px;
   max-height: 38vh;
   overflow-y: auto;
 }
@@ -657,6 +661,13 @@ body[data-replay] #conjunctions {
   height: 100%;
   object-fit: cover;
   display: block;
+  transition: filter 220ms ease;
+}
+
+/* The 64 px thumbnail, upscaled while the full frame is in flight. Blurred rather than left
+   crisp so that it reads as a placeholder at a glance; the caption says so in words too. */
+#replay-sun.placeholder {
+  filter: blur(3px) saturate(0.9);
 }
 
 .replay-readout {

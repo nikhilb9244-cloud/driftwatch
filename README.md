@@ -97,16 +97,22 @@ What works today:
   queue with the reason, never in the queue with a blank. **The control changes numbers in the
   panel and nothing else** — the point cloud, the worker and the tracks are geometry and do not
   depend on the scenario, which is what keeps Phase 1's frame budget.
-- **Replay mode** (`?replay`) loads a second, self-contained bundle: the catalogue as it stood on
-  9 May 2024, that run's own screening under the observed record, and a timeline. The Kp bar is
-  the background of the scrubber, the density ratio at 400 and 500 km is drawn over it, the Sun
-  in SDO/AIA 193 Å sits beside it, and all of them plus the objects read the one simulation
-  clock — so scrubbing moves everything together by construction. Nothing of it is fetched until
-  replay is entered.
+- **Replay mode** swaps the catalogue for the one that existed on 9 May 2024, that run's own
+  screening under the observed record, and a timeline — **without leaving the page**. The Kp bar is
+  the background of the scrubber, the density ratio at 400 and 500 km is drawn over it, the Sun in
+  SDO/AIA 193 Å sits beside it, and all of them plus the objects read the one simulation clock, so
+  scrubbing moves everything together by construction. The camera, the selected object, the
+  filters, the playback speed and the position through the window all carry across; the scenario
+  is remembered per mode, so leaving replay puts a G5 back. `?replay` still goes in the address
+  bar, so a replay is a link and the Back button leaves it, and nothing of the replay bundle is
+  fetched until somebody asks for it.
 - `driftwatch replay-bundle <run>` writes that timeline: the observed Kp and ap with their
   provenance, the density ratios against the same quiet control window Step 4 measured the
   enhancement against, and a few Sun frames a day from Helioviewer with the lag between the time
-  asked for and the image actually returned on each.
+  asked for and the image actually returned on each. Each frame is fetched at two sizes — the full
+  512 px image as a file and a 32 px thumbnail inlined in the timeline — so the viewer has a
+  placeholder everywhere on the scrubber and fetches the 360 kB frames only as the playhead
+  reaches them.
 - `driftwatch supplemental` fetches CelesTrak's operator-ephemeris element sets, stores
   the version, thins versions older than a fortnight to one a day, and with `--fit`
   refits the supplemental covariance across the whole store. It runs every three hours

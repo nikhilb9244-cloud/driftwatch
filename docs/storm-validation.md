@@ -112,9 +112,8 @@ different mixtures of species. That it does not points at a bias in the storm re
 whole rather than at the altitude profile — which is the term the code carries as a prior, and
 the one thing the measurement was designed to constrain.
 
-**Against the published record, this disagrees in sign, and the disagreement is the point of
-recording it.** The published assessments of MSIS-class models at storm time mostly find
-**under**-estimation:
+**Against the published record, this disagrees in sign.** The published assessments of
+MSIS-class models at storm time mostly find **under**-estimation:
 
 - Bruinsma et al. (2021), *Thermosphere modeling capabilities assessment: geomagnetic storms*,
   J. Space Weather Space Clim. — comparing modelled against accelerometer-derived densities over
@@ -126,33 +125,61 @@ recording it.** The published assessments of MSIS-class models at storm time mos
 - Assessments of NRLMSIS 2.1 report the same shape: under-estimation of the main-phase peak,
   over-estimation in the initial phase, and a recovery-phase error over 40 % for some events.
 
-Our measurement says over-prediction by 22 per cent. Four things separate the two, and they are
-not all in our favour:
+### The two sides are not measuring the same quantity, and here is each one written out
 
-1. **It is not the same quantity.** The published work compares an *instantaneous* density
-   against an accelerometer, and reports the error in the *peak amplitude*. We compare a
-   three-day window-integrated storm/quiet decay ratio over 10 to 13 May, which is dominated by
-   the sustained recovery rather than by the peak. A model that undershoots a sharp main-phase
-   peak and overshoots the two-day recovery would produce both results at once. That
-   reconciliation is plausible and **this measurement cannot test it**: the decay method has no
-   time resolution inside the window, by construction.
-2. **Our altitudes are mostly above theirs.** GRACE-FO and Swarm sit at 450 to 510 km; our
-   sample runs to 2,000 km, with 27 of the 53 binned objects above 650 km.
-3. **Our denominator makes us look worse, not better.** The quiet control window (25–28 April
-   2024) had Kp at or below 4, not a solar-minimum baseline, so the *observed* ratio is
-   conservative — the true enhancement was larger than 1.68 and the model's over-prediction is
-   therefore smaller than 22 per cent.
-4. **Survivorship does the same.** The 3,891 objects that were in orbit on 9 May 2024 and have
-   since decayed are the ones that felt the storm hardest and cannot be in the sample, so again
-   the observed ratio is biased low and the apparent over-prediction biased high.
+Before the disagreement can be called a discrepancy, it has to survive being stated precisely.
+A "density error" is not one number: it depends on where, when, over how long, and against what.
+Set side by side:
 
-Three of those four push the number in one direction, and it is the direction that would shrink
-or reverse the disagreement. **So the honest statement is: over this window, at these altitudes,
-by this method, NRLMSIS 2.1 over-predicts the enhancement by about 22 per cent, and at least
-three known biases in the measurement inflate that figure.** It is a number to test the next
-storm against, not a correction to apply. `DENSITY_STORM_RATIO_SIGMA_REL` stays at a symmetric
-0.30 and a test pins it there, so that no later change can quietly turn this record into a
-calibration.
+| | **The published assessments** | **This measurement** |
+| --- | --- | --- |
+| **What is compared** | Model density at a **point** against density derived from a **spacecraft accelerometer** at that point | Model density at a **fixed altitude** against density inferred from the **decay of an orbit** through it |
+| **The observed quantity** | Non-gravitational acceleration on a drag-free-controlled satellite, inverted to `rho` with a modelled drag coefficient and a known area | `da/dt` of the mean semi-major axis, from a straight line through the element sets in each window, with `B` divided out by taking a **ratio of two windows** |
+| **Where in space** | One point on one orbit, sampled continuously: GRACE-FO ~500 km, Swarm-A/C ~450 km | Wherever each of 53 objects flew, weighted along the orbit by `rho \|v_rel\| (v_rel · v)`; 450–2,000 km, 27 of them above 650 km |
+| **Where in time** | Instantaneous, at whatever cadence the accelerometer gives (seconds to minutes) | A **three-day integral**, 10–13 May, with no time resolution inside it whatever |
+| **What is reported** | The error in the **peak amplitude** of the storm response, and separately per storm phase | The error in the **window-integrated storm/quiet ratio**, one number per object |
+| **The baseline** | The model's own quiet value at the same point and time | A different **three-day window three weeks earlier** (25–28 April), through which the same objects flew |
+| **The population** | Two to four dedicated science satellites in near-circular orbits, with measured areas and attitudes | Every catalogued object that had a decay significant against its own element-set scatter — sizes, shapes and attitudes unknown |
+
+**So the honest reading is that this is mostly a category difference, with a possible discrepancy
+inside it that this measurement cannot isolate.** Three things follow from the table, in order of
+how much they explain:
+
+1. **Peak against integral.** A storm's density response is a sharp main-phase spike on a
+   two-day recovery shoulder. The published error is in the spike; ours is in the area under the
+   whole thing, where the shoulder dominates simply because it is longer. A model that
+   undershoots the spike and overshoots the recovery — which is exactly the shape the NRLMSIS 2.1
+   assessments describe, "under-estimation of the main-phase peak, over-estimation in the initial
+   phase, recovery error over 40 %" — produces both results at once with no contradiction. **This
+   measurement cannot test that**, by construction: the decay method integrates the window and
+   has no time resolution inside it. Resolving it needs a shorter window, which needs element
+   sets more often than the catalogue issues them.
+2. **Point against path, and fixed height against a decaying orbit.** Their `rho` is at a place;
+   ours is what an object *flew through*, weighted by the drag integral and therefore by
+   perigee, over an orbit that was itself falling as the storm acted. The two are the same number
+   only for a circular orbit at a constant altitude, which is the case their satellites nearly
+   are and ours are not.
+3. **Different altitudes.** Their 450–510 km sits at the bottom of our range; half our binned
+   objects are above 650 km, where the storm response is set by a different mixture of species.
+   Our own altitude split resolves no trend across 1,550 km, which argues this is the smallest
+   of the three, but it is not nothing.
+
+**And two known biases in our measurement push in one direction — the direction that would shrink
+the disagreement.** The quiet control window had Kp at or below 4 rather than being a
+solar-minimum baseline, so the *observed* ratio is conservative and the true enhancement was
+larger than 1.68; and the 3,891 objects in orbit on 9 May 2024 that have since decayed are
+precisely the ones that felt the storm hardest and cannot be in the sample. Both make the model
+look worse than it is. Together with (1) they mean **22 per cent is an upper bound on this
+quantity's error, not a best estimate of it**.
+
+**What is documented, and what is not done.** Over this window, at these altitudes, by this
+method, NRLMSIS 2.1 over-predicts the enhancement by about 22 per cent; the published work
+measures a different quantity and finds the opposite sign; the difference is mostly explained by
+which quantity, and what remains is not separable here. Nothing is tuned either way.
+`DENSITY_STORM_RATIO_SIGMA_REL` stays at a symmetric 0.30 and a test pins it there, so that no
+later change can quietly turn this record into a calibration — and so that a future reader who
+resolves (1) with better data finds the prior where they left it rather than half-corrected
+against a comparison that never justified a correction.
 
 ---
 

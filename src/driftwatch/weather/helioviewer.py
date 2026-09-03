@@ -17,6 +17,14 @@ it, because Helioviewer returns the nearest image it has and that can be minutes
 data gap, hours away. A replay that silently showed a picture from the day before would be
 worse than showing none.
 
+**Each frame is fetched twice, at two sizes.** The full 512 px image is 360 kB, and a seven-day
+replay wants 29 of them; loading all of that before a reader has scrubbed anywhere would be ten
+megabytes spent on a picture. So a 64 px thumbnail of the same disc is fetched alongside -- the
+identical request at a coarser ``imageScale``, needing no image library and no second code path
+-- and it is small enough (about 3 kB) to inline into the replay timeline. The viewer draws the
+thumbnail immediately at every scrub position and fetches the full frame as the playhead
+approaches it.
+
 Terms: the API is public and needs no account. The Helioviewer documentation asks for credit
 rather than imposing a licence; ``config.HELIOVIEWER_CITATION`` carries it, and the images are
 NASA/SDO products, which are not subject to copyright.
@@ -44,13 +52,20 @@ log = logging.getLogger(__name__)
 
 @dataclass(frozen=True)
 class SunFrame:
-    """One cached frame: what was asked for, what came back, and where it is."""
+    """One cached frame: what was asked for, what came back, and where it is.
+
+    ``thumb`` is the same disc at :data:`driftwatch.config.HELIOVIEWER_THUMB_PX`, fetched
+    alongside the full frame so the viewer has something to draw while the full one is in
+    flight. It is ``None`` when Helioviewer served the full frame but not the small one, which
+    the caller reports rather than papering over.
+    """
 
     requested: datetime
     actual: datetime | None
     path: Path
     source_id: int | None
     from_cache: bool
+    thumb: Path | None = None
 
     @property
     def lag(self) -> timedelta | None:
@@ -74,8 +89,19 @@ def frame_times(start: datetime, end: datetime, *, per_day: int = config.HELIOVI
     return out
 
 
-def image_path(t: datetime, cache_dir: Path = config.CACHE_DIR) -> Path:
-    return cache_dir / "helioviewer" / f"aia193_{stamp(t)}.png"
+def image_path(
+    t: datetime, cache_dir: Path = config.CACHE_DIR, *, thumb: bool = False, thumb_px: int | None = None
+) -> Path:
+    """Where a frame is cached. **The thumbnail's size is in its name**, on purpose.
+
+    Without it, changing :data:`driftwatch.config.HELIOVIEWER_THUMB_PX` would go on serving the
+    old size from cache for ever and the config would silently mean nothing -- which is how the
+    64 px measurement was found still in place after the value had been changed to 32.
+    """
+    if not thumb:
+        return cache_dir / "helioviewer" / f"aia193_{stamp(t)}.png"
+    px = config.HELIOVIEWER_THUMB_PX if thumb_px is None else thumb_px
+    return cache_dir / "helioviewer" / f"aia193_{stamp(t)}_thumb{px}.png"
 
 
 def _meta_path(path: Path) -> Path:
@@ -108,29 +134,16 @@ def closest_image(
             client.close()
 
 
-def fetch_frame(
+def _screenshot(
     t: datetime,
     *,
-    cache_dir: Path = config.CACHE_DIR,
-    client: httpx.Client | None = None,
-    offline: bool = False,
-    layers: str = config.HELIOVIEWER_LAYERS,
-    image_scale: float = config.HELIOVIEWER_IMAGE_SCALE,
-    size_px: int = config.HELIOVIEWER_IMAGE_PX,
-) -> SunFrame | None:
-    """One PNG of the Sun nearest ``t``, cached. None when Helioviewer has no image there."""
-    path = image_path(t, cache_dir)
-    if path.exists():
-        meta = json.loads(_meta_path(path).read_text(encoding="utf-8")) if _meta_path(path).exists() else {}
-        actual = pd.Timestamp(meta["actual"]).to_pydatetime() if meta.get("actual") else None
-        return SunFrame(t, actual, path, meta.get("source_id"), True)
-    if offline:
-        return None
-
-    own = client is None
-    client = client or make_client()
+    client: httpx.Client,
+    layers: str,
+    image_scale: float,
+    size_px: int,
+) -> bytes | None:
+    """The PNG bytes of one screenshot, or None when Helioviewer will not serve it."""
     try:
-        info = closest_image(t, client=client)
         response = client.get(
             f"{config.HELIOVIEWER_BASE_URL}/takeScreenshot/",
             params={
@@ -146,21 +159,75 @@ def fetch_frame(
             },
             timeout=120.0,
         )
-        if response.status_code != 200 or not response.headers.get("content-type", "").startswith("image/"):
-            log.warning("Helioviewer returned no image for %s (%s)", t.isoformat(), response.status_code)
-            return None
-        content = response.content
     except httpx.HTTPError as exc:
-        log.warning("Helioviewer request for %s failed (%s)", t.isoformat(), exc)
+        log.warning("Helioviewer request for %s at %d px failed (%s)", t.isoformat(), size_px, exc)
         return None
-    finally:
-        if own:
-            client.close()
+    if response.status_code != 200 or not response.headers.get("content-type", "").startswith("image/"):
+        log.warning("Helioviewer returned no %d px image for %s (%s)", size_px, t.isoformat(), response.status_code)
+        return None
+    return response.content
 
+
+def _write_png(path: Path, content: bytes) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     tmp = path.with_name(path.name + ".tmp")
     tmp.write_bytes(content)
     os.replace(tmp, path)
+
+
+def fetch_frame(
+    t: datetime,
+    *,
+    cache_dir: Path = config.CACHE_DIR,
+    client: httpx.Client | None = None,
+    offline: bool = False,
+    layers: str = config.HELIOVIEWER_LAYERS,
+    image_scale: float = config.HELIOVIEWER_IMAGE_SCALE,
+    size_px: int = config.HELIOVIEWER_IMAGE_PX,
+    thumb_px: int = config.HELIOVIEWER_THUMB_PX,
+) -> SunFrame | None:
+    """One PNG of the Sun nearest ``t`` and a thumbnail of it, cached.
+
+    The thumbnail is the identical request at a coarser ``imageScale``, so the field of view is
+    the same disc and the only difference is the pixel count. A frame whose full image exists but
+    whose thumbnail does not (an older cache, or a failed second request) is still returned, with
+    ``thumb`` as None; the viewer then waits for the full image rather than showing nothing.
+    """
+    path = image_path(t, cache_dir)
+    thumb_path = image_path(t, cache_dir, thumb=True, thumb_px=thumb_px)
+    if path.exists() and (thumb_path.exists() or offline):
+        meta = json.loads(_meta_path(path).read_text(encoding="utf-8")) if _meta_path(path).exists() else {}
+        actual = pd.Timestamp(meta["actual"]).to_pydatetime() if meta.get("actual") else None
+        return SunFrame(t, actual, path, meta.get("source_id"), True, thumb_path if thumb_path.exists() else None)
+    if offline:
+        return None
+
+    own = client is None
+    client = client or make_client()
+    try:
+        info = closest_image(t, client=client)
+        content = (
+            None
+            if path.exists()
+            else _screenshot(t, client=client, layers=layers, image_scale=image_scale, size_px=size_px)
+        )
+        if content is None and not path.exists():
+            return None
+        small = _screenshot(
+            t,
+            client=client,
+            layers=layers,
+            image_scale=image_scale * size_px / thumb_px,
+            size_px=thumb_px,
+        )
+    finally:
+        if own:
+            client.close()
+
+    if content is not None:
+        _write_png(path, content)
+    if small is not None:
+        _write_png(thumb_path, small)
     actual = None
     if info and info.get("date"):
         actual = pd.Timestamp(str(info["date"]), tz="UTC").to_pydatetime()
@@ -173,13 +240,15 @@ def fetch_frame(
                 "layers": layers,
                 "image_scale": image_scale,
                 "size_px": size_px,
-                "bytes": len(content),
+                "bytes": len(content) if content is not None else path.stat().st_size,
+                "thumb_px": thumb_px,
+                "thumb_bytes": len(small) if small is not None else None,
             },
             indent=2,
         ),
         encoding="utf-8",
     )
-    return SunFrame(t, actual, path, info.get("id") if info else None, False)
+    return SunFrame(t, actual, path, info.get("id") if info else None, False, thumb_path if small else None)
 
 
 def fetch_frames(
@@ -205,12 +274,13 @@ def fetch_frames(
         if own:
             client.close()
     log.info(
-        "Helioviewer: %d of %d frames for %s to %s (%d from cache)",
+        "Helioviewer: %d of %d frames for %s to %s (%d from cache, %d with a thumbnail)",
         len(out),
         len(times),
         start.date(),
         end.date(),
         sum(1 for f in out if f.from_cache),
+        sum(1 for f in out if f.thumb is not None),
     )
     return out
 
@@ -225,6 +295,7 @@ def frames_table(frames: list[SunFrame]) -> pd.DataFrame:
                 "lag_minutes": round(f.lag.total_seconds() / 60.0, 2) if f.lag is not None else None,
                 "file": f.path.name,
                 "kilobytes": round(f.path.stat().st_size / 1024.0, 1) if f.path.exists() else None,
+                "thumb_kilobytes": round(f.thumb.stat().st_size / 1024.0, 2) if f.thumb and f.thumb.exists() else None,
             }
             for f in frames
         ]

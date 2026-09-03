@@ -4,8 +4,14 @@ export class SimClock {
   tMs: number;
   playing = true;
   speed = 60;
-  readonly minMs: number;
-  readonly maxMs: number;
+  minMs: number;
+  maxMs: number;
+  /**
+   * The middle of the window, which is the bundle's reference time and what the `t₀` button
+   * jumps to. It moves with the range, so entering replay does not leave the button pointing at
+   * a moment two years away.
+   */
+  t0Ms: number;
   private listeners: Array<(clock: SimClock) => void> = [];
 
   /**
@@ -15,9 +21,35 @@ export class SimClock {
    */
   constructor(t0Ms: number, windowHours: number, range?: { minMs: number; maxMs: number }) {
     this.tMs = t0Ms;
+    this.t0Ms = t0Ms;
     const half = (windowHours / 2) * 3.6e6;
     this.minMs = Math.min(t0Ms - half, range?.minMs ?? Infinity);
     this.maxMs = Math.max(t0Ms + half, range?.maxMs ?? -Infinity);
+  }
+
+  /**
+   * Move the clock to a different window without replacing it.
+   *
+   * Entering replay changes *when* the viewer is, by two years, but not *what* it is: one
+   * application, one clock, one set of transport controls, and the bindings in `ui.ts` stay
+   * attached across the switch. `keepFraction` carries the reader's position through the window
+   * over, which is the only part of a 2026 instant that still means anything in May 2024 — the
+   * two windows are the same length, so "four days in" survives the move and the instant does
+   * not.
+   */
+  setRange(
+    t0Ms: number,
+    windowHours: number,
+    range?: { minMs: number; maxMs: number },
+    opts: { keepFraction?: boolean } = {},
+  ): void {
+    const fraction = opts.keepFraction ? this.fraction : 0;
+    const half = (windowHours / 2) * 3.6e6;
+    this.t0Ms = t0Ms;
+    this.minMs = Math.min(t0Ms - half, range?.minMs ?? Infinity);
+    this.maxMs = Math.max(t0Ms + half, range?.maxMs ?? -Infinity);
+    this.tMs = opts.keepFraction ? this.minMs + fraction * (this.maxMs - this.minMs) : t0Ms;
+    this.emit();
   }
 
   /** Advance by a wall-clock interval in milliseconds. Pauses at the window edges. */

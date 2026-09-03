@@ -493,13 +493,18 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   2024 it **over-predicts** the storm/quiet density ratio by about **22 per cent** (observed
   median 1.68 against a modelled 2.21), with **no resolvable altitude dependence** — 0.83, 0.74,
   0.76 and 0.73 across 450–550, 550–650, 650–800 and 800–2000 km. The published assessments of
-  MSIS-class models at storm time mostly find the opposite sign, but they measure the
-  instantaneous peak against an accelerometer while this measures a three-day window-integrated
-  decay ratio, and three known biases in this measurement (a not-quite-quiet control window,
-  survivorship, and altitudes mostly above the accelerometer satellites) all inflate the apparent
-  over-prediction. `DENSITY_STORM_RATIO_SIGMA_REL` stays a symmetric 0.30 and a test pins it, so
-  the record cannot quietly become a calibration. `docs/storm-validation.md` §1 carries the
-  comparison and the citations.
+  MSIS-class models at storm time mostly find the opposite **sign**, and the two are **not
+  measuring the same quantity**: they compare model density at a point against a spacecraft
+  accelerometer and report the error in the storm's *peak*, while this compares model density at
+  a fixed altitude against density inferred from the *decay of an orbit* and reports the error in
+  a three-day *integral* dominated by the recovery. A model that undershoots the peak and
+  overshoots the recovery gives both answers with no contradiction, and this method cannot
+  separate them because it has no time resolution inside its window. Two further biases here — a
+  control window that was not solar-minimum quiet, and survivorship against the objects that
+  decayed — both inflate our figure, so 22 per cent is an upper bound on this quantity's error
+  rather than a best estimate. `DENSITY_STORM_RATIO_SIGMA_REL` stays a symmetric 0.30 and a test
+  pins it, so the record cannot quietly become a calibration.
+  `docs/storm-validation.md` §1 sets the two quantities out side by side, with the citations.
 - **The February 2022 case is bounded by the catalogue holding 17 of the 49 satellites**, and the
   decay evidence in it rests on six of the thirty-eight lost. No population statistic is quoted
   from six objects, five of which have under a day of element sets; what they establish is the
@@ -602,12 +607,31 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   numerical noise — the same floor `driftwatch storm-check` bands on. Where one side is below it
   and the other above, the cell reads `↑ from ~0` rather than an exponent, because crossing the
   level at which a probability means anything is the statement worth making.
-- **Replay is a separate document, reached by a navigation.** `?replay` reloads the viewer
-  against `web/public/data/replay/`: the historical catalogue for 9 May 2024, that run's own
-  conjunctions, and the storm timeline. Holding two catalogues in memory and swapping the point
-  cloud's buffers would put a second code path through the one part of the viewer Phase 1 asked
-  not to be touched; a reload keeps exactly one catalogue alive and makes a replay a link
-  somebody can send. Nothing of the replay bundle is fetched until that navigation happens.
+- **Replay is a mode, not a second page.** The globe, the camera, the clock, the transport
+  controls and the animation loop are created once and live for the life of the tab; the
+  *catalogue* — the bundle, the point cloud, the worker, the frame store, the conjunctions panel
+  and the storm control — is mounted and unmounted around them against
+  `web/public/data/replay/` or `web/public/data/`. Nothing of the replay bundle is fetched until
+  a reader enters it, and `?replay` still goes into the address bar through `pushState`, so a
+  replay is a link somebody can send and the Back button leaves it.
+  (Changed at the Step 5 review, 2026-09-03: the first build entered replay by reloading the
+  page, which was simpler and cost the reader their camera, selection and scenario every time
+  they crossed the boundary.)
+- **What carries across a mode switch, and what does not.** Carried: the camera, the *position
+  through the window* as a fraction (the two windows are the same length two years apart, so
+  "four days in" is the only part of a 2026 instant that still means anything in May 2024), the
+  playback speed and whether it was playing, the category and band filters **by name** rather
+  than by index, the selected object **by NORAD id**, and the scenario — remembered **per mode**,
+  because a replay run is scored under `quiet` and its own observed record while the live run is
+  scored under quiet, forecast and the storm levels, so one carried value would drop a reader's
+  G5 on the way in and fail to restore it on the way out. Not carried: an absolute time, an
+  object the other catalogue does not hold, and a scenario the other run was not scored under.
+- **The worker is replaced rather than re-initialised.** The WebAssembly bulk propagator is
+  allocated for a fixed object count; re-initialising it for a different catalogue would leave
+  the previous allocation resident with nothing to free it. The script is already cached, so the
+  cost of a fresh worker is the WASM instantiation alone. Every listener a mounted catalogue
+  attaches goes on one `AbortController`, so unmounting cannot leave a handler behind to fire
+  against a catalogue no longer on screen.
 - **The replay scrubber is the simulation clock.** There is no second timeline. The Kp bar is
   the clock's background, and the density readout, the Sun image and the objects all read the
   same `tMs`, which is what makes them move together by construction rather than by
@@ -623,8 +647,22 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   same section records.
 - **A Sun frame is the nearest image Helioviewer holds to the time asked for**, which during a
   data gap can be hours away. The lag is carried on every frame and the viewer renders it above
-  15 minutes. Four frames a day, ~360 kB each, fetched one at a time as the scrubber passes
-  them.
+  15 minutes.
+- **The Sun loads lazily, over an inline placeholder.** Four frames a day at 512 px is 29 images
+  and 10.4 MiB for a seven-day replay, which is not a thing to fetch before a reader has looked
+  at anything. Each frame is fetched from Helioviewer **twice**: the full 512 px image, which
+  stays a file, and a 64 px — now 32 px — thumbnail of the same disc, which is the identical
+  request at a coarser `imageScale` and needs no image library. The thumbnails travel **inline in
+  `storm.json` as data URIs** (about 3 kB each, 121 kB for the whole timeline against 360 kB for
+  one full frame), so every scrub position has a picture the instant the file parses; the full
+  image is requested when the playhead comes within six hours of it, at most one at a time, and
+  the three the exporter marks `eager` — the first, the peak and the last — are requested up
+  front. The placeholder is blurred **and captioned as a preview**, because a 32 px disc
+  presented as the Sun at a stated minute would be a small lie.
+  (Measured at the Step 5 review: a 64 px thumbnail came out at 9.8 kB, because Helioviewer
+  renders a 24-bit PNG of a noisy image, so 29 of them inline was 280 kB of JSON. The thumbnail's
+  size is now part of its cache filename, because without that a change to
+  `HELIOVIEWER_THUMB_PX` went on serving the old size for ever.)
 - **The replay fleet is not the demo fleet.** Sentinel-1A stands in for Sentinel-1C, which did
   not launch until December 2024. `fleets/demo-2024.yaml` records the substitution.
 

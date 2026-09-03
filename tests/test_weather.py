@@ -15,6 +15,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
+from driftwatch import config
 from driftwatch.weather import celestrak_sw as csw
 from driftwatch.weather import helioviewer, swpc
 from driftwatch.weather import table as wt
@@ -458,3 +459,23 @@ def test_sun_frames_are_spaced_evenly_and_a_few_a_day():
     assert times == [T0 + timedelta(hours=6 * i) for i in range(5)]
     assert helioviewer.frame_times(T0, T0, per_day=4) == []
     assert helioviewer.frame_times(T0, T0 + timedelta(days=1), per_day=0) == []
+
+
+def test_a_thumbnails_size_is_part_of_its_cache_name(tmp_path):
+    """Otherwise changing the size goes on serving the old one for ever.
+
+    Found the hard way at the Step 5 review: `HELIOVIEWER_THUMB_PX` was changed from 64 to 32,
+    the bundle was rebuilt, and `storm.json` came out exactly the same size because every
+    thumbnail was still the cached 64 px one. A config value that cannot change anything is
+    worse than no config value.
+    """
+    full = helioviewer.image_path(T0, tmp_path)
+    small = helioviewer.image_path(T0, tmp_path, thumb=True, thumb_px=32)
+    large = helioviewer.image_path(T0, tmp_path, thumb=True, thumb_px=64)
+    assert full != small != large and full != large
+    assert "thumb32" in small.name and "thumb64" in large.name
+    assert "thumb" not in full.name
+    # And the default follows the config rather than being frozen at whatever it once was.
+    assert helioviewer.image_path(T0, tmp_path, thumb=True) == helioviewer.image_path(
+        T0, tmp_path, thumb=True, thumb_px=config.HELIOVIEWER_THUMB_PX
+    )

@@ -1,24 +1,27 @@
 /**
- * Replay mode: May 2024, scrubbed.
+ * Replay mode: May 2024, scrubbed, without leaving the application.
  *
- * Phase 3 Step 5. The Kp bar, the density ratio at 400 and 500 km, the Sun image nearest the
- * selected time and the conjunction list all move together, because they are all driven by the
- * one simulation clock the viewer already has. There is no second timeline: the replay scrubber
- * *is* the clock, drawn with the Kp bar as its background.
+ * Phase 3 Step 5, revised at the Step 5 review. The Kp bar, the density ratio at 400 and 500 km,
+ * the Sun image nearest the selected time and the conjunction list all move together, because
+ * they are all driven by the one simulation clock the viewer already has. There is no second
+ * timeline: the replay scrubber *is* the clock, drawn with the Kp bar as its background.
  *
- * **Replay is a mode, not a sixth scenario** (`docs/design-brief.md` §3.1). It changes what the
- * whole screen means — the times become historical, the catalogue becomes the one that existed
- * on 9 May 2024, and the fleet has Sentinel-1A standing in for Sentinel-1C, which did not launch
- * until December of that year. So it is entered from its own control, not from the segmented
- * scenario control beside it.
+ * **Replay is a mode, not a reload.** The first build entered it by navigating to `?replay`,
+ * which was simple and cost the reader their camera, their selection and their scenario every
+ * time they crossed the boundary. It is now a swap of the data source inside one live
+ * application: `main.ts` unmounts the catalogue, mounts the other one, and carries over
+ * everything that still means something (see `Carried` there). The URL still carries `?replay`
+ * through `history.pushState`, so a replay is still a link somebody can send and the browser's
+ * Back button still works — it is the reload that has gone, not the address.
  *
- * **Entering it navigates to `?replay`, which reloads the viewer against `data/replay/`.**
- * That looks blunt and is the deliberate choice. The alternative — holding two catalogues in
- * memory and swapping the point cloud's buffers — would put a second code path through the one
- * part of this project Phase 1 asked not to be touched, for a mode a reader enters once. A
- * reload keeps exactly one catalogue alive, keeps the propagation worker's initialisation
- * unchanged, and has the side benefit of making a replay a link somebody can send. The replay
- * bundle is never fetched until that navigation happens, which is what §8 of the brief asks for.
+ * **The Sun is loaded lazily.** A seven-day replay is 29 frames at 360 kB, and fetching all of
+ * them so that a reader can look at three is ten megabytes spent on a picture. Every frame
+ * carries a 64 px thumbnail inline in `storm.json` (about 3 kB, so all of them together are a
+ * fraction of one full image), which is drawn immediately at any scrub position; the full image
+ * is fetched when the playhead comes near it, and the three marked `eager` by the exporter — the
+ * first, the peak and the last — are requested up front. The caption says which of the two is on
+ * screen, because a blurred 64 px disc presented as the Sun at a stated minute would be a small
+ * lie.
  *
  * Everything drawn here comes from `storm.json`, written by `driftwatch replay-bundle`. The
  * browser computes no density and no Kp; it draws two series and picks the nearest image.
@@ -27,9 +30,13 @@
 import type { SimClock } from "./clock";
 import { el, escapeHtml } from "./ui";
 
-/** The query parameter that puts the viewer in replay mode, and the directory it then reads. */
+/** The query parameter that marks replay mode, and the directory it reads. */
 export const REPLAY_PARAM = "replay";
 export const REPLAY_BASE = "data/replay/";
+export const LIVE_BASE = "data/";
+
+/** How near the playhead has to come, in milliseconds, before a full frame is fetched. */
+const PREFETCH_MS = 6 * 3600 * 1000;
 
 export interface SunFrame {
   requested: string;
@@ -37,6 +44,10 @@ export interface SunFrame {
   lag_minutes: number | null;
   path: string;
   bytes: number;
+  /** A 64 px data URI, drawn while the full image is in flight. Null if the export had none. */
+  thumb: string | null;
+  /** Whether the exporter marked this one worth fetching before the reader scrubs. */
+  eager: boolean;
 }
 
 export interface StormTimeline {
@@ -53,17 +64,38 @@ export interface StormTimeline {
     quiet_window: string[];
     [key: string]: unknown;
   };
-  sun: { layers: string; citation: string; frames: SunFrame[]; total_bytes: number };
+  sun: {
+    layers: string;
+    citation: string;
+    frames: SunFrame[];
+    total_bytes: number;
+    thumb_px?: number;
+    n_eager?: number;
+    n_with_thumb?: number;
+  };
   notes: string[];
 }
 
-export function isReplay(): boolean {
+/** Whether the address bar says replay. Read once at startup; after that the mode is state. */
+export function replayInUrl(): boolean {
   return new URLSearchParams(window.location.search).has(REPLAY_PARAM);
 }
 
-/** The data directory the viewer should read: the replay bundle in replay mode, else the live one. */
-export function dataBase(): string {
-  return isReplay() ? REPLAY_BASE : "data/";
+export function dataBaseFor(replay: boolean): string {
+  return replay ? REPLAY_BASE : LIVE_BASE;
+}
+
+/**
+ * Put `?replay` in the address bar, or take it out, without reloading.
+ *
+ * `pushState` rather than `replaceState` so the Back button leaves replay, which is what a
+ * reader who arrived by clicking a button will expect it to do.
+ */
+export function setReplayInUrl(on: boolean): void {
+  const url = new URL(window.location.href);
+  if (on) url.searchParams.set(REPLAY_PARAM, "1");
+  else url.searchParams.delete(REPLAY_PARAM);
+  if (url.toString() !== window.location.href) window.history.pushState({ replay: on }, "", url);
 }
 
 export async function loadTimeline(base = REPLAY_BASE): Promise<StormTimeline | null> {
@@ -100,27 +132,99 @@ function kpColour(kp: number | null): string {
   return ramp[Math.min(4, Math.floor(kp - 5))];
 }
 
-const nearest = <T>(items: T[], at: number, time: (item: T) => number): T | null => {
-  let best: T | null = null;
+const nearestIndex = <T>(items: T[], at: number, time: (item: T) => number): number => {
+  let best = -1;
   let bestGap = Infinity;
-  for (const item of items) {
+  items.forEach((item, i) => {
     const gap = Math.abs(time(item) - at);
     if (gap < bestGap) {
       bestGap = gap;
-      best = item;
+      best = i;
     }
-  }
+  });
   return best;
 };
 
 /**
+ * Fetches full-resolution Sun frames on demand and remembers which have arrived.
+ *
+ * A frame is requested when the playhead comes within `PREFETCH_MS` of it, and at most one
+ * request is in flight at a time so that dragging the scrubber across a week does not open
+ * twenty-nine connections. A frame that fails is marked failed and not retried in a loop; its
+ * thumbnail goes on being shown, which is a worse picture rather than no picture.
+ */
+class SunLoader {
+  private readonly state = new Map<number, "pending" | "ready" | "failed">();
+  private inflight = 0;
+
+  constructor(
+    private readonly frames: SunFrame[],
+    private readonly base: string,
+    private readonly onLoaded: (index: number) => void,
+  ) {
+    frames.forEach((frame, i) => {
+      if (frame.eager) this.request(i);
+    });
+  }
+
+  ready(index: number): boolean {
+    return this.state.get(index) === "ready";
+  }
+
+  url(index: number): string {
+    return this.base + this.frames[index].path;
+  }
+
+  /** Ask for `index` and anything else the playhead is about to reach. */
+  ensure(index: number, nowMs: number): void {
+    this.request(index);
+    this.frames.forEach((frame, i) => {
+      const at = Date.parse(frame.actual ?? frame.requested);
+      if (Math.abs(at - nowMs) <= PREFETCH_MS) this.request(i);
+    });
+  }
+
+  private request(index: number): void {
+    if (index < 0 || index >= this.frames.length) return;
+    if (this.state.has(index)) return;
+    if (this.inflight >= 1 && !this.frames[index].eager) return;
+    this.state.set(index, "pending");
+    this.inflight++;
+    const image = new Image();
+    image.decoding = "async";
+    image.onload = () => {
+      this.state.set(index, "ready");
+      this.inflight--;
+      this.onLoaded(index);
+    };
+    image.onerror = () => {
+      this.state.set(index, "failed");
+      this.inflight--;
+      console.warn("Sun frame failed to load:", this.frames[index].path);
+    };
+    image.src = this.url(index);
+  }
+}
+
+export interface ReplayHandle {
+  /** Called once per animation frame. Cheap: only the playhead and three text nodes move. */
+  tick(): void;
+  /** Hide the scrubber and release its listeners. */
+  destroy(): void;
+}
+
+/**
  * Draw the scrubber and keep it, the Sun image and the readouts in step with the clock.
  *
- * Returns a function the animation loop calls each frame. It is cheap: the SVG is built once
- * and only the playhead's `x` and three text nodes change, so scrubbing does not re-render the
- * bar. Nothing here touches the point cloud.
+ * The SVG is built once and only the playhead's `x` and a few text nodes change, so scrubbing
+ * does not re-render the bar. Nothing here touches the point cloud.
  */
-export function buildReplay(timeline: StormTimeline, clock: SimClock, base = REPLAY_BASE): () => void {
+export function buildReplay(
+  timeline: StormTimeline,
+  clock: SimClock,
+  base = REPLAY_BASE,
+  signal?: AbortSignal,
+): ReplayHandle {
   const root = el<HTMLDivElement>("replay");
   root.hidden = false;
   // The scrubber is fixed to the bottom, so the two side panels have to stop above it rather
@@ -193,15 +297,43 @@ export function buildReplay(timeline: StormTimeline, clock: SimClock, base = REP
     `${escapeHtml(timeline.density.quiet_window[1].slice(0, 10))}, the same one Step 4 measured against</span>`;
 
   // Clicking the bar scrubs, which is what a reader will try first.
-  bar.addEventListener("click", (ev) => {
-    const rect = bar.getBoundingClientRect();
-    const fraction = Math.min(Math.max((ev.clientX - rect.left) / rect.width, 0), 1);
-    clock.playing = false;
-    clock.set(startMs + fraction * span);
-  });
+  bar.addEventListener(
+    "click",
+    (ev) => {
+      const rect = bar.getBoundingClientRect();
+      const fraction = Math.min(Math.max((ev.clientX - rect.left) / rect.width, 0), 1);
+      clock.playing = false;
+      clock.set(startMs + fraction * span);
+    },
+    { signal },
+  );
 
-  let shownFrame: SunFrame | null = null;
+  let shown = -1;
+  let shownFull = false;
   let lastKpIndex = -1;
+
+  const paint = (index: number, full: boolean) => {
+    const frame = timeline.sun.frames[index];
+    if (!frame) return;
+    shown = index;
+    shownFull = full;
+    image.src = full ? base + frame.path : (frame.thumb ?? base + frame.path);
+    image.classList.toggle("placeholder", !full);
+    image.hidden = false;
+    const at = frame.actual ?? frame.requested;
+    const lag = frame.lag_minutes;
+    caption.innerHTML =
+      `SDO/AIA 193 Å at ${escapeHtml(at.slice(0, 16).replace("T", " "))} UTC` +
+      (lag != null && lag > 15 ? ` <span class="warn">· ${lag.toFixed(0)} min from the time asked for</span>` : "") +
+      // A blurred 64 px disc presented as "the Sun at 11 May 12:00" would be a small lie, so it
+      // is labelled until the real one arrives.
+      (full ? "" : ` <span class="muted">· ${timeline.sun.thumb_px ?? 64} px preview, loading…</span>`) +
+      ` <span class="muted">${escapeHtml(timeline.sun.citation)}</span>`;
+  };
+
+  const loader = new SunLoader(timeline.sun.frames, base, (index) => {
+    if (index === shown && !shownFull) paint(index, true);
+  });
 
   const update = () => {
     const now = clock.tMs;
@@ -232,21 +364,12 @@ export function buildReplay(timeline: StormTimeline, clock: SimClock, base = REP
         ratios;
     }
 
-    const frame = nearest(timeline.sun.frames, now, (f) => Date.parse(f.actual ?? f.requested));
-    if (frame && frame !== shownFrame) {
-      shownFrame = frame;
-      image.src = base + frame.path;
-      image.hidden = false;
-      const at = frame.actual ?? frame.requested;
-      const lag = frame.lag_minutes;
-      caption.innerHTML =
-        `SDO/AIA 193 Å at ${escapeHtml(at.slice(0, 16).replace("T", " "))} UTC` +
-        (lag != null && lag > 15
-          ? ` <span class="warn">· ${lag.toFixed(0)} min from the time asked for</span>`
-          : "") +
-        ` <span class="muted">${escapeHtml(timeline.sun.citation)}</span>`;
-    }
-    if (!timeline.sun.frames.length) {
+    if (timeline.sun.frames.length) {
+      const nearest = nearestIndex(timeline.sun.frames, now, (f) => Date.parse(f.actual ?? f.requested));
+      loader.ensure(nearest, now);
+      const full = loader.ready(nearest);
+      if (nearest !== shown || (full && !shownFull)) paint(nearest, full);
+    } else {
       image.hidden = true;
       caption.innerHTML =
         `<span class="muted">No Sun imagery in this bundle. Run <code>driftwatch replay-bundle &lt;run&gt;</code> ` +
@@ -255,26 +378,46 @@ export function buildReplay(timeline: StormTimeline, clock: SimClock, base = REP
   };
 
   update();
-  return update;
+  return {
+    tick: update,
+    destroy: () => {
+      root.hidden = true;
+      image.hidden = true;
+      image.removeAttribute("src");
+      image.classList.remove("placeholder");
+      delete document.body.dataset.replay;
+    },
+  };
 }
 
 /**
- * The control that enters and leaves replay mode. Present on both, because a reader who has
- * scrubbed through May 2024 needs a way back that is not the browser's history.
+ * The control that enters and leaves replay mode.
+ *
+ * Bound once for the life of the page, because the mode switch no longer reloads it. Returns a
+ * setter the application calls after a switch so the label always describes what the button will
+ * do next rather than what it did last.
  */
-export function bindReplayControl(): void {
+export function bindReplayControl(onToggle: (replay: boolean) => void): (replay: boolean, busy?: boolean) => void {
   const button = document.getElementById("replay-toggle");
-  if (!(button instanceof HTMLButtonElement)) return;
-  const on = isReplay();
-  button.textContent = on ? "leave replay" : "replay May 2024";
-  button.title = on
-    ? "Return to the live catalogue and the current screening window"
-    : "Load the historical catalogue for 9 May 2024 and scrub through the Gannon storm. " +
-      "The Sun imagery and the historical positions are fetched only when you do this.";
-  button.addEventListener("click", () => {
-    const url = new URL(window.location.href);
-    if (on) url.searchParams.delete(REPLAY_PARAM);
-    else url.searchParams.set(REPLAY_PARAM, "1");
-    window.location.href = url.toString();
+  if (!(button instanceof HTMLButtonElement)) return () => void 0;
+  let current = replayInUrl();
+
+  const apply = (replay: boolean, busy = false) => {
+    current = replay;
+    button.disabled = busy;
+    button.textContent = busy ? "loading…" : replay ? "leave replay" : "replay May 2024";
+    button.title = replay
+      ? "Return to the live catalogue and the current screening window"
+      : "Load the historical catalogue for 9 May 2024 and scrub through the Gannon storm. " +
+        "The Sun imagery and the historical positions are fetched only when you do this.";
+  };
+
+  button.addEventListener("click", () => onToggle(!current));
+  // The Back button leaves replay, because a reader who arrived by clicking expects it to.
+  window.addEventListener("popstate", () => {
+    const wanted = replayInUrl();
+    if (wanted !== current) onToggle(wanted);
   });
+  apply(current);
+  return apply;
 }

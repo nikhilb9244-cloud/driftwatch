@@ -1523,3 +1523,123 @@ over-predicting by 22 per cent, and it is not corrected for that here either.
 4. **The Sun imagery is 10.4 MiB for 29 frames** at four a day over a seven-day window. One frame
    loads at a time, so the cost is per-frame rather than up front, but the bundle is the bundle.
    Fewer frames a day, or smaller images, or is a 360 kB image per twelve hours of replay right?
+
+## The Step 5 review's three answers, and Phase 3 closing (2026-09-03)
+
+The review approved Step 5 and answered the three questions it was asked, closing the phase.
+
+### 1. Replay is a mode, not a reload
+
+**Answered: one application, one live catalogue, the data source swapped in place, preserving
+camera, selection and scenario where they still apply.**
+
+Step 5 shipped the switch as a navigation to `?replay`, which was defensible and cost the reader
+their camera, their selection and their scenario every time they crossed the boundary. It is now a
+mount and unmount inside one live page. `main.ts` creates the globe, the camera, the clock, the
+transport bindings and the animation loop once, for the life of the tab; `mountCatalogue` builds
+the *catalogue* — bundle, point cloud, worker, frame store, conjunctions panel, storm control,
+replay scrubber — and returns a handle whose `unmount` gives back what is worth carrying.
+
+**What carries, and the reason for each.** The camera, because nothing touches it. The position
+through the window as a **fraction**: the live and replay windows are the same length two years
+apart, so "four days in" is the only part of a 2026 instant that still means anything in May 2024.
+The playback speed and whether it was playing. The filters **by name**, not by index — the two
+catalogues share a legend today and nothing guarantees they always will, and a carried index would
+silently filter the wrong class. The selection **by NORAD id**, because 13,376 objects are not the
+same 13,376. And the scenario **per mode**: the first attempt carried one value and lost a reader's
+G5 on the way in (replay has no G5) and then could not restore it on the way out, leaving them on
+the live run's default having chosen nothing.
+
+**Three things the swap needed that a reload had hidden.** `SimClock` gained a mutable range, so
+one clock and one set of transport controls survive the move rather than being rebuilt.
+`CataloguePoints` and `ConjunctionTracks` gained `dispose`, because three.js does not free GPU
+buffers on its own and a discarded catalogue is 13,000 to 32,000 objects' worth of vertex data.
+Every listener a mounted catalogue attaches now goes on one `AbortController`, so unmounting
+cannot leave a handler behind to fire against a catalogue that is no longer on screen.
+
+**The worker is replaced rather than re-initialised.** The WebAssembly bulk propagator is allocated
+for a fixed object count; a second `init` for a different catalogue would leave the first
+allocation resident with nothing to free it. Terminating and recreating costs one WASM
+instantiation against a script already in cache, and it guarantees no stale state.
+
+`?replay` still reaches the address bar, through `pushState` rather than a navigation, so a replay
+is still a link somebody can send and the Back button still leaves it. Measured in a real browser:
+`performance.getEntriesByType('navigation').length` stays at **1** across three switches, the
+object count moves 32,361 → 13,376 → 32,361, and the selection, speed, filters and scenario all
+come back.
+
+### 2. The Sun ships two or three frames and fetches the rest lazily
+
+**Answered: three eager frames, an inline low-resolution placeholder for every position, the rest
+on approach.**
+
+Each frame is now fetched from Helioviewer **twice**: the full 512 px image and a thumbnail of the
+same disc. The thumbnail is the identical request at a coarser `imageScale` — no image library, no
+second code path, and Helioviewer caches it like any other screenshot. The thumbnails travel
+**inline in `storm.json` as data URIs**; the full images stay files.
+
+The size took two measurements to get right, and both are worth keeping. At 64 px a thumbnail came
+out at **9.8 kB**, because Helioviewer renders a 24-bit PNG of a noisy image and 64 × 64 × 3 barely
+compresses; 29 of those inline is 280 kB of JSON, which is not lean. At 32 px it is **2.9 kB**, and
+behind `filter: blur(3px)` at 96 px on screen it is indistinguishable from the larger one. The
+second measurement was nearly missed: changing the config appeared to do nothing, because the
+thumbnail's cache filename did not include its size and the old files were being served. The size
+is now part of the name.
+
+The result: `storm.json` is **121 kB** with all 29 thumbnails in it, against 360 kB for a single
+full frame. The exporter marks three frames `eager` — the first, the one nearest peak Kp, and the
+last — chosen rather than taken in order, because those are where a reader opens, where they land
+when they scrub to "the storm", and the far end of the bar that would otherwise always wait.
+Everything else is requested when the playhead comes within six hours, at most one at a time.
+
+**The placeholder is labelled.** A blurred 32 px disc presented as "the Sun at 11 May 12:00" would
+be a small lie, so the caption reads `32 px preview, loading…` until the real frame lands. Verified
+over a throttled 60 kB/s link: scrubbing to an unfetched frame shows the thumbnail and that
+caption immediately, and the full image replaces both about ten seconds later. Entering replay
+fetched four full frames, not twenty-nine; a scrub fetched two more.
+
+### 3. The NRLMSIS comparison states which quantity each side measures
+
+**Answered: set the two out side by side so a reader can judge discrepancy against category
+difference, and tune nothing either way.**
+
+`docs/storm-validation.md` §1 now carries a seven-row table comparing what is measured, the
+observed quantity, where in space, where in time, what is reported, the baseline and the
+population — for the published assessments and for this measurement. The short version: they
+compare **model density at a point against a spacecraft accelerometer** and report the error in the
+storm's **peak**; we compare **model density at a fixed altitude against density inferred from the
+decay of an orbit** and report the error in a **three-day integral** dominated by the recovery.
+
+Three things follow, in order of how much they explain. A model that undershoots the main-phase
+spike and overshoots the two-day recovery — which is exactly the shape the NRLMSIS 2.1 assessments
+describe — produces both results with no contradiction, and **this method cannot test that**,
+because it has no time resolution inside its window. Their `rho` is at a place; ours is what an
+object flew through, weighted by the drag integral and therefore by perigee, along an orbit that
+was itself falling. And their 450–510 km sits at the bottom of our range.
+
+So it is mostly a category difference with a possible discrepancy inside it that this measurement
+cannot isolate — and the two known biases here, a control window that was not solar-minimum quiet
+and survivorship against the objects that decayed, both make the model look worse than it is. **22
+per cent is an upper bound on this quantity's error, not a best estimate.** Nothing is tuned:
+`DENSITY_STORM_RATIO_SIGMA_REL` stays a symmetric 0.30 and the test that pins it stays, so a future
+reader who resolves the time-resolution problem with better data finds the prior where they left it
+rather than half-corrected against a comparison that never justified a correction.
+
+### Phase 3 closes
+
+Six steps, every one reviewed. What it delivered: space weather with per-row provenance and a
+stated skill; NRLMSIS density along every orbit with the ap history built the way the model was
+fitted; a ballistic coefficient per object from its own decay where the decay is measurable, with
+the source on every row; the in-track storm term derived, verified against an independent numerical
+integration to a quarter of a per cent, and applied as a mean shift plus a variance through a
+minimally extended covariance protocol; five scenarios rescoring stored events with the quiet one
+bit-for-bit unchanged; validation against two storms with nothing tuned to either; and a viewer
+that switches scenarios and replays May 2024.
+
+Two of those are worth naming as the phase's real content. **A result survived losing its
+explanation** — the storm lowers most probabilities, and the common-mode cancellation that was
+supposed to be why does not exist. And **a label was added that says how far a measurement
+reaches**: `storm_validity`, which turned out to matter by a factor of five on the one number the
+phase is about.
+
+`docs/phase4-prompt.md` is written and awaiting review. Nothing in it is built.

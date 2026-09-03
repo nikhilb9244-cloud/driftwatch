@@ -85,6 +85,18 @@ export class ConjunctionTracks {
     this.group.visible = false;
   }
 
+  /** Release the two polylines and their markers, for a catalogue swap. */
+  dispose(): void {
+    for (const line of this.lines) {
+      line.geometry.dispose();
+      (line.material as THREE.Material).dispose();
+    }
+    for (const mark of this.marks) {
+      mark.geometry.dispose();
+      (mark.material as THREE.Material).dispose();
+    }
+  }
+
   /**
    * Draw both tracks for `event`, rotating each TEME sample to Earth-fixed at its own time.
    *
@@ -301,11 +313,16 @@ export interface PanelHandles {
 /**
  * Build the conjunctions panel. `onSelect` is called with the pair, the event and the two
  * point-cloud indices (-1 when the object is not in the catalogue bundle).
+ *
+ * `signal` aborts every listener this attaches, so the panel can be rebuilt against a different
+ * bundle when the viewer switches to replay without the previous one's handlers surviving. The
+ * lists themselves are rebuilt by `innerHTML`, so only the four persistent controls need it.
  */
 export function buildConjunctionPanel(
   bundle: Bundle,
   state: ScenarioState,
   onSelect: (selection: ConjunctionSelection | null) => void,
+  signal?: AbortSignal,
 ): PanelHandles {
   const root = document.getElementById("conjunctions");
   const data = bundle.conjunctions;
@@ -480,13 +497,19 @@ export function buildConjunctionPanel(
     }
   };
 
-  filter.addEventListener("input", render);
-  onlyFlagged.addEventListener("change", render);
-  root.querySelector<HTMLButtonElement>("#conjunction-clear")?.addEventListener("click", () => {
-    detail.hidden = true;
-    delete detail.dataset.eventIndex;
-    onSelect(null);
-  });
+  filter.addEventListener("input", render, { signal });
+  onlyFlagged.addEventListener("change", render, { signal });
+  root.querySelector<HTMLButtonElement>("#conjunction-clear")?.addEventListener(
+    "click",
+    () => {
+      detail.hidden = true;
+      delete detail.dataset.eventIndex;
+      onSelect(null);
+    },
+    { signal },
+  );
+  detail.hidden = true;
+  delete detail.dataset.eventIndex;
   render();
   return { refresh: render };
 }

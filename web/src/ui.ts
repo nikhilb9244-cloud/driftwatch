@@ -32,10 +32,44 @@ export interface Filters {
   bands: Set<number>;
 }
 
-export function buildFilterControls(bundle: Bundle, onChange: (f: Filters) => void): Filters {
+/**
+ * What a filter selection means independently of a catalogue: names, not indices.
+ *
+ * The replay catalogue and the live one share a legend today, but nothing guarantees they always
+ * will, and an index carried across a mode switch would silently filter the wrong class. Names
+ * carry; an index does not.
+ */
+export interface FilterNames {
+  categories: Set<string>;
+  bands: Set<string>;
+}
+
+export function filterNames(bundle: Bundle, filters: Filters): FilterNames {
+  return {
+    categories: new Set([...filters.categories].map((i) => bundle.manifest.categories[i])),
+    bands: new Set([...filters.bands].map((i) => bundle.manifest.bands[i])),
+  };
+}
+
+/**
+ * Build the category and altitude-band checkboxes for `bundle`.
+ *
+ * `signal` aborts every listener when the catalogue is unmounted, and `carried` restores a
+ * selection made against the previous one. Both containers are emptied first, so this is safe to
+ * call again on the same DOM.
+ */
+export function buildFilterControls(
+  bundle: Bundle,
+  onChange: (f: Filters) => void,
+  opts: { signal?: AbortSignal; carried?: FilterNames | null } = {},
+): Filters {
+  const { signal, carried } = opts;
+  const wanted = (kind: "categories" | "bands", name: string) => !carried || carried[kind].has(name);
   const filters: Filters = {
-    categories: new Set(bundle.manifest.categories.map((_, i) => i)),
-    bands: new Set(bundle.manifest.bands.map((_, i) => i)),
+    categories: new Set(
+      bundle.manifest.categories.map((name, i) => (wanted("categories", name) ? i : -1)).filter((i) => i >= 0),
+    ),
+    bands: new Set(bundle.manifest.bands.map((name, i) => (wanted("bands", name) ? i : -1)).filter((i) => i >= 0)),
   };
   const catCounts = new Array(bundle.manifest.categories.length).fill(0);
   const bandCounts = new Array(bundle.manifest.bands.length).fill(0);
@@ -45,16 +79,21 @@ export function buildFilterControls(bundle: Bundle, onChange: (f: Filters) => vo
   }
 
   const cats = el<HTMLDivElement>("categories");
+  cats.replaceChildren();
   bundle.manifest.categories.forEach((name, i) => {
     const label = document.createElement("label");
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = true;
-    input.addEventListener("change", () => {
-      if (input.checked) filters.categories.add(i);
-      else filters.categories.delete(i);
-      onChange(filters);
-    });
+    input.checked = filters.categories.has(i);
+    input.addEventListener(
+      "change",
+      () => {
+        if (input.checked) filters.categories.add(i);
+        else filters.categories.delete(i);
+        onChange(filters);
+      },
+      { signal },
+    );
     const chip = document.createElement("span");
     chip.className = "chip";
     chip.style.background = CATEGORY_COLOURS[name] ?? CATEGORY_COLOURS.unknown;
@@ -69,16 +108,21 @@ export function buildFilterControls(bundle: Bundle, onChange: (f: Filters) => vo
   });
 
   const bands = el<HTMLDivElement>("bands");
+  bands.replaceChildren();
   bundle.manifest.bands.forEach((name, i) => {
     const label = document.createElement("label");
     const input = document.createElement("input");
     input.type = "checkbox";
-    input.checked = true;
-    input.addEventListener("change", () => {
-      if (input.checked) filters.bands.add(i);
-      else filters.bands.delete(i);
-      onChange(filters);
-    });
+    input.checked = filters.bands.has(i);
+    input.addEventListener(
+      "change",
+      () => {
+        if (input.checked) filters.bands.add(i);
+        else filters.bands.delete(i);
+        onChange(filters);
+      },
+      { signal },
+    );
     const text = document.createElement("span");
     text.className = "name";
     text.textContent = BAND_LABELS[name] ?? name;
@@ -106,13 +150,15 @@ export function bindClock(clock: SimClock): void {
   const speed = el<HTMLSelectElement>("speed");
   const utc = el<HTMLSpanElement>("clock-utc");
   const offset = el<HTMLSpanElement>("clock-offset");
-  const t0Ms = (clock.minMs + clock.maxMs) / 2;
   const steps = Number(slider.max);
   let dragging = false;
 
+  // Bound once for the life of the page, and `clock.t0Ms` is read at render time rather than
+  // captured, so entering replay moves the window under the same controls instead of leaving
+  // the offset measured against a reference time two years away.
   const render = () => {
     utc.textContent = formatUtc(clock.tMs);
-    offset.textContent = formatOffset(clock.tMs, t0Ms);
+    offset.textContent = formatOffset(clock.tMs, clock.t0Ms);
     play.textContent = clock.playing ? "⏸" : "▶";
     if (!dragging) slider.value = String(Math.round(clock.fraction * steps));
   };
@@ -131,7 +177,7 @@ export function bindClock(clock: SimClock): void {
   });
   speed.value = String(clock.speed);
   speed.addEventListener("change", () => (clock.speed = Number(speed.value)));
-  el<HTMLButtonElement>("now").addEventListener("click", () => clock.set(t0Ms));
+  el<HTMLButtonElement>("now").addEventListener("click", () => clock.set(clock.t0Ms));
   el<HTMLButtonElement>("live").addEventListener("click", () => clock.set(Date.now()));
   window.addEventListener("keydown", (ev) => {
     if (ev.code === "Space" && !(ev.target instanceof HTMLInputElement)) {

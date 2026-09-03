@@ -422,8 +422,24 @@ HELIOVIEWER_BASE_URL = "https://api.helioviewer.org/v2"
 HELIOVIEWER_LAYERS = "[SDO,AIA,193,1,100]"
 HELIOVIEWER_IMAGE_SCALE = 4.8
 HELIOVIEWER_IMAGE_PX = 512
+# And a thumbnail of the same disc, for the viewer to show while the full frame is still in
+# flight. 64 px of the same field of view means the arcsec-per-pixel scale goes up by the same
+# factor as the pixel count goes down, so it is the identical request at a coarser scale --
+# no image library, no second code path, and Helioviewer caches it like any other screenshot.
+# Measured: 64 px came out at 9.8 kB, because Helioviewer renders a 24-bit PNG of a noisy
+# image and 64x64x3 barely compresses. Twenty-nine of those inline is 280 kB of JSON, which is
+# not lean. 32 px is about 3 kB, and blurred behind `filter: blur(3px)` at 96 px on screen it
+# is indistinguishable from the larger one -- so the whole set inlines into storm.json for a
+# fraction of what one full frame costs, and every scrub position has a placeholder the instant
+# the timeline parses.
+HELIOVIEWER_THUMB_PX = 32
+HELIOVIEWER_THUMB_SCALE = HELIOVIEWER_IMAGE_SCALE * HELIOVIEWER_IMAGE_PX / HELIOVIEWER_THUMB_PX
 # A few frames a day, not a movie: enough to see the active region turn.
 HELIOVIEWER_FRAMES_PER_DAY = 4
+# How many full-resolution frames the viewer fetches before the reader scrubs: the first, the
+# one at the storm's peak and the one under the playhead. Everything else arrives as it is
+# approached, over the thumbnail.
+HELIOVIEWER_EAGER_FRAMES = 3
 HELIOVIEWER_CITATION = "Sun imagery courtesy of the Helioviewer Project (helioviewer.org), NASA/SDO and the AIA team."
 
 # Space-Track.org: the full public catalogue and element-set history. Needs a free account;

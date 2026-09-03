@@ -271,6 +271,19 @@ export class CataloguePoints {
     return out;
   }
 
+  /**
+   * Release the GPU buffers and the shader program.
+   *
+   * Needed because entering replay swaps one catalogue for another of a different size, and a
+   * `THREE.Points` whose geometry is still resident is 13,000 to 32,000 objects' worth of
+   * vertex buffers that nothing will ever draw again. The caller removes it from the scene
+   * first; three.js does not free the GPU side on its own.
+   */
+  dispose(): void {
+    this.geometry.dispose();
+    this.material.dispose();
+  }
+
   private refreshVisibility(): void {
     const arr = this.vis.array as Float32Array;
     for (let i = 0; i < this.n; i++) arr[i] = this.filterMask[i] && !this.errMask[i] ? 1 : 0;
