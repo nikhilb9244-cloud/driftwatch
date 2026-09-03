@@ -195,6 +195,24 @@ jobs:
           uv run driftwatch check-run "$RUN_DIR" --max-snapshot-age-hours "$MAX_SNAPSHOT_AGE_HOURS"
           echo "check_run,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
+      # Every scenario but `quiet` refuses to run without a ballistic coefficient per object --
+      # deliberately, because a missing coefficient would otherwise move nothing and produce quiet
+      # numbers under a stormy label. It was missing from this workflow, so the first storm
+      # scenario would have failed every run; found by timing the steps rather than by a test,
+      # because nothing here had ever been run end to end. Not `--offline`: the historical ap and
+      # F10.7 table lives in the *fetch cache*, which the Actions cache can evict, and an offline
+      # fit without it does not fail -- it quietly returns NaN density and rejects every object,
+      # which is the silent degradation this project keeps refusing. Fetching hits CelesTrak's
+      # two-hour floor and so costs nothing on a warm cache. The fit itself is bounded by
+      # BALLISTIC_FIT_BUDGET_S (240 s), and the coefficient store on the branch keeps it there.
+      - name: Fit the ballistic coefficients
+        if: env.SCENARIOS != ''
+        env:
+          DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
+        run: |
+          uv run driftwatch ballistic "$RUN_DIR"
+          echo "ballistic,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
+
       - name: Score every scenario
         env:
           DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
@@ -254,6 +272,16 @@ jobs:
             --project-name "$PAGES_PROJECT" --branch "$branch" --commit-dirty=true
           echo "deploy,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
+      # After the deploy for the same reason the archive is: nothing is recorded that was not
+      # published. Before it, so that the archived run.json says whether the run is in the index
+      # and on what tolerance. It is a hard failure like every other step -- a silent gap in the
+      # index is unrecoverable in exactly the way a missing run is, because the series it would
+      # have continued cannot be reconstructed from a run that is no longer the current one.
+      - name: Index the run for warning stability
+        run: |
+          uv run driftwatch stability "$RUN_DIR"
+          echo "stability,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
+
       # After the deploy, so nothing is archived that was not published. Release assets rather
       # than the store branch: a run is 4.8 MB, so retaining every one is 1.8 GB a year, git
       # keeps every blob for ever, and release assets are not stored in git at all.
@@ -277,11 +305,11 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          # Snapshots, supplemental versions, the ballistic-coefficient cache and the weather
-          # tables. Not the run directories, not the fetch cache, not the ephemerides: the
-          # .gitignore on this branch keeps those out, and -f is deliberately not used here so
-          # that it cannot be overridden by accident.
-          git add data/snapshots data/supplemental data/ballistic data/weather 2>/dev/null || true
+          # Snapshots, supplemental versions, the ballistic-coefficient cache, the weather
+          # tables and the warning-stability index. Not the run directories, not the fetch cache,
+          # not the ephemerides: the .gitignore on this branch keeps those out, and -f is
+          # deliberately not used here so that it cannot be overridden by accident.
+          git add data/snapshots data/supplemental data/ballistic data/weather data/stability 2>/dev/null || true
           if git diff --cached --quiet; then
             echo "Nothing new to store."
           else
