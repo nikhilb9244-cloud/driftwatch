@@ -110,6 +110,7 @@ from driftwatch import config
 from driftwatch.catalogue.celestrak import make_client
 from driftwatch.ephemeris.hermite import HermiteSpline
 from driftwatch.orbit.frames import j2000_to_teme
+from driftwatch.orbit.propagator import WGS72_EARTH_RADIUS_KM
 from driftwatch.orbit.time import stamp
 from driftwatch.risk.covariance import CovarianceModel, ObjectRef, RicCovariance, source_array
 
@@ -757,6 +758,35 @@ class EphemerisTrajectory:
             v_out[inside] = v
             covered |= inside
         return r_out, v_out, covered
+
+    def reach(self) -> dict[int, tuple[float, float, float]]:
+        """What each object's published states actually reach: lowest and highest altitude, top speed.
+
+        Stage A's two tests both have to bound the trajectory the later stages screen on, and
+        the mean elements do not. Measured over 300 files on 2026-09-03, these states leave the
+        mean-element shell by a median 7.6 km and by up to 32.6 km for a satellite raising its
+        orbit, against only 14.6 km of pad left over the 35.4 km screening radius -- so the
+        excursion is not something the pad absorbs.
+
+        The speed is the largest actually present in the states, which is an exact bound for the
+        span they cover, rather than a vis-viva speed inferred from a perigee the object may
+        never reach. Outside that span the element set serves and its own bound still applies,
+        so Stage A takes the larger of the two.
+        """
+        if not len(self.table):
+            return {}
+        r = self.table[list(POSITION_VELOCITY_COLUMNS[:3])].to_numpy(dtype=float)
+        v = self.table[list(POSITION_VELOCITY_COLUMNS[3:])].to_numpy(dtype=float)
+        frame = pd.DataFrame(
+            {
+                "norad_id": self.table["norad_id"].to_numpy(),
+                "altitude_km": np.linalg.norm(r, axis=1) - WGS72_EARTH_RADIUS_KM,
+                "speed_kms": np.linalg.norm(v, axis=1),
+            }
+        )
+        grouped = frame.groupby("norad_id")
+        low, high, fast = grouped["altitude_km"].min(), grouped["altitude_km"].max(), grouped["speed_kms"].max()
+        return {int(k): (float(low[k]), float(high[k]), float(fast[k])) for k in low.index}
 
     def summary(self) -> dict[str, Any]:
         if not len(self.table):

@@ -774,3 +774,78 @@ def test_stage_b_still_misses_nothing_when_the_trajectory_is_the_published_one()
     # And the jump was seen: the served trajectory stops part way through the window.
     assert result.stage_b.served is not None and len(result.stage_b.served.rows) == len(secondaries)
     assert result.stage_b.served.summary()["jump_intervals"] >= len(secondaries)
+
+
+def test_stage_a_widens_a_shell_to_what_the_published_states_actually_reach():
+    """The shell test has to bound the trajectory the later stages screen on, not a different one.
+
+    Measured over 300 Starlink files on 2026-09-03, the published trajectory leaves the
+    mean-element shell by a median 7.6 km and by up to 32.6 km for a satellite raising its
+    orbit, against 14.6 km of pad left over the 35.4 km screening radius. So the excursion is
+    not something the pad absorbs, and Stage A takes the union of the two ranges instead of
+    assuming it fits.
+    """
+    primary = primary_satrec()  # about 420 km
+    # A secondary whose mean shell sits far enough above the primary's to be dropped: at
+    # 14.05 rev/day it is near 780 km, and the pad is 50 km.
+    secondary = satrec_from_elements(90301, PRIMARY_EPOCH, 14.35, 0.0005, 53.0, 120.0, 90.0, 200.0, 1e-4)
+    snap = snapshot_from(
+        {PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH), 90301: (secondary, "SECONDARY", PRIMARY_EPOCH)}
+    )
+    config = ScreeningConfig(days=0.5)
+    row = snap.loc[snap["norad_id"] == 90301].iloc[0]
+    primary_row = snap.loc[snap["norad_id"] == PRIMARY_ID].iloc[0]
+    gap = float(row["perigee_km"]) - float(primary_row["apogee_km"])
+    assert gap > config.pad_km, "the test needs a pair the mean-element shells drop"
+
+    plain = stage_a(snap, [PRIMARY_ID], config, start=START)
+    assert 90301 not in set(plain.pairs["secondary_norad_id"])
+    mean_speed = float(plain.objects.loc[plain.objects["norad_id"] == 90301, "v_perigee_kms"].iloc[0])
+
+    # Published states that dip to within the pad of the primary's apogee: now it must survive.
+    low = float(primary_row["apogee_km"]) + 0.5 * config.pad_km
+    widened = stage_a(
+        snap, [PRIMARY_ID], config, start=START, reach={90301: (low, float(row["apogee_km"]), 7.0)}
+    )
+    assert 90301 in set(widened.pairs["secondary_norad_id"])
+
+    # The speed bound is the larger of the two: 7.0 km/s from the states is slower than the
+    # element set's own perigee speed here, so the element set's wins and nothing is loosened.
+    assert 7.0 < mean_speed
+    assert widened.objects.loc[widened.objects["norad_id"] == 90301, "v_perigee_kms"].iloc[0] == pytest.approx(
+        mean_speed
+    )
+    # And a faster published state raises it, because the bound has to hold on what is screened.
+    faster = stage_a(
+        snap, [PRIMARY_ID], config, start=START, reach={90301: (low, float(row["apogee_km"]), mean_speed + 1.0)}
+    )
+    assert faster.objects.loc[faster.objects["norad_id"] == 90301, "v_perigee_kms"].iloc[0] == pytest.approx(
+        mean_speed + 1.0
+    )
+
+    # And it only ever widens: a shell inside the element set's changes nothing.
+    narrow = stage_a(
+        snap,
+        [PRIMARY_ID],
+        config,
+        start=START,
+        reach={90301: (float(row["perigee_km"]) + 10.0, float(row["apogee_km"]) - 10.0, 1.0)},
+    )
+    assert list(narrow.pairs["secondary_norad_id"]) == list(plain.pairs["secondary_norad_id"])
+
+
+def test_the_trajectory_reports_the_shell_its_states_reach():
+    from driftwatch.ephemeris.spacex import EphemerisTrajectory
+    from driftwatch.orbit.propagator import WGS72_EARTH_RADIUS_KM
+
+    primary = primary_satrec()
+    table = ephemeris_table(primary, PRIMARY_ID, start=START, hours=3.0, offset_km=np.zeros(3))
+    reach = EphemerisTrajectory(table).reach()
+    assert set(reach) == {PRIMARY_ID}
+    low, high, fastest = reach[PRIMARY_ID]
+    radii = np.linalg.norm(table[["x_km", "y_km", "z_km"]].to_numpy(), axis=1) - WGS72_EARTH_RADIUS_KM
+    speeds = np.linalg.norm(table[["vx_kms", "vy_kms", "vz_kms"]].to_numpy(), axis=1)
+    assert low == pytest.approx(radii.min())
+    assert high == pytest.approx(radii.max())
+    assert fastest == pytest.approx(speeds.max())
+    assert high > low

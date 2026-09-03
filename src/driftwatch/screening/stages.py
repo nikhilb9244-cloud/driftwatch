@@ -13,6 +13,15 @@ a mean perigee below 120 km are dropped as decaying: SGP4 is unreliable that low
 object will be gone within days. Element sets older than five days are kept but flagged
 stale.
 
+Where an operator's published states are used instead of the element set, both the shell
+and the speed bound are **widened to whatever those states actually reach**, because both
+have to bound the trajectory the later stages screen on rather than a different one.
+Measured over 300 Starlink files on 2026-09-03, the published trajectory leaves the
+mean-element shell by a median 7.6 km and by up to 32.6 km for a satellite raising its
+orbit. The pad's slack over the 35.4 km screening radius is only 14.6 km, so the excursion
+is not something the pad absorbs; using the trajectory's own reach removes the question
+rather than padding it.
+
 **Stage B, coarse time stepping.** Every surviving pair's separation is sampled on a
 common time grid with the vectorised SGP4 path. The step and the detection threshold
 are chosen together so that no approach inside the screening radius ``R`` can fall
@@ -198,25 +207,59 @@ class StageAResult:
 
 
 def stage_a(
-    snapshot: pd.DataFrame, primaries: Sequence[int], config: ScreeningConfig, *, start: datetime
+    snapshot: pd.DataFrame,
+    primaries: Sequence[int],
+    config: ScreeningConfig,
+    *,
+    start: datetime,
+    reach: Mapping[int, tuple[float, float, float]] | None = None,
 ) -> StageAResult:
     """Apogee/perigee overlap filter with a pad; drop decaying objects; flag stale element sets.
 
     Uses only ``perigee_km``, ``apogee_km``, ``semi_major_axis_km`` and ``epoch``. The
     ``category`` and ``altitude_band`` labels play no part, by design (see
     ``docs/phase2-plan.md``), and a test permutes them to prove it.
+
+    ``reach`` describes the published states that will actually serve an object:
+    ``{norad id: (lowest km, highest km, fastest km/s)}``, from
+    :meth:`driftwatch.ephemeris.spacex.EphemerisTrajectory.reach`. Both of Stage A's tests are
+    widened by it and neither is ever narrowed -- the union with the mean-element values is
+    taken -- because outside the ephemeris's coverage the element set still serves and has to
+    be bounded too.
     """
     ids = snapshot["norad_id"].to_numpy(dtype=np.int64)
-    perigee = snapshot["perigee_km"].to_numpy(dtype=float)
-    apogee = snapshot["apogee_km"].to_numpy(dtype=float)
+    # Copies, not views: the widening below writes into them, and a frame column can hand back
+    # read-only memory.
+    perigee = np.array(snapshot["perigee_km"], dtype=float)
+    apogee = np.array(snapshot["apogee_km"], dtype=float)
     sma = snapshot["semi_major_axis_km"].to_numpy(dtype=float)
+    n_widened = 0
+    published_speed: dict[int, float] = {}
+    if reach:
+        row_for = {int(n): k for k, n in enumerate(ids)}
+        for norad_id, (low, high, fastest) in reach.items():
+            k = row_for.get(int(norad_id))
+            if k is None or not (np.isfinite(low) and np.isfinite(high)):
+                continue
+            if low < perigee[k] or high > apogee[k]:
+                n_widened += 1
+            perigee[k] = min(perigee[k], float(low))
+            apogee[k] = max(apogee[k], float(high))
+            if np.isfinite(fastest):
+                published_speed[k] = float(fastest)
     epoch = pd.to_datetime(snapshot["epoch"], utc=True)
     start_ts = pd.Timestamp(parse_utc(start))
     age_days = ((start_ts - epoch).dt.total_seconds() / 86400.0).to_numpy()
 
     decaying = perigee < config.decay_perigee_km
     stale = age_days > config.stale_days
-    v_peri = perigee_speed_kms(perigee, sma)
+    # The speed bound comes from the mean elements, and from the published states where there
+    # are any: the largest speed those states actually show is an exact bound over the span
+    # they cover, while the vis-viva value covers the rest of the window. The larger wins.
+    v_peri = perigee_speed_kms(snapshot["perigee_km"].to_numpy(dtype=float), sma)
+    for k, fastest in published_speed.items():
+        if not np.isfinite(v_peri[k]) or fastest > v_peri[k]:
+            v_peri[k] = fastest
     objects = pd.DataFrame(
         {
             "norad_id": ids,
@@ -264,12 +307,14 @@ def stage_a(
     )
     dropped = sorted(int(n) for n in ids[decaying])
     log.info(
-        "Stage A: %d pairs over %d primaries (%s); %d objects dropped as decaying; %d element sets stale",
+        "Stage A: %d pairs over %d primaries (%s); %d objects dropped as decaying; %d element sets stale; "
+        "%d shells widened to the published trajectory's own reach",
         len(pairs),
         len(per_primary),
         ", ".join(f"{p}: {n}" for p, n in per_primary.items()),
         len(dropped),
         int(stale.sum()),
+        n_widened,
     )
     return StageAResult(pairs, objects, dropped, per_primary)
 
@@ -1063,7 +1108,8 @@ def screen_fleet(
     )
 
     t0 = time.perf_counter()
-    a = stage_a(snapshot, fleet.norad_ids, config, start=start_dt)
+    reach = ephemeris.reach() if ephemeris is not None else None
+    a = stage_a(snapshot, fleet.norad_ids, config, start=start_dt, reach=reach)
     timings["stage_a"] = time.perf_counter() - t0
 
     t1 = time.perf_counter()
