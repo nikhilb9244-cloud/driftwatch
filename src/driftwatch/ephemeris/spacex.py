@@ -773,6 +773,95 @@ class EphemerisTrajectory:
         }
 
 
+class FrameCheckError(RuntimeError):
+    """The stored states do not sit where an independent trajectory says they should.
+
+    Raised rather than warned about, and raised before anything is written, because the failure
+    this guards against is silent: states in the wrong frame are smooth, interpolate cleanly and
+    produce plausible conjunctions in the wrong place.
+    """
+
+
+def check_state_frame(
+    states: pd.DataFrame,
+    elements: pd.DataFrame,
+    *,
+    max_km: float = config.SPACEX_FRAME_CHECK_MAX_KM,
+    lead_hours: float = config.SPACEX_FRAME_CHECK_LEAD_HOURS,
+) -> dict[str, Any]:
+    """Are the stored TEME states where an independent SGP4 fit to the same file puts them?
+
+    ``elements`` is a frame of OMM columns -- CelesTrak's supplemental sets, which are fits to
+    these very files and whose residual CelesTrak publishes. Propagating one to the first few
+    hours of the ephemeris and comparing gives a number with only two plausible values: a few
+    hundred metres, which is that published residual, or tens of kilometres, which is a frame
+    error. See ``docs/ephemeris-frame.md``.
+
+    Returns a summary. It does not raise; the caller decides what a failure means, and
+    ``driftwatch spacex`` refuses to write the store.
+    """
+    from driftwatch.orbit.propagator import build_satrecs
+    from driftwatch.orbit.time import julian_dates
+
+    summary: dict[str, Any] = {"objects": 0, "median_km": None, "max_km_seen": None, "threshold_km": float(max_km)}
+    if not len(states) or not len(elements):
+        summary["verdict"] = "not checked: no states or no element sets to check them against"
+        return summary
+
+    by_id = elements.drop_duplicates("norad_id").set_index("norad_id")
+    residuals: list[float] = []
+    checked: list[int] = []
+    for norad_id, group in states.groupby("norad_id"):
+        norad_id = int(norad_id)
+        # sgp4init refuses a satellite number above 339999; the supplemental file carries
+        # placeholder ids for objects with no catalogue number, and they cannot be checked.
+        if norad_id not in by_id.index or norad_id > 339999:
+            continue
+        group = group.sort_values("t")
+        times = pd.to_datetime(group["t"], utc=True).dt.tz_localize(None).to_numpy(dtype="datetime64[us]")
+        lead_s = (times - times[0]) / np.timedelta64(1, "s")
+        window = lead_s <= lead_hours * 3600.0
+        if not window.any():
+            continue
+        try:
+            satrec = build_satrecs(by_id.loc[[norad_id]].reset_index())[0]
+        except (ValueError, KeyError):
+            continue
+        jd, fr = julian_dates(times[window])
+        err, r_sgp4, _v = satrec.sgp4_array(jd, fr)
+        ok = err == 0
+        if not ok.any():
+            continue
+        stored = group.loc[window, list(POSITION_VELOCITY_COLUMNS[:3])].to_numpy(dtype=float)
+        residuals.append(float(np.median(np.linalg.norm(stored[ok] - r_sgp4[ok], axis=1))))
+        checked.append(norad_id)
+
+    if not residuals:
+        summary["verdict"] = "not checked: no satellite had both stored states and a usable element set"
+        return summary
+    values = np.asarray(residuals)
+    summary.update(
+        {
+            "objects": len(values),
+            "median_km": round(float(np.median(values)), 4),
+            "p90_km": round(float(np.quantile(values, 0.9)), 4),
+            "max_km_seen": round(float(values.max()), 4),
+            "passed": bool(np.median(values) <= float(max_km)),
+        }
+    )
+    summary["verdict"] = (
+        f"pass: the states sit a median {summary['median_km']} km from an independent SGP4 fit, "
+        f"which is the published fit residual and not a frame error"
+        if summary["passed"]
+        else (
+            f"FAIL: the states sit a median {summary['median_km']} km from an independent SGP4 fit, "
+            f"over the {max_km:g} km threshold. A rotation error is about 44 km at this radius. "
+            f"Check the frame the files declare (see docs/ephemeris-frame.md) before using them."
+        )
+    )
+    return summary
+
+
 def interpolated_times_from_events(events: pd.DataFrame) -> dict[int, np.ndarray]:
     """Per object, the event times whose geometry came from the published states.
 

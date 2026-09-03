@@ -62,6 +62,15 @@ they enter the chain; each states what is assumed, why, and what it costs.
   of two trajectories to microseconds and metres, which says nothing about how close the two
   spacecraft come: the trajectories themselves are good to hundreds of metres to kilometres.
   The probability layer below attaches the uncertainty.
+- **The published states are in MEME (J2000), and only the filename says so.** The file header
+  names the covariance's frame, `UVW`, and never the states'. MEME is 0.36 degrees from TEME by
+  2026, about **44 km** at low Earth orbit radius. Measured against CelesTrak's SGP4 fits to the
+  same files: read as TEME the states sit 36.2 km away, rotated into TEME they sit 0.356 km
+  away, which is CelesTrak's own published fit residual. Reading them wrong would have
+  introduced a 44 km error in the course of removing a 0.2 km one, and it would have been
+  silent. `driftwatch spacex` re-runs that comparison on every fetch and refuses to write the
+  store if it fails, because the risk being guarded against is a change at the source rather
+  than a mistake in the code. `docs/ephemeris-frame.md` is the standalone note.
 - **Where an operator publishes states, those are the trajectory (Phase 4 Step 1).** For a
   Starlink object inside the 72-hour horizon of SpaceX's published ephemeris, both Stage B and
   Stage C use the published states, interpolated by cubic Hermite on a 120-second grid, rather
@@ -96,6 +105,21 @@ they enter the chain; each states what is assumed, why, and what it costs.
   candidate rule. That needs a relative speed of metres per second (co-orbital objects),
   for which the sampled separation is already within metres of the true minimum; the
   sampled-minimum fallback catches it. Never triggered on the 2026-09-01 catalogue.
+- **SpaceX's published files are not smooth all the way through, and the discontinuity is
+  structural.** Every 72-hour file measured on 2026-09-03 -- ten of ten, then nineteen of
+  nineteen -- steps by a few hundred metres at **exactly 48 hours after `ephemeris_start`**. On
+  the file examined in detail the radius moves 160 m between two consecutive 60-second states
+  and the published velocity at that instant disagrees with the central difference of the
+  positions around it by 16 m/s. This is an observation about how the files are made, not about
+  the satellites: it is at the same lead in every file, so it is not a manoeuvre, and the header
+  labels the product `ephemeris_source: blend`, which is the likely explanation -- two arcs
+  produced differently and joined at a fixed offset from the file's start, with no attempt to
+  match derivatives across the join. Consequences: an interpolant must not span it (driftwatch
+  splits the stored history into segments and lets the base propagator serve the 60-second gap),
+  and any use of these files that assumes a single smooth arc over 72 hours is wrong by a few
+  hundred metres for part of it. A planned manoeuvre would look the same to any detector and is
+  handled the same way. A break in a file's very first or very last interval cannot be detected
+  at all, because the test needs a node on both sides. `docs/spacex-ephemerides.md`.
 - **Supplemental Starlink sets are fits to predictions.** CelesTrak fits SGP4 to SpaceX's
   published ephemerides, which include planned manoeuvres. The fit residuals CelesTrak
   publishes with every set (a median of 0.20 km, a 90th percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02) are the floor on how well the set represents

@@ -103,6 +103,21 @@ fits its supplemental element sets to, so driftwatch is taking the uncertainty o
 trajectory it is already propagating rather than inferring one from how much successive
 fits to it disagree. `docs/spacex-ephemerides.md` carries the full finding.
 
+**Read the frame before you read the numbers.** The states in these files are in **MEME —
+mean equator, mean equinox, of J2000 — and the header does not say so.** The header's bare
+`UVW` line is the *covariance's* frame; the state frame is declared only by the `MEME_`
+prefix on the filename. MEME is not TEME, which is what SGP4 produces and what most
+conjunction tooling assumes: by 2026 precession and nutation have separated them by about
+0.36 degrees, which is **roughly 44 km at low Earth orbit radius**. Measured here on
+2026-09-03 against CelesTrak's SGP4 fits to the same files: read as TEME the states sit
+**36.2 km** from the fit, and rotated into TEME they sit **0.356 km** from it, which is
+CelesTrak's own published fit residual and therefore the right answer. There is nothing to
+warn you if you get this wrong — the trajectory stays smooth and plausible, it is simply in
+the wrong place — and in driftwatch's case the mistake would have introduced a 44 km error
+in the course of removing a 0.2 km one. `docs/ephemeris-frame.md` is the standalone note,
+including how to check it for yourself; `driftwatch spacex` re-runs the check on every fetch
+and refuses to store anything that fails it.
+
 **Rules (read 2026-09-02).** No account, no authentication, no stated licence and no
 stated attribution requirement. Published for the express purpose of letting other
 operators screen against Starlink. Space-Track stopped hosting them on 28 July 2025 and

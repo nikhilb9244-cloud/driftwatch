@@ -537,7 +537,7 @@ def ephemeris_table(
     times = np.array([start + timedelta(seconds=o) for o in offsets])
     n = len(times)
     rows = []
-    for k, t in enumerate(times):
+    for t in times:
         r, v = state_at(sat, t)
         rows.append((r + offset_km, v))
     half = n // 2

@@ -129,6 +129,18 @@ SPACEX_BREAK_TOLERANCE_KM = 0.05
 # the states sit 36 km from the SGP4 fit of the same satellite, and rotated they sit 0.36 km
 # from it, which is the published fit residual.
 SPACEX_STATE_FRAME = "MEME"
+# The frame is checked on every fetch, not once in a test, because what it guards against is a
+# change at the source: the header does not name the state frame at all, so a change to the
+# filename convention -- or to the frame behind it -- would be silent. `driftwatch spacex`
+# propagates the matching supplemental element set to the ephemeris start and refuses to write
+# the store if the median distance exceeds this. Correct: 0.36 km, which is CelesTrak's own
+# published fit residual. Wrong frame: 36 km. Two orders of magnitude apart, and 5 km sits an
+# order of magnitude clear of both, so the check cannot fire on an unusually bad fit or pass on
+# a frame error.
+SPACEX_FRAME_CHECK_MAX_KM = 5.0
+# How far into a file to compare. Early, where the SGP4 fit is at its tightest and any
+# disagreement that is not a frame error is at its smallest.
+SPACEX_FRAME_CHECK_LEAD_HOURS = 3.0
 
 # ---------------------------------------------------------------------------------------
 # Space weather (Phase 3 Step 1). See docs/space-weather.md and driftwatch/weather/.

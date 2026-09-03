@@ -2287,6 +2287,28 @@ def cmd_spacex(args: argparse.Namespace) -> int:
     if not len(table):
         log.error("No SpaceX ephemerides were retrieved")
         return 2
+    # The frame check, before anything is written. It is here rather than only in the tests
+    # because the failure it guards against is a change at the source: the file header does not
+    # name the state frame at all, so a change to the convention would otherwise be silent, and
+    # states in the wrong frame are smooth, interpolate cleanly and land 44 km from the truth.
+    # See docs/ephemeris-frame.md.
+    frame_check = {"verdict": "not checked: no stored supplemental element sets to check against"}
+    if len(states):
+        elements = supplemental_mod.load_supplemental_history("starlink")
+        if len(elements):
+            elements = elements.sort_values("epoch").drop_duplicates("norad_id", keep="last")
+            frame_check = spacex.check_state_frame(states, elements)
+        summary["frame_check"] = frame_check
+        log.info("SpaceX state frame check: %s", frame_check)
+        if frame_check.get("passed") is False:
+            log.error("%s", frame_check["verdict"])
+            log.error("Refusing to store states that fail the frame check; nothing was written.")
+            info["spacex_frame_check"] = frame_check
+            run_dir.write_run(info)
+            return 1
+        if "passed" not in frame_check:
+            log.warning("The state frame could not be checked (%s)", frame_check["verdict"])
+
     path = spacex.write_store(table, spacex.store_path(now))
     summary["file"] = path.name
     if len(states):

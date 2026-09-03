@@ -85,8 +85,9 @@ satellites under orbit-raising thrust.
 
 **Three things follow, and the first two are corrections to the project's own record.**
 
-1. **Phase 2's patch was the right shape and the wrong size.** 0.2 km is a fair description of
-   the first eight to twelve hours and a hundredth of the error at the end of the horizon.
+1. **Phase 2's patch was the right shape at a hundredth of the right size.** 0.2 km is a fair
+   description of the first eight to twelve hours and a hundredth of the error at the end of
+   the horizon.
    `docs/spacex-ephemerides.md` said the term "bites at short lead and nowhere else", which
    was measured and is true *of the term*; what was not measured was whether the term was the
    whole of the error it stood for. It was not.
@@ -241,5 +242,23 @@ src/driftwatch/
 tests/
   test_hermite.py    new
   test_frames.py     j2000_to_teme against astropy, and the 44 km the rotation is worth
-  test_spacex.py     states, frame, breaks, segments, per-event residual, the state store
+  test_spacex.py     states, frame, breaks, segments, per-event residual, the state store,
+                     and the fetch-time frame check in both directions
+  test_screening.py  the served trajectory, the jump, and the no-miss guarantee by brute force
+docs/
+  ephemeris-frame.md new: the frame finding on its own, for anyone else using these files
 ```
+
+### The frame check runs on every fetch, not once in a test
+
+Added at the Step 1 review. The frame finding is only half-safe as a test: what it guards
+against is a **change at the source**, and the header does not name the state frame at all, so a
+change to the filename convention — or to the frame behind it — would arrive silently.
+`driftwatch spacex` therefore propagates the matching supplemental element set to the first
+three hours of each fetched ephemeris and compares, **before writing anything**. The two
+plausible outcomes are hundreds of metres, which is CelesTrak's published fit residual, and tens
+of kilometres, which is a frame error; the threshold sits at 5 km, an order of magnitude clear
+of both, so it is not a judgement call. A failure logs the residual, refuses to write the store
+and exits non-zero. Where there are no stored supplemental sets to check against, it says it
+could not check rather than passing by default — the same distinction the Step 2 precondition
+check draws about the Actions secrets.

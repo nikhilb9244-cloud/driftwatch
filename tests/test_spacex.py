@@ -440,3 +440,75 @@ def test_the_state_store_keeps_only_the_newest_version_of_each_satellite(tmp_pat
     assert len(latest) == len(new)
     assert set(latest["created"]) == {pd.Timestamp(T0 + timedelta(hours=8))}
     assert spacex.load_state_store([12345], out_dir=tmp_path).empty
+
+
+def test_the_frame_check_passes_on_matching_states_and_fails_on_a_rotation_error():
+    """The guard that runs on every fetch, in both directions.
+
+    The failure this exists for is silent: states in the wrong frame are smooth, interpolate
+    cleanly and produce plausible conjunctions in the wrong place. So the check is a comparison
+    against an independent trajectory -- CelesTrak's SGP4 fit to the same file -- and its two
+    plausible outcomes are hundreds of metres (the published fit residual) or tens of kilometres
+    (a frame error). Nothing sits between them, which is why a 5 km threshold is not a
+    judgement call. See docs/ephemeris-frame.md.
+    """
+    from driftwatch.orbit.propagator import satrec_from_elements
+    from driftwatch.orbit.time import julian_dates
+
+    epoch = T0 - timedelta(hours=1)
+    elements = pd.DataFrame(
+        {
+            "norad_id": [NORAD_ID],
+            "epoch": [pd.Timestamp(epoch)],
+            "mean_motion": [15.06],
+            "eccentricity": [0.0002],
+            "inclination_deg": [53.05],
+            "raan_deg": [130.0],
+            "arg_perigee_deg": [80.0],
+            "mean_anomaly_deg": [200.0],
+            "bstar": [3.5e-4],
+            "mean_motion_dot": [0.0],
+            "mean_motion_ddot": [0.0],
+        }
+    )
+    satrec = satrec_from_elements(
+        NORAD_ID, epoch, 15.06, 0.0002, 53.05, 130.0, 80.0, 200.0, 3.5e-4
+    )
+    times = np.array(
+        [np.datetime64((T0 + timedelta(seconds=120 * k)).replace(tzinfo=None), "us") for k in range(60)],
+        dtype="datetime64[us]",
+    )
+    jd, fr = julian_dates(times)
+    err, r, _v = satrec.sgp4_array(jd, fr)
+    assert (err == 0).all()
+    states = pd.DataFrame(
+        {
+            "norad_id": NORAD_ID,
+            "t": times,
+            "x_km": r[:, 0],
+            "y_km": r[:, 1],
+            "z_km": r[:, 2],
+        }
+    )
+
+    good = spacex.check_state_frame(states, elements)
+    assert good["passed"] is True
+    assert good["median_km"] < 0.001
+    assert "pass" in good["verdict"]
+
+    # A frame error is a rotation about the pole, so it displaces without changing the radius.
+    # 44 km is what MEME-read-as-TEME costs at this altitude in 2026.
+    angle = np.radians(0.365)
+    rotated = states.copy()
+    x, y = states["x_km"].to_numpy(), states["y_km"].to_numpy()
+    rotated["x_km"] = x * np.cos(angle) - y * np.sin(angle)
+    rotated["y_km"] = x * np.sin(angle) + y * np.cos(angle)
+    bad = spacex.check_state_frame(rotated, elements)
+    assert bad["passed"] is False
+    assert bad["median_km"] > 20.0
+    assert "FAIL" in bad["verdict"] and "docs/ephemeris-frame.md" in bad["verdict"]
+
+    # With nothing to check against, the check says so rather than passing by default.
+    empty = spacex.check_state_frame(states, elements.iloc[:0])
+    assert "passed" not in empty
+    assert "not checked" in empty["verdict"]
