@@ -77,6 +77,11 @@ What works today:
   pull proportionate. Cached permanently under `data/snapshots/as-of/`.
 - `driftwatch validate gannon` and `driftwatch validate starlink-2022` measure the storm term
   against the record. See below.
+- `driftwatch stability <run>` adds a scored run to the warning-stability index -- one narrow
+  file per run on the pipeline's store branch, holding each encounter's identity, miss distance
+  and probability. `driftwatch stability --pair 55053,61705` reads one encounter's history back:
+  how a warning moved run to run, without opening a month of run archives. The index is written;
+  no analysis of it is.
 - `driftwatch report <run>` writes the weekly markdown report and the viewer's
   conjunction bundle. Repeated encounters of one pair are collapsed to a single row with
   the event count, the closest miss, the highest probability and the first time of
@@ -168,6 +173,9 @@ uv run driftwatch ballistic latest        # a ballistic coefficient per object, 
 uv run driftwatch risk latest --scenario storm-g5
                                           # rescore under a synthetic G5 built from May 2024
 uv run driftwatch storm-check latest      # attack the storm result; name what cannot be scored
+uv run driftwatch stability latest        # index the run for warning stability (the pipeline does this daily)
+uv run driftwatch stability --pair 55053,61705
+                                          # read one encounter's history back across runs
 uv run driftwatch validate gannon         # measure the term against the May 2024 storm
 
 # The May 2024 replay the viewer's `?replay` mode reads.

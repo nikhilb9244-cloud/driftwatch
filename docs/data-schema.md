@@ -399,6 +399,61 @@ parquets — could show a storm probability with nothing beside it to say what h
 it. Rebuild an older run's join with `RunDirectory.rebuild_conjunctions()`; no rescore
 is needed, because every column comes from the stored risk tables.
 
+## Warning stability: `data/stability/<fleet>/<run_id>.parquet`
+
+One narrow file per indexed run, written by `driftwatch stability <run>` after the run is
+published and read by `driftwatch stability --pair A,B` or `--series <id>`. It is the read path
+for how a warning evolved: following one encounter across a month costs these files rather than a
+month of 4.8 MB run archives. It lives on the `pipeline-store` branch with the other accumulating
+state, never in the release-asset archive it exists to save you from opening.
+
+**Identity is the whole design.** `event_id` cannot join runs — it carries the snapshot stamp and
+the time of closest approach to the minute, both of which change daily by construction — so a
+**series** is assembled on the object pair plus the time of closest approach within
+`STABILITY_TCA_TOLERANCE_S` (600 s), greedily, nearest first, one event to one series. Measured
+over two real runs whose windows start 43 hours apart: 1,756 series continued, and the matched
+time of closest approach moved by a **median 0.3 s, 4.5 s at the 95th percentile and 20.8 s at
+most** — against a 600 s tolerance and the ~46-minute half-orbit gap that separates successive
+passes of one pair.
+
+Every event is indexed, not only the flagged ones: over the same runs, flagged events have miss
+distances from 0.53 km to 28.3 km — the whole screening volume — so no miss-distance cut admits
+the warnings, and an event first indexed on the day it flags has no history to be read against.
+The scenarios indexed are `config.STABILITY_SCENARIOS` (`quiet` and `forecast`, whichever the run
+scored): the two that are statements about the actual window. The what-if storms would double the
+index for a question the run archive still answers.
+
+| Column | Type | Meaning |
+| --- | --- | --- |
+| `series_id` | string | `<primary>-<secondary>-<tca when first seen>`, e.g. `55053-61705-20260904T0710Z`. Anchored to the first observation and never recomputed, so it does not move when the time of closest approach does. |
+| `fleet` | string | The fleet name; also the directory. |
+| `primary_norad_id`, `secondary_norad_id` | int32 | The pair, which is the stable half of the identity. |
+| `run_id`, `run_start`, `snapshot`, `snapshot_fetched_at` | string, timestamp, string, timestamp | Which run saw it and what that run screened. The fetch time is read from the snapshot itself, not from its file name. |
+| `obs_index` | int16 | 0 the first time this series was seen, 1 the next, and so on. |
+| `scenario` | string | `quiet` or `forecast`. |
+| `tca`, `lead_s` | timestamp, int32 | The time of closest approach and how far ahead of `run_start` it was. A series read in `lead_s` order is the warning as it approached. |
+| `dt_tca_s` | float32 | Seconds the time of closest approach moved since the previous observation; null on the first. The tolerance is checkable from the data rather than from the docstring that set it. |
+| `miss_km` | float32 | Separation at the time of closest approach. |
+| `pc`, `pc_max` | float32 | The scenario's probability and the maximum over the covariance-scale sweep. |
+| `flag` | string | `red`, `yellow` or `none`, as the run published it. |
+| `scoreable`, `unscoreable_reason` | boolean, string | An unscoreable event is indexed with a null probability and its reason, never as a zero. |
+| `slow_encounter` | boolean | The geometry the two-dimensional probability is known to underestimate, carried so a series can be read with that caveat attached. |
+| `storm_validity` | string | `validated`, `indicative` or `no-storm-term` for that scenario. |
+| `cov_source_primary`, `cov_source_secondary` | string | Where each covariance came from. |
+| `primary_trajectory`, `secondary_trajectory` | string | `sgp4` or `spacex-ephemeris`; null for a run screened before Phase 4 Step 1, which is still a real observation of the same encounter. |
+
+**Not here, deliberately.** No `event_id` — the snapshot, the pair and the time of closest
+approach are what one is made of, so it is reconstructed rather than stored. No row for an
+encounter a run did **not** report: the file is what that run saw, and the disappearance is
+counted in the run's `stability` record instead (`n_not_seen`). No analysis: survival rates,
+false-alarm rates and lead-time curves are not computed and there is no viewer panel.
+
+**What it costs.** 231 KB for one scenario over 6,224 events and **330 KB for two** — 27 bytes a
+row, the second scenario's rows compressing against the first's identity columns — against 8.6 MB
+a day for the run and its snapshot. One immutable file per run rather than one file rewritten
+daily, because git keeps every version of a rewritten file in full. A test pins the byte budget,
+since a column added carelessly is a year of files.
+
 ## Propagated state: `data/propagated/state_<YYYYMMDDTHHMMSSZ>.parquet`
 
 One row per object of the snapshot named in the parquet metadata

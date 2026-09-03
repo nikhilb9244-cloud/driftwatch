@@ -25,6 +25,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from driftwatch import __version__, config
+from driftwatch import stability as stability_mod
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
 from driftwatch.drag import ballistic as ballistic_mod
 from driftwatch.drag import density as density_mod
@@ -61,6 +62,7 @@ from driftwatch.risk.scenario import (
 )
 from driftwatch.screening import ScreeningConfig, ScreeningError, ScreeningResult, screen_fleet
 from driftwatch.screening import supplemental as supplemental_mod
+from driftwatch.stability import StabilityIndex
 from driftwatch.storm import diagnostics, validation
 from driftwatch.storm import scenarios as storm_scenarios
 from driftwatch.storm import term as storm_term
@@ -756,6 +758,53 @@ def cmd_check_run(args: argparse.Namespace) -> int:
             }
         )
     )
+    return 0
+
+
+def cmd_stability(args: argparse.Namespace) -> int:
+    """Append a scored run to the warning-stability index, or read one series back out of it.
+
+    Two modes in one command because they are two ends of one file. The pipeline calls the first
+    after it publishes; a person asking "did this warning hold up" calls the second, and never
+    has to download a run archive to get an answer.
+    """
+    index = StabilityIndex(Path(args.store) if args.store else None)
+    if args.series or args.pair:
+        pair = None
+        if args.pair:
+            try:
+                a, b = (int(x) for x in str(args.pair).replace(",", " ").split())
+            except ValueError:
+                log.error("--pair wants two NORAD ids, e.g. --pair 55053,61705")
+                return 2
+            pair = (a, b)
+        rows = index.read(args.fleet, series=args.series, pair=pair, scenario=args.scenario)
+        if rows.empty:
+            log.error("Nothing in the index for %s", args.series or f"{pair[0]} vs {pair[1]}" if pair else args.fleet)
+            return 1
+        print(stability_mod.format_series(rows))
+        return 0
+
+    try:
+        run_dir = resolve_run(args.run or "latest")
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    try:
+        result = index.append_run(
+            run_dir,
+            scenarios=[s.strip() for s in args.scenario.split(",")] if args.scenario else None,
+            tolerance_s=args.tolerance_s,
+            dry_run=args.dry_run,
+        )
+    except stability_mod.StabilityError as exc:
+        log.error("%s", exc)
+        return 1
+    if not args.dry_run:
+        # The run records what it contributed, so an archived run says whether it is in the index
+        # and on what tolerance -- the same rule every other step here follows.
+        run_dir.update_run(stability=result.to_dict())
+    print(json.dumps(result.to_dict()))
     return 0
 
 
@@ -2804,6 +2853,34 @@ def build_parser() -> argparse.ArgumentParser:
         help="fail if the run's snapshot was fetched longer ago than this (default: no limit)",
     )
     check_run.set_defaults(func=cmd_check_run)
+
+    stability = sub.add_parser(
+        "stability",
+        help="append a scored run to the warning-stability index, or read one encounter's history back",
+    )
+    stability.add_argument("run", nargs="?", help="run directory, its name, or 'latest' (default) -- the append mode")
+    stability.add_argument("--series", help="read mode: one series id, e.g. 55053-61705-20260904T1018Z")
+    stability.add_argument("--pair", help="read mode: two NORAD ids, e.g. 55053,61705")
+    stability.add_argument("--fleet", default="demo", help="fleet whose index to read (read mode only; default: demo)")
+    stability.add_argument(
+        "--scenario",
+        help=(
+            "comma-separated scenarios to index, or one to read "
+            f"(default: {', '.join(config.STABILITY_SCENARIOS)}, whichever the run scored)"
+        ),
+    )
+    stability.add_argument(
+        "--tolerance-s",
+        type=float,
+        default=None,
+        help=(
+            "how far a time of closest approach may move between runs and still be the same "
+            f"encounter (default {config.STABILITY_TCA_TOLERANCE_S:g} s)"
+        ),
+    )
+    stability.add_argument("--store", help=f"index directory (default {config.STABILITY_DIR})")
+    stability.add_argument("--dry-run", action="store_true", help="match and report, but write nothing")
+    stability.set_defaults(func=cmd_stability)
 
     check = sub.add_parser(
         "check-bundle",

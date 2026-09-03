@@ -30,10 +30,27 @@ SUPPLEMENTAL_DIR = DATA_DIR / "supplemental"
 SPACEX_DIR = DATA_DIR / "spacex"
 WEATHER_DIR = DATA_DIR / "weather"
 CONJUNCTION_DIR = DATA_DIR / "conjunctions"
+# The warning-stability index (Phase 4, after the Step 2 review): one narrow file per run,
+# accumulating, and small enough to live on the store branch beside the snapshots rather than in
+# the release-asset archive it exists to save you from reading. See driftwatch/stability.py.
+STABILITY_DIR = DATA_DIR / "stability"
 EXTERNAL_DIR = DATA_DIR / "external"
 # ESA's Kelvins Collision Avoidance Challenge data, if downloaded (see risk/kelvins.py).
 KELVINS_DIR = EXTERNAL_DIR / "kelvins"
 VIEWER_DATA_DIR = Path(os.environ.get("DRIFTWATCH_VIEWER_DATA_DIR", PROJECT_ROOT / "web" / "public" / "data"))
+
+# How far a time of closest approach may move between runs and still be the same encounter.
+# Successive close passes of one pair are typically half an orbit apart -- about 46 minutes in
+# low Earth orbit -- while a refit moves a tca by seconds to minutes, so ten minutes separates
+# them by a wide margin. It is the tolerance the Step 1 comparison used for the same problem.
+STABILITY_TCA_TOLERANCE_S = 600.0
+# Which scenarios the index carries. The two that are statements about the actual window; the
+# what-if storms are a property of the scenario definition rather than of a warning, and they
+# would double the index for a question the run archive can still answer.
+STABILITY_SCENARIOS: tuple[str, ...] = ("quiet", "forecast")
+# Runs read back when matching. A series can only be continued by an event inside this run's
+# window, which is a week, so ten daily runs is already generous.
+STABILITY_LOOKBACK_RUNS = 10
 
 # CelesTrak asks for a descriptive User-Agent so they can tell polite tools from
 # runaway scripts. Set DRIFTWATCH_CONTACT to add a contact address.
