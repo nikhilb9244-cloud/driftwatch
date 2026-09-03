@@ -138,3 +138,51 @@ Three things that have to travel with the claim, or it is overstated:
 
 Note also what it tests that Kelvins could not: the dataset is **ephemerides**, so it exercises the
 Phase 4 Step 1 served-trajectory path rather than the SGP4 one. The two validations do not overlap.
+
+---
+
+## The page was showing 2.77 × 10⁻¹ against the ISS, and every internal check was green (Phase 4 Step 2 review, 2026-09-03)
+
+**The clearest example this project has of an error that is invisible from inside the pipeline and
+obvious from the front page.** Worth its own paragraph in the write-up, because the lesson is not
+about conjunctions at all.
+
+Before the attached-object filter, the published page's top row — the highest probability in the
+demo fleet, the first number a stranger read — was:
+
+| | |
+| --- | --- |
+| Primary | ISS (Zarya), 25544 |
+| Secondary | **PROGRESS-MS 33**, 68319 — a Progress cargo ship docked to it |
+| Miss distance | **0.272 m** (0.267 m is the median over all ten attached objects) |
+| Relative speed | 0.3 mm/s |
+| Probability of collision | **2.77 × 10⁻¹** |
+
+Behind it, in order: Poisk 2.74 × 10⁻¹, Crew Dragon 12 2.73 × 10⁻¹, Cygnus NG-24 2.73 × 10⁻¹,
+Soyuz MS-29 2.73 × 10⁻¹, Nauka 2.73 × 10⁻¹, Progress MS-34 2.70 × 10⁻¹, then the three structural
+modules — Destiny 1.75 × 10⁻¹, Zvezda 1.71 × 10⁻¹, Unity 1.68 × 10⁻¹. Ten objects, 217 events
+each, 2,170 of the run's 8,394 events and **1,528 of its 1,529 red flags**.
+
+**Nothing inside the pipeline was wrong, which is the point.** The catalogue really does carry ten
+objects on the station's own element set. Stages A to C really did find a repeated 0.267 m
+approach between each of them and the station. The two-dimensional probability of a 0.267 m
+approach between two objects with a combined hard-body radius of 100 m really is of order one. Every test passed, the provenance check passed, the frame check passed, the flag counts were
+internally consistent, and a run's own report could not have told anyone the number was
+meaningless — because from inside the run it was correct arithmetic on correct inputs. It took
+**looking at the site** to see that the tool's headline was a docked spacecraft.
+
+Three things to say with it:
+
+- **The by-hand fix was wrong too.** Step 1 excluded the visiting vehicles by listing them and
+  missed Zvezda, Unity and Destiny — station structure that no rule about visitors would catch.
+  See the entry above and `docs/phase4-plan.md` Step 1 review, item 1.
+- **What replaced it is a measurement, not a list**: a pair whose separation stays under 1 km for
+  99 % of the sampled window is one physical cluster. The threshold sits three orders of magnitude
+  clear on both sides — the ten attached pairs never exceed 0.857 m apart over seven days, and the
+  tightest genuinely distinct pair reaches 745 km.
+- **It is the argument for the public page being on the critical path** rather than the last step
+  of the phase. A viewer is not decoration on a pipeline; on this occasion it was the only
+  instrument that could see the fault.
+
+The corrected top row, with the filter on, is the EOS SAT-1 event: 2.780 km, 1.076 × 10⁻⁴, one red
+flag in the whole fleet.
