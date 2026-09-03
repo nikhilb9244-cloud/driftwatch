@@ -320,7 +320,11 @@ they enter the chain; each states what is assumed, why, and what it costs.
   published states removes the gap rather than sizing it, which is why Step 1 exists; for
   events past the horizon, where the fit is still the trajectory, the residual carried is still
   the published 0.20 km and is still too small by this measurement. That is an open
-  understatement, not a solved one.
+  understatement, not a solved one. **Measured on the demo run of 2026-09-03**, screening on the
+  published states instead of the fit moved the miss distance of the 476 affected events by a
+  median 0.16 km inside twelve hours rising to 9.1 km at 48 to 60 hours, moved ten flags
+  (one of them `none` to red), and added or removed nine more flagged events outright. Phase 2's
+  measurement that the 0.2 km patch moved no flag was true of the patch and not of the error.
 
 ## Density and drag (Phase 3, Step 2)
 

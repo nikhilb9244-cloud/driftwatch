@@ -224,6 +224,111 @@ ephemeris horizon and some past it got the single label `spacex-ephemeris+defaul
 of them; now each event carries what actually served it. The prompt asked for
 `cov_source_secondary` to be extended rather than a parallel flag added, and this is that.
 
+### What it changed: two runs of the same window, by lead
+
+The report the prompt asks for. Both runs screen the same 2026-09-03 16:06 snapshot over the
+same seven days with the same fleet; **run A** screens on CelesTrak's SGP4 fits and carries the
+fit residual on every served covariance, which is what Phase 3 shipped, and **run B** screens on
+SpaceX's published states and carries the residual only where the fit still served. Events are
+matched by object pair and nearest time of closest approach, because the time itself moves.
+
+The ISS's docked visiting vehicles — Soyuz, Progress, Cygnus, Crew Dragon, Nauka, Poisk — are
+separate catalogue objects sitting at the same position as the station, so they generate 1,519
+events at a 0.2 m miss and 416 of the run's red flags. They have nothing to do with Step 1 and
+they would swamp any tally, so they are excluded from everything below and counted once here.
+
+**Totals.** 8,404 events in A and 8,394 in B (6,885 and 6,875 without the docked modules). 300
+objects had published states stored; 131 of them had events inside the coverage, and **646
+events were refined on the published states**. No event needed the scan refinement: 22
+candidates fell in a jump interval and none of them survived to be an event.
+
+**Events gained and lost.** 170 events exist only in B and 180 only in A — and they are not
+scattered. Every one of the 170 and 173 of the 180 are on an object whose states served, and
+they sit where the two trajectories disagree most:
+
+| Lead | Only in B | Only in A |
+| --- | ---: | ---: |
+| 0–12 h | 1 | 2 |
+| 12–24 h | 11 | 15 |
+| 24–36 h | 26 | 25 |
+| 36–48 h | 40 | 46 |
+| 48–60 h | 54 | 51 |
+| 60–72 h | 38 | 41 |
+| past 72 h | 0 | 0 |
+
+Past 72 hours nothing changes at all, which is the control: there are no published states there
+and both runs are doing the same thing.
+
+**How far the miss moved**, over the 476 matched events served by the published states:
+
+| Lead | Events | Median | 90th pct | 99th pct | Worst | Moved > 1 km |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0–12 h | 117 | 0.159 km | 1.006 km | 4.360 km | 5.895 km | 12 |
+| 12–24 h | 143 | 1.571 km | 7.087 km | 12.089 km | 12.720 km | 83 |
+| 24–36 h | 90 | 3.399 km | 13.169 km | 21.128 km | 26.354 km | 63 |
+| 36–48 h | 86 | 6.975 km | 17.051 km | 24.114 km | 25.816 km | 75 |
+| 48–60 h | 28 | 9.086 km | 15.881 km | 17.870 km | 18.147 km | 23 |
+| 60–72 h | 12 | 3.361 km | 10.729 km | 16.743 km | 17.456 km | 11 |
+
+The growth is the finding, and it is the same growth as the trajectory measurement that opened
+this step — 0.16 km in the first half-day rising to 9 km by two and a half days. It is *smaller*
+than the raw trajectory disagreement (0.30 km rising to 83 km) and it has to be: an event only
+survives in both runs if the miss stays inside the screening radius, so the largest shifts
+destroy the event rather than moving it, and turn up in the gained-and-lost table instead. The
+60–72 h bin falls back only because 12 events are left in it.
+
+**How far the probability moved.** An average ratio would be meaningless — `pc` goes as
+`exp(-(miss/sigma)^2 / 2)`, so a few kilometres against a sub-kilometre sigma moves it by tens of
+orders of magnitude — and most of these events have a probability far below anything anyone would
+act on in *both* runs. So: how many carry a probability worth reading at all, and what happened
+to those.
+
+| Lead | Served | Negligible in both (`pc` < 1e-9) | Live | Median log10 ratio | 10th pct | 90th pct | Fell ≥10× | Rose ≥10× |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0–12 h | 117 | 116 | 1 | −0.58 | — | — | 0 | 0 |
+| 12–24 h | 143 | 140 | 3 | −2.02 | −2.04 | +0.59 | 2 | 1 |
+| 24–36 h | 90 | 81 | 9 | −4.50 | −12.97 | +15.71 | 5 | 3 |
+| 36–48 h | 86 | 75 | 11 | −1.19 | −16.26 | +14.70 | 6 | 4 |
+| 48–60 h | 28 | 22 | 6 | −1.93 | −8.14 | +1.82 | 3 | 1 |
+| 60–72 h | 12 | 10 | 2 | −13.73 | −32.53 | +5.07 | 1 | 1 |
+
+Two things to take from it. The great majority of served events are negligible in both runs and
+stay negligible: this changes nothing for them. For the 32 that carry a readable probability the
+change is not a correction of a few per cent but a different answer — 17 fell by a factor of ten
+or more, 10 rose by ten or more, and only two stayed within a factor of two.
+
+**And whether any flag moved. Yes — which is the sharpest way to say what this step did.**
+
+Phase 2 measured its 0.2 km quadrature patch and found that it moved no flag anywhere, and
+concluded from that how little the whole class of error mattered. Removing the *error the patch
+stood for*, rather than the patch, moves flags:
+
+| | Run A | Run B |
+| --- | ---: | ---: |
+| red | 416 | **417** |
+| yellow | 257 | **255** |
+| none | 6,212 | 6,203 |
+
+- **10 matched events changed flag, every one of them on an object served by published states**:
+  one `none` → **red**, two `none` → yellow, seven yellow → `none`.
+- **5 more flagged events exist only in run B** and **4 only in run A** — events that appear or
+  disappear entirely once the trajectory changes, all yellow, all on EOS SAT-1 between 49 and 65
+  hours out.
+
+The new red is EOS SAT-1 against Starlink 61705 at a 15-hour lead: the miss falls from 5.479 km
+to 2.780 km and the probability rises from 6.19e-6 to **1.076e-4**, across the 1e-4 threshold.
+Fifteen hours is not the far end of the horizon, where the trajectory disagreement is tens of
+kilometres; it is the near end, where the median disagreement is about 1.6 km. That is all it
+took.
+
+So the answer to the prompt's question — *say plainly whether removing it does* — is that it
+does, and the honest gloss is that Phase 2's "it moves no flag" was a true measurement of a term
+that was far too small. The number that bounds how much this class of error matters is not zero.
+
+**Cost.** Stage B went from 195 s to 205 s, a 5 per cent overhead for interpolating 2.4 million
+states into the sample grid; Stage C from 2.6 s to 4.2 s. The fetch itself is unchanged at about
+26 minutes for 300 satellites, which is download time and is Step 2's problem, not this step's.
+
 ### Files
 
 ```
@@ -248,6 +353,70 @@ tests/
 docs/
   ephemeris-frame.md new: the frame finding on its own, for anyone else using these files
 ```
+
+### What the fetch actually produced (300 satellites, 2026-09-03)
+
+`driftwatch spacex` on the demo run's 300 closest Starlink secondaries: 300 of 300 fetched,
+648,602 stored states out of 1,296,300 published, 33.9 MB of parquet. 26 minutes, which is the
+download; the parsing, rotation, break detection and thinning are 0.17 s a file.
+
+**The interpolation error, over 647,698 held-out states.** Median 5.74 m. Per object the median
+is 5.29 to 5.87 m — the spread is the spread of orbital radii, since the error goes as
+`a (omega h)^4` — and the 99th percentile per object is 5.9 m. The single worst held-out point
+over all 300 objects is 49.4 m, and it is on the one object described below. Against the 200 m
+fit residual this replaces, the typical figure is a thirty-fifth and the worst is a quarter.
+
+**The frame check on the real store.** Median 0.3664 km against CelesTrak's SGP4 fits, 90th
+percentile 0.757 km, worst 2.34 km, on all 300 objects. That is the published fit residual and
+not a frame error, which is what the check exists to distinguish.
+
+**The break census, and it is the interesting part.** 303 breaks over 300 objects:
+
+| Break at | Objects |
+| --- | ---: |
+| 47.98 h after `ephemeris_start` | **299** |
+| 49.40 h | 1 |
+| 54.25 h | 1 |
+| 62.35 h | 1 |
+| 65.28 h | 1 |
+| none detected | 1 |
+
+299 of 300 files carry the seam at the same instant, which settles that it is a property of how
+the files are made rather than anything the satellites did. The four scattered breaks are one
+object each at four different times, which is what a planned manoeuvre looks like, and it is the
+right behaviour that the same detector catches both: an interpolant must not span a burn either.
+
+The one object with no detected break, **STARLINK-30405 (57851)**, is also the object with the
+worst interpolation error, 49.4 m. That is not a coincidence and it is worth stating plainly:
+its seam is gentler than the others and its node-consistency error came out at 49 m against a
+tolerance of 57 m — ten times its own median of 5.7 m, and just under the bar. So the detector
+found 299 of 300 and the one it missed cost 49 m, which is still a quarter of the term being
+removed. The threshold is doing what it was set to do rather than being lucky, but this is where
+its margin actually is, and a narrower one would start flagging ordinary arcs.
+
+### Stage A: the pad does not quite absorb it, so nothing relies on the pad
+
+The prompt's instruction was not to rely quietly on the pad, and measuring it showed why. Over
+the 300 fetched objects, the published trajectory leaves the mean-element shell by:
+
+| | Median | 90th percentile | 99th | Worst |
+| --- | ---: | ---: | ---: | ---: |
+| Excursion beyond the shell | 7.6 km | 10.6 km | 20.2 km | **32.6 km** |
+
+Most of that is the ordinary difference between mean and osculating elements, which the 50 km pad
+was already sized for. But the pad also has to cover the 35.4 km screening radius, so its slack
+is 14.6 km — and 54 of 300 objects exceed that, three of them by more than 25 km. Those three are
+raising their orbits: 63885 dips 32.6 km below its mean perigee inside the 72 hours.
+
+So Stage A now takes the **union** of the mean-element shell and what the published states reach,
+and the same for the speed bound. The speed comes from the largest speed the states actually
+show, which is an exact bound over the span they cover; a vis-viva speed inferred from a perigee
+the object never reaches is not a bound on anything. Neither test is ever narrowed, because
+outside the ephemeris's coverage the element set still serves.
+
+**What it costs and what it buys:** 4 extra pairs out of 47,974, on four objects, none lost. Tiny
+— but it is the difference between a bound and a hope, and the four are precisely the
+orbit-raisers whose element sets describe them worst.
 
 ### The frame check runs on every fetch, not once in a test
 
