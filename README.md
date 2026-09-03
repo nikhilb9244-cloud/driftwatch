@@ -285,6 +285,8 @@ data/                   cache, snapshots, history, supplemental and SpaceX ephem
 
 ## Docs
 
+- `docs/state-of-play.md`: **start here to resume the work.** Where Phase 4 stands step by
+  step, what is committed and what has never run, the open items, and the ceilings.
 - `docs/tle-and-sgp4.md`: what a TLE is, mean versus osculating elements, what SGP4
   does, and the accuracy limits of the public catalogue.
 - `docs/frames-and-time.md`: TEME, ITRS, GMST, UT1 and polar motion, and the measured
@@ -305,8 +307,12 @@ data/                   cache, snapshots, history, supplemental and SpaceX ephem
   terms, how the sources are layered, and what is deliberately not filled in.
 - `docs/density-and-drag.md`: NRLMSIS and how it is driven, the sampling step and its
   convergence, the ballistic coefficient and why B* is not one.
+- `docs/pipeline.md`: the daily run — the runtime budget, where each piece of state lives
+  and why, the retention rule and the failure model.
 - `docs/phase2-plan.md`: the Phase 2 plan, the review decisions and the demo fleet.
 - `docs/phase3-plan.md`: the Phase 3 plan and its review decisions.
+- `docs/phase4-plan.md`: the Phase 4 plan and its review decisions, with
+  `docs/writeup-notes.md` accumulating the findings the write-up has to name.
 
 ## Data sources and their rules
 
