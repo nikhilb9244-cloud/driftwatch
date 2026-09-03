@@ -58,7 +58,14 @@ deliberately; `check-bundle` exists to keep the SpaceX files out of anything pub
 - **No pipeline run has ever completed.** See the attempt below.
 - **No deploy from CI.** The site has only ever been published by hand with
   `scripts/deploy-pages.ps1` (Cloudflare Pages project `driftwatch`; branch `main` is
-  production, any other branch name gets its own preview URL).
+  production, any other branch name gets its own preview URL). Live at
+  **https://driftwatch-2wg.pages.dev**, currently serving run `20260903T175632Z-9a31` over
+  snapshot `gp_20260903T160632Z`, `exclude_attached` on, 6,224 events, opening on `forecast`
+  with `quiet`, `storm-g4` and `storm-g5` behind the control. Its top row is the EOS SAT-1
+  event at 2.78 km. **Pass `-Run` explicitly**: the script's default `-Run latest` resolves to
+  the top level of `data/conjunctions/` and so picks the 1 September run, not the 3 September
+  ones, which are a directory deeper under `step1-baseline/`, `step1-served/` and
+  `step2-attached/`. Deploying the default silently puts the site two days back.
 - **No release archive and no stability file has ever been written by a runner.** Both steps run
   after the deploy, and no run has reached the deploy.
 - **The four Actions secrets have never been confirmed to exist** by anything but the operator's
