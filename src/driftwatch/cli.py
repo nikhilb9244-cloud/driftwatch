@@ -2490,7 +2490,7 @@ def build_parser() -> argparse.ArgumentParser:
     screen.add_argument(
         "--no-spacex",
         action="store_true",
-        help="ignore SpaceX's published ephemerides: screen on element sets and do not serve their covariance",
+        help="ignore SpaceX's published ephemerides: their states when screening, their covariance when scoring",
     )
     screen.add_argument("--out-dir", help="output directory (default: data/conjunctions)")
     add_risk_options(screen, scenario_default="quiet")
@@ -2508,7 +2508,7 @@ def build_parser() -> argparse.ArgumentParser:
     risk.add_argument(
         "--no-spacex",
         action="store_true",
-        help="ignore SpaceX's published ephemerides: screen on element sets and do not serve their covariance",
+        help="ignore SpaceX's published ephemerides: their states when screening, their covariance when scoring",
     )
     add_risk_options(risk, scenario_default="quiet")
     risk.set_defaults(func=cmd_risk)

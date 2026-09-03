@@ -674,3 +674,103 @@ def test_a_break_in_the_stored_history_is_a_gap_the_base_propagator_fills():
     covered = trajectory.covers(PRIMARY_ID, at)
     assert covered[0] and covered[2]
     assert not covered[1], "the gap between two segments is not covered by either"
+
+
+def _served_separation(
+    primary: Satrec, secondary: Satrec, trajectory, norad_id: int, t_s: np.ndarray
+) -> np.ndarray:
+    """The separation Stage B is supposed to be sampling: SGP4, with the ephemeris where it reaches.
+
+    Built here from the parts rather than from the screening code, so that the test is a check
+    on the screening rather than a restatement of it.
+    """
+    jd0, fr0 = julian_date(START)
+    jd = np.full(len(t_s), jd0)
+    fr = fr0 + t_s / 86400.0
+    _e1, r_p, _v_p = SatrecArray([primary]).sgp4(jd, fr)
+    _e2, r_s, _v_s = SatrecArray([secondary]).sgp4(jd, fr)
+    r_p, r_s = r_p[0], r_s[0]
+    at = np.array(
+        [np.datetime64((START + timedelta(seconds=float(t))).replace(tzinfo=None), "us") for t in t_s],
+        dtype="datetime64[us]",
+    )
+    r_e, _v_e, covered = trajectory.states(norad_id, at)
+    r_s = np.where(covered[:, None], r_e, r_s)
+    return np.linalg.norm(r_s - r_p, axis=1)
+
+
+def test_stage_b_still_misses_nothing_when_the_trajectory_is_the_published_one():
+    """The Phase 2 guarantee, re-run against the trajectory Phase 4 Step 1 actually screens on.
+
+    The published states cover the first two thirds of the window and stop, so the served
+    trajectory jumps by several kilometres part way through — which is precisely the case the
+    doubled threshold and the scan refinement exist for. Brute force samples the same served
+    separation at one second and refines every local minimum; every minimum inside the
+    screening radius has to fall inside a Stage B bracket.
+    """
+    from driftwatch.ephemeris.spacex import EphemerisTrajectory
+
+    primary = primary_satrec()
+    config = ScreeningConfig(days=0.25)
+    window_s = config.days * 86400.0
+    designs = [
+        (90201, timedelta(hours=1, minutes=7), 4.0, 40.0),
+        (90202, timedelta(hours=3, minutes=41), 12.0, 110.0),
+        (90203, timedelta(hours=5, minutes=2), 22.0, 70.0),
+    ]
+    objects = {PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH)}
+    secondaries = {}
+    for norad_id, offset, miss_km, crossing in designs:
+        t_star = START + offset
+        sat, _design = make_conjunction(
+            primary, t_star, miss_km=miss_km, crossing_angle_deg=crossing, miss_direction_deg=25.0, norad_id=norad_id
+        )
+        objects[norad_id] = (sat, f"SEC-{norad_id}", t_star)
+        secondaries[norad_id] = sat
+    snap = snapshot_from(objects)
+
+    # Published states over the first two thirds of the window, displaced by 6 km, so the
+    # served trajectory differs from the element set and then stops differing, abruptly.
+    coverage_hours = 2.0 * config.days * 24.0 / 3.0
+    tables = [
+        ephemeris_table(
+            sat,
+            norad_id,
+            start=START,
+            hours=coverage_hours,
+            offset_km=np.array([3.0, -4.0, 2.6]),
+        )
+        for norad_id, sat in secondaries.items()
+    ]
+    trajectory = EphemerisTrajectory(pd.concat(tables, ignore_index=True))
+
+    result = screen_fleet(
+        snap, fleet_of((PRIMARY_ID, "Primary", True)), config=config, start=START, ephemeris=trajectory
+    )
+    candidates = result.stage_b.candidates
+    radius = config.screening_radius_km
+
+    t_grid = np.arange(0.0, window_s + 1.0, 1.0)
+    n_checked = 0
+    for norad_id, sat in secondaries.items():
+        d = _served_separation(primary, sat, trajectory, norad_id, t_grid)
+        interior = np.nonzero((d[1:-1] <= d[:-2]) & (d[1:-1] < d[2:]) & (d[1:-1] <= radius))[0] + 1
+        brackets = candidates[candidates["secondary_norad_id"] == norad_id]
+        lo = (brackets["t_lo"].to_numpy(dtype="datetime64[us]") - np.datetime64(
+            START.replace(tzinfo=None), "us"
+        )) / np.timedelta64(1, "s")
+        hi = (brackets["t_hi"].to_numpy(dtype="datetime64[us]") - np.datetime64(
+            START.replace(tzinfo=None), "us"
+        )) / np.timedelta64(1, "s")
+        for k in interior:
+            t_min = t_grid[k]
+            n_checked += 1
+            # The one-second grid can place the minimum a second either side of the truth, so
+            # the bracket has to be allowed that much slack at its ends.
+            assert ((lo - 1.0 <= t_min) & (t_min <= hi + 1.0)).any(), (
+                f"secondary {norad_id}: a minimum of {d[k]:.3f} km at t={t_min:.0f} s is in no Stage B bracket"
+            )
+    assert n_checked >= len(designs), "the brute force found nothing to check"
+    # And the jump was seen: the served trajectory stops part way through the window.
+    assert result.stage_b.served is not None and len(result.stage_b.served.rows) == len(secondaries)
+    assert result.stage_b.served.summary()["jump_intervals"] >= len(secondaries)
