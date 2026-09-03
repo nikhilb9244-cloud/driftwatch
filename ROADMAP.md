@@ -156,6 +156,35 @@ ground** and do it far better than a side project would. The interesting, unoccu
 human-made objects between the Earth's surface and the outer planets, which is where this would
 sit.
 
+### Launch conjunction assessment
+
+Screen a **nominal ascent trajectory** against the catalogue across a launch window and produce
+what a launch operator actually wants: the **blocked intervals** inside the window, and the
+objects responsible for each. It is the existing screening and probability code with **time as
+the free variable** — instead of one trajectory over a week, it is the same trajectory offset by
+every candidate lift-off time across the window, and the output is a set of intervals rather
+than a set of events. Stages A to C, the covariance, the encounter plane and the flags all
+carry over unchanged.
+
+**Why it is distinctive here rather than a commodity, and it is the storm that makes it so.**
+Blocked windows computed before a storm are **invalidated by catalogue displacement afterwards**:
+the objects the analysis blocked around are not where the analysis put them, and a window cleared
+on Monday is not cleared on Wednesday. That is the same in-track displacement driftwatch already
+models — and the **storm-term validity split says how much of it is predictable**, object by
+object. A launch conjunction assessment that reports which of its blocked intervals rest on
+objects whose storm response is measured, and which rest on objects where it is not, is saying
+something no existing tool says.
+
+**The insertion case**, which is the sharp end: a vehicle **inserting at low altitude during a
+storm** faces both elevated drag on its own initial orbit and a catalogue that has shifted
+underneath it. That is the **February 2022 Starlink loss stated in prospective form** — the
+validation case this project already reproduces, asked forwards instead of backwards.
+
+**Explicitly out of scope: launch trajectory simulation itself.** Ascent flight dynamics —
+staging, thrust profiles, aerodynamic loads, the trajectory's own construction — is a different
+discipline and **RocketPy already serves it well**. This takes a nominal trajectory as input and
+says nothing about how it was produced.
+
 ### Capability targets, not plans
 
 Six things driftwatch cannot currently do, listed as capabilities to acquire rather than

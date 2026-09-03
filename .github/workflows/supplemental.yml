@@ -92,7 +92,10 @@ jobs:
             "# driftwatch supplemental store" "" \
             "Data only. The code is on \`main\`; this branch is written by" \
             "\`.github/workflows/supplemental.yml\` and holds nothing else." > README.md
-          git add README.md
+          # The fetch cache is restored into this working tree by actions/cache. It must
+          # never be committed: 5.1 MB of JSON a fetch, seven times the parquet it makes.
+          echo 'data/cache/' > .gitignore
+          git add README.md .gitignore
           git commit -q -m "Supplemental element-set store"
           git push -q "$REPO_URL" "$STORE_BRANCH"
           echo "Created $STORE_BRANCH."
@@ -139,38 +142,57 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # A store branch created before the ignore file existed does not have one.
+          [ -f .gitignore ] || echo 'data/cache/' > .gitignore
+          git add .gitignore
           # The store only. The fetch cache lives in the Actions cache, for the reasons in
           # the header: it is rebuildable, and it is seven times the size of what it produces.
           git add -f data/supplemental
           if git diff --cached --quiet; then
             echo "No new version this run (CelesTrak's two-hour floor, or an unchanged file)."
           else
+            # How many commits have landed since the last compaction. See that step for why
+            # this is a file rather than `git rev-list --count`.
+            echo $(( $(cat data/.commits 2>/dev/null || echo 0) + 1 )) > data/.commits
+            git add -f data/.commits
             git commit -m "Supplemental element sets, $(date -u +%Y-%m-%dT%H:%MZ)"
             git push
           fi
 
+      # The counter is a file on the branch, not `git rev-list --count`. `actions/checkout`
+      # clones the store at fetch-depth 1 -- which is what keeps every run cheap however long
+      # the branch gets -- so `git rev-list --count HEAD` reads 1 for ever and a threshold on
+      # it never fires. Found by testing it: the first attempt reported "1 commits, limit 1"
+      # on a branch that already had two. A counter in the store is shallow-clone-proof and
+      # needs no API call.
       - name: Compact the store branch when its history outgrows its contents
         working-directory: store
         env:
           COMPACT_AFTER_INPUT: ${{ inputs.compact_after }}
         run: |
           limit="${COMPACT_AFTER_INPUT:-$COMPACT_AFTER}"
-          commits="$(git rev-list --count HEAD)"
+          commits="$(cat data/.commits 2>/dev/null || echo 1)"
           if [ "$commits" -le "$limit" ]; then
-            echo "$commits commits, limit $limit: no compaction."
+            echo "$commits commit(s) since the last compaction, limit $limit: no compaction."
             exit 0
           fi
-          echo "$commits commits over the limit of $limit; rebuilding the branch from its tip."
-          before="$(du -sk .git | cut -f1)"
+          echo "$commits commits since the last compaction, over the limit of $limit;"
+          echo "rebuilding $STORE_BRANCH from its own tip: same tree, one commit, no history."
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # `--orphan` keeps the index, so the new commit's tree is exactly what was tracked:
+          # README, .gitignore, the versions and the counter. No `git add -A` here -- the
+          # Actions cache is restored into store/data/cache, and `-A` would sweep 5.1 MB of
+          # CelesTrak JSON into the very history this step exists to prevent.
           git checkout -q --orphan compacted
-          git add -A
+          echo 1 > data/.commits
+          git add -f data/.commits
           git commit -q -m "Supplemental element-set store, compacted $(date -u +%Y-%m-%dT%H:%MZ)"
           git branch -q -M "$STORE_BRANCH"
+          # Safe under the concurrency group above: one writer, and a push is atomic, so an
+          # interrupted run leaves the previous tip standing rather than a half-written branch.
           git push -q -f origin "$STORE_BRANCH"
-          git reflog expire --expire=now --all && git gc -q --prune=now
-          echo "history $(( before ))K -> $(du -sk .git | cut -f1)K, now $(git rev-list --count HEAD) commit"
+          echo "Compacted: one commit holding $(ls -1 data/supplemental | wc -l) version(s)."
 
       - name: What the store holds now
         working-directory: store
