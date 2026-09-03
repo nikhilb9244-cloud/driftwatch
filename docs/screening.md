@@ -206,6 +206,65 @@ and that Stage C reproduces each one inside the watch radius to 10 ms and 1 m. T
 negative control sets the threshold to `R` alone, without the `v_bound h / 2` term, at a
 120 s step, and shows that fast crossings are then lost.
 
+## Attached and co-orbiting objects
+
+Some pairs never come apart. The ISS's own modules — Zvezda, Unity, Destiny, Poisk, Nauka —
+and every visiting vehicle docked to it are separate catalogue objects carried on essentially
+the station's own element set, so Stage C finds a closest approach between each of them and the
+station roughly once an orbit for as long as the window runs. On the 2026-09-03 demo run there
+were **ten such objects and 2,170 events**, every one at a miss of 0.267 m and a relative speed
+of 0.3 mm/s, with the ten never separating by more than 0.862 m across the seven days. They were a quarter of that run's 8,394 events and **1,528 of its 1,529 red
+flags**: one red flag in the whole run was a conjunction.
+
+These are not conjunctions, and the reason is not only that the answer is silly. They are
+**outside the domain of the probability method**. The encounter-plane calculation (see "The
+encounter plane" below) assumes a brief encounter: a relative velocity large enough that the
+covariance does not evolve while the two objects pass, and a miss that is a distance rather
+than a state the pair is simply *in*. A pair 0.267 m apart at 0.3 mm/s for seven days has none
+of that. Scoring them produces a number the method cannot support, and the number is large,
+which is the worst combination.
+
+**The rule.** Stage B already samples every surviving pair's separation across the whole window,
+so the test costs nothing extra: a pair whose separation stays at or under `attached_km`
+(default 1 km) for at least `attached_fraction` (default 99 %) of the sampled window is held to
+be one physical cluster and its candidates are dropped before Stage C sees them. The excluded
+pairs, with their closest, mean and furthest separations, are recorded in the run's `run.json`
+and printed in the report. `driftwatch screen --keep-attached` turns the filter off and the
+events come back unchanged; `--attached-km` and `--attached-fraction` move the thresholds.
+
+**Where the threshold came from.** Measured over all 47,974 Stage A survivors of the 2026-09-03
+demo run, on a 300-second grid over the seven-day window:
+
+| Pair | Furthest apart over the window |
+| --- | ---: |
+| Each of the ten ISS-attached objects | **0.857 m** (0.862 m on the run's own 30 s grid) |
+| The tightest genuinely distinct pair (EOS SAT-1 / STARLINK-35843) | 745 km |
+| Median over all pairs | 13,824 km |
+
+There is nothing between 0.857 m and 745 km, so every threshold across five orders of magnitude
+gives the same ten pairs, and a rule on the *maximum* separation and a rule on the 99th
+percentile agree exactly. 1 km sits a thousandfold clear of each side. The fraction is kept
+rather than using the maximum because a single bad sample — a stale element set, a served
+trajectory's jump at a file's 48-hour seam — should not be able to save a pair that is otherwise
+permanently attached.
+
+**Why sustained separation and not relative speed.** A near-zero relative speed would catch
+these pairs too, and more cheaply. It would also catch the **slow encounters between genuinely
+distinct objects**, which is precisely the population the two-dimensional probability is known
+to underestimate (see "Slow encounters, where the straight line fails") and which
+`docs/methods.md` records as the largest error in this project that no comparison available to
+it can size. Removing the events the method is worst at, on a criterion that cannot tell them
+apart from docked hardware, would be the wrong kind of tidying. Separation can tell them apart:
+a pair never more than a kilometre apart over a week is one object as far as any screening is
+concerned, and a pair that passes slowly is two.
+
+**What it does not do.** It is a rule about the *modelled* trajectories, so it says nothing
+about a physical attachment the element sets disagree about — a vehicle whose separate tracking
+puts it kilometres from its docking port will not be caught, and should not be, because at that
+point the catalogue is describing two objects. It would also fire on a genuine close formation
+flown for days within a kilometre. No pair in any run so far is in that position; if one ever
+is, the flag exists and the exclusion is in the report to be argued with.
+
 ## Stage C: refinement
 
 For each bracket the time of closest approach is the root of `f(t) = dr . dv` with SGP4

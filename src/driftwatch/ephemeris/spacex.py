@@ -915,12 +915,9 @@ def interpolated_times_from_events(events: pd.DataFrame) -> dict[int, np.ndarray
     return {k: np.unique(np.asarray(v, dtype="datetime64[us]")) for k, v in out.items()}
 
 
-def load_trajectory(
-    norad_ids: Sequence[int] | None = None, out_dir: Path = config.SPACEX_DIR
-) -> EphemerisTrajectory:
+def load_trajectory(norad_ids: Sequence[int] | None = None, out_dir: Path = config.SPACEX_DIR) -> EphemerisTrajectory:
     """The newest stored state history of each requested satellite, ready to interpolate."""
     return EphemerisTrajectory(load_state_store(norad_ids, out_dir))
-
 
 
 # --------------------------------------------------------------------------------------
@@ -1044,9 +1041,7 @@ class SpacexEphemerisCovariance:
         covered = (at64 >= start) & (at64 <= stop) & (at64 >= times[0]) & (at64 <= times[-1])
         out = np.zeros((len(at64), 3, 3))
         served_times = self.interpolated_times.get(int(norad_id))
-        interpolated = (
-            np.isin(at64, served_times) if served_times is not None else np.zeros(len(at64), dtype=bool)
-        )
+        interpolated = np.isin(at64, served_times) if served_times is not None else np.zeros(len(at64), dtype=bool)
         if not covered.any():
             return out, covered, interpolated
         x = (at64[covered] - times[0]) / np.timedelta64(1, "s")

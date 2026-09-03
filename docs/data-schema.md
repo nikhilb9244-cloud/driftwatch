@@ -255,7 +255,7 @@ events. `driftwatch risk <run> --scenario <name>` adds a scenario without rescre
 
 | File | Content |
 | --- | --- |
-| `run.json` | The run id, snapshot, fleet file, window, screening configuration, per-stage summary and timings, the history backfill result, the covariance fit summary, the supplemental versions used and their covariance fit, the scenarios present and one record per scoring (scenario, time, model version, flag counts). |
+| `run.json` | The run id, snapshot, fleet file, window, screening configuration, per-stage summary and timings, the attached/co-orbiting exclusions, the history backfill result, the covariance fit summary, the supplemental versions used and their covariance fit, the scenarios present and one record per scoring (scenario, time, model version, flag counts). |
 | `events.parquet` | Stages A to C: one row per event, the geometry and both TEME states at the time of closest approach (below). Metadata: the snapshot, the run id, the fleet, the configuration and the summary. |
 | `objects.parquet` | One row per object that takes part in any event, plus every fleet member (below). |
 | `covariance.parquet` | The fitted covariance model: one row per object analysed (every Stage A survivor), per (category, band) pool and per default band (below). Rebuilding the model from this table gives the same covariances. |
@@ -265,6 +265,21 @@ events. `driftwatch risk <run> --scenario <name>` adds a scenario without rescre
 
 An event is kept when its miss vector lies inside the RIC box or its miss distance is
 inside the watch radius.
+
+#### `run.json`: `attached_excluded`
+
+What the attached and co-orbiting filter took out, so the exclusion is reproducible and
+arguable rather than silent (`docs/screening.md`). `enabled` is false when the run was screened
+with `--keep-attached`, in which case `pairs` is empty and nothing was excluded.
+
+| Field | Meaning |
+| --- | --- |
+| `enabled` | Whether the filter ran. `false` means the events of attached pairs are in the tables. |
+| `rule` | The rule in words, as it appears in the report. |
+| `attached_km`, `attached_fraction` | The thresholds: separation at or under `attached_km` km for at least this fraction of the sampled window. |
+| `n_pairs` | How many pairs met the rule. |
+| `n_candidates_dropped` | How many Stage B candidates were dropped with them, before Stage C ran. |
+| `pairs[]` | One entry per excluded pair: `primary_norad_id`, `primary_name`, `secondary_norad_id`, `secondary_name`, `samples` (grid samples with both states valid), `fraction_below`, and `d_min_m`, `d_mean_m`, `d_max_m` — the closest, mean and **furthest** separation over the window, in metres. `d_max_m` is the number the rule has to be defended on. |
 
 ### `events.parquet`
 

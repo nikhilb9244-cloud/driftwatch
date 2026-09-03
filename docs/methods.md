@@ -125,6 +125,20 @@ they enter the chain; each states what is assumed, why, and what it costs.
   publishes with every set (a median of 0.20 km, a 90th percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02) are the floor on how well the set represents
   that ephemeris, and the ephemeris itself is a prediction revised as plans change. Used for 10,728 of the 11,094 Starlink objects on the first run;
   `secondary_ephemeris` says which set an event used.
+- **Attached and co-orbiting objects are excluded structurally, not by name (Phase 4 Step 2
+  review).** A docked visiting vehicle, a station module and a payload still mated to its
+  upper stage are separate catalogue objects on essentially one element set, and screening them
+  against their host produces a closest approach of a fraction of a metre once an orbit for the
+  whole window. Ten such objects sit on the ISS; before this they were 2,170 of the demo run's
+  8,394 events and **1,528 of its 1,529 red flags**. A pair whose separation stays under 1 km for at least
+  99 % of the sampled window is dropped before Stage C. That is an approximation in two
+  directions. It will not catch a physical attachment whose two element sets disagree by more
+  than a kilometre — correctly, since at that point the catalogue is describing two objects — and
+  it *would* fire on a genuine close formation flown within a kilometre for days, which no run
+  has yet contained. The rule is on sustained separation and deliberately not on relative speed,
+  because a speed rule would also delete the slow encounters this project's probability method is
+  known to underestimate. Every exclusion is listed in the run and in the report, and
+  `--keep-attached` reverses it. `docs/screening.md`.
 - **Events are geometry; probability is a separate layer.** An event is kept when the
   miss vector lies inside the 2 x 25 x 25 km box or within the 25 km watch radius, and
   its row carries both objects' states at the time of closest approach. Every scenario

@@ -44,6 +44,30 @@ Three, agreed before any code was written, and committed as `2428587`.
 The licence was already in `main` — `LICENSE`, MIT, tracked since `5b903f6` on 1 September —
 so there was nothing to pull; GitHub was displaying the file the repository already had.
 
+### The precondition check, re-run at the Step 1 review (2026-09-03, later)
+
+Re-run because the prompt requires it immediately before the pipeline is written, and because
+the first check passed item 1 on a state that no longer holds.
+
+| Check | Result |
+| --- | --- |
+| GitHub remote, `main` pushed | **Fail, and it is a new failure.** `origin/main` is still `89f2ea3`; local `main` is `8bd44c3`, **six commits ahead**. Everything Phase 4 Step 1 built is unpushed, and so is `.github/workflows/supplemental.yml`'s companion setup. `git push --dry-run` succeeds, so the credential is not the obstacle — nobody has pushed. |
+| The four Actions secrets | **Still could not verify.** Same 403, same cause: `gh` is authenticated as `nikoloooodeon`, which the API reports as `{"admin": false, "push": false, "pull": true}` on this repository. Listing secret names needs admin. This is not evidence that the secrets are absent. |
+| `.gitignore` exclusions | **Pass**, re-checked with `git check-ignore` on each path: `data/spacex`, `data/external` (which holds `kelvins/`), `data/cache`, `data/ballistic`, `data/supplemental`, `data/snapshots`, `data/history`, `data/conjunctions`, `data/weather`, `data/validation`, `data/propagated`, `.wrangler`, `web/public/data/*`. |
+
+**A fourth thing the check found that it was not asked to look for.** The `supplemental-store`
+orphan branch **does not exist on the remote** — `git ls-remote --heads origin` returns `main`
+and nothing else. `.github/workflows/supplemental.yml` is on `origin/main` and is `active`, but
+its first step checks out `supplemental-store`, so every scheduled run would fail at the
+checkout; and in fact the workflow has never run at all, the only run in the repository's
+history being the `ci` job on the Phase 3 close-out push. That matters for Step 2 beyond its own
+sake: the prompt names this workflow as the pattern for persisting state between runs, and the
+pattern has not yet been shown to work. The one-off setup in the workflow's own header comment
+has to be done before either workflow can be trusted.
+
+**Step 2 is therefore blocked on item 1** and proceeds no further than this. The two review
+items below need none of it.
+
 ## Step 1. Stage C interpolates the SpaceX ephemeris states directly
 
 Built 2026-09-03. This step turned out to be much larger than the prompt supposed, for one
@@ -237,6 +261,16 @@ separate catalogue objects sitting at the same position as the station, so they 
 events at a 0.2 m miss and 416 of the run's red flags. They have nothing to do with Step 1 and
 they would swamp any tally, so they are excluded from everything below and counted once here.
 
+> **Corrected at the Step 1 review, 2026-09-03.** Two things in that paragraph are wrong. The
+> list of attached objects is incomplete — three ISS *structural* modules (Zvezda, Unity,
+> Destiny) sit on the station's element set too, so it is ten objects and 2,170 events, not
+> seven and 1,519 — and the "416 red flags" is not the visiting vehicles' count but what was
+> *left* after removing them, which is those three modules. The seven visiting vehicles carry
+> 1,112 reds and 407 yellows. Everything in this section that compares run A with run B stands,
+> because the attached pairs are identical in both runs; the **flag totals table below does
+> not**. See the Step 1 review section below for the corrected table and for
+> the structural filter that replaces this by-hand exclusion.
+
 **Totals.** 8,404 events in A and 8,394 in B (6,885 and 6,875 without the docked modules). 300
 objects had published states stored; 131 of them had events inside the coverage, and **646
 events were refined on the published states**. No event needed the scan refinement: 22
@@ -308,6 +342,12 @@ stood for*, rather than the patch, moves flags:
 | red | 416 | **417** |
 | yellow | 257 | **255** |
 | none | 6,212 | 6,203 |
+
+> **Corrected at the Step 1 review, 2026-09-03.** This table counts the three ISS structural
+> modules the by-hand exclusion above missed, and they supply every one of run A's 416 reds and
+> 235 of its 257 yellows. Corrected: run A is 0 red and 22 yellow, run B is **1 red and 20
+> yellow**. The conclusion below is unchanged and gets sharper — the one red flag in run B is
+> the new one.
 
 - **10 matched events changed flag, every one of them on an object served by published states**:
   one `none` → **red**, two `none` → yellow, seven yellow → `none`.
@@ -431,3 +471,219 @@ of both, so it is not a judgement call. A failure logs the residual, refuses to 
 and exits non-zero. Where there are no stored supplemental sets to check against, it says it
 could not check rather than passing by default — the same distinction the Step 2 precondition
 check draws about the Actions secrets.
+
+## Step 1 review: three items before the pipeline, and a fourth that turned up (2026-09-03)
+
+Step 1 was approved with three items attached, and a fourth turned up while doing them.
+
+### 1. The hand exclusion was wrong, which is the argument for not doing it by hand
+
+Step 1's report excluded the ISS's docked visiting vehicles from every tally by listing them:
+Soyuz, Progress (two of them), Cygnus, Crew Dragon, Nauka, Poisk — seven objects, 1,519 events.
+The list was incomplete. **Three more catalogue objects sit on the station's own element set**:
+ISS (ZVEZDA) 26400, ISS (UNITY) 25575 and ISS (DESTINY) 26700, the service module, the first
+US node and the US laboratory. They are structure, not visitors, and no rule about visiting
+vehicles would ever have caught them. Ten objects, 2,170 events, a median miss of 0.267 m.
+
+Leaving them in did not merely add noise. It **produced the headline flag table**:
+
+| Quiet scenario, event flags | Run A as reported | Run A, corrected | Run B as reported | Run B, corrected |
+| --- | ---: | ---: | ---: | ---: |
+| red | 416 | **0** | 417 | **1** |
+| yellow | 257 | **22** | 255 | **20** |
+| none | 6,212 | 6,212 | 6,203 | 6,203 |
+| events | 6,885 | 6,234 | 6,875 | 6,224 |
+
+Every one of run A's 416 red flags was one of the three ISS modules, and so were 235 of its 257
+yellows. The corrected statement of the Step 1 result is **stronger and much cleaner** than the
+one first written: screening on CelesTrak's fits, the demo fleet had **no red flag at all**
+outside the station's own hardware; screening on SpaceX's published states it has **exactly
+one**, and that one is EOS SAT-1 against Starlink 61705. The rest of Step 1's numbers — the
+miss-distance movements, the gained-and-lost tables, the probability ratios, the ten matched
+flag changes — are unaffected, because the attached pairs are identical in both runs and
+contribute nothing to any difference.
+
+One number is re-derived rather than corrected. Recomputing the ten matched flag changes at
+this review, with a greedy nearest-time matcher inside a ten-minute tolerance, gives **one
+`none` → red, three `none` → yellow and six yellow → `none`** against the "one, two, seven"
+first reported. Ten changes either way, on the same ten events; the single event that moves
+between the two categories is a matching-tolerance detail and neither breakdown is being
+claimed over the other here. The one that matters is the same in both: `none` → **red**, EOS
+SAT-1 against Starlink 61705.
+
+### 2. Attached and co-orbiting objects are filtered structurally
+
+**The rule.** A pair whose separation stays at or under `attached_km` (1 km) for at least
+`attached_fraction` (99 %) of Stage B's sampled window is one physical cluster, and its
+candidates are dropped before Stage C. Stage B already samples every surviving pair's
+separation across the window, so the test is five extra array reductions per chunk and no extra
+propagation.
+
+**Why sustained separation and not relative speed.** A relative-speed rule would catch these
+pairs too — the ISS and its modules close at 0.3 mm/s — and it would be simpler. It would also
+catch the **slow encounters between genuinely distinct objects**, which are exactly the events
+the two-dimensional probability is known to underestimate and which `docs/methods.md` records as
+the largest error in this project that no comparison available to it can size. Deleting the
+events the method is worst at, on a criterion that cannot distinguish them from docked hardware,
+would be the wrong kind of tidying. A test pins it: a designed encounter at a 3° crossing angle,
+with a relative speed a twentieth of an ordinary one, survives the filter.
+
+**Why a rule and not a list.** A known-attached list would have caught the seven visiting
+vehicles, because those are the ones anybody thinks of — and it would have missed the three
+station modules for exactly the reason the hand exclusion did. The rule catches what it
+measures rather than what somebody remembered.
+
+**Where the threshold came from.** Measured over all 47,974 Stage A survivors of this run on a
+300-second grid, the furthest apart each pair ever gets over the seven days:
+
+| Pair | Furthest apart over the window |
+| --- | ---: |
+| Each of the ten ISS-attached objects | **0.857 m** |
+| The tightest genuinely distinct pair (EOS SAT-1 / STARLINK-35843) | 745 km |
+| Median over all 47,974 pairs | 13,824 km |
+
+Nothing lies between 0.857 m and 745 km. Every threshold across five orders of magnitude gives
+the same ten pairs; a maximum-separation rule and a 99th-percentile rule agree exactly. The
+fraction is kept rather than the maximum so that one bad sample — a stale element set, a served
+trajectory's jump at a file's 48-hour seam — cannot rescue a pair that is otherwise permanently
+attached. 1 km sits a thousandfold clear on each side, which is the only defence a threshold
+needs.
+
+**Visible and reversible.** The excluded pairs, with their closest, mean and furthest
+separations and the fraction of the window they spent below the threshold, go into the run's
+`run.json` under `attached_excluded` and into a section of the report that is written whether
+the filter fired or not, and whether it was on or off. `driftwatch screen --keep-attached`
+restores the events; `--attached-km` and `--attached-fraction` move the thresholds.
+`docs/screening.md` has the derivation, `docs/methods.md` the approximation.
+
+**What it removes from a normal run.** The same fleet, snapshot, window and supplemental
+version as run B, screened again with the filter on:
+
+| | Filter off (run B) | Filter on | Removed |
+| --- | ---: | ---: | ---: |
+| Events | 8,394 | **6,224** | 2,170 (25.9 %) |
+| Event flags: red | 1,529 | **1** | 1,528 |
+| Event flags: yellow | 662 | **20** | 642 |
+| Event flags: none | 6,203 | 6,203 | 0 |
+| Pairs flagged red (the report's own count) | 11 | **1** | 10 |
+| Pairs flagged yellow | 15 | 15 | 0 |
+| Report's "closest approach" | 0.000 km | **0.138 km** | |
+| Report's "highest probability" | 2.77 × 10⁻¹ | **1.08 × 10⁻⁴** | |
+
+The last two rows are the reason this could not be left to a hand exclusion in the analysis.
+The report's headline numbers — the two a reader looks at first — were a miss of zero and a
+probability of 0.28, and both were the ISS's own service module.
+
+**Every red flag but one was attached hardware.** That is the finding, and it is the answer to
+"how many flags does it remove": 1,528 of 1,529. The one that survives is EOS SAT-1 against
+Starlink 61705, the flag Step 1 produced.
+
+The filter is surgical rather than merely large. The two runs' event tables were compared by
+event id: **2,170 ids present only in the unfiltered run, none present only in the filtered
+one**, and the 6,224 shared events are bit-for-bit identical. Dropping the candidates before
+Stage C changes the refinement of nothing else, which is what a test asserts as well as this
+run.
+
+The excluded objects, exactly as they appear in the report:
+
+| Excluded object | NORAD | Closest | Mean | Furthest apart | Window below 1 km |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| ISS (ZVEZDA) | 26400 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+| ISS (UNITY) | 25575 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+| ISS (DESTINY) | 26700 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+| ISS (NAUKA) | 49044 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+| POISK | 36086 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+| SOYUZ-MS 29 | 100057 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+| PROGRESS-MS 33 | 68319 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+| PROGRESS-MS 34 | 68837 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+| CYGNUS NG-24 | 68689 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+| CREW DRAGON 12 | 67796 | 0.198 m | 0.431 m | 0.862 m | 100 % |
+
+All ten give the same three numbers to the millimetre, which is the clearest possible statement
+of what they are: ten catalogue entries propagating one element set. (The threshold table above
+says 0.857 m rather than 0.862 m because it came from a 300-second diagnostic sweep; the run's
+own grid is 30 seconds and catches a slightly higher peak. Nothing turns on the difference.)
+
+**Cost.** Stage B went from 205.1 s to 239.8 s, a **17 per cent overhead** for five array
+reductions per chunk per primary group over the same separations Stage B already computes. Read
+that as an upper bound rather than a measurement: the two runs were not alone on the machine and
+this one shared it with the test suite. Even taken at face value it is 35 seconds on a
+ten-minute screening, against storm scenarios that cost sixteen minutes each, so it is not worth
+optimising before Step 2 has measured the whole run. It is recorded because Step 2's constraint
+is runtime and because there is an obvious fix if it ever matters: the reductions are over the
+full
+`(pairs, samples)` block for all 47,974 pairs at every step, and a pair can be **disqualified
+permanently** once `(samples below so far + samples remaining) / total` falls under
+`attached_fraction`. The first chunk is 235 of 20,161 samples, so any pair not already below the
+threshold throughout it can never reach 99 % and drops out — which leaves ten pairs out of
+47,974 to keep accumulating for. Stage C fell from 4.2 s to 3.7 s, having 2,170 fewer candidates
+to refine.
+
+### 3. The mixed covariance case, tested rather than waited for
+
+The prompt's Step 1 asked for the SGP4 fit residual to be removed **per event**, and it is:
+an event refined on the published states gets SpaceX's covariance as published; one whose
+geometry still came from CelesTrak's fit carries the 0.20 km residual in quadrature and is
+labelled `spacex-ephemeris+sgp4-fit`. Checking the review's question — has that second label
+ever actually been produced? — the answer is **no**:
+
+| `cov_source_secondary`, run B, quiet | Events |
+| --- | ---: |
+| `empirical` | 3,924 |
+| `supplemental:beyond-horizon` | 3,334 |
+| `spacex-ephemeris` | 646 |
+| `supplemental:consistency-prior-p1.5` | 395 |
+| `supplemental:consistency-prior-p1.5+beyond-horizon` | 65 |
+| pooled fallbacks | 30 |
+| **`spacex-ephemeris+sgp4-fit`** | **0** |
+
+Sixteen objects had events served both ways, so the *trajectory* label is genuinely mixed. But
+every unserved event on those sixteen sits at a lead of 65.7 hours or more, past the end of the
+object's own ephemeris, so the covariance falls through to the base model and the event is
+labelled `supplemental:beyond-horizon` rather than `spacex-ephemeris+sgp4-fit`. The two horizons
+— the covariance's and the states' — coincided on every file in this run, so the partial path
+had nothing to do.
+
+It is not dead code. A file's covariance covers its full 72 hours while its stored states are
+split at every discontinuity, and 299 of the 300 files fetched carry a seam at 47.98 hours; a
+time of closest approach inside a seam has SpaceX's covariance and CelesTrak's trajectory. The
+same holds if a fetch stores covariance for an object whose states fail to parse. So the path
+is real, rare, and until now exercised only by a unit test on the model in isolation.
+
+`tests/test_spacex.py` now runs it end to end. One Starlink secondary meets the primary twice an
+orbit for a day; its states are stored for the first twelve hours and its covariance across all
+twenty-four. The whole chain runs — the screening writes `secondary_trajectory`,
+`interpolated_times_from_events` reads it back, the model decides per event, `run_risk` labels
+the row — and it produces **18 events labelled `spacex-ephemeris` and 15 labelled
+`spacex-ephemeris+sgp4-fit` on the same object**, with the in-track sigma differing by exactly
+the quadrature term. The test asserts the labels follow the trajectory event by event and not
+object by object, which is the property Step 1 changed and the one that would break silently.
+
+### 4. A shadowed variable meant no Step 1 run recorded its own snapshot
+
+Found while wiring the exclusion record into `run.json`. `cmd_screen` assigns the catalogue
+snapshot to `path`, and the supplemental loop then assigned the *stored supplemental file* to
+the same name:
+
+```python
+path = Path(args.snapshot) if args.snapshot else snapshot.latest_snapshot(config.SNAPSHOT_DIR)
+...
+    path, written = supplemental_mod.store_supplemental(records, ...)   # shadows it
+...
+run_dir.write_run({"snapshot": path.name, ...})                        # the wrong file
+```
+
+Both Step 1 runs therefore recorded `snapshot: starlink_20260903T152308Z.parquet`, which is a
+supplemental element-set file and not a snapshot at all. The consequence is not cosmetic:
+`elements_for_run` looks the recorded name up with `snapshot_file`, which searches the snapshot
+directories and raises, so **`driftwatch report` could not rebuild either Step 1 run** —
+confirmed by running it and getting `FileNotFoundError: snapshot
+'starlink_20260903T152308Z.parquet' is in neither ... nor ...`. And Step 2 is required to fail
+loudly on a snapshot older than a set age, which it cannot compute from the name of a different
+file.
+
+The shadowing dates from `343660d` (Phase 3 Step 0, 2 September) and the 1 September run
+predates it and records `gp_20260901T204841Z.parquet` correctly, which is how it was dated. The
+loop variable is now `stored_path`, with a comment saying why it must not be `path`. The two
+stored Step 1 runs were repaired in place, with the correction recorded in their own `run.json`
+under `corrections`, and `driftwatch report` rebuilds them again.

@@ -656,6 +656,64 @@ def _validity_summary_rows(rows: pd.DataFrame) -> list[str]:
     ]
 
 
+def attached_section(info: dict[str, Any]) -> list[str]:
+    """What the attached/co-orbiting filter took out of this run, and how to put it back.
+
+    An exclusion nobody can see is an exclusion nobody can argue with, so this section is
+    written whether the filter fired or not, and whether it was on or off.
+    """
+    record = info.get("attached_excluded")
+    if not isinstance(record, dict):
+        return []
+    lines = ["## Attached and co-orbiting objects", ""]
+    if not record.get("enabled", True):
+        return lines + [
+            "**The filter was off for this run** (`--keep-attached`), so docked visiting vehicles, station "
+            "modules and any other pair that never comes apart are scored as ordinary conjunctions. Their "
+            "misses are fractions of a metre and their flags are not real. Compare against a run without "
+            "the flag before reading anything below.",
+            "",
+        ]
+    pairs = record.get("pairs") or []
+    lines += [
+        "A docked visiting vehicle, a station module and a payload still mated to its upper stage are "
+        "separate catalogue objects at the same place, usually carried on the same element set. The "
+        "closest approach between them is a fraction of a metre once an orbit, for as long as they stay "
+        "attached, and it is not a conjunction: the probability on the encounter plane assumes a brief "
+        "encounter and a relative velocity that dominates, which a pair a metre apart at a fraction of a "
+        "millimetre a second does not have. They are excluded before the refinement stage, by "
+        f"**{record.get('rule', 'a sustained-separation rule')}** — never by name, so an attachment nobody "
+        "listed is caught on the same terms. `driftwatch screen --keep-attached` puts them back.",
+        "",
+    ]
+    if not pairs:
+        return lines + ["No pair in this run met the rule.", ""]
+    n_dropped = int(record.get("n_candidates_dropped", 0))
+    lines += [
+        f"**{len(pairs)} pair{'' if len(pairs) == 1 else 's'} excluded**, dropping {n_dropped} "
+        f"candidate approach{'' if n_dropped == 1 else 'es'} before Stage C:",
+        "",
+        "| Fleet member | Excluded object | NORAD | Closest (m) | Mean (m) | Furthest apart (m) | Window below |",
+        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
+    ]
+    for row in pairs:
+        lines.append(
+            f"| {row.get('primary_name', '')} | {row.get('secondary_name', '')} "
+            f"| {int(row.get('secondary_norad_id', 0))} | {float(row.get('d_min_m', 0)):.3f} "
+            f"| {float(row.get('d_mean_m', 0)):.3f} | {float(row.get('d_max_m', 0)):.3f} "
+            f"| {float(row.get('fraction_below', 0)):.1%} |"
+        )
+    lines += [
+        "",
+        "The furthest-apart column is the test the rule actually has to pass. Where it is a metre or two "
+        "over a seven-day window, the two objects are one object as far as any screening is concerned, and "
+        "no threshold between that and the closest genuinely distinct pair in the run would change the "
+        "answer.",
+        "",
+    ]
+    return lines
+
+
 def _storm_rows(rows: pd.DataFrame, label: str) -> pd.DataFrame:
     """The subset of ``rows`` carrying one ``storm_validity`` label, or everything for ``combined``."""
     if label == "combined" or "storm_validity" not in rows.columns:
@@ -847,6 +905,7 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         lines.append("")
 
     lines += storm_section(rows, scenario)
+    lines += attached_section(info)
 
     top_pc = pairs.head(top_n)
     lines += [f"## Top {len(top_pc)} pairs by probability", ""]

@@ -805,23 +805,35 @@ def cmd_screen(args: argparse.Namespace) -> int:
             )
             records = supplemental_mod.load_supplemental_records(name, config.CACHE_DIR)
             # Store the version before it is used: the cache keeps one version and overwrites it,
-            # so without this a run cannot be reproduced from what it records.
-            path, written = supplemental_mod.store_supplemental(records, name=name, fetched_at=res.fetched_at)
-            version = supplemental_mod.version_of(path)
+            # so without this a run cannot be reproduced from what it records. Its own variable,
+            # never `path`: `path` is the catalogue snapshot and is what the run records as its
+            # snapshot, and shadowing it here made two Step 1 runs record the supplemental file
+            # name instead -- which `snapshot_file` then cannot find, so `elements_for_run`
+            # could not rebuild them and Step 2 could not have computed a snapshot age.
+            stored_path, written = supplemental_mod.store_supplemental(records, name=name, fetched_at=res.fetched_at)
+            version = supplemental_mod.version_of(stored_path)
             log.info("Supplemental %s version %s (%s)", name, version, "stored" if written else "already stored")
             df, match = supplemental_mod.apply_supplemental(df, records, name=name, version=version)
             supplemental_used.append(
                 {
                     "name": name,
                     "version": version,
-                    "file": path.name,
+                    "file": stored_path.name,
                     "n_records": match.n_records,
                     "n_applied": match.n_applied,
                     "epoch_lag_days_median": round(float(match.epoch_lag_days_median), 3),
                 }
             )
 
-    cfg = ScreeningConfig(days=args.days, step_s=args.step, pad_km=args.pad, watch_radius_km=args.watch_radius)
+    cfg = ScreeningConfig(
+        days=args.days,
+        step_s=args.step,
+        pad_km=args.pad,
+        watch_radius_km=args.watch_radius,
+        attached_km=args.attached_km,
+        attached_fraction=args.attached_fraction,
+        exclude_attached=not args.keep_attached,
+    )
     # The operator's own published states, where the store holds them, in place of the SGP4
     # fit to them -- in Stage B as well as Stage C, because the two trajectories are tens of
     # kilometres apart at the far end of the ephemeris horizon (docs/spacex-ephemerides.md).
@@ -922,6 +934,7 @@ def cmd_screen(args: argparse.Namespace) -> int:
             "end": result.end.isoformat(),
             "config": cfg.to_dict(),
             "summary": summary,
+            "attached_excluded": attached_record(result, df, fleet),
             "timings_s": {k: round(v, 2) for k, v in timings.items()},
             "history": {
                 "mode": args.history if rc == 0 else "off",
@@ -953,6 +966,45 @@ def cmd_screen(args: argparse.Namespace) -> int:
     print_risk_summary(joined, args.scenario, args.show)
     print(run_dir.path)
     return rc
+
+
+def attached_record(result: ScreeningResult, elements: pd.DataFrame, fleet: Fleet) -> dict[str, Any]:
+    """What the attached/co-orbiting filter excluded, named, for ``run.json`` and the report.
+
+    Named here rather than in the screening because Stage B works on norad ids and the names
+    live in the snapshot. Ten rows at most in practice, so it goes in ``run.json`` beside the
+    rest of the run's provenance rather than into a parquet of its own.
+    """
+    cfg = result.config
+    table = result.stage_b.attached
+    names = elements.drop_duplicates("norad_id").set_index("norad_id")["name"]
+    fleet_names = {m.norad_id: m.name for m in fleet}
+    rows = [
+        {
+            "primary_norad_id": int(r.primary_norad_id),
+            "primary_name": fleet_names.get(int(r.primary_norad_id), str(names.get(r.primary_norad_id, ""))),
+            "secondary_norad_id": int(r.secondary_norad_id),
+            "secondary_name": str(names.get(r.secondary_norad_id, "")),
+            "samples": int(r.samples),
+            "fraction_below": round(float(r.fraction_below), 6),
+            "d_min_m": round(float(r.d_min_km) * 1000.0, 3),
+            "d_mean_m": round(float(r.d_mean_km) * 1000.0, 3),
+            "d_max_m": round(float(r.d_max_km) * 1000.0, 3),
+        }
+        for r in table.itertuples()
+    ]
+    return {
+        "enabled": bool(cfg.exclude_attached),
+        "rule": (
+            f"separation at or under {cfg.attached_km:g} km for at least "
+            f"{cfg.attached_fraction:.0%} of the sampled window"
+        ),
+        "attached_km": cfg.attached_km,
+        "attached_fraction": cfg.attached_fraction,
+        "n_pairs": len(rows),
+        "n_candidates_dropped": int(result.stage_b.n_attached_candidates),
+        "pairs": rows,
+    }
 
 
 def layer_spacex_ephemerides(
@@ -2513,6 +2565,23 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-spacex",
         action="store_true",
         help="ignore SpaceX's published ephemerides: their states when screening, their covariance when scoring",
+    )
+    screen.add_argument(
+        "--keep-attached",
+        action="store_true",
+        help="keep attached and co-orbiting objects (docked vehicles, station modules) instead of excluding them",
+    )
+    screen.add_argument(
+        "--attached-km",
+        type=float,
+        default=1.0,
+        help="a pair never further apart than this for --attached-fraction of the window is one cluster (default: 1)",
+    )
+    screen.add_argument(
+        "--attached-fraction",
+        type=float,
+        default=0.99,
+        help="how much of the window a pair must stay within --attached-km to be excluded (default: 0.99)",
     )
     screen.add_argument("--out-dir", help="output directory (default: data/conjunctions)")
     add_risk_options(screen, scenario_default="quiet")

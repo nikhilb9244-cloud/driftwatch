@@ -416,9 +416,7 @@ def test_the_fit_residual_goes_per_event_not_globally():
     result = model.covariance_ric(ref, T0, np.array([at(2.0), at(6.0)]))
     assert list(result.source) == ["spacex-ephemeris", "spacex-ephemeris+sgp4-fit"]
     assert np.sqrt(result.cov_km2[0, 1, 1]) == pytest.approx(0.05)
-    assert np.sqrt(result.cov_km2[1, 1, 1]) == pytest.approx(
-        np.hypot(0.05, model.fit_rms_share[1] * model.fit_rms_km)
-    )
+    assert np.sqrt(result.cov_km2[1, 1, 1]) == pytest.approx(np.hypot(0.05, model.fit_rms_share[1] * model.fit_rms_km))
     assert model.fit_rms_summary()["served_without_fit_term"] == 1
     assert model.fit_rms_summary()["served_with_fit_term"] == 1
 
@@ -471,9 +469,7 @@ def test_the_frame_check_passes_on_matching_states_and_fails_on_a_rotation_error
             "mean_motion_ddot": [0.0],
         }
     )
-    satrec = satrec_from_elements(
-        NORAD_ID, epoch, 15.06, 0.0002, 53.05, 130.0, 80.0, 200.0, 3.5e-4
-    )
+    satrec = satrec_from_elements(NORAD_ID, epoch, 15.06, 0.0002, 53.05, 130.0, 80.0, 200.0, 3.5e-4)
     times = np.array(
         [np.datetime64((T0 + timedelta(seconds=120 * k)).replace(tzinfo=None), "us") for k in range(60)],
         dtype="datetime64[us]",
@@ -512,3 +508,116 @@ def test_the_frame_check_passes_on_matching_states_and_fails_on_a_rotation_error
     empty = spacex.check_state_frame(states, elements.iloc[:0])
     assert "passed" not in empty
     assert "not checked" in empty["verdict"]
+
+
+# --------------------------------------------------------------------------------------
+# The mixed case: their covariance present, the trajectory still the SGP4 fit
+
+
+def inclined_copy(base, norad_id: int, *, d_inclination_deg: float):
+    """The same orbit with the plane tilted, so the two objects meet twice an orbit all week.
+
+    Both keep the same period and the same argument of latitude, so their separation is
+    ``2 r sin(di/2) |sin u|``: it goes to nothing at the two nodes and out to ``r di`` between
+    them, once every half orbit. That gives events spread evenly across the window without
+    designing each one, which is what this test needs -- events on both sides of the hour the
+    stored states run out.
+    """
+    from test_screening import PRIMARY_EPOCH
+
+    from driftwatch.orbit.propagator import satrec_from_elements
+
+    return satrec_from_elements(
+        norad_id,
+        PRIMARY_EPOCH,
+        base.no_kozai * 1440.0 / (2.0 * np.pi),
+        base.ecco,
+        np.degrees(base.inclo) + d_inclination_deg,
+        np.degrees(base.nodeo),
+        np.degrees(base.argpo),
+        np.degrees(base.mo),
+        base.bstar,
+    )
+
+
+def test_one_object_carries_the_fit_residual_on_some_events_and_not_others_end_to_end():
+    """Their covariance present, the trajectory still CelesTrak's fit: the partial residual path.
+
+    Added at the Step 1 review, because production has not produced this case and might not
+    for a while. Measured on the 2026-09-03 demo run **no event took it**: 646 events were
+    served by the published states, 16 objects had events both ways, and every unserved event
+    on those objects fell past the covariance's own horizon too, so it went to the base model
+    with ``supplemental:beyond-horizon`` rather than to ``spacex-ephemeris+sgp4-fit``. The path
+    is real -- an ephemeris covers 72 hours while its stored states can stop earlier, and 299
+    of 300 real files carry a seam at 47.98 hours whose interior has SpaceX's covariance and
+    CelesTrak's trajectory -- but waiting for a run to produce it is not a test.
+
+    So: one Starlink secondary meeting the primary twice an orbit for a day, with states stored
+    for the first twelve hours only and covariance stored across the whole twenty-four. The
+    chain runs for real -- the screening writes ``secondary_trajectory``,
+    ``interpolated_times_from_events`` reads it back, the model decides per event, ``run_risk``
+    labels the row -- and the events of the *same object* must come out with two different
+    covariances and two different labels.
+    """
+    from test_screening import PRIMARY_ID, START, ephemeris_table, fleet_of, primary_satrec, snapshot_from
+
+    from driftwatch.ephemeris.spacex import EphemerisTrajectory
+    from driftwatch.risk.scenario import objects_from_snapshot, run_risk
+    from driftwatch.screening import ScreeningConfig, screen_fleet
+
+    primary = primary_satrec()
+    secondary = inclined_copy(primary, NORAD_ID, d_inclination_deg=0.25)
+    snapshot = snapshot_from(
+        {
+            PRIMARY_ID: (primary, "PRIMARY", START - timedelta(hours=6)),
+            NORAD_ID: (secondary, "STARLINK-37618", START - timedelta(hours=6)),
+        }
+    )
+    snapshot.loc[snapshot["norad_id"] == NORAD_ID, "category"] = "starlink"
+    fleet = fleet_of((PRIMARY_ID, "PRIMARY", True))
+
+    # Twelve hours of published states against a twenty-four hour window, displaced by a known
+    # 0.5 km so that the two trajectories are genuinely different objects to screen on.
+    trajectory = EphemerisTrajectory(
+        ephemeris_table(secondary, NORAD_ID, start=START, hours=12.0, offset_km=np.array([0.0, 0.0, 0.5]))
+    )
+    result = screen_fleet(
+        snapshot, fleet, config=ScreeningConfig(days=1.0, step_s=30.0), start=START, ephemeris=trajectory
+    )
+    assert set(result.events["secondary_trajectory"]) == {"spacex-ephemeris", "sgp4"}, (
+        "the run has to produce both, or the test is checking nothing"
+    )
+
+    # Their covariance across the whole window, so every event is inside it whatever served the
+    # trajectory. This is exactly the situation the per-event residual exists for.
+    covariance = stored_frame(sigma_i_km=0.05, start=START, hours=24.0)
+    served = spacex.interpolated_times_from_events(result.events)
+    assert set(served) == {NORAD_ID}
+    model = spacex.SpacexEphemerisCovariance(EmpiricalCovariance(), covariance, interpolated_times=served)
+
+    objects = objects_from_snapshot([PRIMARY_ID, NORAD_ID], snapshot, fleet)
+    risk = run_risk(
+        result.events, objects, model, scenario="quiet", run_id="test", snapshot="test.parquet", sweep=False
+    )
+    counts = risk["cov_source_secondary"].value_counts()
+    assert set(counts.index) == {"spacex-ephemeris", "spacex-ephemeris+sgp4-fit"}
+    assert counts["spacex-ephemeris"] > 0 and counts["spacex-ephemeris+sgp4-fit"] > 0
+
+    # The label follows the trajectory event by event, not object by object.
+    joined = risk[["event_id", "cov_source_secondary"]].merge(
+        result.events[["event_id", "tca", "secondary_trajectory"]], on="event_id"
+    )
+    expected = np.where(
+        joined["secondary_trajectory"] == "spacex-ephemeris", "spacex-ephemeris", "spacex-ephemeris+sgp4-fit"
+    )
+    assert list(joined["cov_source_secondary"]) == list(expected)
+    summary = model.fit_rms_summary()
+    assert summary["served_with_fit_term"] > 0 and summary["served_without_fit_term"] > 0
+
+    # And the difference is exactly the quadrature term, on the same object, hours apart.
+    at = pd.to_datetime(joined["tca"], utc=True).dt.tz_convert(None).to_numpy(dtype="datetime64[us]")
+    cov = model.covariance_ric(ObjectRef(NORAD_ID, "starlink", "leo"), START, at)
+    interpolated = np.asarray(cov.source) == "spacex-ephemeris"
+    sigma_i = np.sqrt(cov.cov_km2[:, 1, 1])
+    assert sigma_i[interpolated] == pytest.approx(0.05)
+    assert sigma_i[~interpolated] == pytest.approx(np.hypot(0.05, model.fit_rms_share[1] * model.fit_rms_km))

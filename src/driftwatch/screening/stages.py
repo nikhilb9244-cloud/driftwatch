@@ -33,6 +33,21 @@ is any consecutive pair of samples where the range rate changes sign from approa
 to receding while either sample is below the threshold; a sampled local minimum with no
 sign change beside it is kept as a fallback candidate.
 
+**Attached and co-orbiting objects (Phase 4 Step 2 review).** A docked visiting vehicle,
+a station module and a payload still mated to its upper stage are separate catalogue
+objects at the same place, and they are usually carried on the *same* element set, so the
+screening finds a closest approach of a fraction of a metre once an orbit for the whole
+window. Those are not conjunctions. They are also not screenable by this method at all:
+the probability on the encounter plane assumes a brief encounter, a relative velocity that
+dominates over the window the covariance is valid for, and a miss that is a distance rather
+than a state -- and a pair 0.9 m apart at 0.3 mm/s for seven days violates every one of
+them. Stage B therefore drops a pair whose separation stays under ``attached_km`` for at
+least ``attached_fraction`` of the sampled window, before Stage C ever sees it, and records
+what it dropped so the exclusion appears in the run and in the report rather than being
+silent. ``--keep-attached`` turns it off. See ``docs/screening.md`` for the measurement
+that set the threshold and for why the rule is on sustained separation rather than on
+relative speed.
+
 **Stage C, refinement.** For each candidate the time of closest approach is the root of
 the range rate, ``f(t) = dr . dv`` (the derivative of ``d^2/2``), found by a bracketed
 root finder with the trajectory evaluated at each trial time. Fallback candidates are
@@ -154,6 +169,16 @@ class ScreeningConfig:
     time_tolerance_s: float = 1e-5
     # Stage B propagates in time chunks sized so the position and velocity arrays fit this.
     memory_budget_mb: float = 256.0
+    # Attached and co-orbiting objects: a pair whose separation stays under `attached_km` for
+    # at least `attached_fraction` of the sampled window is the same physical cluster, not a
+    # conjunction, and Stage B drops it. Measured on the 2026-09-03 demo run, the ten objects
+    # attached to the ISS never separate by more than 0.862 m over seven days and the tightest
+    # genuine pair in the same run reaches 745 km, so any threshold between the two gives the
+    # same answer; 1 km sits a thousandfold clear of each side. `docs/screening.md` has the
+    # measurement. `exclude_attached=False` (the `--keep-attached` flag) restores the events.
+    attached_km: float = 1.0
+    attached_fraction: float = 0.99
+    exclude_attached: bool = True
 
     @property
     def screening_radius_km(self) -> float:
@@ -172,6 +197,9 @@ class ScreeningConfig:
             "speed_margin": self.speed_margin,
             "time_tolerance_s": self.time_tolerance_s,
             "screening_radius_km": self.screening_radius_km,
+            "attached_km": self.attached_km,
+            "attached_fraction": self.attached_fraction,
+            "exclude_attached": self.exclude_attached,
         }
 
 
@@ -453,6 +481,18 @@ def pair_jumps(served: ServedTrajectory, p_row: int, s_rows: np.ndarray, interva
 # Stage B
 
 
+ATTACHED_COLUMNS: tuple[str, ...] = (
+    "primary_norad_id",
+    "secondary_norad_id",
+    "samples",
+    "samples_below",
+    "fraction_below",
+    "d_min_km",
+    "d_mean_km",
+    "d_max_km",
+)
+
+
 @dataclass
 class StageBResult:
     """Candidate brackets for Stage C, plus what it cost."""
@@ -462,6 +502,64 @@ class StageBResult:
     n_objects: int
     n_propagations: int
     served: ServedTrajectory | None = None
+    # Pairs held to be the same physical cluster, and the candidates that were dropped with
+    # them. Empty with `exclude_attached=False`, which is what `--keep-attached` sets.
+    attached: pd.DataFrame = field(default_factory=lambda: pd.DataFrame(columns=list(ATTACHED_COLUMNS)))
+    n_attached_candidates: int = 0
+
+
+def _accumulate_separation(acc: dict[str, np.ndarray], d: np.ndarray, attached_km: float) -> None:
+    """Fold one chunk's separations into a group's running per-pair statistics.
+
+    ``d`` is ``(pairs, samples)``. A sample where either object failed to propagate is NaN and
+    is not counted either way, so ``fraction_below`` is over the samples that exist.
+    """
+    ok = np.isfinite(d)
+    acc["n"] += ok.sum(axis=1)
+    acc["below"] += (ok & (d <= attached_km)).sum(axis=1)
+    acc["sum"] += np.where(ok, d, 0.0).sum(axis=1)
+    acc["min"] = np.minimum(acc["min"], np.where(ok, d, np.inf).min(axis=1))
+    acc["max"] = np.maximum(acc["max"], np.where(ok, d, -np.inf).max(axis=1))
+
+
+def attached_pairs(
+    track: Mapping[int, dict[str, np.ndarray]],
+    groups: Sequence[tuple[int, int, np.ndarray, np.ndarray, np.ndarray]],
+    config: ScreeningConfig,
+) -> pd.DataFrame:
+    """The pairs whose separation stayed under ``attached_km`` for ``attached_fraction`` of the window.
+
+    The rule is on **sustained separation** and deliberately not on relative speed. A near-zero
+    relative speed would catch these too -- the ISS and its docked vehicles close at 0.3 mm/s --
+    but it would also catch the slow encounters between genuinely distinct objects that
+    ``docs/methods.md`` records as this project's largest unsized error, and dropping those
+    would hide the very events the two-dimensional probability is known to underestimate. A pair
+    that is never more than a kilometre apart over seven days is one object as far as any
+    screening is concerned; a pair that passes slowly is two.
+    """
+    rows: list[dict[str, Any]] = []
+    if not config.exclude_attached:
+        return pd.DataFrame(rows, columns=list(ATTACHED_COLUMNS))
+    for p, _p_row, _idx, _threshold, sec_ids in groups:
+        acc = track[int(p)]
+        n = acc["n"]
+        with np.errstate(invalid="ignore", divide="ignore"):
+            fraction = np.where(n > 0, acc["below"] / np.maximum(n, 1), 0.0)
+        hit = np.nonzero((n > 0) & (fraction >= config.attached_fraction))[0]
+        for k in hit:
+            rows.append(
+                {
+                    "primary_norad_id": int(p),
+                    "secondary_norad_id": int(sec_ids[k]),
+                    "samples": int(n[k]),
+                    "samples_below": int(acc["below"][k]),
+                    "fraction_below": float(fraction[k]),
+                    "d_min_km": float(acc["min"][k]),
+                    "d_mean_km": float(acc["sum"][k] / n[k]),
+                    "d_max_km": float(acc["max"][k]),
+                }
+            )
+    return pd.DataFrame(rows, columns=list(ATTACHED_COLUMNS))
 
 
 def stage_b(
@@ -493,10 +591,20 @@ def stage_b(
         log.info("Stage B: served trajectory: %s", served.summary())
 
     groups = []
+    # Per pair, what its separation did over the whole window: enough to recognise a pair that
+    # never comes apart, and enough to say so with a number in the report.
+    track: dict[int, dict[str, np.ndarray]] = {}
     for p, sub in stage_a_result.pairs.groupby("primary_norad_id", sort=False):
         idx = np.fromiter((prop.row[int(s)] for s in sub["secondary_norad_id"]), dtype=np.int64, count=len(sub))
         threshold = radius + sub["speed_bound_kms"].to_numpy(dtype=float) * half_step
         groups.append((int(p), prop.row[int(p)], idx, threshold, sub["secondary_norad_id"].to_numpy(dtype=np.int64)))
+        track[int(p)] = {
+            "n": np.zeros(len(idx), dtype=np.int64),
+            "below": np.zeros(len(idx), dtype=np.int64),
+            "sum": np.zeros(len(idx)),
+            "min": np.full(len(idx), np.inf),
+            "max": np.zeros(len(idx)),
+        }
 
     # Two (n_obj, chunk, 3) float64 arrays per chunk.
     chunk = max(8, int(config.memory_budget_mb * 1e6 // (n_obj * 48)))
@@ -522,6 +630,9 @@ def stage_b(
             dv = v[idx] - v[p_row][None, :, :]
             d = np.sqrt(np.einsum("kmi,kmi->km", dr, dr))
             f = np.einsum("kmi,kmi->km", dr, dv)
+            # Samples [s, e) of the global grid, so the chunks tile it without overlap. The
+            # very last sample of the window is never counted, which is one in twenty thousand.
+            _accumulate_separation(track[p], d[:, c_sc], config.attached_km)
             below = d <= threshold[:, None]
             # Twice the reach, for the intervals where only one endpoint is on the near side
             # of a trajectory jump: threshold is R + v h / 2, and this is R + v h.
@@ -592,7 +703,7 @@ def stage_b(
         }
     )
     log.info(
-        "Stage B: %d samples x %d objects = %d propagations; %d candidates "
+        "Stage B: %d samples x %d objects = %d propagations; %d candidates found "
         "(%d sign changes, %d sampled minima, %d across a trajectory jump)",
         n_t,
         n_obj,
@@ -602,7 +713,26 @@ def stage_b(
         int((~root & ~jump).sum()),
         int(jump.sum()),
     )
-    return StageBResult(candidates, times, n_obj, n_prop, served)
+    attached = attached_pairs(track, groups, config)
+    n_dropped = 0
+    if len(attached):
+        drop = pd.MultiIndex.from_frame(attached[["primary_norad_id", "secondary_norad_id"]])
+        keep = ~pd.MultiIndex.from_frame(candidates[["primary_norad_id", "secondary_norad_id"]]).isin(drop)
+        n_dropped = int((~keep).sum())
+        candidates = candidates[keep].reset_index(drop=True)
+        log.info(
+            "Stage B: %d pair(s) held attached or co-orbiting and excluded, dropping %d candidate(s) "
+            "and leaving %d: %s",
+            len(attached),
+            n_dropped,
+            len(candidates),
+            ", ".join(
+                f"{int(r.primary_norad_id)}/{int(r.secondary_norad_id)} "
+                f"(never more than {r.d_max_km * 1000:.0f} m apart)"
+                for r in attached.itertuples()
+            ),
+        )
+    return StageBResult(candidates, times, n_obj, n_prop, served, attached, n_dropped)
 
 
 # --------------------------------------------------------------------------------------
@@ -1062,6 +1192,8 @@ class ScreeningResult:
             "propagations": self.stage_b.n_propagations,
             "candidates": self.stage_c.n_candidates,
             "scanned_across_a_jump": self.stage_c.n_scan,
+            "attached_pairs_excluded": int(len(self.stage_b.attached)),
+            "attached_candidates_dropped": int(self.stage_b.n_attached_candidates),
             "served_trajectory": self.stage_b.served.summary() if self.stage_b.served is not None else {"objects": 0},
             "events": int(len(ev)),
             "events_on_published_states": (

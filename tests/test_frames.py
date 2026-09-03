@@ -178,9 +178,7 @@ def test_j2000_to_teme_matches_astropy():
     got_r, got_v = j2000_to_teme(r, v, times)
 
     at = Time([str(t) for t in times], scale="utc")
-    representation = CartesianRepresentation(
-        r.T * u.km, differentials=CartesianDifferential(v.T * u.km / u.s)
-    )
+    representation = CartesianRepresentation(r.T * u.km, differentials=CartesianDifferential(v.T * u.km / u.s))
     reference = GCRS(representation, obstime=at).transform_to(AstropyTEME(obstime=at))
     want_r = reference.cartesian.xyz.to_value(u.km).T
     want_v = reference.cartesian.differentials["s"].d_xyz.to_value(u.km / u.s).T

@@ -676,9 +676,7 @@ def test_a_break_in_the_stored_history_is_a_gap_the_base_propagator_fills():
     assert not covered[1], "the gap between two segments is not covered by either"
 
 
-def _served_separation(
-    primary: Satrec, secondary: Satrec, trajectory, norad_id: int, t_s: np.ndarray
-) -> np.ndarray:
+def _served_separation(primary: Satrec, secondary: Satrec, trajectory, norad_id: int, t_s: np.ndarray) -> np.ndarray:
     """The separation Stage B is supposed to be sampling: SGP4, with the ephemeris where it reaches.
 
     Built here from the parts rather than from the screening code, so that the test is a check
@@ -756,12 +754,12 @@ def test_stage_b_still_misses_nothing_when_the_trajectory_is_the_published_one()
         d = _served_separation(primary, sat, trajectory, norad_id, t_grid)
         interior = np.nonzero((d[1:-1] <= d[:-2]) & (d[1:-1] < d[2:]) & (d[1:-1] <= radius))[0] + 1
         brackets = candidates[candidates["secondary_norad_id"] == norad_id]
-        lo = (brackets["t_lo"].to_numpy(dtype="datetime64[us]") - np.datetime64(
-            START.replace(tzinfo=None), "us"
-        )) / np.timedelta64(1, "s")
-        hi = (brackets["t_hi"].to_numpy(dtype="datetime64[us]") - np.datetime64(
-            START.replace(tzinfo=None), "us"
-        )) / np.timedelta64(1, "s")
+        lo = (
+            brackets["t_lo"].to_numpy(dtype="datetime64[us]") - np.datetime64(START.replace(tzinfo=None), "us")
+        ) / np.timedelta64(1, "s")
+        hi = (
+            brackets["t_hi"].to_numpy(dtype="datetime64[us]") - np.datetime64(START.replace(tzinfo=None), "us")
+        ) / np.timedelta64(1, "s")
         for k in interior:
             t_min = t_grid[k]
             n_checked += 1
@@ -804,9 +802,7 @@ def test_stage_a_widens_a_shell_to_what_the_published_states_actually_reach():
 
     # Published states that dip to within the pad of the primary's apogee: now it must survive.
     low = float(primary_row["apogee_km"]) + 0.5 * config.pad_km
-    widened = stage_a(
-        snap, [PRIMARY_ID], config, start=START, reach={90301: (low, float(row["apogee_km"]), 7.0)}
-    )
+    widened = stage_a(snap, [PRIMARY_ID], config, start=START, reach={90301: (low, float(row["apogee_km"]), 7.0)})
     assert 90301 in set(widened.pairs["secondary_norad_id"])
 
     # The speed bound is the larger of the two: 7.0 km/s from the states is slower than the
@@ -849,3 +845,159 @@ def test_the_trajectory_reports_the_shell_its_states_reach():
     assert high == pytest.approx(radii.max())
     assert fastest == pytest.approx(speeds.max())
     assert high > low
+
+
+# --------------------------------------------------------------------------------------
+# Attached and co-orbiting objects
+
+
+def docked_satrec(primary: Satrec, norad_id: int, *, along_track_km: float, epoch: datetime = PRIMARY_EPOCH) -> Satrec:
+    """A second catalogue object holding station a fixed distance along track from the primary.
+
+    What a docked visiting vehicle looks like in the catalogue: the same orbit to every
+    significant figure, offset by a fraction of the along-track spacing that separate element
+    sets for the same physical stack disagree by. The mean motion is copied exactly, so the
+    offset neither grows nor closes -- which is the whole point.
+    """
+    r, _ = state_at(primary, epoch)
+    radius_km = float(np.linalg.norm(r))
+    d_mean_anomaly_deg = np.degrees(along_track_km / radius_km)
+    return satrec_from_elements(
+        norad_id,
+        epoch,
+        primary.no_kozai * 1440.0 / (2.0 * np.pi),
+        primary.ecco,
+        np.degrees(primary.inclo),
+        np.degrees(primary.nodeo),
+        np.degrees(primary.argpo),
+        np.degrees(primary.mo) + d_mean_anomaly_deg,
+        primary.bstar,
+    )
+
+
+def test_a_docked_object_is_excluded_structurally_and_a_real_conjunction_is_not():
+    """The filter takes out the pair that never comes apart and leaves everything else alone.
+
+    Three secondaries: one holding station 200 m along track (a docked vehicle), one making a
+    designed fast conjunction, and one making a designed *slow* one at a 3 degree crossing.
+    The slow encounter is the discrimination that matters. A rule on relative speed would take
+    it out along with the docked object; the rule on sustained separation must not, because the
+    slow encounters are the events `docs/methods.md` records as the largest error this project
+    cannot size, and hiding them would be the worst possible way to tidy the table.
+    """
+    primary = primary_satrec()
+    t_star = START + timedelta(hours=30)
+    fast, _ = make_conjunction(
+        primary, t_star, miss_km=1.5, crossing_angle_deg=70.0, miss_direction_deg=20.0, norad_id=90001
+    )
+    slow, slow_design = make_conjunction(
+        primary,
+        t_star + timedelta(hours=12),
+        miss_km=2.0,
+        crossing_angle_deg=3.0,
+        miss_direction_deg=0.0,
+        norad_id=90002,
+    )
+    docked = docked_satrec(primary, 90003, along_track_km=0.2)
+    objects = {
+        PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH),
+        90001: (fast, "FAST", t_star),
+        90002: (slow, "SLOW", t_star + timedelta(hours=12)),
+        90003: (docked, "DOCKED VEHICLE", PRIMARY_EPOCH),
+    }
+    snapshot = snapshot_from(objects)
+    fleet = fleet_of((PRIMARY_ID, "PRIMARY", True))
+    config = ScreeningConfig(days=3.0, step_s=60.0)
+
+    result = screen_fleet(snapshot, fleet, config=config, start=START)
+    attached = result.stage_b.attached
+    assert list(attached["secondary_norad_id"]) == [90003]
+    row = attached.iloc[0]
+    # It never comes apart, and the numbers the report quotes say so.
+    assert row["d_max_km"] < config.attached_km
+    assert row["fraction_below"] == 1.0
+    assert row["d_min_km"] == pytest.approx(0.2, abs=0.05)
+    assert result.stage_b.n_attached_candidates > 0
+    assert set(result.events["secondary_norad_id"]) == {90001, 90002}
+    # The slow encounter survives -- it approaches more than once, being nearly co-orbital --
+    # and it really is slow: a twentieth of the fast one's relative speed.
+    kept_slow = result.events[result.events["secondary_norad_id"] == 90002]
+    designed = kept_slow.loc[kept_slow["miss_km"].idxmin()]
+    assert float(designed["miss_km"]) == pytest.approx(slow_design["miss_km"], abs=0.02)
+    assert float(designed["rel_speed_kms"]) == pytest.approx(slow_design["rel_speed_kms"], rel=0.02)
+    assert slow_design["rel_speed_kms"] < 0.5
+
+    summary = result.summary()
+    assert summary["attached_pairs_excluded"] == 1
+    assert summary["attached_candidates_dropped"] == result.stage_b.n_attached_candidates
+
+
+def test_keep_attached_restores_the_docked_events_unchanged():
+    """The exclusion is reversible by a flag, and reversing it changes nothing else.
+
+    The events of every other pair have to be bit-for-bit what they were: the filter drops
+    candidates and must not perturb the refinement of the ones it keeps.
+    """
+    primary = primary_satrec()
+    t_star = START + timedelta(hours=30)
+    fast, _ = make_conjunction(
+        primary, t_star, miss_km=1.5, crossing_angle_deg=70.0, miss_direction_deg=20.0, norad_id=90001
+    )
+    docked = docked_satrec(primary, 90003, along_track_km=0.2)
+    snapshot = snapshot_from(
+        {
+            PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH),
+            90001: (fast, "FAST", t_star),
+            90003: (docked, "DOCKED VEHICLE", PRIMARY_EPOCH),
+        }
+    )
+    fleet = fleet_of((PRIMARY_ID, "PRIMARY", True))
+
+    filtered = screen_fleet(snapshot, fleet, config=ScreeningConfig(days=3.0, step_s=60.0), start=START)
+    kept = screen_fleet(
+        snapshot,
+        fleet,
+        config=ScreeningConfig(days=3.0, step_s=60.0, exclude_attached=False),
+        start=START,
+    )
+    assert not len(kept.stage_b.attached)
+    assert kept.stage_b.n_attached_candidates == 0
+    assert kept.summary()["attached_pairs_excluded"] == 0
+
+    docked_events = kept.events[kept.events["secondary_norad_id"] == 90003]
+    assert len(docked_events) > 10  # about one an orbit over three days
+    assert float(docked_events["miss_km"].max()) < 1.0
+    assert len(kept.events) == len(filtered.events) + len(docked_events)
+
+    columns = ["secondary_norad_id", "tca", "miss_km", "rel_speed_kms"]
+    other = kept.events[kept.events["secondary_norad_id"] != 90003].reset_index(drop=True)
+    pd.testing.assert_frame_equal(other[columns], filtered.events[columns].reset_index(drop=True))
+
+
+def test_a_pair_that_comes_apart_for_part_of_the_window_is_kept():
+    """The rule is sustained separation, not the closest approach: one tight pass is not attachment.
+
+    A designed conjunction whose miss is a hundred metres -- closer than the docked vehicle
+    ever is -- must survive, because the two objects are a thousand kilometres apart for the
+    rest of the window. Nothing here keys on how small the miss gets.
+    """
+    primary = primary_satrec()
+    close, _ = make_conjunction(
+        primary,
+        START + timedelta(hours=20),
+        miss_km=0.1,
+        crossing_angle_deg=45.0,
+        miss_direction_deg=0.0,
+        norad_id=90004,
+    )
+    snapshot = snapshot_from(
+        {
+            PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH),
+            90004: (close, "VERY CLOSE PASS", START + timedelta(hours=20)),
+        }
+    )
+    result = screen_fleet(
+        snapshot, fleet_of((PRIMARY_ID, "PRIMARY", True)), config=ScreeningConfig(days=2.0, step_s=60.0), start=START
+    )
+    assert not len(result.stage_b.attached)
+    assert float(result.events["miss_km"].min()) == pytest.approx(0.1, abs=0.01)

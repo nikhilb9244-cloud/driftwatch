@@ -93,7 +93,7 @@ Goal. A public, automated, documented product.
 
 Build. A daily GitHub Actions run that fetches, screens, computes and republishes. A landing page that explains the problem in plain language. CSV and JSON export for a fleet. Tests, a licence, a citation file, and a methods page that lists every approximation.
 
-Write. A short paper or a long blog post covering the problem, the method, the two validation storms, and what the tool gets right and wrong. Publish it and send it to a few people at SANSA, the SKA Observatory, a university satellite group and two space situational awareness companies, asking for criticism rather than praise.
+Write. A short paper or a long blog post covering the problem, the method, the two validation storms, and what the tool gets right and wrong. Publish it and send it to a few people at SANSA, the SKA Observatory, a university satellite group and two space situational awareness companies, asking for criticism rather than praise. Findings from the build that the write-up has to name, with their numbers attached, accumulate in `docs/writeup-notes.md` as they are produced, so Step 7 is not reconstructed from memory — the first entry is the EOS SAT-1 red flag that Step 1 produced.
 
 Milestone. Site live, repository public, write-up published, five pieces of outside feedback received.
 
