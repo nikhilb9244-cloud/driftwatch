@@ -22,6 +22,7 @@ from typing import Any
 import numpy as np
 import pandas as pd
 import pyarrow as pa
+import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
 from driftwatch import config
@@ -307,6 +308,54 @@ def read_snapshot(path: Path) -> pd.DataFrame:
     if version != str(SCHEMA_VERSION):
         log.warning("Snapshot %s has schema version %s, expected %s", path.name, version, SCHEMA_VERSION)
     return table.to_pandas(date_as_object=True)
+
+
+def snapshot_problem(path: Path) -> str | None:
+    """Why ``path`` is not a usable catalogue snapshot, or ``None`` if it is one.
+
+    A run records its snapshot by file name and everything downstream trusts that name: the
+    element sets a rescore propagates, the provenance on every exported row, and -- from Phase 4
+    Step 2 -- the snapshot age the pipeline refuses to publish past. Nothing checked that the
+    name was a snapshot at all, and in September 2026 a shadowed variable in ``cmd_screen``
+    made two runs record a *supplemental element-set file* instead. Every test passed. The two
+    file types share nineteen of their columns and both are parquet, so the check is on what
+    only a snapshot has: the schema-version metadata that :func:`write_snapshot` stamps, the
+    absence of the supplemental marker, and the columns a snapshot alone carries.
+    """
+    path = Path(path)
+    if not path.exists():
+        return f"{path} does not exist"
+    if path.suffix != ".parquet":
+        return f"{path.name} is not a parquet file"
+    try:
+        schema = pq.read_schema(path)
+    except Exception as exc:  # noqa: BLE001 -- any unreadable file is the same answer here
+        return f"{path.name} cannot be read as parquet ({exc})"
+    metadata = {k.decode(): v.decode() for k, v in (schema.metadata or {}).items() if not k.startswith(b"pandas")}
+    if "driftwatch_supplemental" in metadata:
+        return (
+            f"{path.name} is a supplemental element-set file "
+            f"({metadata['driftwatch_supplemental']!r}), not a catalogue snapshot"
+        )
+    version = metadata.get("driftwatch_schema_version")
+    if version is None:
+        return f"{path.name} carries no driftwatch_schema_version, so it was not written as a snapshot"
+    if version != str(SCHEMA_VERSION):
+        return f"{path.name} has snapshot schema version {version}, expected {SCHEMA_VERSION}"
+    missing = [f.name for f in SNAPSHOT_SCHEMA if f.name not in schema.names]
+    if missing:
+        return f"{path.name} is missing snapshot columns: {', '.join(missing)}"
+    return None
+
+
+def snapshot_fetched_at(path: Path) -> datetime:
+    """When the catalogue snapshot at ``path`` was fetched: the newest ``fetched_at`` in it.
+
+    Read from the data rather than parsed out of the file name, so that a renamed or copied
+    file cannot make a stale snapshot look fresh. The pipeline's staleness check runs on this.
+    """
+    column = pq.read_table(path, columns=["fetched_at"])["fetched_at"]
+    return pd.Timestamp(pc.max(column).as_py()).tz_convert("UTC").to_pydatetime()
 
 
 def list_snapshots(snapshot_dir: Path = config.SNAPSHOT_DIR) -> list[Path]:

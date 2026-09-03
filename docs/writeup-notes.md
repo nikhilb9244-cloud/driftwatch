@@ -47,8 +47,27 @@ The red threshold is 10⁻⁴, the one NASA applies to the ISS.
   not operational — and here is a case where the indicative answer is different depending on
   whose orbit you screen against.
 
+**The corrected form of the claim, which is the one to publish.** The Step 1 write-up's flag
+table counted ten catalogue objects that sit on the ISS's own element set — three structural
+modules and seven docked visiting vehicles — as though they were conjunctions, and a by-hand
+exclusion caught only seven of the ten. With all ten excluded structurally, the result is
+sharper than it first appeared:
+
+| Quiet scenario, event flags | Run A (SGP4 fits) | Run B (published states) |
+| --- | ---: | ---: |
+| red | **0** | **1** |
+| yellow | 22 | 20 |
+| none | 6,212 | 6,203 |
+
+**Screening on CelesTrak's fits, the demo fleet has no red flag at all outside the station's own
+attached hardware. Screening on SpaceX's published states it has exactly one, and it is EOS
+SAT-1 against Starlink 61705.** That is the sentence for the write-up. Do not quote the earlier
+"416 red / 417 red" table: every one of those flags was the ISS's own Zvezda, Unity and Destiny
+modules being screened against the ISS.
+
 **Where the numbers are.** `docs/phase4-plan.md`, Step 1, "What it changed: two runs of the
-same window, by lead". Run A (`data/conjunctions/step1-baseline/`) and run B
+same window, by lead", with the corrections marked in place, and the Step 1 review section for
+the corrected table. Run A (`data/conjunctions/step1-baseline/`) and run B
 (`data/conjunctions/step1-served/`) over the 2026-09-03 16:06 UTC snapshot.
 
 **The caveat that has to travel with it.** Both numbers are indicative. The covariance on the
@@ -88,3 +107,34 @@ encounters between genuinely distinct objects, and those are exactly the events 
 two-dimensional probability is known to underestimate — the largest error in `docs/methods.md`
 that this project cannot size. Tidying the table by deleting the events you are worst at would
 be the wrong kind of tidy.
+
+---
+
+## The Office of Space Commerce dataset is a stronger claim than Kelvins (Step 2A, 2026-09-03)
+
+When Step 2A is done, **say clearly that this validation is of a different kind from the Kelvins
+one**, and why, because the difference is the whole reason it is worth doing.
+
+The ESA Kelvins reproduction (`docs/kelvins-reproduction.md`) is a check against **a competition
+dataset**: valuable, public, and widely used, but assembled for a machine-learning challenge, with
+a hard-body radius this project had to infer from the span of the data because the organisers did
+not publish one. The Office of Space Commerce's **Dataset for Conjunction Assessment Verification**
+is a **government-issued test set with a published answer key**, developed for TraCSS — the US
+civil space traffic coordination system — and issued expressly so that space situational awareness
+providers can check their conjunction assessment algorithms against a common reference. Agreeing
+with it is a claim about matching the reference the American civil regulator publishes, not about
+scoring well on a contest.
+
+Three things that have to travel with the claim, or it is overstated:
+
+- **The Office of Space Commerce's own caveat, quoted rather than paraphrased**: the dataset is not
+  comprehensive, and it is "not evaluated (nor is it intended) for use in live operations or as a
+  tool for formal system certification or validation". Passing it is evidence, not accreditation,
+  and the write-up must not let a reader take it for the latter.
+- **Which screening volume was compared against** — the key is published for a spherical volume and
+  for an SFSH rectangular one, and driftwatch's own 2 x 25 x 25 km box is neither.
+- **Nothing was tuned to it**, on the same terms as the 22 % NRLMSIS bias and the 0.88 correlation:
+  a record, not a calibration.
+
+Note also what it tests that Kelvins could not: the dataset is **ephemerides**, so it exercises the
+Phase 4 Step 1 served-trajectory path rather than the SGP4 one. The two validations do not overlap.

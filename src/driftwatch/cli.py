@@ -13,7 +13,7 @@ import pstats
 import sys
 import time
 from collections.abc import Sequence
-from dataclasses import asdict
+from dataclasses import asdict, dataclass
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
 from typing import Any
@@ -621,6 +621,144 @@ def snapshot_file(name: str) -> Path:
     raise FileNotFoundError(f"snapshot {name!r} is in neither {config.SNAPSHOT_DIR} nor {config.AS_OF_SNAPSHOT_DIR}")
 
 
+@dataclass(frozen=True)
+class RunCheck:
+    """The result of checking one run's provenance and freshness."""
+
+    problems: list[str]
+    warnings: list[str]
+    snapshot: Path | None
+    fetched_at: datetime | None
+    age_hours: float | None
+
+    @property
+    def ok(self) -> bool:
+        return not self.problems
+
+
+def check_run(
+    run_dir: RunDirectory,
+    *,
+    max_snapshot_age_hours: float | None = None,
+    now: datetime | None = None,
+) -> RunCheck:
+    """Is this run's recorded provenance true, and is its snapshot fresh enough to publish?
+
+    Added at the Phase 4 Step 2 review, because the failure it guards against had already
+    happened once and nothing noticed. A run records its snapshot by file name; ``cmd_screen``
+    shadowed the variable holding that name with the stored supplemental file's, so two runs
+    recorded a supplemental element-set file as their snapshot. `driftwatch report` could not
+    rebuild them, every exported row carried a false provenance, and the whole test suite was
+    green -- because no test, and no code path outside `elements_for_run`, ever looked the
+    recorded name up.
+
+    Step 2's failure model rests on this name twice over: it computes the snapshot age from it
+    and refuses to publish past a limit, and the console shows that age. A name that resolves
+    to the wrong file, or to nothing, has to be a loud failure rather than a silent one.
+
+    Problems fail; warnings do not. Two runs of the same snapshot minutes apart are ordinary,
+    so a start time that disagrees with the snapshot's fetch time is a warning; a snapshot that
+    is not a snapshot is a problem.
+    """
+    now = now or datetime.now(UTC)
+    problems: list[str] = []
+    warnings: list[str] = []
+    try:
+        info = run_dir.read_run()
+    except (OSError, json.JSONDecodeError) as exc:
+        return RunCheck([f"{run_dir.name}: run.json cannot be read ({exc})"], [], None, None, None)
+
+    name = info.get("snapshot")
+    if not name:
+        return RunCheck([f"{run_dir.name}: run.json records no snapshot"], warnings, None, None, None)
+
+    path: Path | None = None
+    try:
+        path = snapshot_file(str(name))
+    except FileNotFoundError as exc:
+        problems.append(f"{run_dir.name}: {exc}")
+
+    fetched_at: datetime | None = None
+    age_hours: float | None = None
+    if path is not None:
+        problem = snapshot.snapshot_problem(path)
+        if problem:
+            problems.append(f"{run_dir.name}: recorded snapshot {name!r} is not a catalogue snapshot -- {problem}")
+        else:
+            fetched_at = snapshot.snapshot_fetched_at(path)
+            age_hours = (now - fetched_at).total_seconds() / 3600.0
+            # The screening window starts at the snapshot's fetch time floored to the minute
+            # (`default_start`), so more than a minute of disagreement means the run was screened
+            # from a different snapshot than the one it names.
+            start = info.get("start")
+            if start:
+                drift_s = abs((parse_utc(start) - fetched_at).total_seconds())
+                if drift_s > 60.0:
+                    warnings.append(
+                        f"{run_dir.name}: start {start} is {drift_s / 60.0:.1f} min from the snapshot's "
+                        f"fetch time {fetched_at.isoformat()}; --start was given, "
+                        "or the snapshot is not the one screened"
+                    )
+            if max_snapshot_age_hours is not None and age_hours > float(max_snapshot_age_hours):
+                problems.append(
+                    f"{run_dir.name}: snapshot {path.name} was fetched {age_hours:.1f} h ago, "
+                    f"past the {float(max_snapshot_age_hours):g} h limit -- EXPIRED, do not publish"
+                )
+
+    for entry in info.get("supplemental") or []:
+        supplemental_path = Path(config.SUPPLEMENTAL_DIR) / str(entry.get("file", ""))
+        if not supplemental_path.exists():
+            warnings.append(
+                f"{run_dir.name}: supplemental version {entry.get('file')!r} is no longer stored, "
+                "so this run cannot be rebuilt exactly"
+            )
+
+    for required in (run_dir.events_path, run_dir.objects_path):
+        if not required.exists():
+            problems.append(f"{run_dir.name}: {required.name} is missing")
+    if not run_dir.scenarios():
+        problems.append(f"{run_dir.name}: no risk_<scenario>.parquet, so nothing has been scored")
+
+    return RunCheck(problems, warnings, path, fetched_at, age_hours)
+
+
+def cmd_check_run(args: argparse.Namespace) -> int:
+    """Check a run's provenance and its snapshot's age; the pipeline's gate before it publishes."""
+    try:
+        run_dir = resolve_run(args.run)
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    result = check_run(run_dir, max_snapshot_age_hours=args.max_snapshot_age_hours)
+    for warning in result.warnings:
+        log.warning("%s", warning)
+    for problem in result.problems:
+        log.error("%s", problem)
+    if result.fetched_at is not None:
+        log.info(
+            "Snapshot %s fetched %s (%.1f h ago)",
+            result.snapshot.name if result.snapshot else "?",
+            result.fetched_at.isoformat(),
+            result.age_hours or 0.0,
+        )
+    if result.problems:
+        log.error("%s: %d problem(s); refusing to pass this run", run_dir.name, len(result.problems))
+        return 1
+    print(
+        json.dumps(
+            {
+                "run": run_dir.name,
+                "snapshot": result.snapshot.name if result.snapshot else None,
+                "snapshot_fetched_at": result.fetched_at.isoformat() if result.fetched_at else None,
+                "snapshot_age_hours": round(result.age_hours, 3) if result.age_hours is not None else None,
+                "warnings": result.warnings,
+                "ok": True,
+            }
+        )
+    )
+    return 0
+
+
 def elements_for_run(info: dict[str, Any]) -> pd.DataFrame:
     """Rebuild the element sets a stored run screened from: its snapshot plus the supplemental versions it used.
 
@@ -953,6 +1091,17 @@ def cmd_screen(args: argparse.Namespace) -> int:
             "risk_runs": [risk_run_record(risk, args.scenario, model, now)],
         }
     )
+    # Immediately, on the run just written: the provenance a run records is trusted by every
+    # later step and by the pipeline's staleness gate, and it went wrong silently once.
+    provenance = check_run(run_dir)
+    for warning in provenance.warnings:
+        log.warning("%s", warning)
+    if provenance.problems:
+        for problem in provenance.problems:
+            log.error("%s", problem)
+        log.error("The run was written but its recorded provenance is wrong; treat it as unpublishable")
+        rc = 1
+
     joined = run_dir.rebuild_conjunctions()
     log.info(
         "Timings: screening %.1f s, history and fit %.1f s, risk %.1f s, total %.1f s",
@@ -2642,6 +2791,19 @@ def build_parser() -> argparse.ArgumentParser:
         ),
     )
     report.set_defaults(func=cmd_report)
+
+    check_run = sub.add_parser(
+        "check-run",
+        help="check a run's recorded provenance and its snapshot's age; the pipeline's gate before deploy",
+    )
+    check_run.add_argument("run", help="run directory, its name under data/conjunctions, or 'latest'")
+    check_run.add_argument(
+        "--max-snapshot-age-hours",
+        type=float,
+        default=None,
+        help="fail if the run's snapshot was fetched longer ago than this (default: no limit)",
+    )
+    check_run.set_defaults(func=cmd_check_run)
 
     check = sub.add_parser(
         "check-bundle",

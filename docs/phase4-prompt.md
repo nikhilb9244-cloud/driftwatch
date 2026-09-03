@@ -133,8 +133,73 @@ deploys, with no human in the loop.
   console specification already requires snapshot age to be two numbers and to say `EXPIRED` when
   the run is older than the window it describes; wire the pipeline to that rather than inventing a
   second staleness mechanism.
-- **Retention.** Decide how many run directories survive and where, and make `driftwatch report`
-  able to rebuild any of them.
+- **Retention. Keep every daily run.** Not a rolling window: every one, so that **warning
+  stability** can be measured later. That is the question of how a *particular event* behaves as
+  its time of closest approach approaches — how the miss distance and the probability evolve run
+  by run as the lead shortens, and how often a flag raised at a long lead survives to a short one.
+  It is the question an operator asks about a screening service before trusting it, it is the one
+  thing a daily pipeline can answer that a single run never can, and it is unrecoverable: a run
+  that was not kept cannot be reconstructed, because the catalogue it screened is gone.
+  `driftwatch report` must be able to rebuild any of them.
+
+  **Report the schema this needs and build no analysis.** Say what has to be stored, and where, for
+  the analysis to be possible in a later phase: what identifies the same physical encounter across
+  runs when its time of closest approach moves by minutes and its event id therefore changes; what
+  each run has to carry so a series can be assembled without reopening every run directory; what
+  the retention costs per day and per year at the demo fleet's size; and what would have to change
+  if the fleet grew tenfold. Do not build the analysis, do not add a command for it, and do not
+  add a viewer panel. The deliverable is the storage decision and its justification, made now
+  because it cannot be made retrospectively.
+
+## Step 2A. Validation against the Office of Space Commerce's conjunction assessment dataset
+
+Numbered 2A rather than 3, and the following steps left where they are, because
+`docs/phase4-plan.md` already refers to Steps 3 to 7 by number and renumbering them would
+silently break every one of those references. It runs after the pipeline and before the
+write-up.
+
+**What it is.** The Office of Space Commerce has published a **Dataset for Conjunction Assessment
+Verification**, developed for TraCSS — the US civil space traffic coordination system — and
+issued expressly so that SSA providers can test their conjunction assessment algorithms against a
+common reference. It is an ephemeris dataset with an **answer key**: the conjunctions that are in
+it. Read at 2026-09-03, it is five files — a 20.73 GB ephemeris tarball, a spherical screening
+volume result set (198.8 MB compressed CSV), an SFSH rectangular screening volume result set
+(62.4 MB), the volume mappings, and a user's guide — distributed under **CC0-1.0**, a public
+domain dedication with no restrictions on use or dissemination, from a Google Drive link behind
+an access form. **Read the user's guide and confirm those terms before anything is downloaded or
+redistributed**, exactly as `docs/data-sources.md` required for every other source; CC0 is the
+most permissive answer possible, which is a reason to check it rather than to assume it.
+
+**What to do with it.** Validate driftwatch's screening and probability against it **exactly as
+Phase 2 did with the ESA Kelvins dataset** (`docs/kelvins-reproduction.md` is the model to
+follow), and under the same rule that governs every phase: **nothing is tuned to it**. Report:
+
+- **Agreement.** How many of the answer key's conjunctions driftwatch finds, and how many it
+  reports that the key does not have. Both directions. A screening that misses events is broken;
+  a screening that invents them is noisy, and the two failures need separate numbers.
+- **Residuals.** The distribution of the difference in time of closest approach, in miss distance
+  and — where the key gives one — in probability, against lead time and against miss distance,
+  since that is where a screening's errors actually live.
+- **Every case we fail**, named and worked through rather than summarised. The dataset was built
+  to include **stressing edge cases** on purpose; the edge cases are the point of it, and a
+  failure on one is the most valuable thing this step can produce.
+- **The screening volume.** The key is published for two volume conventions, spherical and SFSH
+  rectangular. driftwatch screens on a 2 x 25 x 25 km RIC box *or* a 25 km watch radius, which is
+  neither. Say which convention is being compared against, and configure the run to the dataset's
+  volume rather than comparing across two different definitions of "found".
+
+**Two constraints that are the practical work of this step.** The ephemeris tarball is **20.73 GB**
+and cannot go into the repository, into a run directory, into the viewer bundle or through a
+GitHub Actions job casually; decide where it lives, keep it out of `.gitignore`'s blind spots, and
+make the validation reproducible from a documented download rather than from a copy. And the
+dataset is **ephemerides, not element sets**, so it exercises the Phase 4 Step 1 path — the
+served-trajectory machinery — rather than the SGP4 one, which is the right thing to be testing and
+is not what the Kelvins reproduction tested.
+
+**What it is not.** The Office of Space Commerce states plainly that the dataset is not
+comprehensive, and that it is not evaluated for and not intended as a tool for live operations or
+for formal certification or validation. Quote that in the write-up rather than paraphrasing it.
+Passing this is evidence, not accreditation.
 
 ## Step 3. The public landing page
 
@@ -351,7 +416,12 @@ recording what comes back.
 2. A scheduled GitHub Actions workflow fetches, screens, scores every scenario, rebuilds the bundle
    and deploys to Cloudflare Pages, with Space-Track and Cloudflare credentials as Actions secrets,
    **every fetch inside Actions**, persistent state between runs, one run at a time, and a stale
-   bundle either not published or visibly labelled as stale.
+   bundle either not published or visibly labelled as stale. **Every daily run is retained**, and
+   the schema warning-stability analysis will need is reported without that analysis being built.
+2A. driftwatch's screening and probability are validated against the Office of Space Commerce's
+   Dataset for Conjunction Assessment Verification, with its terms read and recorded, agreement
+   reported in both directions, residuals against lead time and miss distance, every failing case
+   worked through, the screening volume convention stated, and **nothing tuned to it**.
 3. A landing page explains conjunctions, storms and the tool's limits in plain language, states that
    this is not a collision-avoidance service, and is readable before any JavaScript runs.
 4. CSV and JSON export per fleet, per run, per scenario, with a documented and versioned schema,
