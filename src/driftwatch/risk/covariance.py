@@ -164,6 +164,27 @@ class ObjectRef:
     altitude_band: str  # snapshot altitude band
 
 
+SourceLabel = str | np.ndarray
+"""Where a covariance came from: one label for every requested time, or one label per time."""
+
+
+def relabel(source: SourceLabel, template: str) -> SourceLabel:
+    """Wrap a source label in a ``{}`` template, whether it is one string or one per time."""
+    if isinstance(source, str):
+        return template.format(source)
+    return np.array([template.format(s) for s in np.asarray(source, dtype=object)], dtype=object)
+
+
+def source_array(source: SourceLabel, n: int) -> np.ndarray:
+    """A source label as one entry per requested time, whichever form it arrived in."""
+    if isinstance(source, str):
+        return np.full(n, source, dtype=object)
+    out = np.asarray(source, dtype=object)
+    if out.shape != (n,):
+        raise ValueError(f"a per-time source label must have one entry per time; got {out.shape} for {n}")
+    return out
+
+
 @dataclass(frozen=True)
 class RicCovariance:
     """Position covariance in the object's own RIC frame at each requested time, and where it came from.
@@ -175,10 +196,17 @@ class RicCovariance:
     only component Step 3 ever fills is the in-track one, but the field is a full RIC vector
     because a scenario that wanted to move an object radially should not have to change the
     protocol again.
+
+    ``source`` is one string when the whole batch came from one place, and an array of one
+    string per requested time when it did not. Phase 4 Step 1 needs the second form: whether
+    the SGP4 fit residual is in a Starlink object's covariance depends on whether *that event*
+    was refined on the published states, which is a per-time fact, and collapsing it to one
+    label for the object would put the term on events that do not have it. Compose labels with
+    :func:`relabel` rather than an f-string, and read them with :func:`source_array`.
     """
 
     cov_km2: np.ndarray  # (n, 3, 3)
-    source: str  # 'empirical', 'pooled:<category>/<band>', 'default:<band>', 'storm:<model>'
+    source: SourceLabel  # 'empirical', 'pooled:<category>/<band>', 'default:<band>', 'storm:<model>'
     mean_shift_ric_km: np.ndarray | None = None  # (n, 3), or None for "where the element set says"
 
 
@@ -714,7 +742,7 @@ class ScaledCovariance:
 
     def covariance_ric(self, obj: ObjectRef, epoch: datetime, at: np.ndarray) -> RicCovariance:
         inner = self.base.covariance_ric(obj, epoch, at)
-        return RicCovariance(inner.cov_km2 * self.factor, f"scaled:{self.factor:g}:{inner.source}")
+        return RicCovariance(inner.cov_km2 * self.factor, relabel(inner.source, f"scaled:{self.factor:g}:{{}}"))
 
 
 COVARIANCE_TABLE_COLUMNS: tuple[str, ...] = (

@@ -901,17 +901,38 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         "- **Manoeuvres are not predicted.** An object marked `known` or `observed` can move at any time, and "
         "no element set here knows about a burn that has not happened yet.",
     ]
-    spacex_rows = int(rows["cov_source_secondary"].astype(str).str.startswith("spacex").sum())
+    source_strings = rows["cov_source_secondary"].astype(str)
+    spacex_rows = int(source_strings.str.startswith("spacex").sum())
     if spacex_rows:
+        with_fit = int(source_strings.str.contains("sgp4-fit").sum())
+        served = int(source_strings.str.contains("spacex-ephemeris").sum()) - with_fit
         lines.append(
             f"- **{spacex_rows} events use SpaceX's own published covariance** for the Starlink secondary, "
             "inside the 72-hour horizon of the operator's ephemeris. It is much tighter than an estimate from "
             "element-set consistency, and it answers a different question: it is the uncertainty *within* one "
-            "published plan, not the uncertainty *of the plan being revised*. One term is added to it: the "
-            "0.2 km published residual of CelesTrak's SGP4 fit to that same ephemeris, in quadrature, because "
-            "that fit is the trajectory being propagated here while their covariance describes the ephemeris. "
-            "Past the horizon the covariance changes hands mid-window and `Cov source` says so."
+            "published plan, not the uncertainty *of the plan being revised*. Past the horizon the covariance "
+            "changes hands mid-window and `Cov source` says so."
         )
+        lines.append(
+            f"- **{served} of those events were also screened on SpaceX's published states**, so the trajectory "
+            "and the covariance come from the same object and nothing is added to it. The remaining "
+            f"{with_fit} were refined on CelesTrak's SGP4 fit to that ephemeris instead — past the horizon, "
+            "inside a break in the published file, or on an object whose states were not stored — and those "
+            "carry the 0.2 km published residual of that fit in quadrature, because the fit and the ephemeris "
+            "are then two different trajectories. That residual is measured over the arc the fit was made on: "
+            "beyond about twelve hours the true gap grows to tens of kilometres (`docs/methods.md`), so where "
+            "it still applies it is an understatement, not a correction."
+        )
+    if "secondary_trajectory" in rows.columns:
+        scanned = int((rows["refine_method"] == "scan").sum()) if "refine_method" in rows.columns else 0
+        if scanned:
+            lines.append(
+                f"- **{scanned} events were refined by scanning rather than by root finding.** Those sit in the "
+                "one sample interval where an object's served trajectory switches between the operator's "
+                "published states and its element set — the start of coverage, the file's 48-hour seam, or its "
+                "72-hour horizon — where the separation steps discontinuously. Their time of closest approach "
+                "is placed to about a hundredth of the screening step rather than to microseconds."
+            )
     slow = rows[rows["slow_encounter"]] if "slow_encounter" in rows.columns else rows.iloc[:0]
     if len(slow):
         flagged_slow = int(is_flagged(slow["flag"]).sum())

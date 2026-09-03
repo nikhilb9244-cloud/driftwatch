@@ -146,3 +146,64 @@ def test_nan_rows_pass_through():
     assert np.isfinite(r_out[0]).all() and np.isnan(r_out[1]).all()
     lat, lon, h = itrs_to_geodetic(r_out)
     assert np.isfinite(lat[0]) and np.isnan(lat[1])
+
+
+# --------------------------------------------------------------------------------------
+# MEME J2000 to TEME (Phase 4 Step 1)
+
+
+def test_j2000_to_teme_matches_astropy():
+    """The rotation that reads SpaceX's published states, against astropy's frame machinery.
+
+    This inverts Phase 1's arrangement -- there astropy converted and skyfield checked -- and
+    the reason is cost: a fetch rotates a few hundred thousand states, and astropy's frame
+    transform is about thirteen times slower than skyfield's rotation matrix. The check that
+    justified astropy is therefore kept here, as a test rather than in the pipeline.
+
+    The one difference is expected and stated in the docstring of the function under test:
+    skyfield rotates velocity with the position's matrix, so it omits the frame's own rotation
+    rate. That is a fraction of a millimetre per second.
+    """
+    from astropy.coordinates import GCRS, CartesianDifferential, CartesianRepresentation
+    from astropy.coordinates.builtin_frames import TEME as AstropyTEME
+
+    from driftwatch.orbit.frames import j2000_to_teme
+
+    n = 64
+    times = np.datetime64("2026-09-03T09:23:42", "us") + (np.arange(n) * 3_600_000_000).astype("timedelta64[us]")
+    rng = np.random.default_rng(20260903)
+    r = np.stack([6800 + rng.normal(0, 50, n), rng.normal(0, 3000, n), rng.normal(0, 3000, n)], axis=1)
+    v = rng.normal(0, 7.5, (n, 3))
+
+    got_r, got_v = j2000_to_teme(r, v, times)
+
+    at = Time([str(t) for t in times], scale="utc")
+    representation = CartesianRepresentation(
+        r.T * u.km, differentials=CartesianDifferential(v.T * u.km / u.s)
+    )
+    reference = GCRS(representation, obstime=at).transform_to(AstropyTEME(obstime=at))
+    want_r = reference.cartesian.xyz.to_value(u.km).T
+    want_v = reference.cartesian.differentials["s"].d_xyz.to_value(u.km / u.s).T
+
+    assert np.abs(got_r - want_r).max() < 1e-5  # a hundredth of a millimetre
+    assert np.abs(got_v - want_v).max() < 1e-6  # a millimetre a second, the frame-rate term
+
+
+def test_reading_meme_states_as_teme_would_be_a_forty_kilometre_error():
+    """Why the rotation is not optional, stated as a number the docs can quote.
+
+    Precession and nutation since J2000 separate the two frames by about 0.36 degrees by
+    2026. At low Earth orbit radius that is tens of kilometres -- two hundred times the
+    0.2 km SGP4 fit residual that interpolating these states exists to remove -- so treating
+    the published states as TEME would have made the cure far worse than the disease.
+    """
+    from driftwatch.orbit.frames import j2000_to_teme
+
+    times = np.array([np.datetime64("2026-09-03T09:23:42", "us")])
+    r = np.array([[774.9155802260, 6585.0492066958, 1696.6793273830]])
+    v = np.array([[1.1924944021, 1.7600470244, -7.3320882616]])
+    rotated, _ = j2000_to_teme(r, v, times)
+    separation_km = float(np.linalg.norm(rotated[0] - r[0]))
+    assert 30.0 < separation_km < 60.0
+    # The rotation is a rotation: it moves the vector without changing its length.
+    assert float(np.linalg.norm(rotated[0])) == pytest.approx(float(np.linalg.norm(r[0])), rel=1e-12)

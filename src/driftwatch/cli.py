@@ -822,8 +822,18 @@ def cmd_screen(args: argparse.Namespace) -> int:
             )
 
     cfg = ScreeningConfig(days=args.days, step_s=args.step, pad_km=args.pad, watch_radius_km=args.watch_radius)
+    # The operator's own published states, where the store holds them, in place of the SGP4
+    # fit to them -- in Stage B as well as Stage C, because the two trajectories are tens of
+    # kilometres apart at the far end of the ephemeris horizon (docs/spacex-ephemerides.md).
+    trajectory = None
+    if not args.no_spacex:
+        trajectory = spacex.load_trajectory(sorted(set(df["norad_id"].astype(int))))
+        if len(trajectory):
+            log.info("Screening on published states where they reach: %s", trajectory.summary())
+        else:
+            log.info("No stored SpaceX states; screening on element sets alone (run `driftwatch spacex`)")
     try:
-        result = screen_fleet(df, fleet, config=cfg, start=args.start)
+        result = screen_fleet(df, fleet, config=cfg, start=args.start, ephemeris=trajectory)
     except ScreeningError as exc:
         log.error("%s", exc)
         return 1
@@ -945,15 +955,20 @@ def cmd_screen(args: argparse.Namespace) -> int:
     return rc
 
 
-def layer_spacex_ephemerides(model: CovarianceModel, objects: pd.DataFrame, info: dict[str, Any]) -> CovarianceModel:
+def layer_spacex_ephemerides(
+    model: CovarianceModel,
+    objects: pd.DataFrame,
+    info: dict[str, Any],
+    events: pd.DataFrame | None = None,
+) -> CovarianceModel:
     """Serve the Starlink objects a stored SpaceX ephemeris covers from SpaceX's own covariance.
 
     Everything else, and every time past a file's 72-hour horizon, stays with ``model``: the
     ephemeris is the operator's plan for the next three days and says nothing about day four.
 
-    Their covariance carries CelesTrak's SGP4 fit residual in quadrature, because the
-    trajectory being propagated is that fit rather than the ephemeris itself; see
-    ``ephemeris/spacex.py``.
+    Their covariance carries CelesTrak's SGP4 fit residual in quadrature **only on the events
+    whose geometry still comes from that fit**. Which those are is read from the events table
+    the screening wrote, not recomputed here; see ``ephemeris/spacex.py``.
     """
     ids = [int(i) for i in objects.loc[objects["category"] == "starlink", "norad_id"]]
     if not ids:
@@ -961,7 +976,8 @@ def layer_spacex_ephemerides(model: CovarianceModel, objects: pd.DataFrame, info
     table = spacex.load_store(ids)
     if not len(table):
         return model
-    layered = spacex.SpacexEphemerisCovariance(model, table)
+    served = spacex.interpolated_times_from_events(events) if events is not None else {}
+    layered = spacex.SpacexEphemerisCovariance(model, table, interpolated_times=served)
     info["spacex_covariance"] = {
         "n_objects": len(layered.series),
         "n_starlink_in_run": len(ids),
@@ -1170,7 +1186,7 @@ def cmd_risk(args: argparse.Namespace) -> int:
     if hbr_summary["n_changed"] and not args.refit:
         run_dir.write_objects(objects)
     if not args.no_spacex:
-        model = layer_spacex_ephemerides(model, objects, info)
+        model = layer_spacex_ephemerides(model, objects, info, events)
     if args.scale != 1.0:
         model = ScaledCovariance(model, args.scale)
     try:
@@ -2264,7 +2280,7 @@ def cmd_spacex(args: argparse.Namespace) -> int:
 
     now = datetime.now(UTC)
     try:
-        table, summary = spacex.fetch_ephemerides(ids, now=now, offline=args.offline, limit=args.limit)
+        table, states, summary = spacex.fetch_ephemerides(ids, now=now, offline=args.offline, limit=args.limit)
     except (httpx.HTTPError, FileNotFoundError) as exc:
         log.error("Cannot fetch SpaceX ephemerides: %s", exc)
         return 2
@@ -2273,6 +2289,16 @@ def cmd_spacex(args: argparse.Namespace) -> int:
         return 2
     path = spacex.write_store(table, spacex.store_path(now))
     summary["file"] = path.name
+    if len(states):
+        state_path = spacex.write_state_store(states, spacex.state_store_path(now))
+        summary["state_file"] = state_path.name
+        log.info("SpaceX states: %s", summary["states"])
+        s = summary["states"]
+        print(
+            f"states: {s['kept']} of {s['of']} kept for {s['objects']} satellites; "
+            f"interpolation error median {s['interp_err_median_m']:.2f} m, worst {s['interp_err_worst_m']:.2f} m; "
+            f"{s['objects_with_a_break']} objects carry a break, at {s['break_hours']} h"
+        )
 
     # The cross-check: their covariance against ours, at matched leads. Two different
     # quantities, kept side by side rather than merged (see ephemeris/spacex.py).
@@ -2461,6 +2487,11 @@ def build_parser() -> argparse.ArgumentParser:
         "--no-supplemental", action="store_true", help="do not use CelesTrak's supplemental Starlink sets"
     )
     screen.add_argument("--offline", action="store_true", help="use only cached supplemental and history data")
+    screen.add_argument(
+        "--no-spacex",
+        action="store_true",
+        help="ignore SpaceX's published ephemerides: screen on element sets and do not serve their covariance",
+    )
     screen.add_argument("--out-dir", help="output directory (default: data/conjunctions)")
     add_risk_options(screen, scenario_default="quiet")
     screen.set_defaults(func=cmd_screen)
@@ -2477,7 +2508,7 @@ def build_parser() -> argparse.ArgumentParser:
     risk.add_argument(
         "--no-spacex",
         action="store_true",
-        help="ignore any stored SpaceX ephemeris covariance (see `driftwatch spacex`)",
+        help="ignore SpaceX's published ephemerides: screen on element sets and do not serve their covariance",
     )
     add_risk_options(risk, scenario_default="quiet")
     risk.set_defaults(func=cmd_risk)

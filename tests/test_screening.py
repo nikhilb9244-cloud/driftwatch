@@ -506,3 +506,171 @@ def test_state_at_helper_matches_the_library():
     _, r2, v2 = sat.sgp4(jd, fr)
     np.testing.assert_allclose(r, r2)
     np.testing.assert_allclose(v, v2)
+
+
+# --------------------------------------------------------------------------------------
+# The served trajectory (Phase 4 Step 1)
+
+
+def ephemeris_table(
+    sat: Satrec,
+    norad_id: int,
+    *,
+    start: datetime,
+    hours: float,
+    offset_km: np.ndarray,
+    step_s: float = 120.0,
+    segments: int = 1,
+) -> pd.DataFrame:
+    """A stored state history for ``sat``, displaced by ``offset_km``, in the store's schema.
+
+    A constant displacement is not a Keplerian orbit, but it is a smooth trajectory, which is
+    all the interpolant needs -- and it is the cleanest way to make the published states and
+    the SGP4 fit disagree by a known amount, which is the situation Step 1 exists for. With
+    ``segments=2`` the history is split in the middle, leaving an uncovered gap the way a real
+    file's 48-hour seam does.
+    """
+    end_s = hours * 3600.0
+    offsets = [k * step_s for k in range(int(end_s // step_s) + 1)]
+    if offsets[-1] < end_s:  # the history ends where it ends, not at the last whole step
+        offsets.append(end_s)
+    times = np.array([start + timedelta(seconds=o) for o in offsets])
+    n = len(times)
+    rows = []
+    for k, t in enumerate(times):
+        r, v = state_at(sat, t)
+        rows.append((r + offset_km, v))
+    half = n // 2
+    return pd.DataFrame(
+        {
+            "norad_id": norad_id,
+            "name": f"OBJ-{norad_id}",
+            "created": pd.Timestamp(start),
+            "ephemeris_start": pd.Timestamp(start),
+            "ephemeris_stop": pd.Timestamp(times[-1]),
+            "state_frame": "MEME",
+            "segment": [0 if (segments == 1 or k < half) else 1 for k in range(n)],
+            "t": [np.datetime64(t.replace(tzinfo=None), "us") for t in times],
+            "x_km": [r[0] for r, _ in rows],
+            "y_km": [r[1] for r, _ in rows],
+            "z_km": [r[2] for r, _ in rows],
+            "vx_kms": [v[0] for _, v in rows],
+            "vy_kms": [v[1] for _, v in rows],
+            "vz_kms": [v[2] for _, v in rows],
+            "interp_err_median_m": 0.0,
+            "interp_err_p99_m": 0.0,
+            "interp_err_max_m": 0.0,
+            "n_breaks": segments - 1,
+        }
+    )
+
+
+def test_screening_on_published_states_finds_an_event_the_element_set_hides():
+    """The point of Step 1, as a test: the two trajectories are far enough apart to change the answer.
+
+    The secondary's element set passes the primary at 60 km, well outside the 35.4 km screening
+    radius, so on element sets alone there is no event at all. Its published states put it 1 km
+    away. That is not a contrived margin -- measured on real files the two trajectories sit a
+    median 83 km apart at the far end of the 72-hour horizon -- and it is why Stage B screens on
+    the published states rather than screening on one trajectory and refining on another.
+    """
+    from driftwatch.ephemeris.spacex import EphemerisTrajectory
+
+    primary = primary_satrec()
+    t_star = START + timedelta(hours=3, minutes=17, seconds=5)
+    secondary, design = make_conjunction(
+        primary, t_star, miss_km=60.0, crossing_angle_deg=75.0, miss_direction_deg=30.0, norad_id=90101
+    )
+    snap = snapshot_from({PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH), 90101: (secondary, "SECONDARY", t_star)})
+    fleet = fleet_of((PRIMARY_ID, "Primary", True))
+    config = ScreeningConfig(days=0.5)
+
+    # The miss vector is perpendicular to the relative velocity, so shrinking it along its own
+    # direction moves the miss without moving the time of closest approach.
+    r_p, v_p = state_at(primary, t_star)
+    r_s, _v_s = state_at(secondary, t_star)
+    delta = r_s - r_p
+    offset = -delta * (1.0 - 1.0 / 60.0)
+
+    plain = screen_fleet(snap, fleet, config=config, start=START)
+    assert (plain.events["secondary_norad_id"] == 90101).sum() == 0
+
+    trajectory = EphemerisTrajectory(ephemeris_table(secondary, 90101, start=START, hours=12.0, offset_km=offset))
+    served = screen_fleet(snap, fleet, config=config, start=START, ephemeris=trajectory)
+    hits = served.events[served.events["secondary_norad_id"] == 90101]
+    assert len(hits) >= 1
+    hit = hits.loc[(hits["tca"] - pd.Timestamp(t_star)).dt.total_seconds().abs().idxmin()]
+
+    assert abs((hit["tca"] - pd.Timestamp(t_star)).total_seconds()) < 1.0
+    assert hit["miss_km"] == pytest.approx(1.0, abs=0.01)
+    assert hit["secondary_trajectory"] == "spacex-ephemeris"
+    assert hit["primary_trajectory"] == "sgp4"
+    assert hit["refine_method"] == "root"
+    # The stored state is the published one, not the element set's: that is what the risk step
+    # will score, and what says the covariance and the trajectory now share a source.
+    stored = np.array([hit["s_x_km"], hit["s_y_km"], hit["s_z_km"]])
+    # To the interpolation error of the 120-second grid, which is metres, and 59 km from where
+    # the element set puts the same object at the same instant.
+    assert np.linalg.norm(stored - (r_s + offset)) < 0.02
+    assert np.linalg.norm(stored - r_s) == pytest.approx(59.0, abs=0.05)
+    assert served.summary()["events_on_published_states"] >= 1
+
+
+def test_an_approach_at_the_edge_of_the_published_states_is_still_found_and_flagged():
+    """Where the served trajectory jumps, the threshold doubles and the interval is scanned.
+
+    The published states stop part way through the window, so the trajectory steps by 59 km at
+    that instant. The sampling argument is one-sided there, so Stage B widens its reach to a
+    whole step instead of half of one, and Stage C scans rather than root-finding, because a
+    discontinuous separation has neither a bracketed root nor a unimodal minimum.
+    """
+    from driftwatch.ephemeris.spacex import EphemerisTrajectory
+
+    primary = primary_satrec()
+    # The published states stop 15 s after a Stage B sample, so the jump falls strictly inside
+    # the interval [10800 s, 10830 s], and the encounter is placed inside it on the covered side.
+    horizon_s = 3 * 3600 + 15.0
+    t_star = START + timedelta(seconds=3 * 3600 + 10.0)
+    secondary, _design = make_conjunction(
+        primary, t_star, miss_km=60.0, crossing_angle_deg=75.0, miss_direction_deg=30.0, norad_id=90102
+    )
+    snap = snapshot_from({PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH), 90102: (secondary, "SECONDARY", t_star)})
+    r_p, _ = state_at(primary, t_star)
+    r_s, _ = state_at(secondary, t_star)
+    offset = -(r_s - r_p) * (1.0 - 1.0 / 60.0)
+
+    trajectory = EphemerisTrajectory(
+        ephemeris_table(secondary, 90102, start=START, hours=horizon_s / 3600.0, offset_km=offset)
+    )
+    result = screen_fleet(
+        snap,
+        fleet_of((PRIMARY_ID, "Primary", True)),
+        config=ScreeningConfig(days=0.5),
+        start=START,
+        ephemeris=trajectory,
+    )
+    hits = result.events[result.events["secondary_norad_id"] == 90102]
+    assert len(hits) >= 1, "an approach at the horizon must not be lost to the jump"
+    assert (hits["refine_method"] == "scan").any()
+    assert result.stage_c.n_scan >= 1
+    assert result.summary()["scanned_across_a_jump"] >= 1
+
+
+def test_a_break_in_the_stored_history_is_a_gap_the_base_propagator_fills():
+    """Between two segments nothing is interpolated, and the element set serves instead."""
+    from driftwatch.ephemeris.spacex import EphemerisTrajectory
+
+    primary = primary_satrec()
+    trajectory = EphemerisTrajectory(
+        ephemeris_table(primary, PRIMARY_ID, start=START, hours=4.0, offset_km=np.zeros(3), segments=2)
+    )
+    at = np.array(
+        [
+            np.datetime64((START + timedelta(hours=1)).replace(tzinfo=None), "us"),
+            np.datetime64((START + timedelta(hours=1, minutes=58, seconds=30)).replace(tzinfo=None), "us"),
+            np.datetime64((START + timedelta(hours=3)).replace(tzinfo=None), "us"),
+        ]
+    )
+    covered = trajectory.covers(PRIMARY_ID, at)
+    assert covered[0] and covered[2]
+    assert not covered[1], "the gap between two segments is not covered by either"

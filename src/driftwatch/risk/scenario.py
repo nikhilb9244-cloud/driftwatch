@@ -59,7 +59,7 @@ from driftwatch import __version__, config
 from driftwatch.catalogue.classify import rcs_class
 from driftwatch.fleet import Fleet
 from driftwatch.orbit.time import stamp
-from driftwatch.risk.covariance import CovarianceModel, ObjectRef
+from driftwatch.risk.covariance import CovarianceModel, ObjectRef, source_array
 from driftwatch.risk.manoeuvre import manoeuvre_prior
 from driftwatch.risk.pc import (
     SLOW_ENCOUNTER_KMS,
@@ -397,7 +397,7 @@ def _covariances(
         ref = ObjectRef(int(norad_id), str(row["category"]), str(row["altitude_band"]))
         result = model.covariance_ric(ref, row["epoch"].to_pydatetime(), at[idx])
         cov[idx] = result.cov_km2
-        source[idx] = result.source
+        source[idx] = source_array(result.source, len(idx))
         if result.mean_shift_ric_km is not None:
             shift[idx] = np.asarray(result.mean_shift_ric_km, dtype=float)
     return cov, source, shift

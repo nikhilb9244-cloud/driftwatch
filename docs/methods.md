@@ -58,10 +58,24 @@ they enter the chain; each states what is assumed, why, and what it costs.
   beyond half the modelled drag change; a lowering beyond twice it, so that storm-driven
   decay is not called a burn; gaps over ten days skipped) are judgement calls recorded
   in `risk/manoeuvre.py`. A `known` object's next burn is as invisible as ever.
-- **Miss distances are between SGP4 trajectories.** Stage C finds the closest approach
-  of two propagated element sets to microseconds and metres, which says nothing about
-  how close the two spacecraft come: the element sets themselves are good to hundreds of
-  metres to kilometres. The probability layer below attaches the uncertainty.
+- **Miss distances are between propagated trajectories.** Stage C finds the closest approach
+  of two trajectories to microseconds and metres, which says nothing about how close the two
+  spacecraft come: the trajectories themselves are good to hundreds of metres to kilometres.
+  The probability layer below attaches the uncertainty.
+- **Where an operator publishes states, those are the trajectory (Phase 4 Step 1).** For a
+  Starlink object inside the 72-hour horizon of SpaceX's published ephemeris, both Stage B and
+  Stage C use the published states, interpolated by cubic Hermite on a 120-second grid, rather
+  than CelesTrak's SGP4 fit to them. `primary_trajectory` and `secondary_trajectory` say which
+  served each event. Three approximations come with it. The interpolation error is a measured
+  median 5.7 m and maximum 6.8 m, against the 0.2 km fit residual it removes. The published
+  states are in MEME (J2000), which is 44 km from TEME at this radius, so they are rotated on
+  the way in; the rotation is skyfield's and agrees with astropy's to 0.9 mm. And the served
+  trajectory is discontinuous at up to three instants per object per run — the start of
+  coverage, the file's 48-hour seam and its 72-hour horizon — where the position steps by up
+  to tens of kilometres; Stage B doubles its detection threshold on those intervals and Stage C
+  scans them rather than root-finding, so the time of closest approach there is placed to about
+  0.3 s rather than to microseconds. A break in a file's first or last interval cannot be
+  detected at all.
 - **Stage A uses mean apogee and perigee with a 50 km pad.** Brouwer mean values differ
   from the osculating orbit by several kilometres, and drag lowers an orbit by a few
   kilometres a week (more for an object about to decay, and in a storm); the pad, which
@@ -69,11 +83,15 @@ they enter the chain; each states what is assumed, why, and what it costs.
   perigee rises or falls by more than the pad's slack inside the window (a manoeuvre, or
   the last days of a decay) can be missed by Stage A. Objects with a mean perigee below
   120 km are dropped outright.
-- **Stage B's no-miss guarantee rests on a speed bound.** The relative speed of a pair
-  is bounded by the sum of the two-body perigee speeds from mean elements, times a 2 %
-  margin for SGP4's departures from Keplerian motion. The bound is derived and tested in
-  `docs/screening.md`; it fails only if an SGP4 trajectory moves more than 2 % faster
-  than its two-body perigee speed, which does not happen above 120 km.
+- **Stage B's no-miss guarantee rests on a speed bound and on continuity.** The relative
+  speed of a pair is bounded by the sum of the two-body perigee speeds from mean elements,
+  times a 2 % margin for SGP4's departures from Keplerian motion. The bound is derived and
+  tested in `docs/screening.md`; it fails only if a trajectory moves more than 2 % faster than
+  its two-body perigee speed, which does not happen above 120 km. It also assumes the
+  separation is continuous, which the served trajectory is not at the handful of instants where
+  it switches between published states and SGP4; there the threshold is doubled to `R + v h`,
+  because only one endpoint sample lies on each side of the jump and a one-sided reach needs
+  the whole step rather than half of it.
 - **A maximum and a minimum inside one step** (30 s) would defeat the sign-change
   candidate rule. That needs a relative speed of metres per second (co-orbital objects),
   for which the sampled separation is already within metres of the true minimum; the
@@ -259,14 +277,26 @@ they enter the chain; each states what is assumed, why, and what it costs.
   geometry driftwatch propagates is CelesTrak's SGP4 fit to that ephemeris, not the
   ephemeris itself, so that fit's own published residual — 0.2 km, split in the base model's
   measured shape to 20 m radial, 199 m in-track and 11 m cross-track — is **added in
-  quadrature** to every served covariance. The two are independent errors: theirs is how well
-  SpaceX knows the satellite's future position, the residual is how far the element set we
-  propagate sits from the ephemeris they published. It changes nothing past a day, where
-  their number is a kilometre-scale control box, and triples the probability inside one,
-  where used as published the covariance was tighter than the gap between the two
-  trajectories. `SPACEX_SGP4_FIT_RMS_KM`; `spacex-ephemeris/2` in the model version says it
-  is in there. It is a patch on a mismatch, not a fix: the fix is for Stage C to interpolate
-  the ephemeris states directly, which is the first Phase 4 item.
+  quadrature** — but **only on the events whose geometry still comes from that fit**
+  (`spacex-ephemeris+sgp4-fit`); where Stage C refined on the published states the two share a
+  source and nothing is added (`spacex-ephemeris`). `SPACEX_SGP4_FIT_RMS_KM`;
+  `spacex-ephemeris/3` in the model version says the rule is per event.
+- **How big that residual actually is, corrected (Phase 4 Step 1).** Phase 2 sized the gap
+  between the propagated element set and the published ephemeris at CelesTrak's published fit
+  RMS, a median 0.20 km. Measured directly on nineteen matched files on 2026-09-03, that holds
+  only for the first eight to twelve hours: the median distance is 0.30 km inside 12 hours,
+  **2.8 km at 12 to 24, 11.5 km at 24 to 36, 28.3 km at 36 to 48, 51.8 km at 48 to 60 and
+  82.9 km at 60 to 72**, almost all in-track, with a worst case in the thousands of kilometres
+  for satellites under orbit-raising thrust. CelesTrak's number is the residual over the arc
+  the fit was made on, not over the file. Two consequences are recorded rather than tidied
+  away: the Phase 2 patch was the right shape at a hundredth of the right size at the far end
+  of the horizon, and serving SpaceX's 3.80 km control box on top of a trajectory that is 83 km
+  out **understated** the uncertainty on the events furthest ahead in the window, where the
+  project's own supplemental-consistency model would have said 22.8 km. Interpolating the
+  published states removes the gap rather than sizing it, which is why Step 1 exists; for
+  events past the horizon, where the fit is still the trajectory, the residual carried is still
+  the published 0.20 km and is still too small by this measurement. That is an open
+  understatement, not a solved one.
 
 ## Density and drag (Phase 3, Step 2)
 

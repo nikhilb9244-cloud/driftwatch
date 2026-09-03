@@ -101,6 +101,35 @@ SPACEX_SGP4_FIT_RMS_KM = 0.20
 # disagreement, unit-normed -- where there is not.
 SPACEX_FIT_RMS_SHARE = (0.099, 0.994, 0.055)
 
+# Phase 4 Step 1. The published states are kept too, so Stage C can refine on the ephemeris
+# itself instead of on the SGP4 fit to it. Three numbers govern that.
+#
+# The state grid. The files are 60-second and a cubic Hermite interpolant on a grid of step h
+# has an error of about a (omega h)^4 / 384 for an orbit of radius a and rate omega: 0.3 m at
+# 60 s, 5.7 m at 120 s, 194 m at 300 s. 120 seconds halves the store against the file's own
+# step and still leaves the interpolation error a thirty-fifth of the 0.2 km term it is
+# there to remove. Measured against the files' own held-out states, not assumed: the numbers
+# are in docs/spacex-ephemerides.md and `driftwatch spacex` re-measures them on every fetch.
+SPACEX_STATE_STEP_S = 120.0
+# The files are not smooth all the way through. Every one measured carries a discontinuity of
+# a few hundred metres at exactly 48 hours after `ephemeris_start`, which is a seam in the
+# `blend` the header names, and a manoeuvre would look the same. Interpolating across one
+# costs more than the whole exercise saves, so a break splits the stored history into
+# segments and no interpolant spans it; between the two segments the base propagator serves.
+# A break is a file interval whose Hermite consistency error exceeds this, or ten times the
+# file's own median error, whichever is larger -- the smooth-arc value is 5.7 m and the
+# smallest break measured is 121 m, so the two are three orders of magnitude apart and the
+# threshold is not a tuning knob.
+SPACEX_BREAK_TOLERANCE_KM = 0.05
+# The frame. The file names declare MEME -- mean equator, mean equinox of J2000 -- and the
+# header names only the covariance frame, UVW. MEME is not TEME: by 2026 precession and
+# nutation separate them by about 0.36 degrees, some 44 km at low Earth orbit radius, so the
+# states are rotated on the way in (orbit/frames.py:j2000_to_teme) and TEME is the only
+# inertial frame stored anywhere in this project. Verified rather than assumed: read as TEME
+# the states sit 36 km from the SGP4 fit of the same satellite, and rotated they sit 0.36 km
+# from it, which is the published fit residual.
+SPACEX_STATE_FRAME = "MEME"
+
 # ---------------------------------------------------------------------------------------
 # Space weather (Phase 3 Step 1). See docs/space-weather.md and driftwatch/weather/.
 

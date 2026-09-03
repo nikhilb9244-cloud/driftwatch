@@ -32,9 +32,12 @@ from datetime import datetime
 import astropy.units as u
 import erfa
 import numpy as np
+import pandas as pd
 from astropy.coordinates import ITRS, TEME, CartesianDifferential, CartesianRepresentation, EarthLocation
 from astropy.time import Time
 from astropy.utils import iers
+from skyfield.api import load as skyfield_load
+from skyfield.sgp4lib import TEME as SkyfieldTEME
 
 from driftwatch.orbit.time import julian_date, julian_dates, parse_utc, to_datetime64
 
@@ -83,6 +86,58 @@ def teme_to_itrs(r_teme: np.ndarray, v_teme: np.ndarray, t: datetime) -> tuple[n
     r_out[ok] = itrs.cartesian.xyz.to_value(u.km).T
     v_out[ok] = itrs.velocity.d_xyz.to_value(u.km / u.s).T
     return r_out, v_out
+
+
+_TIMESCALE = None
+
+
+def _timescale():
+    """Skyfield's timescale, built once. It reads no files: the built-in leap-second table serves."""
+    global _TIMESCALE
+    if _TIMESCALE is None:
+        _TIMESCALE = skyfield_load.timescale()
+    return _TIMESCALE
+
+
+def j2000_to_teme(r_km: np.ndarray, v_kms: np.ndarray, times) -> tuple[np.ndarray, np.ndarray]:
+    """Rotate mean-equator mean-equinox J2000 states into TEME, one time per row.
+
+    Why this exists. SpaceX publishes its Starlink ephemerides in the frame its file names
+    declare, ``MEME`` -- mean equator and mean equinox -- and the rest of this project is in
+    TEME, because that is what SGP4 produces. The two differ by precession and nutation
+    accumulated since J2000, which by 2026 is about 0.36 degrees: **roughly 44 km at low
+    Earth orbit radius**. Reading the published states as TEME is not a small error, it is
+    two hundred times the fit residual this conversion exists to remove, and
+    ``docs/spacex-ephemerides.md`` records how that was measured rather than assumed.
+
+    MEME J2000 and the ICRF differ by the frame bias, about 23 milliarcseconds, which is
+    0.8 m at this radius -- below every other error in the chain and ignored here, as it is
+    everywhere else in the project.
+
+    The rotation is skyfield's, not astropy's, and that is the reverse of Phase 1, where
+    astropy converted and skyfield checked. The reason is cost, not preference: a fetch
+    converts a few hundred thousand states and astropy's frame machinery takes about 1.7 s
+    per 4,321-state file against skyfield's 0.13 s. ``tests/test_frames.py`` pins the two
+    against each other -- they agree to under a millimetre in position -- so the check that
+    justified astropy in Phase 1 still runs, only as a test rather than in the pipeline.
+
+    One difference is real and stated rather than hidden: skyfield rotates the velocity with
+    the same matrix as the position, so it omits the frame's own rotation rate, worth about
+    0.12 mm/s. That term matters to nothing here -- it is a part in 10^8 of a relative speed,
+    and over a 60-second interpolation interval it moves a position by 7 mm.
+    """
+    r = np.asarray(r_km, dtype=float)
+    v = np.asarray(v_kms, dtype=float)
+    if r.shape != v.shape or r.ndim != 2 or r.shape[1] != 3:
+        raise ValueError(f"expected (n, 3) position and velocity, got {r.shape} and {v.shape}")
+    times64 = to_datetime64(times)
+    if len(times64) != len(r):
+        raise ValueError(f"got {len(r)} states and {len(times64)} times")
+    when = _timescale().from_datetimes(list(pd.to_datetime(times64, utc=True).to_pydatetime()))
+    rot = SkyfieldTEME.rotation_at(when)  # (3, 3, n), ICRF -> TEME
+    if rot.ndim == 2:  # a single time comes back as (3, 3)
+        rot = rot[:, :, None]
+    return np.einsum("ijk,kj->ki", rot, r), np.einsum("ijk,kj->ki", rot, v)
 
 
 def teme_to_ecef_gmst_only(r_teme: np.ndarray, v_teme: np.ndarray, t: datetime) -> tuple[np.ndarray, np.ndarray]:

@@ -59,7 +59,7 @@ import pandas as pd
 from driftwatch import config
 from driftwatch.drag import density as dn
 from driftwatch.orbit.time import parse_utc
-from driftwatch.risk.covariance import CovarianceModel, ObjectRef, RicCovariance
+from driftwatch.risk.covariance import CovarianceModel, ObjectRef, RicCovariance, relabel
 from driftwatch.storm import term
 from driftwatch.weather import table as weather_table
 
@@ -324,7 +324,7 @@ class StormCovariance:
         inner = self.base.covariance_ric(obj, epoch, at)
         series = self.shifts.get(int(obj.norad_id))
         if series is None or not len(series.seconds):
-            return RicCovariance(inner.cov_km2, f"{inner.source}+storm:none", inner.mean_shift_ric_km)
+            return RicCovariance(inner.cov_km2, relabel(inner.source, "{}+storm:none"), inner.mean_shift_ric_km)
         shift_m, sigma_m = series.at(term.times_since_epoch_s(epoch, at))
         cov = np.array(inner.cov_km2, dtype=float, copy=True)
         cov[:, 1, 1] += (sigma_m / 1000.0) ** 2
@@ -333,7 +333,7 @@ class StormCovariance:
         if inner.mean_shift_ric_km is not None:
             mean = mean + np.asarray(inner.mean_shift_ric_km, dtype=float)
         label = series.b_source if series.valid else f"{series.b_source}!extrapolated"
-        return RicCovariance(cov, f"{inner.source}+storm:{label}", mean)
+        return RicCovariance(cov, relabel(inner.source, "{}+storm:" + label), mean)
 
     def to_frame(self) -> pd.DataFrame:
         return self.base.to_frame() if hasattr(self.base, "to_frame") else pd.DataFrame()

@@ -26,9 +26,31 @@ sign change beside it is kept as a fallback candidate.
 
 **Stage C, refinement.** For each candidate the time of closest approach is the root of
 the range rate, ``f(t) = dr . dv`` (the derivative of ``d^2/2``), found by a bracketed
-root finder with SGP4 evaluated at each trial time. Fallback candidates are minimised
-directly. The result is the time of closest approach, the miss distance, the relative
-speed and the miss vector in the primary's radial, in-track, cross-track frame.
+root finder with the trajectory evaluated at each trial time. Fallback candidates are
+minimised directly. The result is the time of closest approach, the miss distance, the
+relative speed and the miss vector in the primary's radial, in-track, cross-track frame.
+
+**The served trajectory (Phase 4 Step 1).** Where an operator has published states for an
+object -- SpaceX's Starlink ephemerides, ``ephemeris/spacex.py`` -- those states are
+interpolated and used in place of SGP4, in **both** Stage B and Stage C. Both, not just
+Stage C, because the two trajectories are not close: measured on 2026-09-03 the SGP4 fit
+sits a median 0.30 km from the ephemeris inside 12 hours but 28 km at 36 to 48 hours and
+83 km at 60 to 72. Screening on one and refining on the other would choose pairs by a
+trajectory tens of kilometres from the one they are then scored on, and no pad this side
+of absurdity covers that.
+
+That leaves the switch itself. An object's published states cover part of the window and
+not the rest, and they are split at every discontinuity in the file, so the served
+trajectory has a small number of instants -- at most three per object per run: the start
+of coverage, the 48-hour seam, the 72-hour horizon -- where it jumps. Stage B's no-miss
+argument rests on ``|d'(t)| <= |v_rel|``, which a jump breaks. Every sample interval
+holding a jump is therefore marked, and on a marked interval the detection threshold is
+**doubled**, from ``R + v h / 2`` to ``R + v h``, because only one of the two endpoint
+samples lies on each side of the jump and a one-sided bound needs the whole step rather
+than half of it. A candidate on a marked interval is refined by scanning the interval
+rather than by root finding, since a discontinuous function has neither a bracketed root
+nor a unimodal minimum, and the event carries ``refine_method="scan"`` so it can be
+counted. ``docs/screening.md`` re-derives the guarantee with the jump in it.
 
 Everything is in TEME. Nothing here knows about uncertainty: Step 3 adds covariance and
 probability on top of the geometry this module produces, and to keep the two apart every
@@ -40,10 +62,10 @@ from __future__ import annotations
 
 import logging
 import time
-from collections.abc import Callable, Sequence
+from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 import numpy as np
 import pandas as pd
@@ -54,6 +76,10 @@ from driftwatch.orbit.propagator import WGS72_EARTH_RADIUS_KM, WGS72_MU_KM3_S2, 
 from driftwatch.orbit.time import julian_date, julian_dates, parse_utc, stamp
 from driftwatch.risk.manoeuvre import manoeuvre_prior
 from driftwatch.screening.ric import ric_basis, to_ric
+
+if TYPE_CHECKING:  # a type-only import: importing it for real would close a cycle
+    # through risk.covariance, which reaches back into this package for the RIC basis.
+    from driftwatch.ephemeris.spacex import EphemerisTrajectory
 
 log = logging.getLogger(__name__)
 
@@ -83,9 +109,18 @@ EVENT_COLUMNS: tuple[str, ...] = (
     "manoeuvre_primary",
     "manoeuvre_secondary",
     "secondary_ephemeris",
+    "primary_trajectory",
+    "secondary_trajectory",
     "refine_method",
     *STATE_COLUMNS,
 )
+
+# What produced an object's state at the time of closest approach: its element set through
+# SGP4, or the operator's own published ephemeris interpolated (Phase 4 Step 1).
+TRAJECTORY_SGP4 = "sgp4"
+TRAJECTORY_EPHEMERIS = "spacex-ephemeris"
+# How finely a candidate spanning a trajectory jump is scanned, as a fraction of the step.
+SCAN_SUBDIVISIONS = 100
 
 
 class ScreeningError(RuntimeError):
@@ -275,6 +310,101 @@ def _time_grid(start: datetime, config: ScreeningConfig) -> np.ndarray:
 
 
 # --------------------------------------------------------------------------------------
+# The served trajectory
+
+
+class ServedTrajectory:
+    """SGP4, with an operator's published states substituted wherever they reach.
+
+    Holds, for the objects a run propagates, which rows of a :class:`Propagable` have
+    published states and where those states cover the sample grid. Everything the two stages
+    have to agree about lives here, so that "which trajectory served this object at this
+    time" has exactly one answer in a run.
+    """
+
+    def __init__(self, prop: Propagable, ephemeris: EphemerisTrajectory | None, times: np.ndarray) -> None:
+        self.ephemeris = ephemeris
+        self.times = times
+        self.rows: dict[int, int] = {}  # prop row -> norad id
+        self.served: dict[int, np.ndarray] = {}  # prop row -> covered, per sample
+        self.jumps: dict[int, np.ndarray] = {}  # prop row -> the trajectory jumps inside interval j
+        if ephemeris is None or not len(ephemeris):
+            return
+        for row, norad_id in enumerate(prop.norad_id):
+            if int(norad_id) not in ephemeris:
+                continue
+            covered = ephemeris.covers(int(norad_id), times)
+            if not covered.any():
+                continue
+            self.rows[row] = int(norad_id)
+            self.served[row] = covered
+            self.jumps[row] = covered[:-1] != covered[1:]
+
+    def __bool__(self) -> bool:
+        return bool(self.rows)
+
+    def substitute(self, times: np.ndarray, r: np.ndarray, v: np.ndarray, offset: int) -> None:
+        """Overwrite ``r`` and ``v`` in place for every row an ephemeris covers.
+
+        ``r`` and ``v`` are ``(n_obj, n_chunk, 3)`` over ``times``, which begin at sample
+        ``offset`` of the run's grid.
+        """
+        for row, norad_id in self.rows.items():
+            covered = self.served[row][offset : offset + len(times)]
+            if not covered.any():
+                continue
+            r_e, v_e, ok = self.ephemeris.states(norad_id, times[covered])  # type: ignore[union-attr]
+            sel = np.nonzero(covered)[0][ok]
+            r[row, sel] = r_e[ok]
+            v[row, sel] = v_e[ok]
+
+    def states_at(self, norad_id: int, at: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+        """The published states at arbitrary times, and which of them the ephemeris reached."""
+        if self.ephemeris is None:
+            n = np.asarray(at).size
+            return np.full((n, 3), np.nan), np.full((n, 3), np.nan), np.zeros(n, dtype=bool)
+        return self.ephemeris.states(int(norad_id), at)
+
+    def jump_intervals(self, row: int) -> np.ndarray | None:
+        """Which sample intervals hold a jump for this row, or ``None`` where it has no ephemeris."""
+        return self.jumps.get(row)
+
+    def label(self, norad_id: int, at: np.ndarray) -> np.ndarray:
+        """``sgp4`` or ``spacex-ephemeris`` per requested time, for the events table."""
+        at64 = np.asarray(at, dtype="datetime64[us]")
+        if self.ephemeris is None or int(norad_id) not in self.ephemeris:
+            return np.full(at64.shape, TRAJECTORY_SGP4, dtype=object)
+        covered = self.ephemeris.covers(int(norad_id), at64)
+        return np.where(covered, TRAJECTORY_EPHEMERIS, TRAJECTORY_SGP4).astype(object)
+
+    def summary(self) -> dict[str, Any]:
+        if not self.rows:
+            return {"objects": 0}
+        served = np.array([int(c.sum()) for c in self.served.values()])
+        return {
+            "objects": len(self.rows),
+            "samples_served": int(served.sum()),
+            "samples_per_object_median": float(np.median(served)),
+            "jump_intervals": int(sum(int(d.sum()) for d in self.jumps.values())),
+        }
+
+
+def pair_jumps(served: ServedTrajectory, p_row: int, s_rows: np.ndarray, intervals: np.ndarray) -> np.ndarray:
+    """Which ``(secondary, interval)`` cells hold a jump in either object's served trajectory."""
+    out = np.zeros((len(s_rows), len(intervals)), dtype=bool)
+    if not served or not len(intervals):
+        return out
+    primary = served.jump_intervals(int(p_row))
+    if primary is not None:
+        out |= primary[intervals][None, :]
+    for k, row in enumerate(s_rows):
+        secondary = served.jump_intervals(int(row))
+        if secondary is not None:
+            out[k] |= secondary[intervals]
+    return out
+
+
+# --------------------------------------------------------------------------------------
 # Stage B
 
 
@@ -286,10 +416,16 @@ class StageBResult:
     times: np.ndarray  # the sample grid, datetime64[us]
     n_objects: int
     n_propagations: int
+    served: ServedTrajectory | None = None
 
 
 def stage_b(
-    prop: Propagable, stage_a_result: StageAResult, config: ScreeningConfig, *, start: datetime
+    prop: Propagable,
+    stage_a_result: StageAResult,
+    config: ScreeningConfig,
+    *,
+    start: datetime,
+    ephemeris: EphemerisTrajectory | None = None,
 ) -> StageBResult:
     """Coarse time stepping of relative distance with SatrecArray; returns brackets for Stage C.
 
@@ -307,6 +443,9 @@ def stage_b(
     array = SatrecArray(prop.satrecs)
     radius = config.screening_radius_km
     half_step = 0.5 * config.step_s
+    served = ServedTrajectory(prop, ephemeris, times)
+    if served:
+        log.info("Stage B: served trajectory: %s", served.summary())
 
     groups = []
     for p, sub in stage_a_result.pairs.groupby("primary_norad_id", sort=False):
@@ -316,7 +455,7 @@ def stage_b(
 
     # Two (n_obj, chunk, 3) float64 arrays per chunk.
     chunk = max(8, int(config.memory_budget_mb * 1e6 // (n_obj * 48)))
-    out: dict[str, list[np.ndarray]] = {k: [] for k in ("primary", "secondary", "j", "d_sample", "root")}
+    out: dict[str, list[np.ndarray]] = {k: [] for k in ("primary", "secondary", "j", "d_sample", "root", "jump")}
     n_prop = 0
     s = 0
     while s < n_t - 1:
@@ -328,6 +467,7 @@ def stage_b(
         if bad.any():
             r[bad] = np.nan
             v[bad] = np.nan
+        served.substitute(times[lo:hi], r, v, lo)
         j_sc = np.arange(s, e)
         c_sc = j_sc - lo
         j_lm = np.arange(max(s, 1), min(e, n_t - 1))
@@ -338,9 +478,13 @@ def stage_b(
             d = np.sqrt(np.einsum("kmi,kmi->km", dr, dr))
             f = np.einsum("kmi,kmi->km", dr, dv)
             below = d <= threshold[:, None]
+            # Twice the reach, for the intervals where only one endpoint is on the near side
+            # of a trajectory jump: threshold is R + v h / 2, and this is R + v h.
+            wide = d <= (2.0 * threshold - radius)[:, None]
+            jump_sc = pair_jumps(served, p_row, idx, j_sc)
             with np.errstate(invalid="ignore"):
                 sign_change = (f[:, :-1] < 0) & (f[:, 1:] >= 0)
-            hit = sign_change[:, c_sc] & (below[:, c_sc] | below[:, c_sc + 1])
+            hit = sign_change[:, c_sc] & (below[:, c_sc] | below[:, c_sc + 1]) & ~jump_sc
             rows, cols = np.nonzero(hit)
             if len(rows):
                 out["primary"].append(np.full(len(rows), p, dtype=np.int64))
@@ -348,7 +492,20 @@ def stage_b(
                 out["j"].append(j_sc[cols])
                 out["d_sample"].append(np.minimum(d[rows, c_sc[cols]], d[rows, c_sc[cols] + 1]))
                 out["root"].append(np.ones(len(rows), dtype=bool))
+                out["jump"].append(np.zeros(len(rows), dtype=bool))
+            if jump_sc.any():
+                rows, cols = np.nonzero(jump_sc & (wide[:, c_sc] | wide[:, c_sc + 1]))
+                if len(rows):
+                    out["primary"].append(np.full(len(rows), p, dtype=np.int64))
+                    out["secondary"].append(sec_ids[rows])
+                    out["j"].append(j_sc[cols])
+                    out["d_sample"].append(np.minimum(d[rows, c_sc[cols]], d[rows, c_sc[cols] + 1]))
+                    out["root"].append(np.zeros(len(rows), dtype=bool))
+                    out["jump"].append(np.ones(len(rows), dtype=bool))
             if len(c_lm):
+                # A sampled minimum is bracketed by the two intervals either side of it, so it
+                # is only usable when neither of them holds a jump.
+                safe = ~(pair_jumps(served, p_row, idx, j_lm - 1) | pair_jumps(served, p_row, idx, j_lm))
                 with np.errstate(invalid="ignore"):
                     local_min = (
                         below[:, c_lm]
@@ -356,13 +513,14 @@ def stage_b(
                         & (d[:, c_lm] < d[:, c_lm + 1])
                         & ~(sign_change[:, c_lm - 1] | sign_change[:, c_lm])
                     )
-                rows, cols = np.nonzero(local_min)
+                rows, cols = np.nonzero(local_min & safe)
                 if len(rows):
                     out["primary"].append(np.full(len(rows), p, dtype=np.int64))
                     out["secondary"].append(sec_ids[rows])
                     out["j"].append(j_lm[cols])
                     out["d_sample"].append(d[rows, c_lm[cols]])
                     out["root"].append(np.zeros(len(rows), dtype=bool))
+                    out["jump"].append(np.zeros(len(rows), dtype=bool))
         s = e
 
     if out["primary"]:
@@ -371,11 +529,12 @@ def stage_b(
         j = np.concatenate(out["j"])
         d_sample = np.concatenate(out["d_sample"])
         root = np.concatenate(out["root"])
+        jump = np.concatenate(out["jump"])
     else:
         primary = secondary = j = np.zeros(0, dtype=np.int64)
         d_sample = np.zeros(0)
-        root = np.zeros(0, dtype=bool)
-    t_lo = np.where(root, times[j], times[np.maximum(j - 1, 0)])
+        root = jump = np.zeros(0, dtype=bool)
+    t_lo = np.where(root | jump, times[j], times[np.maximum(j - 1, 0)])
     t_hi = times[np.minimum(j + 1, n_t - 1)]
     candidates = pd.DataFrame(
         {
@@ -384,19 +543,21 @@ def stage_b(
             "t_lo": t_lo,
             "t_hi": t_hi,
             "d_sample_km": d_sample,
-            "method": np.where(root, "root", "minimum"),
+            "method": np.where(jump, "scan", np.where(root, "root", "minimum")),
         }
     )
     log.info(
-        "Stage B: %d samples x %d objects = %d propagations; %d candidates (%d sign changes, %d sampled minima)",
+        "Stage B: %d samples x %d objects = %d propagations; %d candidates "
+        "(%d sign changes, %d sampled minima, %d across a trajectory jump)",
         n_t,
         n_obj,
         n_prop,
         len(candidates),
         int(root.sum()),
-        int((~root).sum()),
+        int((~root & ~jump).sum()),
+        int(jump.sum()),
     )
-    return StageBResult(candidates, times, n_obj, n_prop)
+    return StageBResult(candidates, times, n_obj, n_prop, served)
 
 
 # --------------------------------------------------------------------------------------
@@ -404,24 +565,59 @@ def stage_b(
 
 
 class PairEvaluator:
-    """SGP4 states of candidate pairs at per-candidate times.
+    """States of candidate pairs at per-candidate times: SGP4, or the published ephemeris.
 
     Times are seconds from a reference instant, held as ``(jd0, fr0)``; the sgp4 library
     accepts a day fraction outside [0, 1), and a float64 offset of a week keeps
     nanosecond precision. Each primary is evaluated once per call with ``sgp4_array``
     over all of its candidates; each secondary with a scalar call.
+
+    Where a :class:`ServedTrajectory` covers an object at a trial time, the interpolated
+    published state replaces the SGP4 one -- the same substitution Stage B made, by the same
+    rule, so that a pair chosen on one trajectory is refined on it too.
     """
 
-    def __init__(self, satrecs: list[Satrec], p_rows: Sequence[int], s_rows: Sequence[int], jd0: float, fr0: float):
+    def __init__(
+        self,
+        satrecs: list[Satrec],
+        p_rows: Sequence[int],
+        s_rows: Sequence[int],
+        jd0: float,
+        fr0: float,
+        *,
+        served: ServedTrajectory | None = None,
+        start64: np.datetime64 | None = None,
+        norad_of_row: Mapping[int, int] | None = None,
+    ):
         self.satrecs = satrecs
+        self.p_rows = np.asarray(p_rows, dtype=np.int64)
         self.s_rows = np.asarray(s_rows, dtype=np.int64)
         self.jd0 = float(jd0)
         self.fr0 = float(fr0)
+        self.served = served if (served is not None and served) else None
+        self.start64 = start64
+        self.norad_of_row = dict(norad_of_row or {})
         groups: dict[int, list[int]] = {}
         for k, row in enumerate(p_rows):
             groups.setdefault(int(row), []).append(k)
         self.groups = {row: np.asarray(ks, dtype=np.int64) for row, ks in groups.items()}
         self.n = len(p_rows)
+
+    def _substitute(self, t_s: np.ndarray, rows: np.ndarray, r: np.ndarray, v: np.ndarray) -> None:
+        """Replace SGP4 states with interpolated published ones wherever the ephemeris reaches."""
+        if self.served is None or self.start64 is None:
+            return
+        at = self.start64 + np.round(np.asarray(t_s, dtype=float) * 1e6).astype("timedelta64[us]")
+        for row in np.unique(rows):
+            norad_id = self.norad_of_row.get(int(row))
+            if norad_id is None or int(row) not in self.served.rows:
+                continue
+            which = np.nonzero(rows == row)[0]
+            r_e, v_e, ok = self.served.states_at(norad_id, at[which])
+            if not ok.any():
+                continue
+            r[which[ok]] = r_e[ok]
+            v[which[ok]] = v_e[ok]
 
     def states(self, t_s: np.ndarray, idx: np.ndarray) -> tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray]:
         """``(r_p, v_p, r_s, v_s)`` in km and km/s, ``(m, 3)`` each, for candidates ``idx`` at times ``t_s``."""
@@ -452,6 +648,9 @@ class PairEvaluator:
             if err == 0:
                 r_s[i] = rr
                 v_s[i] = vv
+        if self.served is not None:
+            self._substitute(t_s, self.p_rows[idx], r_p, v_p)
+            self._substitute(t_s, s_rows[idx], r_s, v_s)
         return r_p, v_p, r_s, v_s
 
     def range_rate(self, t_s: np.ndarray, idx: np.ndarray) -> tuple[np.ndarray, np.ndarray]:
@@ -582,6 +781,41 @@ def vector_minimum(
     return t, ~dead & ((b - a) <= tol)
 
 
+def vector_scan(
+    func: Callable[[np.ndarray, np.ndarray], np.ndarray],
+    a: np.ndarray,
+    b: np.ndarray,
+    *,
+    subdivisions: int = SCAN_SUBDIVISIONS,
+) -> tuple[np.ndarray, np.ndarray]:
+    """The smallest sampled value of many functions on ``[a, b]``, on a fixed sub-grid.
+
+    For the brackets that straddle a jump in the served trajectory. A root finder needs a
+    sign change it can trust and a golden-section search needs unimodality; across a
+    discontinuity there is neither, so the interval is simply scanned. With the default
+    hundred subdivisions of a 30-second step the time of closest approach is placed to 0.3 s,
+    which is coarse against the microsecond tolerance the root finder reaches and entirely
+    adequate for the handful of candidates that land on one of an object's three jump
+    instants in a run. Returns ``(t, converged)``; converged is false where every sample
+    was NaN.
+    """
+    a = np.asarray(a, dtype=float)
+    b = np.asarray(b, dtype=float)
+    n = len(a)
+    if n == 0:
+        return np.zeros(0), np.zeros(0, dtype=bool)
+    idx = np.arange(n)
+    best_t = np.full(n, np.nan)
+    best_d = np.full(n, np.inf)
+    for s in np.linspace(0.0, 1.0, int(subdivisions) + 1):
+        t = a + s * (b - a)
+        d = np.asarray(func(t, idx), dtype=float)
+        better = np.isfinite(d) & (d < best_d)
+        best_d[better] = d[better]
+        best_t[better] = t[better]
+    return np.where(np.isfinite(best_t), best_t, 0.5 * (a + b)), np.isfinite(best_t)
+
+
 @dataclass
 class StageCResult:
     """Refined events (geometry only) and counts."""
@@ -591,6 +825,7 @@ class StageCResult:
     n_root: int
     n_minimum: int
     n_unconverged: int
+    n_scan: int = 0
 
 
 def stage_c(
@@ -609,7 +844,16 @@ def stage_c(
 
     p_rows = [prop.row[int(p)] for p in cand["primary_norad_id"]]
     s_rows = [prop.row[int(s)] for s in cand["secondary_norad_id"]]
-    ev = PairEvaluator(prop.satrecs, p_rows, s_rows, jd0, fr0)
+    ev = PairEvaluator(
+        prop.satrecs,
+        p_rows,
+        s_rows,
+        jd0,
+        fr0,
+        served=stage_b_result.served,
+        start64=start64,
+        norad_of_row={row: int(n) for n, row in prop.row.items()},
+    )
     t_lo = (cand["t_lo"].to_numpy(dtype="datetime64[us]") - start64) / np.timedelta64(1, "s")
     t_hi = (cand["t_hi"].to_numpy(dtype="datetime64[us]") - start64) / np.timedelta64(1, "s")
     idx_all = np.arange(n)
@@ -618,7 +862,9 @@ def stage_c(
     # array path in the last place), and send anything not properly bracketed to the minimiser.
     f_lo, _ = ev.range_rate(t_lo, idx_all)
     f_hi, _ = ev.range_rate(t_hi, idx_all)
-    use_root = (cand["method"].to_numpy() == "root") & (f_lo < 0) & (f_hi >= 0)
+    method = cand["method"].to_numpy()
+    use_scan = method == "scan"
+    use_root = (method == "root") & (f_lo < 0) & (f_hi >= 0) & ~use_scan
     t = np.full(n, np.nan)
     ok = np.zeros(n, dtype=bool)
     root_idx = np.nonzero(use_root)[0]
@@ -632,7 +878,7 @@ def stage_c(
         )
         t[root_idx] = tr
         ok[root_idx] = cr
-    min_idx = np.nonzero(~use_root)[0]
+    min_idx = np.nonzero(~use_root & ~use_scan)[0]
     if len(min_idx):
 
         def f_min(tt: np.ndarray, sub: np.ndarray) -> np.ndarray:
@@ -641,6 +887,15 @@ def stage_c(
         tm, cm = vector_minimum(f_min, t_lo[min_idx], t_hi[min_idx], tol=max(config.time_tolerance_s, 1e-3))
         t[min_idx] = tm
         ok[min_idx] = cm
+    scan_idx = np.nonzero(use_scan)[0]
+    if len(scan_idx):
+
+        def f_scan(tt: np.ndarray, sub: np.ndarray) -> np.ndarray:
+            return ev.distance(tt, scan_idx[sub])
+
+        ts, cs = vector_scan(f_scan, t_lo[scan_idx], t_hi[scan_idx])
+        t[scan_idx] = ts
+        ok[scan_idx] = cs
 
     r_p, v_p, r_s, v_s = ev.states(np.where(np.isfinite(t), t, 0.0), idx_all)
     dr = r_s - r_p
@@ -667,7 +922,7 @@ def stage_c(
             "miss_c_km": ric[:, 2],
             "in_box": in_box,
             "within_watch_radius": within,
-            "refine_method": np.where(use_root, "root", "minimum"),
+            "refine_method": np.where(use_scan, "scan", np.where(use_root, "root", "minimum")),
             **state_columns(r_p, v_p, r_s, v_s),
         }
     )[keep]
@@ -679,17 +934,20 @@ def stage_c(
     events = events.sort_values(["primary_norad_id", "tca"]).reset_index(drop=True)
     n_unconverged = int((~ok).sum())
     log.info(
-        "Stage C: %d candidates refined (%d by root, %d by minimisation, %d did not converge); %d events "
-        "within %.1f km or the %s km box",
+        "Stage C: %d candidates refined (%d by root, %d by minimisation, %d by scanning a jump, "
+        "%d did not converge); %d events within %.1f km or the %s km box",
         n,
         int(use_root.sum()),
-        int((~use_root).sum()),
+        int((~use_root & ~use_scan).sum()),
+        int(use_scan.sum()),
         n_unconverged,
         len(events),
         config.watch_radius_km,
         "x".join(f"{2 * x:g}" for x in config.box_ric_km),
     )
-    return StageCResult(events, n, int(use_root.sum()), int((~use_root).sum()), n_unconverged)
+    return StageCResult(
+        events, n, int(use_root.sum()), int((~use_root & ~use_scan).sum()), n_unconverged, int(use_scan.sum())
+    )
 
 
 _GEOMETRY_DTYPES: dict[str, Any] = {
@@ -758,7 +1016,12 @@ class ScreeningResult:
             "objects_propagated": self.stage_b.n_objects,
             "propagations": self.stage_b.n_propagations,
             "candidates": self.stage_c.n_candidates,
+            "scanned_across_a_jump": self.stage_c.n_scan,
+            "served_trajectory": self.stage_b.served.summary() if self.stage_b.served is not None else {"objects": 0},
             "events": int(len(ev)),
+            "events_on_published_states": (
+                int((ev["secondary_trajectory"] == TRAJECTORY_EPHEMERIS).sum()) if len(ev) else 0
+            ),
             "events_in_box": int(ev["in_box"].sum()) if len(ev) else 0,
             "events_within_watch": int(ev["within_watch_radius"].sum()) if len(ev) else 0,
             "timings_s": {k: round(v, 2) for k, v in self.timings_s.items()},
@@ -777,6 +1040,7 @@ def screen_fleet(
     *,
     config: ScreeningConfig | None = None,
     start: datetime | str | None = None,
+    ephemeris: EphemerisTrajectory | None = None,
 ) -> ScreeningResult:
     """Screen every fleet member against the snapshot over the window; the Step 2 entry point.
 
@@ -804,14 +1068,14 @@ def screen_fleet(
 
     t1 = time.perf_counter()
     prop = Propagable.from_snapshot(snapshot, list(a.secondary_ids) + list(fleet.norad_ids))
-    b = stage_b(prop, a, config, start=start_dt)
+    b = stage_b(prop, a, config, start=start_dt, ephemeris=ephemeris)
     timings["stage_b"] = time.perf_counter() - t1
 
     t2 = time.perf_counter()
     c = stage_c(prop, b, config, start=start_dt, end=end_dt)
     timings["stage_c"] = time.perf_counter() - t2
 
-    events = annotate_events(c.events, snapshot, fleet, a)
+    events = annotate_events(c.events, snapshot, fleet, a, b.served)
     timings["total"] = time.perf_counter() - t0
     log.info(
         "Timings: Stage A %.1f s, Stage B %.1f s, Stage C %.1f s, total %.1f s",
@@ -829,7 +1093,11 @@ def in_active_group(snapshot: pd.DataFrame) -> pd.Series:
 
 
 def annotate_events(
-    events: pd.DataFrame, snapshot: pd.DataFrame, fleet: Fleet, stage_a_result: StageAResult
+    events: pd.DataFrame,
+    snapshot: pd.DataFrame,
+    fleet: Fleet,
+    stage_a_result: StageAResult,
+    served: ServedTrajectory | None = None,
 ) -> pd.DataFrame:
     """Add the event id, names, categories and the flags to Stage C's geometry, in ``EVENT_COLUMNS`` order.
 
@@ -865,5 +1133,19 @@ def annotate_events(
         for n, cat in zip(s, sec_category, strict=True)
     ]
     out["secondary_ephemeris"] = ephemeris.reindex(s).fillna("gp").to_numpy()
+    tca64 = events["tca"].to_numpy(dtype="datetime64[us]")
+    out["primary_trajectory"] = _trajectory_labels(served, p, tca64)
+    out["secondary_trajectory"] = _trajectory_labels(served, s, tca64)
     out["tca"] = pd.to_datetime(out["tca"], utc=True)
     return out[list(EVENT_COLUMNS)].reset_index(drop=True)
+
+
+def _trajectory_labels(served: ServedTrajectory | None, norad_ids: np.ndarray, tca: np.ndarray) -> np.ndarray:
+    """Which trajectory produced each event's state for these objects at their own TCA."""
+    out = np.full(len(norad_ids), TRAJECTORY_SGP4, dtype=object)
+    if served is None or not served:
+        return out
+    for norad_id in np.unique(norad_ids):
+        which = np.nonzero(norad_ids == norad_id)[0]
+        out[which] = served.label(int(norad_id), tca[which])
+    return out

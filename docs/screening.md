@@ -140,6 +140,60 @@ local minimum under the threshold with no sign change on either side is also a
 candidate, with the two-step bracket `[t_(k-1), t_(k+1)]`, and Stage C minimises the
 separation directly rather than root-finding.
 
+### What the bound rests on, and where it does not hold
+
+Every line of the argument above rests on one thing: `d(t)` is continuous, with a bounded
+derivative. Phase 4 Step 1 introduced a trajectory for which that is not true everywhere,
+so the guarantee has to be re-derived rather than assumed to carry over.
+
+**Why the trajectory changed.** Where SpaceX has published states for a Starlink object,
+Stage B and Stage C both use those states rather than CelesTrak's SGP4 fit to them
+(`ephemeris/spacex.py`, `docs/spacex-ephemerides.md`). The first design considered was the
+one the Phase 4 prompt proposed — screen on element sets, refine on the published states,
+and widen the Stage A pad to cover the difference. Measured on nineteen matched files on
+2026-09-03, that difference is a median 0.30 km inside 12 hours but **28 km at 36 to 48
+hours and 83 km at 60 to 72**, with a 90th percentile of 211 km. There is no pad for that,
+and screening on a trajectory tens of kilometres from the one the pair is then scored on is
+not a defensible arrangement whatever the pad. So both stages moved to the same trajectory.
+
+**Where it jumps.** An object's published states cover part of the window and not the rest,
+and the stored history is split at every discontinuity in the published file — every file
+measured has one at exactly 48 hours after `ephemeris_start`. So the served trajectory has
+at most three jump instants per object per run: the start of coverage, the 48-hour seam and
+the 72-hour horizon. Between two segments, and past the horizon, the SGP4 states serve, and
+the change from one to the other is a step of up to tens of kilometres.
+
+**The re-derivation.** Let interval `[t_k, t_(k+1)]` contain a jump for one of the pair's
+objects. Inside it the trajectory is continuous on each side of the jump separately, so the
+bound `|d'| <= v_bound` still holds on each side — but a minimum on one side can only be
+reached from the endpoint on that side, not from the nearer of the two. The reach needed is
+therefore the whole step rather than half of it:
+
+```
+d(t_k) <= d(t*) + v_bound h    for a minimum t* on t_k's side of the jump,
+```
+
+so on such an interval the threshold becomes `T_jump = R + v_bound h`, twice the ordinary
+one less `R`. Stage B marks every interval holding a jump for either object and applies
+`T_jump` there. For a typical LEO pair at the default step that is 503 km rather than
+269 km, on a handful of intervals per ephemeris object per run.
+
+**And how those candidates are refined.** Not by root finding: `f = dr . dv` has no
+trustworthy sign change across a step in position, and a golden-section search needs a
+unimodal function. The interval is scanned instead, on a hundred-point sub-grid, and the
+smallest sampled separation is taken. At a 30-second step that places the time of closest
+approach to 0.3 s, against the microsecond tolerance the root finder reaches elsewhere.
+Those events carry `refine_method = "scan"` and are counted in the run summary, so the
+coarser treatment can be seen rather than assumed away. A sampled local minimum is bracketed
+by the two intervals either side of it and is used only when neither holds a jump.
+
+**What is still not guaranteed.** The scan places a jump-interval event's time of closest
+approach to about `h / 100`, not to the root finder's tolerance, so its miss distance is the
+smallest on that sub-grid rather than the true minimum. And a break in the very first or very
+last interval of a published file cannot be detected at all, because the detector needs a node
+test on both sides. Both are stated here and in `ephemeris/spacex.py` rather than left to be
+discovered.
+
 ### The proof by brute force
 
 `tests/test_screening.py` builds a synthetic catalogue: an ISS-like primary, eight

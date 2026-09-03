@@ -202,6 +202,123 @@ Stage C should interpolate the SpaceX ephemeris states directly for served event
 trajectory and the covariance share a source. When it lands, `SPACEX_SGP4_FIT_RMS_KM` goes to
 zero for those events.
 
+## Phase 4 Step 1: the states, and what the fit residual really was (2026-09-03)
+
+The section above ends by saying the fit residual is "a patch on a mismatch, not a fix for
+it", and that the fix is to propagate the ephemeris. Step 1 did that. It also measured the
+mismatch properly for the first time, and the measurement changes the story.
+
+### The disagreement is not 0.2 km except at short lead
+
+CelesTrak publishes a per-object RMS with each supplemental element set: a median 0.201 km on
+2026-09-03, 99th percentile 0.48 km. Phase 2 took that as the size of the gap between the
+trajectory driftwatch propagates and the trajectory SpaceX's covariance describes. It is the
+residual **over the arc the fit was made on**, which is the first several hours; past that the
+element set is being propagated rather than fitted.
+
+Measured directly: nineteen satellites, ephemeris files and supplemental element sets fetched
+within a few hours of each other on 2026-09-03 so that the element set is the fit to *that*
+file, states compared every 30 minutes across the whole 72 hours.
+
+| Lead | Median | 90th percentile | Worst | Median in-track | Median radial | Median cross-track |
+| ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 0 to 1 h | 0.515 km | 1.570 km | 6.7 km | 0.440 km | 0.105 km | 0.111 km |
+| 1 to 3 h | 0.327 km | 0.891 km | 2.9 km | 0.224 km | 0.076 km | 0.106 km |
+| 3 to 8 h | 0.296 km | 0.768 km | 3.5 km | 0.213 km | 0.059 km | 0.112 km |
+| 8 to 12 h | 0.337 km | 1.231 km | 5.2 km | 0.269 km | 0.097 km | 0.135 km |
+| 12 to 24 h | **2.765 km** | 8.712 km | 185.8 km | 2.749 km | 0.153 km | 0.146 km |
+| 24 to 36 h | **11.503 km** | 27.975 km | 582.5 km | 11.496 km | 0.173 km | 0.153 km |
+| 36 to 48 h | **28.306 km** | 66.181 km | 1191.9 km | 28.304 km | 0.241 km | 0.180 km |
+| 48 to 60 h | **51.792 km** | 126.985 km | 2034.0 km | 51.791 km | 0.243 km | 0.313 km |
+| 60 to 72 h | **82.940 km** | 210.787 km | 3099.7 km | 82.938 km | 0.291 km | 0.293 km |
+
+Almost all of it in-track, which is what a timing error looks like. The worst cases are
+satellites under orbit-raising thrust, which an SGP4 element set cannot represent at all.
+
+**Two corrections to what this file said before.**
+
+1. The 0.2 km term was the right shape and the wrong size. The measurement recorded above —
+   "it bites at short lead and nowhere else" — was true of *the term*. Whether the term was the
+   whole of the error it stood for was never checked. It was not.
+2. Serving SpaceX's covariance on top of the SGP4 trajectory made days two and three **worse**.
+   Their in-track sigma at 72 hours is 3.80 km, a control box for the trajectory they published;
+   ours from the supplemental-consistency fit is 22.8 km, far closer to the 83 km the propagated
+   element set is actually out by. The tighter number was being served for a trajectory it did
+   not describe, on exactly the events furthest out in the window.
+
+Both are fixed by the same change, which is to make the served trajectory and the covariance's
+trajectory the same object.
+
+### The frame: MEME, not TEME, and worth 44 km
+
+The header does not name the state frame. It carries `created`, `ephemeris_start`,
+`ephemeris_stop`, `step_size`, `ephemeris_source` and a bare `UVW` line, which is the
+*covariance's* frame. The state frame is in the file name: every file is
+`MEME_<norad id>_STARLINK-…`, and MEME is mean equator and mean equinox of J2000.
+
+Checked rather than assumed, because being wrong here is expensive — precession and nutation
+since J2000 amount to about 0.36 degrees by 2026, some 44 km at low Earth orbit radius. Six
+satellites, states against SGP4 from their own supplemental element sets:
+
+| Interpretation | Median distance to the SGP4 fit at zero lead |
+| --- | ---: |
+| States read as TEME | 36.2 km |
+| States rotated J2000 → TEME | **0.356 km** |
+
+0.356 km at zero lead is the published fit residual, so the rotated reading is right. The
+rotation is `orbit/frames.j2000_to_teme`, and only TEME is stored, so no second inertial frame
+convention enters the project. It uses skyfield rather than astropy for speed — 0.13 s against
+1.74 s per file — and `tests/test_frames.py` pins the two against each other at 0.9 mm.
+
+### The stored grid, measured
+
+Cubic Hermite on position and velocity, thinned from the file's 60-second grid. Held-out error
+against the file's own states, ten files:
+
+| Stored step | Kept per file | Median error | 99th percentile |
+| ---: | ---: | ---: | ---: |
+| **120 s (chosen)** | **2,161** | **5.68 m** | **6.03 m** |
+| 180 s | 1,441 | 22.6 m | 27.3 m |
+| 300 s | 865 | 193.7 m | 214.1 m |
+| 600 s | 433 | 2,462 m | 3,531 m |
+
+120 seconds halves the store against the file's own step and leaves the interpolation error a
+thirty-fifth of the 0.2 km it removes. 300 seconds would reintroduce an error the same size as
+the one being removed, which is the line this must stay well clear of. Every fetch re-measures
+it and `driftwatch spacex` prints it.
+
+### The 48-hour seam
+
+**Every file measured carries a discontinuity of a few hundred metres at exactly 48 hours after
+`ephemeris_start`.** Not a manoeuvre — it is at the same instant in all of them — but a seam
+between two arcs of the `blend` the header names. On the file measured for this section the
+radius steps by about 160 m between two consecutive 60-second states, and the published velocity
+at the seam disagrees with the central difference of the positions around it by 16 m/s.
+
+It is invisible in raw second differences, which are dominated by 30 km per step² of ordinary
+orbital curvature. The detector is a residual test: predict each interior node from its two
+neighbours by Hermite, which on a smooth arc gives 5.7 m and at the seam gives 150 to 1,100 m.
+Three orders of magnitude, so the threshold — 50 m, or ten times the file's own median — is not
+a tuning knob.
+
+The stored history is split into segments at each break and no interpolant spans one; the
+60-second gap between segments is served by the base propagator, exactly as the region past the
+72-hour horizon is. With that in place the measured interpolation error over ten files has a
+**maximum of 6.8 m**, the tail having been excluded rather than smoothed over.
+
+A planned manoeuvre would look the same to this detector and is handled the same way, which is
+the right answer: an interpolant should not span a burn either. A break in the very first or
+very last interval of a file cannot be detected, because the test needs a node on both sides.
+
+### What the fit residual now is
+
+It applies **per event, not per object**. An event whose geometry came from the interpolated
+states has no SGP4 fit in its chain and gets the covariance exactly as SpaceX published it; one
+past the horizon, inside a break, or on an object whose states were not stored still has a fit
+in its chain and still carries the residual. Which is which is read from the trajectory columns
+the screening wrote, not recomputed from a store that is refetched every eight hours. Model
+version `spacex-ephemeris/3`.
+
 ## Sources
 
 - Starlink ephemerides README, https://api.starlink.com/public-files/ephemerides/README.md, and
