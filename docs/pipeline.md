@@ -33,17 +33,17 @@ the CPU factor would invent half an hour of budget that does not exist.
 | `screen`, history backfill + covariance fit | 6.0 min | CPU over every Stage A survivor, not over the fleet | 8 to 11 min |
 | `risk quiet` | 2 s | arithmetic over stored events | ~4 s |
 | `ballistic` | **5.0 min** | CPU, and self-limiting: `BALLISTIC_FIT_BUDGET_S` is 240 s and what it does not reach falls back to B* | 6 to 9 min |
-| **`risk` for a scenario, x4** | **17.0 min each, 68 min** | CPU: two density tracks per **object in an event**, from its own epoch to the window end | 88 to 122 min |
+| **`risk` for a scenario, x4** | **16.7 min each, 67 min** | CPU: two density tracks per **object in an event**, from its own epoch to the window end | 88 to 122 min |
 | `storm-check`, `propagate`, `report` | ~1 min | CPU | 1.5 to 2 min |
 | `stability` | 3 s | one narrow file per run | ~5 s |
 | `npm ci`, `npm run build`, `check-bundle` | ~1.5 min | node | ~2 min |
 | deploy, archive upload, store push | ~1 min | upload | ~1 min |
 
-**The total is about 1 h 54 m locally and 2 h 20 m to 3 h 0 m on a runner, against the six-hour
-job limit** -- 39 to 51 % of it, with three to three and two-thirds hours spare. `timeout-minutes`
+**The total is about 1 h 53 m locally and 2 h 18 m to 3 h 0 m on a runner, against the six-hour
+job limit** -- 38 to 50 % of it, with three to three and two-thirds hours spare. `timeout-minutes`
 is set to 330, under the ceiling, so a hung step fails rather than being killed by GitHub.
 
-**Where it goes, which is the number that matters for growth.** Of the local 114 minutes, **68 are
+**Where it goes, which is the number that matters for growth.** Of the local 113 minutes, **67 are
 the four scenarios** and **26 are the ephemeris download**. Everything else together is 20
 minutes. The two big terms grow in completely different ways, and neither grows with the fleet in
 the way one would guess.
@@ -52,10 +52,10 @@ the way one would guess.
 
 The scenarios are the binding constraint, and what they scale with is **not the number of
 primaries** but the number of **distinct objects that appear in an event** -- two density tracks
-each, per scenario. Measured three times, and they agree: `forecast` at 1,012 s and `storm-g5` at
-1,031 s over 2,944 objects on the 2026-09-03 run, and `storm-g5` at 990 s over 2,993 objects on
-the 2026-09-01 one -- **0.35 s per object per scenario**, with no scenario materially cheaper than
-another.
+each, per scenario. All four scenarios were timed on the 2026-09-03 run's 2,944 objects --
+`storm-g4` 970 s, `forecast` 1,012 s, `storm-g5` 1,031 s -- against 990 s over 2,993 objects on
+the 2026-09-01 run. That is a 6 % spread end to end: **0.34 s per object per scenario**, and no
+scenario materially cheaper than another, which is the assumption the fan-out lever rests on.
 
 Two measurements decide how that translates into fleet size:
 
@@ -72,7 +72,7 @@ So the ceiling is properly stated in objects, and only then in satellites:
 | --- | --- |
 | Fixed cost on a runner (fetches, screening, covariance, ballistic, export, deploy) | ~51 to 60 min |
 | Left for scoring under the 6 h limit | ~5.0 to 5.2 h |
-| At 0.35 s per object per scenario, four scenarios, x1.3 to x1.8 | **7,200 to 10,300 objects in events** |
+| At 0.34 s per object per scenario, four scenarios, x1.3 to x1.8 | **7,300 to 10,500 objects in events** |
 | At this fleet's mean of 490 objects a primary | **15 to 21 primaries** |
 | If every primary were EOS SAT-1-like (1,587 objects) | **5 or 6 primaries** |
 | If every primary were ISS-like (81 objects) | **90 to 130 primaries** |
@@ -93,7 +93,7 @@ much as a politeness one, and it currently hides that.
 1. **Fan the scenarios out into parallel jobs.** The six-hour limit is **per job**, and the
    scenarios are already independent by construction -- `driftwatch screen` writes `events.parquet`
    once and each `driftwatch risk <run> --scenario X` rescores those rows without touching SGP4.
-   Four scenarios in four jobs turns 68 minutes of scoring into 17 and moves the fleet ceiling out
+   Four scenarios in four jobs turns 67 minutes of scoring into 17 and moves the fleet ceiling out
    by roughly a factor of four, to the region where the ephemeris fetch becomes the constraint
    instead. The cost is that the run directory has to be passed between jobs as an artifact and the
    risk files rejoined before the export. **This is the lever to reach for first**, and it is
