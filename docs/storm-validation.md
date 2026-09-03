@@ -89,6 +89,71 @@ at or under 4 across 25 to 28 April, so the denominator is a genuinely quieter a
 the numerator, but it is not a solar-minimum baseline and the ratio is correspondingly
 conservative.
 
+
+### The bias, recorded: sign, size, altitude dependence, and what the literature says
+
+Recorded here so the next storm has something to disagree with. **Nothing is tuned to it**, and
+the rest of this section is the reasons not to be.
+
+| | |
+| --- | ---: |
+| Sign | **Over-prediction.** NRLMSIS 2.1's storm/quiet ratio exceeds the objects' own |
+| Size | observed/modelled **0.78**, a **22 per cent** over-prediction of the enhancement |
+| Spread | p10 to p90 of the observed ratio 1.06 to 2.38 against a modelled 1.75 to 2.96 |
+| Altitude dependence | **None resolvable.** 0.83, 0.74, 0.76, 0.73 across 450–550, 550–650, 650–800 and 800–2000 km — a spread of 0.10 across 53 objects in four bins, with no monotone trend |
+| Sample | 56 objects with a quiet decay significant against their own element-set scatter |
+| Quantity | the ratio of two **three-day window-integrated** decay rates, not an instantaneous density |
+
+The altitude row is the one worth dwelling on, because "no dependence" is a stronger statement
+than it looks. The four bins span 1,550 km and a factor of some hundreds in density, and the
+ratio moves by a tenth. A model whose *geomagnetic* term were wrong would be expected to fail
+differently at 500 km and at 800 km, where the storm response and the quiet baseline are set by
+different mixtures of species. That it does not points at a bias in the storm response as a
+whole rather than at the altitude profile — which is the term the code carries as a prior, and
+the one thing the measurement was designed to constrain.
+
+**Against the published record, this disagrees in sign, and the disagreement is the point of
+recording it.** The published assessments of MSIS-class models at storm time mostly find
+**under**-estimation:
+
+- Bruinsma et al. (2021), *Thermosphere modeling capabilities assessment: geomagnetic storms*,
+  J. Space Weather Space Clim. — comparing modelled against accelerometer-derived densities over
+  many storms, NRLMSISE-00 **underestimates** storm amplitudes on average, by a margin the paper
+  puts at tens of per cent, while DTM2013 and CTIPe overestimate.
+- Zhang et al. (2025), Front. Astron. Space Sci. — NRLMSIS 2.0 "systematically underestimated
+  thermospheric density" through the November 2003 storm with recovery-phase errors above 50 %,
+  and underestimated the March 2015 main phase by over 20 %, at GRACE-A and Swarm-A altitudes.
+- Assessments of NRLMSIS 2.1 report the same shape: under-estimation of the main-phase peak,
+  over-estimation in the initial phase, and a recovery-phase error over 40 % for some events.
+
+Our measurement says over-prediction by 22 per cent. Four things separate the two, and they are
+not all in our favour:
+
+1. **It is not the same quantity.** The published work compares an *instantaneous* density
+   against an accelerometer, and reports the error in the *peak amplitude*. We compare a
+   three-day window-integrated storm/quiet decay ratio over 10 to 13 May, which is dominated by
+   the sustained recovery rather than by the peak. A model that undershoots a sharp main-phase
+   peak and overshoots the two-day recovery would produce both results at once. That
+   reconciliation is plausible and **this measurement cannot test it**: the decay method has no
+   time resolution inside the window, by construction.
+2. **Our altitudes are mostly above theirs.** GRACE-FO and Swarm sit at 450 to 510 km; our
+   sample runs to 2,000 km, with 27 of the 53 binned objects above 650 km.
+3. **Our denominator makes us look worse, not better.** The quiet control window (25–28 April
+   2024) had Kp at or below 4, not a solar-minimum baseline, so the *observed* ratio is
+   conservative — the true enhancement was larger than 1.68 and the model's over-prediction is
+   therefore smaller than 22 per cent.
+4. **Survivorship does the same.** The 3,891 objects that were in orbit on 9 May 2024 and have
+   since decayed are the ones that felt the storm hardest and cannot be in the sample, so again
+   the observed ratio is biased low and the apparent over-prediction biased high.
+
+Three of those four push the number in one direction, and it is the direction that would shrink
+or reverse the disagreement. **So the honest statement is: over this window, at these altitudes,
+by this method, NRLMSIS 2.1 over-predicts the enhancement by about 22 per cent, and at least
+three known biases in the measurement inflate that figure.** It is a number to test the next
+storm against, not a correction to apply. `DENSITY_STORM_RATIO_SIGMA_REL` stays at a symmetric
+0.30 and a test pins it there, so that no later change can quietly turn this record into a
+calibration.
+
 ---
 
 ## 2. May 2024: did it move the objects where we say it did?
@@ -230,6 +295,29 @@ Of the 17 catalogued payloads, six have decay dates within nine days of launch (
 and 12 February), two decayed later (October 2023 and December 2024), and nine are still in
 orbit.
 
+**What holding 17 of 49 bounds, stated plainly.** The decay evidence in this section rests on
+**six of the thirty-eight satellites that were lost**, plus four pieces of Falcon 9 debris on
+the same trajectory. So:
+
+- Nothing here is a measurement over the *population* of losses. Six objects with between 0.8
+  and 6.7 days of element sets cannot carry a distribution, and no percentile, median or spread
+  is quoted from them anywhere in this section.
+- The six are not a random six. They are the ones that survived long enough to be catalogued,
+  which is a bias *towards* the slower losses — the fastest are exactly the ones the 18th Space
+  Defense Squadron never assigned a number to.
+- Five of the six have under a day of element sets, so their decay *rates* are element-set
+  scatter rather than measurements. The command prints them and says so. Only two objects in the
+  table have a span long enough for the rate to mean anything, and both are debris.
+- What the six do establish is the thing the case was pulled for: that the decay at insertion
+  altitude is unambiguous and enormous — 79 to 101 km of altitude lost in under a week — against
+  a control group at 500 km losing 8.5 km in six weeks. That comparison needs no population.
+
+This is a property of the public catalogue rather than of driftwatch, and it is the general
+version of the survivorship problem the May 2024 sample has: **the objects that come down fastest
+are the ones the catalogue is least likely to hold**, so any tool built on the public record
+systematically under-observes the events a storm causes. It is the single strongest argument in
+this document for the parked SATCAT-decayed-object pull.
+
 ### Second finding: the decay is unambiguous in the element sets
 
 | Object | sets | span (d) | first alt (km) | last alt (km) | change (km) | rate (km/d) | decayed |
@@ -275,20 +363,50 @@ to a very large number. The ratio *grows* with altitude — 1.16 at 210 km, 1.69
 which is the physics: a storm heats the lower thermosphere, the atmosphere expands, and the
 density at a fixed height rises by more the further that height is above the heating.
 
-**Why 16 per cent was enough to lose 38 satellites, and why nothing here is adjusted for it.**
-The loss was not a failure of the density model. At 210 km the *baseline* drag is already close
-to what a Starlink can overcome: 1.5e-10 kg/m³ is three orders of magnitude above the 500 km
-value, and the satellites had been put into safe mode by the storm, where they fly broadside
-with the largest possible area and no thrust. A 16 per cent increase on an already-marginal
-margin, applied to satellites that could not raise themselves, is sufficient. The published
-post-mortems say the same thing.
+### Why 16 per cent is not a model failure, and why nothing here is adjusted for it
 
-The temptation this case creates is to conclude the geomagnetic response is under-modelled at
-low altitude and to raise it. That would be fitting one event through the wrong parameter. What
-the case actually establishes is narrower and more useful: **the model's enhancement at 200 km
-is small, so an operator at insertion altitude cannot rely on the enhancement being the warning
-— the warning is the baseline.** The May 2024 test is where the enhancement itself is measured,
-and there it comes out 22 per cent *too large* rather than too small.
+The loss was not a failure of the density model, and the temptation this case creates — to
+conclude the geomagnetic response is under-modelled at low altitude and raise it — would be
+fitting one event through the wrong parameter. Three things say the modest number is the right
+one.
+
+**The insertion altitude is the whole explanation.** At 210 km the *baseline* is
+1.5e-10 kg/m³, three orders of magnitude above the 500 km value. Drag scales with that baseline,
+so the satellites were already flying in air a thousand times thicker than their operational
+shell before the storm added anything. A margin that thin does not need a large multiplier to be
+consumed: 16 per cent of a very large number is a large number. The comparison that makes this
+concrete is in the decay table above — tens of kilometres a day at 210 km against the control
+group's **0.20 km per day at 500 km**, in the same days and the same atmosphere.
+
+**And the satellites could not answer it.** They had been put into safe mode by the storm, where
+they fly broadside with the largest possible area and no thrust, precisely while the drag rose.
+The survivors in the same launch, which were raising themselves, climbed 138 to 149 km over the
+following 39 days. The difference between the two groups is not the atmosphere; it is whether the
+satellite was pushing.
+
+**The number is in family with the published post-mortems**, which matters because it is the only
+external check available on the model at this altitude:
+
+| Source | Enhancement at ~210 km | Baseline compared against |
+| --- | --- | --- |
+| driftwatch, NRLMSIS 2.1, observed ap | **1.16** (16 %) | quiet 25 January 2022 |
+| Fang et al. (2022), *Space Weather* — the post-mortem written with the Starlink team | 20–30 % | the 9 days before launch |
+| Lin et al. (2022), *Space Weather* — physics-based whole-geospace simulation | 50–125 % at 200–400 km | pre-storm |
+
+The three are not the same measurement: they use different baselines, different models and, in
+Lin's case, a first-principles simulation rather than an empirical model. But 16 per cent sits at
+the low end of a published range whose own spread is a factor of several, and the direction of
+the difference is the one the May 2024 test predicts — an empirical model reading the *smallest*
+enhancement of the three. Nothing here is tuned to close that gap. Two storms, measured in
+opposite directions (22 per cent too large at 450–2000 km in May 2024, at the low end of the
+published range at 210 km in February 2022), is not a calibration; it is two data points and a
+reason to want a third.
+
+What the case establishes is narrower and more useful than a model correction: **the model's
+enhancement at 200 km is small, so an operator at insertion altitude cannot rely on the
+enhancement being the warning — the warning is the baseline.** A tool that screened this launch
+would have shown a 16 per cent density rise and lost the satellites anyway. That is a statement
+about where to look, not about what to fix.
 
 ---
 
@@ -388,3 +506,40 @@ measurement. What changed:
 - The in-track error is measured in the *later* element set's RIC frame. The two frames differ
   by the angle the disagreement subtends, which is under a milliradian for a shift of tens of
   kilometres.
+
+## Published work this section is measured against
+
+Read 2026-09-03. None of it is used as an input; it is here so the two measurements above have
+something external to disagree with, and so a reader can see where they do.
+
+- Parker, W. E. and Linares, R. (2024), *Satellite Drag Analysis During the May 2024 Gannon
+  Geomagnetic Storm*, J. Spacecraft and Rockets 61(6), 1412.
+  <https://arxiv.org/abs/2406.08617> — the template for §1 and §2: TLE-derived density
+  enhancement over the whole LEO catalogue. Reports up to a sixfold density increase at 400 km
+  at the peak against a baseline twelve hours earlier, and a fourfold rise in decay rate on a
+  single object (38 to 180 m/day). A peak against a short baseline is a different quantity from
+  our three-day window ratio and the two are not directly comparable.
+- Bruinsma, S. et al. (2021), *Thermosphere modeling capabilities assessment: geomagnetic
+  storms*, J. Space Weather Space Clim. 11, 12.
+  <https://www.swsc-journal.org/articles/swsc/full_html/2021/01/swsc200061/swsc200061.html>
+  — the standard multi-model, multi-storm assessment against accelerometer densities.
+  NRLMSISE-00 under-estimates storm amplitudes on average; DTM2013 and CTIPe over-estimate.
+- Zhang et al. (2025), *Thermospheric density variations during extreme geomagnetic storms and
+  their potential impact on the orbit of the China space station*, Front. Astron. Space Sci.
+  <https://doi.org/10.3389/fspas.2025.1644152> — NRLMSIS 2.0 systematically under-estimates
+  through the November 2003 and March 2015 storms at GRACE-A and Swarm-A altitudes, with
+  recovery-phase errors above 50 %.
+- Fang, T.-W. et al. (2022), *Space Weather Environment During the SpaceX Starlink Satellite
+  Loss in February 2022*, Space Weather 20, e2022SW003193.
+  <https://doi.org/10.1029/2022SW003193> — the post-mortem written with the Starlink team;
+  density 20–30 % above the nine days before launch at 210 km.
+- Lin, C. Y. et al. (2022), *Thermospheric Neutral Density Variation During the "SpaceX" Storm*,
+  Space Weather 20, e2022SW003254. <https://doi.org/10.1029/2022SW003254> — a physics-based
+  whole-geospace simulation giving 50–125 % enhancement between 200 and 400 km.
+
+**A note on how these were read.** The abstracts and the openly accessible full texts were read
+directly; three of the five sit behind publisher access controls and their quantitative claims
+here come from the abstract, the open preprint or a secondary summary rather than from the
+figures. Every number attributed above is one stated in prose, not read off a plot, and none of
+them is used in any computation. Where the exact figure matters to a conclusion — it does not,
+in either section — the paper should be read in full first.

@@ -1080,6 +1080,12 @@ The review approved Step 3 and named the finding that a storm *lowers* the proba
 events, through common-mode cancellation, as the project's headline result. Four corrections
 before Phase 4, and all four are hardening rather than new physics.
 
+> **Corrected at the Step 4 review (2026-09-03).** The clause "through common-mode cancellation"
+> in the paragraph above is the review's own wording at the time and is left as it was said. It
+> did not survive the first of the four corrections it asked for: correction 1 below falsified
+> the mechanism while confirming the result. The mechanism is two nearly independent
+> displacements separating more pairs than they create. See `docs/storm-term.md`.
+
 ### 1. Verify the cancellation, split two ways
 
 The claim is physical: a storm displaces both objects of a pair in the same direction by
@@ -1299,3 +1305,102 @@ conjunction list moving together; the point cloud untouched, so Phase 1 performa
 After each step, as in Phase 2. Anything that constrains Phase 4 — the space weather table
 schema, the scenario names on `risk`, the export columns the viewer reads — is asked about
 before it is built.
+
+## The Step 4 review's four corrections (2026-09-03)
+
+The review approved Step 4 and confirmed the correction of the cancellation claim. Four things
+before Step 5. None of them changes a number the pipeline computes; three change what is said
+about the numbers and one changes what is carried beside them.
+
+### 1. The correction is propagated, not rewritten
+
+Every place that explained the headline result by common-mode cancellation now carries a dated
+note beside the old wording rather than a silent edit, following the Phase 2 dilution
+precedent. The sites: `docs/design-brief.md` §5 (the operator console's Δ column), the Step 3
+review section above, `driftwatch.storm.diagnostics`'s module docstring, `cmd_storm_check`'s
+one-line summary, `README.md`'s `storm-check` entry, and `docs/methods.md`, which gains the
+corrected mechanism as an entry of its own. `docs/storm-term.md` gains a banner at the head of
+the section that did the falsifying. `docs/density-and-drag.md` gains a disambiguating note,
+because it describes a *different* cancellation — a density-model bias folding into a
+coefficient fitted through the same model — which is unaffected and still stands; the two share
+a word and nothing else.
+
+The report and the viewer carried no such string to correct: the report had no storm section at
+all until this step, and the viewer's storm mode is Step 5. Both now state the corrected
+mechanism where the number appears.
+
+### 2. Storm-term validity on every event
+
+Step 4's sharpest finding was that the term is predictive at r = 0.88 for objects with a
+measured ballistic coefficient and has **no demonstrated skill** without one — over the whole
+free-flying population the correlation is −0.10. That was reported once, in a validation
+document, while every aggregate downstream went on pooling the two populations.
+
+`storm_validity` is now a column on every risk row, taken from the **weaker** of the two
+objects' coefficient sources: `validated` when both are `history`, `indicative` when either
+rests on a B\* inversion, a stand-in or no coefficient, `none` under a scenario with no storm
+layer. The weaker side decides because a relative shift is the difference of two displacements.
+
+Every aggregate is reported over both populations and the combined figure is never printed
+alone: `driftwatch storm-check`, the weekly report's new storm section, `run.json`'s per-scenario
+record, and Step 5's viewer panel. A test pins that the label changes no probability, no sigma
+and no flag — it is a statement about the evidence, and a label that quietly reweighted the
+numbers would be a calibration wearing a provenance badge.
+
+**The split immediately found something the combined number was hiding**, which is the
+justification for the whole exercise. On the demo run's G5 scenario the median
+`pc / pc_variance_only` is **0.16** over the validated events and **0.89** over the indicative
+ones. Where the term is validated the displacement lowers the probability by close to an order
+of magnitude; where it is not, it barely moves the number. The combined 0.66 is an average of a
+large real effect and a near-absent unmeasured one, weighted by how many objects happened to
+have a usable decay history — that is, by the coverage of the coefficient fit rather than by
+physics. `docs/storm-term.md` carries the table.
+
+Two smaller things fell out of it. The joined `conjunctions.parquet` was carrying `pc` alone out
+of Step 3's five probability-and-shift columns, so the report and the viewer — which read that
+file, not the risk parquets — could show a storm probability with nothing beside it to say what
+had moved it; the storm columns are now in `EXPORT_COLUMNS`. And `RunDirectory.read_risk` fills
+`storm_validity` for a run scored before the column existed, because it is a pure function of two
+columns every stored table already has. No rescore was needed for either.
+
+### 3. The NRLMSIS bias is recorded and nothing is tuned to it
+
+`docs/storm-validation.md` §1 gains the bias as a record with its sign, size, spread, altitude
+dependence and — the part the review asked for — a comparison against the published analyses.
+
+The comparison disagrees, and the disagreement is the reason to write it down. Published
+assessments of MSIS-class models at storm time mostly find **under**-estimation; this measurement
+finds a 22 per cent **over**-prediction. Four things separate them, and only one favours us: the
+published work measures an instantaneous peak against an accelerometer while this measures a
+three-day window-integrated decay ratio dominated by the recovery; their satellites sit at 450 to
+510 km while half this sample is above 650 km; and the two known biases in this measurement — a
+control window that was not solar-minimum quiet, and survivorship against the objects that
+decayed — both push the observed ratio down and the apparent over-prediction up. So the honest
+statement is that the figure is real for this quantity at these altitudes and that at least three
+things inflate it.
+
+`DENSITY_STORM_RATIO_SIGMA_REL` stays a symmetric 0.30 and a test now pins it, so that no later
+change can quietly turn the record into a calibration. The config comment that predicted the
+prior "is likely to move up" is corrected in place: it moved the other way.
+
+### 4. February 2022, bounded and explained
+
+The coverage limitation is now stated as what it bounds rather than as a fact about the SATCAT.
+The public catalogue holds 17 of the 49 satellites and the decay evidence rests on **six of the
+thirty-eight lost**, five of which have under a day of element sets. No population statistic is
+quoted from them anywhere. What the six do establish needs no population: 79 to 101 km of
+altitude lost in under a week at 210 km, against a control group at 500 km losing 8.5 km in six
+weeks.
+
+And the 16 per cent enhancement is discussed as the right answer rather than a shortfall. At
+210 km the baseline density is three orders of magnitude above the 500 km value, so a modest
+multiplier on an already-marginal margin is sufficient; the satellites were in safe mode, flying
+broadside with no thrust, while the survivors in the same launch climbed 138 to 149 km over the
+following 39 days. The figure sits at the low end of the published post-mortems — Fang et al.
+(2022) put the enhancement at 20–30 per cent above the nine days before launch, Lin et al. (2022)
+at 50–125 per cent from a physics-based simulation — and nothing is tuned to close the gap. Two
+storms measured in opposite directions is two data points and a reason to want a third, not a
+calibration.
+
+What the case establishes is narrower and more useful than a model correction: **at insertion
+altitude the enhancement is not the warning, the baseline is.**

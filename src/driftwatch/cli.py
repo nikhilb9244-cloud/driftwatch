@@ -1028,17 +1028,37 @@ def layer_storm_term(
     return storm_scenarios.StormCovariance(model, shifts, scenario=scenario.name), scenario
 
 
-def risk_run_record(risk: pd.DataFrame, scenario: str, model: CovarianceModel, now: datetime) -> dict[str, Any]:
-    """What ``run.json`` keeps about one scoring: when, which model, how many flags."""
+def _flag_counts(risk: pd.DataFrame) -> dict[str, Any]:
+    """Events, flags and the largest probability over whatever subset is handed in."""
     return {
-        "scenario": scenario,
-        "computed_at": now.isoformat(),
-        "model_version": model_version_string(model),
         "n_events": int(len(risk)),
         "n_red": int((risk["flag"] == "red").sum()) if len(risk) else 0,
         "n_yellow": int((risk["flag"] == "yellow").sum()) if len(risk) else 0,
         "n_unscoreable": int((risk["flag"] == "unscoreable").sum()) if len(risk) else 0,
         "max_pc": float(risk["pc"].max()) if len(risk) else None,
+    }
+
+
+def risk_run_record(risk: pd.DataFrame, scenario: str, model: CovarianceModel, now: datetime) -> dict[str, Any]:
+    """What ``run.json`` keeps about one scoring: when, which model, how many flags.
+
+    The flag counts are kept **both ways** as well as combined -- over the events whose two
+    objects both have a ballistic coefficient measured from their own decay, and over the rest.
+    Step 4 found the storm term predictive only for the first group, so a red count that does not
+    say which population it came from is not a number anybody should read. See
+    :func:`driftwatch.storm.term.event_validity`.
+    """
+    validity = risk["storm_validity"].astype(str) if len(risk) and "storm_validity" in risk.columns else None
+    return {
+        "scenario": scenario,
+        "computed_at": now.isoformat(),
+        "model_version": model_version_string(model),
+        **_flag_counts(risk),
+        "by_storm_validity": {
+            label: _flag_counts(risk[validity == label])
+            for label in (storm_term.VALIDATED, storm_term.INDICATIVE, storm_term.NO_STORM_TERM)
+            if validity is not None and bool((validity == label).any())
+        },
         "max_pc_variance_only": float(risk["pc_variance_only"].max()) if len(risk) else None,
         "max_abs_shift_km": float(
             np.nanmax(np.abs(risk[["shift_i_primary_km", "shift_i_secondary_km"]].to_numpy(dtype=float)))
@@ -1202,7 +1222,7 @@ def _print_table(title: str, table: dict[str, Any] | list[dict[str, Any]]) -> No
 
 
 def cmd_storm_check(args: argparse.Namespace) -> int:
-    """Verify the common-mode cancellation and report what cannot be scored. See storm/diagnostics.py."""
+    """Attack the storm result and report what cannot be scored. See storm/diagnostics.py."""
     try:
         run_dir = resolve_run(args.run)
     except FileNotFoundError as exc:
@@ -1251,6 +1271,16 @@ def cmd_storm_check(args: argparse.Namespace) -> int:
                 f"(p90 {cancel['overall']['p90_ratio']}). Rank correlation of the ratio with the altitude "
                 f"difference: {cancel['spearman_ratio_vs_altitude_difference']}"
             )
+            # Validated first, combined last, and never the combined figure on its own: the
+            # term is measured only where both objects have a coefficient fitted from their own
+            # decay. Same numbers either way; the label says how far the validation reaches.
+            print(
+                "\nStorm-term validity. `validated` means BOTH objects have a ballistic coefficient"
+                "\nmeasured from their own decay, which is the only population Step 4's May 2024 test"
+                "\nreaches (r = 0.88 there, no demonstrated skill otherwise). Nothing is weighted or"
+                "\nwithheld by the label; it says how far the validation goes, not how large the shift is."
+            )
+            _print_table("", cancel["by_storm_validity"])
             _print_table("By ballistic coefficient source pair", cancel["by_b_source_pair"])
             _print_table("By whether the two sources are the same", cancel["by_shared_source"])
             print(
@@ -1259,7 +1289,19 @@ def cmd_storm_check(args: argparse.Namespace) -> int:
                 f"near-coincidence in position, so that axis has no range):"
             )
             _print_table("", cancel["by_altitude_difference"])
-            _print_table("Probability: combined, shift only, variance only", effects["bands"])
+            for label, table in cancel.get("by_altitude_difference_per_validity", {}).items():
+                if label == "combined":
+                    continue  # the table immediately above is the combined one
+                spearman = cancel.get("spearman_per_validity", {}).get(label)
+                _print_table(f"  ... {label} only (rank correlation {spearman})", table)
+            if "by_storm_validity" in effects:
+                for label, split in effects["by_storm_validity"].items():
+                    _print_table(
+                        f"Probability: combined, shift only, variance only -- {label} ({split['n_events']} events)",
+                        split["bands"],
+                    )
+            else:
+                _print_table("Probability: combined, shift only, variance only", effects["bands"])
         print(f"\nUnscoreable: {bad_summary.get('n_objects', 0)} objects over {bad_summary.get('n_events', 0)} events")
         if len(bad):
             print(bad.head(args.show).to_string(index=False))

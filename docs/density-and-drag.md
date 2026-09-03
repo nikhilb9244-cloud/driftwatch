@@ -514,6 +514,13 @@ like on a population that manoeuvres.
 
 ## The bias that folds in, and the part of it that cancels
 
+> **Not the cancellation that was withdrawn (noted 2026-09-03).** This section is about a
+> *density-model* bias cancelling against a coefficient fitted through the same model, for one
+> object. It is unaffected by the Step 4 correction, which withdrew a different and unrelated
+> claim — a *common-mode* cancellation between the two objects of a conjunction pair. That one is
+> gone; this one stands and is the reason the fit and the scenarios must share a density model.
+> See `docs/storm-term.md`.
+
 Only the **product** `B rho` is observable from a decay. If NRLMSIS is systematically low by
 twenty per cent over the fit window, the fit returns a B twenty per cent high, and when the
 same model then drives the scenarios the product comes back right. **The quiet-case bias

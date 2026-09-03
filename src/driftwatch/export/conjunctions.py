@@ -64,10 +64,26 @@ EXPORT_COLUMNS: tuple[str, ...] = (
     "cov_source_secondary",
     "hbr_m",
     "pc",
+    "pc_shift_only",
+    "pc_variance_only",
     "pc_alfano",
     "pc_chan",
     "pc_max",
     "pc_max_scale",
+    # Phase 3 Step 3's storm columns, carried through the join at the Step 4 review. Without
+    # them the report and the viewer read a storm scenario's `pc` with nothing beside it to say
+    # what moved it, which is the one number this phase asks a reader not to take alone.
+    "miss_shifted_km",
+    "shift_i_primary_km",
+    "shift_i_secondary_km",
+    "relative_shift_km",
+    "sigma_shift_i_primary_km",
+    "sigma_shift_i_secondary_km",
+    "storm_source_primary",
+    "storm_source_secondary",
+    "storm_validity",
+    "scoreable",
+    "unscoreable_reason",
     "region",
     "flag",
     "confidence",
@@ -213,6 +229,16 @@ class RunDirectory:
     def read_risk(self, scenario: str) -> pd.DataFrame:
         df = _read(self.risk_path(scenario))
         df["computed_at"] = pd.to_datetime(df["computed_at"], utc=True)
+        if "storm_validity" not in df.columns and {"storm_source_primary", "storm_source_secondary"} <= set(df):
+            # Added at the Step 4 review (2026-09-03). It is a pure function of the two
+            # coefficient-source columns, which every stored table already carries, so a run
+            # scored before the column existed gets it on read rather than needing a rescore --
+            # and reads identically to one scored after. `driftwatch risk` writes it directly.
+            from driftwatch.storm.term import event_validities
+
+            df["storm_validity"] = event_validities(
+                df["storm_source_primary"].to_numpy(), df["storm_source_secondary"].to_numpy()
+            ).astype(str)
         return df
 
     # the join ----------------------------------------------------------------------

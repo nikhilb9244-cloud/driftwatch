@@ -347,12 +347,21 @@ The parquet metadata records the run id and the NRLMSIS version.
 | `cov_source_primary`, `cov_source_secondary` | string | The model's source label for each, per event (a scenario wrapper prefixes its own, e.g. `scaled:4:default:leo`). `spacex-ephemeris` where SpaceX's own published covariance served, and `spacex-ephemeris+<base label>` where an event straddled the 72-hour horizon of their file; past it the base model serves and reports its own label, so this column says which of the three models covered each event. A `spacex-ephemeris` sigma is their published number with the 0.2 km residual of CelesTrak's SGP4 fit added in quadrature, because that fit is the trajectory being propagated; `model_version` carries `spacex-ephemeris/2` when it is in there. |
 | `hbr_m` | float64 | The combined hard-body radius, primary plus secondary. |
 | `enc_cov_xx_km2`, `enc_cov_xy_km2`, `enc_cov_yy_km2` | float64 | The combined covariance projected onto the encounter plane, x along the miss vector. Enough to draw the ellipse. |
-| `pc` | float64 | Probability of collision, Foster's integration. |
+| `pc` | float64 | Probability of collision, Foster's integration. The primary number: the objects moved by the scenario's mean shift **and** the covariance carrying that shift's uncertainty. |
+| `pc_shift_only` | float64 | The objects moved, scored against the covariance the run would have had with no storm layer. What the displacement alone does to the geometry. |
+| `pc_variance_only` | float64 | The scenario's covariance with the objects left where their element sets put them. What the added uncertainty alone does. The three are not decomposable into one another — the probability is not linear in either input — so all three are computed. Equal to `pc` under a scenario with no storm layer. |
 | `pc_alfano`, `pc_chan` | float64 | The same integral by Alfano's one-dimensional form (the cross-check) and Chan's series. |
 | `pc_max`, `pc_max_scale` | float64 | The maximum probability over covariance scale factors 0.1 to 10, and the factor at which it occurs. NaN when the sweep was skipped. |
 | `region` | string | `dilution` when `pc_max_scale` is below one (shrinking the covariance would raise the probability), `robust` at or above one, `unknown` when the sweep did not run. |
 | `flag` | string | `red` (`pc >= 1e-4`), `yellow` (`>= 1e-5`) or `none`. |
 | `confidence` | string | `standard` in the robust region, `low` elsewhere. A red or yellow flag with `low` confidence is not actionable; see `docs/screening.md`. |
+| `miss_shifted_km` | float64 | The miss distance after the scenario's shifts, in the encounter plane. Equal to the event's own `miss_km` under a scenario with no storm layer. |
+| `shift_i_primary_km`, `shift_i_secondary_km` | float64 | Each object's in-track displacement at `tca`, positive meaning **ahead** of where its element set puts it (more drag lowers the orbit and a lower orbit is faster). Zero where no coefficient was available — which is a statement that the displacement is unknown, not that it is zero; `storm_source_*` is what tells the two apart. |
+| `relative_shift_km` | float64 | The displacement that actually enters the miss: both in-track shifts rotated **out of their own RIC frames** and differenced in TEME, as a vector norm. The scalar difference of the two `shift_i_*` columns is not a displacement — for a crossing geometry the two frames are nearly perpendicular — so do not compute it that way. |
+| `sigma_shift_i_primary_km`, `sigma_shift_i_secondary_km` | float64 | The standard deviation the storm term added to each object's in-track sigma, over and above what the run's base model gave. |
+| `storm_source_primary`, `storm_source_secondary` | string | Where each object's ballistic coefficient came from: `history` (fitted from its own decay), `bstar`, `typical`, or `none` (no coefficient, so no shift). A `!extrapolated` suffix means the scenario's implied decay for that object passed `STORM_MAX_DECAY_FRACTION`; that is a statement about the size of the decay, not about the coefficient. |
+| `storm_validity` | string | How far Step 4's validation reaches this event, from the **weaker** of the two sources above: `validated` (both `history`), `indicative` (anything resting on a B\* inversion, a stand-in, or no coefficient), `none` (no storm layer at all — `quiet`, and any plain labelled rescore). The storm term is predictive at r = 0.88 for objects with a measured coefficient and has no demonstrated skill otherwise, so **every aggregate over these rows is reported both ways**. Nothing is weighted or withheld by the label; the numbers are identical either way. Added at the Step 4 review (2026-09-03) and filled on read for runs scored before it. See `docs/methods.md`, "Storm-term validity". |
+| `scoreable`, `unscoreable_reason` | bool, string | False, with the reason, when either object's in-track displacement passed `STORM_MAX_SHIFT_REVOLUTIONS` of its orbit's circumference. Such an event carries **NaN in every probability column**, `unscoreable` as region and flag, `none` as confidence, and is excluded from every aggregate. The geometry, the covariance and the shift all stay. |
 | `slow_encounter` | bool | True below 0.1 km/s relative, where the two-dimensional method's straight-line assumption no longer holds and the probability is a **known underestimate**. The flag rests on that assumption, not on any measured error: no comparison driftwatch has run can size the bias, because ESA's own risk column shares the approximation. Not a correction either: nothing rescales `pc`. See `driftwatch.risk.pc.slow_encounters`. |
 | `computed_at` | timestamp[us, UTC] | When this scenario was scored. |
 
@@ -362,10 +371,17 @@ The columns of `risk_*` (without `computed_at`) merged with those of `events`
 (without the states), plus `manoeuvre_primary` and `manoeuvre_secondary` taken from
 the objects table (so they can read `observed`), in the order fixed by
 `EXPORT_COLUMNS` in `driftwatch.export.conjunctions`: run identity, event identity,
-geometry, uncertainty, probability, flags, `secondary_ephemeris`, `refine_method` and
-the encounter-plane covariance. One row per event per scenario; (`event_id`,
-`scenario`) is unique. With no risk file present the geometry rows are exported with
-the risk columns empty.
+geometry, uncertainty, the three probabilities, the storm term's shifts and labels,
+flags, `secondary_ephemeris`, `refine_method` and the encounter-plane covariance. One
+row per event per scenario; (`event_id`, `scenario`) is unique. With no risk file
+present the geometry rows are exported with the risk columns empty.
+
+The storm columns were added to this join at the Step 4 review (2026-09-03). Before
+that the join carried `pc` alone out of the scenario's five probability-and-shift
+columns, so the report and the viewer — which both read this file rather than the risk
+parquets — could show a storm probability with nothing beside it to say what had moved
+it. Rebuild an older run's join with `RunDirectory.rebuild_conjunctions()`; no rescore
+is needed, because every column comes from the stored risk tables.
 
 ## Propagated state: `data/propagated/state_<YYYYMMDDTHHMMSSZ>.parquet`
 

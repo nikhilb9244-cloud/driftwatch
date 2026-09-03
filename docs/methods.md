@@ -409,11 +409,57 @@ they enter the chain; each states what is assumed, why, and what it costs.
   in-track displacements are rotated out of their own RIC frames and differenced in TEME; the
   scalar difference of the two in-track components is *not* a displacement, because the two
   frames are different. `relative_shift_km` on every row is the vector norm of the difference.
+- **The two objects' displacements are nearly independent, and no cancellation is claimed
+  between them.** The relative shift is a median **1.91 times** the mean of the two objects' own
+  shifts, out of a maximum of 2, flat across coefficient-source pairs and flat in the altitude
+  difference between the two orbits (rank correlation −0.10), and reproduced at 1.87 on the
+  independent May 2024 replay. The two in-track shifts are uncorrelated (r = 0.08) and the median
+  angle between the two in-track directions at the encounter is 120°, because a screener finds
+  crossing pairs — a low relative speed is what stops two objects closing on each other. That a
+  storm *lowers* the probability on most events is measured and stands; the reason is that a
+  displacement of tens of kilometres applied to a miss of a few separates more pairs than it
+  creates, and the tighter the miss the more surely it does.
+  > **Corrected at the Step 4 review (2026-09-03).** Step 3 explained the same result by
+  > *common-mode cancellation* — both objects displaced alike, so only a small relative shift
+  > reaching the miss. `driftwatch storm-check` was built to test that claim and refuted it. The
+  > wording is withdrawn wherever it appeared; the result is not. `docs/storm-term.md` carries
+  > the measurement.
+
 - **The weather table must reach behind the oldest element-set epoch in a run**, not merely
   cover the screening window: the shift is integrated from each object's own epoch, and NRLMSIS
   wants 57 hours of ap history behind the first sample. A short table returns part-NaN density
   tracks whose unusable samples are zeroed, which *understates* the shift silently. It is now an
   exception rather than a warning (`storm.scenarios.WeatherTableTooShort`) and a test pins it.
+
+### Storm-term validity
+
+- **The storm term is predictive at r = 0.88 for an object whose ballistic coefficient was
+  measured from its own decay, and has no demonstrated skill otherwise.** Over the free-flying
+  May 2024 population as a whole the predicted and observed in-track shifts correlate at
+  **−0.10**, which is nothing; restricted to objects with a `history` coefficient it is **0.88**,
+  with a magnitude between 0.65 and 1.3 times observed depending on the estimator. A `bstar`
+  inversion has no predictive power for the shift at all — regression slope −1.39 — and a
+  `typical` stand-in is a population median that was never a measurement of the object. So the
+  coefficient's source is not a provenance note; it is the difference between a measured quantity
+  and an extrapolation.
+- **Every event therefore carries `storm_validity`, taken from the weaker of its two objects'
+  coefficient sources.** `validated` when **both** objects have a `history` coefficient;
+  `indicative` when either rests on a B\* inversion, a `typical` stand-in, or no coefficient at
+  all; `none` under a scenario with no storm layer, which is `quiet` and any plain labelled
+  rescore. Two measured sides is the only case the validation covers, so it is the only case
+  called validated. `storm_source_primary` and `storm_source_secondary` say which side was the
+  weaker one.
+- **Every aggregate is reported both ways.** The weekly report, `driftwatch storm-check` and the
+  viewer's storm panel give each figure over the `validated` events and over the `indicative`
+  ones separately as well as combined, and never a combined figure alone. A single median over a
+  population that is mostly `indicative` reads as a measurement and is not one: on the demo run
+  1,782 of 2,993 objects have a measured coefficient, so a majority of *objects* are validated
+  and a minority of *events* are, because an event needs both sides.
+- **`indicative` is not a smaller number, it is an unmeasured one.** Nothing is downweighted,
+  widened or withheld on the strength of the label — the sigma an `indicative` object carries is
+  the one Step 3 derived, unchanged. The label says the validation does not reach it. Whether a
+  B\*-only object should instead take a wider storm sigma is a Step 4 review question and is
+  deliberately unanswered here.
 
 ## Validation against the record (Phase 3, Step 4)
 
@@ -443,6 +489,27 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   a single number as its median.
 - **The in-track error is measured in the later element set's RIC frame.** The two frames differ
   by the angle the disagreement subtends, under a milliradian for a shift of tens of kilometres.
+- **NRLMSIS 2.1's storm-response bias is now recorded, and is not applied.** Over 10 to 13 May
+  2024 it **over-predicts** the storm/quiet density ratio by about **22 per cent** (observed
+  median 1.68 against a modelled 2.21), with **no resolvable altitude dependence** — 0.83, 0.74,
+  0.76 and 0.73 across 450–550, 550–650, 650–800 and 800–2000 km. The published assessments of
+  MSIS-class models at storm time mostly find the opposite sign, but they measure the
+  instantaneous peak against an accelerometer while this measures a three-day window-integrated
+  decay ratio, and three known biases in this measurement (a not-quite-quiet control window,
+  survivorship, and altitudes mostly above the accelerometer satellites) all inflate the apparent
+  over-prediction. `DENSITY_STORM_RATIO_SIGMA_REL` stays a symmetric 0.30 and a test pins it, so
+  the record cannot quietly become a calibration. `docs/storm-validation.md` §1 carries the
+  comparison and the citations.
+- **The February 2022 case is bounded by the catalogue holding 17 of the 49 satellites**, and the
+  decay evidence in it rests on six of the thirty-eight lost. No population statistic is quoted
+  from six objects, five of which have under a day of element sets; what they establish is the
+  comparison the case was pulled for, 79 to 101 km of altitude lost in under a week at 210 km
+  against 8.5 km in six weeks for a control group at 500 km. The model's **16 per cent**
+  enhancement at 210 km is not read as a failure: at that altitude the baseline density is three
+  orders of magnitude above the 500 km value, so a modest multiplier on an already-marginal
+  margin is sufficient, and the satellites were in safe mode and could not answer it. The figure
+  sits at the low end of the published post-mortems (Fang et al. 2022: 20–30 %; Lin et al. 2022:
+  50–125 % at 200–400 km from a physics-based simulation) and nothing is tuned to close the gap.
 - **Nothing in the storm term was tuned to any of it.** The measurements are reported and the
   code is unchanged, because adjusting a model against the data that measured it destroys the
   measurement.

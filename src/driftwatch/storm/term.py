@@ -120,6 +120,57 @@ log = logging.getLogger(__name__)
 MU_M3_S2 = dn.MU_M3_S2
 DAY_S = 86400.0
 
+# --------------------------------------------------------------------------------------
+# How far Step 4's validation reaches: the label on every event.
+
+#: The one ballistic coefficient source Step 4 measured the term against, and the only one it
+#: found predictive. A `history` coefficient is fitted from the object's own decay.
+MEASURED_B_SOURCE = "history"
+#: Both objects measured. The only case the May 2024 validation covers.
+VALIDATED = "validated"
+#: Either object resting on a B* inversion, a population stand-in, or no coefficient at all.
+INDICATIVE = "indicative"
+#: No storm layer applied at all: `quiet`, and any plain labelled rescore.
+NO_STORM_TERM = "none"
+
+
+def coefficient_source(label: Any) -> str:
+    """The bare coefficient source from a ``storm_source_*`` label.
+
+    The label a scenario writes can carry the ``!extrapolated`` marker
+    (:meth:`ShiftSeries.summary`), which says the implied decay was large -- a separate
+    statement from where the coefficient came from. Strip it.
+    """
+    return str(label).split("!", 1)[0].strip() or NO_STORM_TERM
+
+
+def event_validity(primary: Any, secondary: Any) -> str:
+    """``validated``, ``indicative`` or ``none`` for one event, from its two coefficient sources.
+
+    **The weaker of the two decides**, because a relative shift is the difference of two
+    displacements and the worse-known one bounds what can be said about it. Step 4 measured the
+    term against the May 2024 record and found it predictive at r = 0.88 for objects with a
+    coefficient fitted from their own decay, and of **no demonstrated skill** for objects
+    carrying a B\\* inversion (regression slope -1.39) or a population stand-in. So two measured
+    sides is ``validated`` and everything else is ``indicative``.
+
+    ``indicative`` is not a smaller number and nothing downstream downweights it: the sigma such
+    an object carries is the one :func:`object_shift` derived, unchanged. The label says the
+    validation does not reach the event. ``docs/methods.md``, "Storm-term validity".
+    """
+    a, b = coefficient_source(primary), coefficient_source(secondary)
+    if a == NO_STORM_TERM and b == NO_STORM_TERM:
+        return NO_STORM_TERM
+    return VALIDATED if a == MEASURED_B_SOURCE and b == MEASURED_B_SOURCE else INDICATIVE
+
+
+def event_validities(primary: np.ndarray, secondary: np.ndarray) -> np.ndarray:
+    """:func:`event_validity` over two arrays of labels, as an object array."""
+    return np.array(
+        [event_validity(a, b) for a, b in zip(np.asarray(primary), np.asarray(secondary), strict=True)],
+        dtype=object,
+    )
+
 
 # --------------------------------------------------------------------------------------
 # The closed form and its verification

@@ -76,6 +76,7 @@ from driftwatch.risk.pc import (
 )
 from driftwatch.screening.ric import ric_basis
 from driftwatch.screening.stages import STATE_COLUMNS
+from driftwatch.storm.term import event_validities
 
 log = logging.getLogger(__name__)
 
@@ -347,6 +348,7 @@ RISK_COLUMNS: tuple[str, ...] = (
     "sigma_shift_i_secondary_km",
     "storm_source_primary",
     "storm_source_secondary",
+    "storm_validity",
     "region",
     "flag",
     "confidence",
@@ -527,6 +529,11 @@ def run_risk(
     # geometry, the covariance, the shift and the reason stay on the row; every probability
     # column goes to NaN and the flag says `unscoreable`, so nothing downstream can sum, rank
     # or threshold them by accident. Under quiet there are none and nothing below runs.
+    # How far Step 4's validation reaches, per event, from the weaker of the two coefficient
+    # sources. Not a weighting and not a filter: the numbers are identical either way, and the
+    # label is what every aggregate downstream is split on. See `storm.term.event_validity`.
+    storm_p, storm_s = _storm_label(src_p), _storm_label(src_s)
+
     reason = unscoreable_events(model, p, s)
     unscoreable = reason != ""
     if unscoreable.any():
@@ -571,8 +578,9 @@ def run_risk(
             "relative_shift_km": np.linalg.norm(dr_shift, axis=1),
             "sigma_shift_i_primary_km": np.sqrt(np.maximum(cov_p[:, 1, 1] - cov_p_base[:, 1, 1], 0.0)),
             "sigma_shift_i_secondary_km": np.sqrt(np.maximum(cov_s[:, 1, 1] - cov_s_base[:, 1, 1], 0.0)),
-            "storm_source_primary": _storm_label(src_p),
-            "storm_source_secondary": _storm_label(src_s),
+            "storm_source_primary": storm_p,
+            "storm_source_secondary": storm_s,
+            "storm_validity": event_validities(storm_p, storm_s).astype(str),
             "region": region.astype(str),
             "flag": flag.astype(str),
             "confidence": np.where(unscoreable, "none", confidences(region)).astype(str),

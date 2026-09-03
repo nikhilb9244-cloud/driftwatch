@@ -300,6 +300,15 @@ frames are different — for a crossing geometry they can be nearly perpendicula
 
 ## Attacking the result: is the relative shift what we think it is?
 
+> **Correction, propagated 2026-09-03 (Phase 3 Step 4 review).** Until the Step 3 review this
+> page, the plan, the design brief and two docstrings all explained the headline result by
+> **common-mode cancellation**. That explanation is withdrawn. The result — a storm lowers the
+> probability on most events — stands unchanged and is measured three ways below; the mechanism
+> is **two nearly independent displacements separating more pairs than they create**, not two
+> alike displacements cancelling. Everywhere the old wording appeared now carries a dated note
+> beside it rather than a silent rewrite, as with the Phase 2 dilution wording. The rest of this
+> section is the working that produced the correction and is left standing.
+
 The result above is the project's headline and it is counter-intuitive, so before it is
 published it has to survive being attacked. It was attacked at the Step 3 review, and it
 survived — while the *explanation* attached to it did not. This section is that in full,
@@ -428,6 +437,52 @@ So the two splits the review asked for did their job twice over. They excluded t
 independently measured pairs behave exactly like pairs sharing a stand-in, so the ratio is not
 coming from shared inputs. And they falsified the mechanism the result had been attributed to,
 which the aggregate number alone would have gone on hiding.
+
+### A third split, added at the Step 4 review: how far the validation reaches
+
+Step 4 measured the storm term against the May 2024 record and found it predictive at r = 0.88
+for objects whose ballistic coefficient was fitted from their own decay, and of no demonstrated
+skill for objects carrying a B\* inversion or a population stand-in. An event needs **both** its
+objects measured before that measurement reaches it, so every row now carries `storm_validity`
+and every aggregate here is reported over the validated events, over the indicative ones, and
+over both — never over both alone.
+
+**The ratio, both ways.** The finding survives the split on both runs, which is the first thing
+to check:
+
+| Population | demo G5, n | ratio | May 2024 replay, n | ratio |
+| --- | ---: | ---: | ---: | ---: |
+| `validated` — both coefficients measured | 2,942 | **1.89** | 1,062 | **1.79** |
+| `indicative` — at least one not | 2,649 | **1.92** | 659 | **1.96** |
+| combined | 5,591 | 1.91 | 1,721 | 1.87 |
+
+Four numbers between 1.79 and 1.96, on two different catalogues in two different years under a
+designed profile and an observed record. There is no cancellation in the population the
+validation covers either.
+
+**And the split found something the combined number was hiding.** The effect split — which of
+the two effects moves the probability — is *not* the same in the two populations, and the
+difference is large:
+
+| Band on `pc_variance_only` | validated: median `pc / pc_variance_only` | indicative | combined |
+| --- | ---: | ---: | ---: |
+| 1e-12 to 1e-9 | **0.36** | 0.98 | 0.88 |
+| 1e-9 to 1e-7 | **0.17** | 0.84 | 0.66 |
+| 1e-7 to 1e-5 | **0.12** | 0.80 | 0.52 |
+| 1e-5 to 1 | **0.24** | 0.85 | 0.49 |
+
+Read down the first column: **where the storm term is validated, the displacement lowers the
+probability by roughly an order of magnitude**, and it lowers it on 718 of the 835 comparable
+events. Where it is indicative the ratio sits near 0.85 and the shift barely moves the number at
+all — which is what would be expected of a displacement built on a coefficient that has no
+demonstrated relationship to the object.
+
+That is a stronger statement of the headline result than the combined figure makes, and it is
+also a warning. The combined median of 0.52 in the 1e-7 band is not a measurement of anything:
+it is an average of a large validated effect and a near-absent indicative one, weighted by how
+many objects happened to have a usable decay history. **A reader given only the combined number
+would be reading the coverage of the coefficient fit as though it were physics.** That is the
+argument for the split, and it is why the combined column is never printed on its own.
 
 ## Extrapolated events are unscoreable
 

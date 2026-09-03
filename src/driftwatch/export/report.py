@@ -580,6 +580,122 @@ def _event_details(rows: pd.DataFrame, pairs: pd.DataFrame, limit: int = 10) -> 
     return lines
 
 
+def _validity_summary_rows(rows: pd.DataFrame) -> list[str]:
+    """Two summary lines counting the events the storm-term validation does and does not reach."""
+    if "storm_validity" not in rows.columns:
+        return []
+    counts = rows["storm_validity"].astype(str).value_counts()
+    if not counts.drop(labels=["none"], errors="ignore").sum():
+        return []
+    return [
+        f"| Events with the storm term validated (both coefficients measured) | {int(counts.get('validated', 0))} |",
+        f"| Events with the storm term indicative only | {int(counts.get('indicative', 0))} |",
+    ]
+
+
+def _storm_rows(rows: pd.DataFrame, label: str) -> pd.DataFrame:
+    """The subset of ``rows`` carrying one ``storm_validity`` label, or everything for ``combined``."""
+    if label == "combined" or "storm_validity" not in rows.columns:
+        return rows
+    return rows[rows["storm_validity"].astype(str) == label]
+
+
+def _storm_figures(rows: pd.DataFrame) -> dict[str, Any]:
+    """What the storm term did to one population of events: shift size, direction, flags."""
+    scoreable = rows[rows["flag"] != "unscoreable"] if "flag" in rows.columns else rows
+    relative = pd.to_numeric(scoreable.get("relative_shift_km"), errors="coerce").to_numpy(dtype=float)
+    moved = np.isfinite(relative) & (relative > 0)
+    pc = pd.to_numeric(scoreable.get("pc"), errors="coerce").to_numpy(dtype=float)
+    variance_only = pd.to_numeric(scoreable.get("pc_variance_only"), errors="coerce").to_numpy(dtype=float)
+    with np.errstate(invalid="ignore", divide="ignore"):
+        ratio = np.where(variance_only > 0, pc / variance_only, np.nan)
+    comparable = np.isfinite(ratio) & (variance_only > 1e-12)
+    return {
+        "n_events": int(len(rows)),
+        "n_unscoreable": int((rows["flag"] == "unscoreable").sum()) if "flag" in rows.columns else 0,
+        "n_moved": int(moved.sum()),
+        "median_relative_km": float(np.median(relative[moved])) if moved.any() else float("nan"),
+        "p90_relative_km": float(np.quantile(relative[moved], 0.9)) if moved.any() else float("nan"),
+        "n_comparable": int(comparable.sum()),
+        "median_ratio": float(np.nanmedian(ratio[comparable])) if comparable.any() else float("nan"),
+        "n_lowered": int(np.nansum(ratio[comparable] < 1.0)),
+        "n_raised": int(np.nansum(ratio[comparable] > 1.0)),
+        "n_red": int((rows["flag"] == "red").sum()) if "flag" in rows.columns else 0,
+        "n_yellow": int((rows["flag"] == "yellow").sum()) if "flag" in rows.columns else 0,
+    }
+
+
+def _fmt_num(value: float, digits: int = 2) -> str:
+    return "—" if value is None or not np.isfinite(value) else f"{value:.{digits}f}"
+
+
+def storm_section(rows: pd.DataFrame, scenario: str) -> list[str]:
+    """What the scenario's storm term did, reported over the validated and indicative events.
+
+    Empty for a scenario with no storm layer. The order is fixed -- validated, indicative,
+    combined -- and the combined column is never the only one, because Step 4 measured the term
+    against the May 2024 record and found it predictive at r = 0.88 only where **both** objects
+    have a ballistic coefficient fitted from their own decay. A median taken over a population
+    that is mostly indicative reads as a measurement and is not one.
+    """
+    if "relative_shift_km" not in rows.columns or not len(rows):
+        return []
+    if not np.any(pd.to_numeric(rows["relative_shift_km"], errors="coerce").to_numpy(dtype=float) > 0):
+        return []
+    labels = ["validated", "indicative", "combined"]
+    figures = {label: _storm_figures(_storm_rows(rows, label)) for label in labels}
+    labels = [label for label in labels if figures[label]["n_events"]]
+
+    header = " | ".join(f"{label} ({figures[label]['n_events']})" for label in labels)
+    lines = [
+        f"## What the `{scenario}` storm term did",
+        "",
+        "**Every figure here is given both ways.** `validated` means **both** objects of the event "
+        "have a ballistic coefficient fitted from their own decay history; `indicative` means at "
+        "least one rests on a B\\* inversion, a population stand-in, or no coefficient at all. Step 4 "
+        "measured the storm term against the May 2024 record and found it predictive at a "
+        "correlation of **0.88** for objects with a measured coefficient and of **no demonstrated "
+        "skill** otherwise, so the split is the difference between a measurement and an "
+        "extrapolation. Nothing is weighted, widened or withheld by the label — the numbers are "
+        "identical either way, and the label says how far the validation reaches.",
+        "",
+        f"| | {header} |",
+        "| --- | " + " | ".join(["---:"] * len(labels)) + " |",
+    ]
+
+    def row(name: str, key: str, fmt) -> str:
+        return f"| {name} | " + " | ".join(fmt(figures[label][key]) for label in labels) + " |"
+
+    lines += [
+        row("Events moved by the shift", "n_moved", lambda v: f"{v:,}"),
+        row("Median relative shift (km)", "median_relative_km", lambda v: _fmt_num(v, 2)),
+        row("p90 relative shift (km)", "p90_relative_km", lambda v: _fmt_num(v, 1)),
+        row("Median `pc` / `pc_variance_only`", "median_ratio", lambda v: _fmt_num(v, 3)),
+        row("Events the shift lowered", "n_lowered", lambda v: f"{v:,}"),
+        row("Events the shift raised", "n_raised", lambda v: f"{v:,}"),
+        row("Flagged red", "n_red", lambda v: f"{v:,}"),
+        row("Flagged yellow", "n_yellow", lambda v: f"{v:,}"),
+        row("Not scored (outside the linear theory)", "n_unscoreable", lambda v: f"{v:,}"),
+        "",
+        "**How to read the ratio.** `pc` is the scenario's probability with both effects — the "
+        "objects moved and the covariance widened. `pc_variance_only` is the same covariance with "
+        "the objects left where their element sets put them. A median below one says the "
+        "displacement is *protective* on most events, which is the counter-intuitive result the "
+        "phase turns on and which `driftwatch storm-check` attacks rather than asserts.",
+        "",
+        "**The reason is not a cancellation between the two objects.** The relative displacement "
+        "that reaches the miss is a median 1.91 times the mean of the two objects' own "
+        "displacements, out of a maximum of 2: the two are nearly independent, because a "
+        "conjunction is a crossing — a median 120° between the two in-track directions. What "
+        "lowers most probabilities is simply that a displacement of tens of kilometres applied to "
+        "a miss of a few separates more pairs than it creates. (Corrected 2026-09-03; Step 3 "
+        "attributed the same result to common-mode cancellation and `docs/storm-term.md` carries "
+        "the measurement that withdrew it.)",
+        "",
+    ]
+    return lines
+
+
 def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int = TOP_N) -> str:
     """The weekly markdown report for one scenario of a run."""
     info = run.read_run()
@@ -623,6 +739,7 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         f"| Flagged pairs in the dilution region (low confidence) | {len(low)} |",
         f"| Flagged pairs in the robust region | {len(actionable)} |",
         f"| Events not scored (the storm term left its own derivation) | {n_unscoreable} |",
+        *_validity_summary_rows(rows),
         f"| Closest approach | {rows['miss_km'].min():.3f} km |",
         f"| Highest probability | {_fmt_pc(rows['pc'].max())} |",
         "",
@@ -665,6 +782,8 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         lines += _pair_rows(low)
         lines += _event_details(rows, low)
         lines.append("")
+
+    lines += storm_section(rows, scenario)
 
     top_pc = pairs.head(top_n)
     lines += [f"## Top {len(top_pc)} pairs by probability", ""]

@@ -1,20 +1,37 @@
-"""Is the common-mode cancellation physical, or an artefact of how the coefficients were made?
+"""What is the relative shift, really? The splits that attacked the headline result.
 
 The headline result of Phase 3 is counter-intuitive and therefore has to be attacked before it
-is published: **a storm lowers the probability on most events.** It does so because a storm
-displaces both objects of a pair in the same direction by a similar amount, so what reaches the
-miss vector is the *relative* shift, which is far smaller than either absolute shift, and a
-relative displacement applied to a population of near misses separates more pairs than it
-creates.
+is published: **a storm lowers the probability on most events.** The result survived. The
+explanation first attached to it did not, and this module is what falsified it.
 
-That is a physical claim, and it has an obvious failure mode. Two objects can also come out
-with similar shifts because they were handed **the same coefficient by the same rule** -- both
+.. note::
+
+   **Corrected at the Step 4 review (2026-09-03).** This module was written to test a claim of
+   *common-mode cancellation*: that a storm displaces both objects of a pair in the same
+   direction by a similar amount, so that what reaches the miss vector is a *relative* shift far
+   smaller than either absolute shift. The splits below excluded the artefact the review asked
+   about and then refuted the claim itself. The measured relative-to-absolute ratio is **1.91**
+   out of a possible 2 -- the two displacements are nearly independent, not a common mode --
+   flat in both splits, with the two in-track shifts uncorrelated (r = 0.08) and the median
+   angle between the two objects' in-track directions at the encounter **120°**. A screener
+   finds crossing pairs, because a low relative speed is what stops two objects closing on each
+   other.
+
+   The result needs no cancellation to explain it: a displacement of tens of kilometres applied
+   to a miss of a few separates more pairs than it creates, and the tighter the miss the more
+   surely it does. ``cancellation_ratio`` keeps its name because it is the quantity the review
+   asked for and the name is how the two runs already on disk are keyed; read it as the
+   relative-to-absolute shift ratio, and read a value near 2 as the *absence* of cancellation.
+   ``docs/storm-term.md`` carries the full account.
+
+The claim was physical, and it had an obvious failure mode. Two objects can also come out with
+similar shifts because they were handed **the same coefficient by the same rule** -- both
 standing in with the run's `typical` median for their category and altitude band, say, or both
-inverted from B\\* by the same code path. If the cancellation were an artefact of shared
-inputs it would be strongest exactly where the inputs are shared and weakest where they are
-not, and it would say nothing about the atmosphere.
+inverted from B\\* by the same code path. If the cancellation were an artefact of shared inputs
+it would be strongest exactly where the inputs are shared and weakest where they are not, and it
+would say nothing about the atmosphere.
 
-So this module splits the cancellation two ways and lets the split answer the question.
+So this module splits the ratio two ways and lets the split answer the question.
 
 **By ballistic coefficient source.** A pair whose two coefficients were *measured
 independently* -- both fitted from their own decay histories, ``history`` against ``history``
@@ -26,7 +43,9 @@ sharper test. The shift goes as ``B drho v^2 t^2``, and the density falls by an 
 magnitude every 50 km or so of altitude, so two objects in the same shell see nearly the same
 excess and two objects 100 km apart do not. If the cancellation is physical the ratio must
 *rise* with the altitude difference; if it is an artefact of shared coefficients it has no
-reason to depend on altitude at all.
+reason to depend on altitude at all. It did neither: the ratio is flat in altitude difference
+(rank correlation -0.10) and flat across source pairs, which excludes the artefact and leaves
+no cancellation to explain.
 
 **Which altitude, and why it cannot be the one at the encounter.** The first version of this
 split used each object's altitude at the stored time of closest approach, and it could not have
@@ -41,6 +60,17 @@ being asked.
 
 Both splits also report the relative and absolute shifts themselves, in kilometres, so the
 ratio can be read against the sizes it came from.
+
+## Every aggregate twice: validated and indicative
+
+Step 4 measured the storm term against May 2024 and found it predictive at r = 0.88 for an
+object whose ballistic coefficient was fitted from its own decay, and of no demonstrated skill
+for one carrying a B\\* inversion or a population stand-in. An event needs **both** its objects
+measured before the validation reaches it, so every event carries ``storm_validity``
+(:func:`driftwatch.storm.term.event_validity`) and every table below is reported over the
+``validated`` events, over the ``indicative`` ones, and over both together -- never over both
+together alone. A median taken across a population that is mostly indicative reads as a
+measurement and is not one.
 
 ## The other half: which of the two effects moves the number
 
@@ -61,6 +91,8 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+
+from driftwatch.storm import term
 
 log = logging.getLogger(__name__)
 
@@ -152,6 +184,13 @@ def cancellation_frame(
         orbit_s = altitudes.reindex(s).to_numpy(dtype=float)
     source_p = source.reindex(p).fillna("unknown").to_numpy(dtype=object)
     source_s = source.reindex(s).fillna("unknown").to_numpy(dtype=object)
+    # Prefer the label the run itself wrote; fall back to the coefficient table for a run
+    # scored before `storm_validity` existed, so an old run still splits.
+    validity = (
+        joined["storm_validity"].astype(str).to_numpy(dtype=object)
+        if "storm_validity" in joined.columns
+        else term.event_validities(source_p, source_s)
+    )
     # Unordered: a history-bstar pair and a bstar-history pair are the same experiment.
     pair = np.array(["+".join(sorted((str(a), str(b)))) for a, b in zip(source_p, source_s, strict=True)], dtype=object)
 
@@ -164,6 +203,7 @@ def cancellation_frame(
             "b_source_primary": source_p,
             "b_source_secondary": source_s,
             "b_source_pair": pair,
+            "storm_validity": validity,
             "shared_source": source_p == source_s,
             "altitude_primary_km": orbit_p,
             "altitude_secondary_km": orbit_s,
@@ -203,25 +243,66 @@ def _group(frame: pd.DataFrame, by: str, *, min_events: int = 1) -> pd.DataFrame
     return out[out["n_events"] >= min_events].round(4)
 
 
-def cancellation(frame: pd.DataFrame, *, min_events: int = 20) -> dict[str, Any]:
-    """The two splits, plus the overall figure, as plain tables ready for the docs and run.json."""
-    if not len(frame):
-        return {"n_events": 0}
+def _overall(frame: pd.DataFrame) -> dict[str, Any]:
+    """The headline four numbers over whatever subset is handed in."""
     return {
         "n_events": int(len(frame)),
-        "overall": {
-            "median_relative_km": round(float(frame["relative_shift_km"].median()), 4),
-            "median_absolute_km": round(float(frame["abs_shift_mean_km"].median()), 4),
-            "median_ratio": round(float(frame["cancellation_ratio"].median()), 4),
-            "p90_ratio": round(float(frame["cancellation_ratio"].quantile(0.9)), 4),
-        },
+        "median_relative_km": round(float(frame["relative_shift_km"].median()), 4),
+        "median_absolute_km": round(float(frame["abs_shift_mean_km"].median()), 4),
+        "median_ratio": round(float(frame["cancellation_ratio"].median()), 4),
+        "p90_ratio": round(float(frame["cancellation_ratio"].quantile(0.9)), 4),
+    }
+
+
+def split_by_validity(frame: pd.DataFrame) -> dict[str, pd.DataFrame]:
+    """``{"validated": ..., "indicative": ..., "combined": ...}``, in that order.
+
+    The ordering is deliberate and every caller keeps it: the measured population is read first
+    and the combined figure last, so a reader never meets a median over a mostly-indicative
+    population before meeting the one the validation actually covers. Groups with no events are
+    absent rather than present and empty.
+    """
+    out: dict[str, pd.DataFrame] = {}
+    if "storm_validity" in frame.columns:
+        for label in (term.VALIDATED, term.INDICATIVE):
+            subset = frame[frame["storm_validity"].astype(str) == label]
+            if len(subset):
+                out[label] = subset
+    out["combined"] = frame
+    return out
+
+
+def cancellation(frame: pd.DataFrame, *, min_events: int = 20) -> dict[str, Any]:
+    """The two splits, plus the overall figure, as plain tables ready for the docs and run.json.
+
+    Reported **three ways**: over the events whose two objects both have a measured ballistic
+    coefficient, over the rest, and over both together. See the module docstring.
+    """
+    if not len(frame):
+        return {"n_events": 0}
+    groups = split_by_validity(frame)
+    return {
+        "n_events": int(len(frame)),
+        "overall": {k: v for k, v in _overall(frame).items() if k != "n_events"},
+        "by_storm_validity": {label: _overall(subset) for label, subset in groups.items()},
         "by_b_source_pair": _group(frame, "b_source_pair", min_events=min_events).to_dict(orient="index"),
         "by_shared_source": _group(frame, "shared_source").to_dict(orient="index"),
         "by_altitude_difference": _group(frame, "altitude_difference_band").to_dict(orient="index"),
+        "by_altitude_difference_per_validity": {
+            label: _group(subset, "altitude_difference_band").to_dict(orient="index")
+            for label, subset in groups.items()
+        },
         "spearman_ratio_vs_altitude_difference": _spearman(
             frame["altitude_difference_km"].to_numpy(dtype=float),
             frame["cancellation_ratio"].to_numpy(dtype=float),
         ),
+        "spearman_per_validity": {
+            label: _spearman(
+                subset["altitude_difference_km"].to_numpy(dtype=float),
+                subset["cancellation_ratio"].to_numpy(dtype=float),
+            )
+            for label, subset in groups.items()
+        },
         "median_tca_altitude_difference_km": round(float(frame["tca_altitude_difference_km"].median()), 3)
         if "tca_altitude_difference_km" in frame
         else None,
@@ -251,9 +332,25 @@ def effect_split(frame: pd.DataFrame) -> dict[str, Any]:
     element sets put them -- because that is the closest thing to a size the event had *before*
     the shift moved it, and banding on the combined number would sort the events by the very
     effect being measured.
+
+    ``bands`` is the combined table and ``by_storm_validity`` the same table computed separately
+    over the validated and indicative events, because which of the two effects moves the number
+    is exactly the kind of claim that must not be read off a population the validation does not
+    reach.
     """
     if not len(frame):
         return {"n_events": 0}
+    out = {"n_events": int(len(frame)), "bands": _bands(frame)}
+    groups = split_by_validity(frame)
+    if len(groups) > 1:
+        out["by_storm_validity"] = {
+            label: {"n_events": int(len(subset)), "bands": _bands(subset)} for label, subset in groups.items()
+        }
+    return out
+
+
+def _bands(frame: pd.DataFrame) -> list[dict[str, Any]]:
+    """One row per probability band: the three probabilities and how many the shift moved each way."""
     rows: list[dict[str, Any]] = []
     baseline = frame["pc_variance_only"].to_numpy(dtype=float)
     for lo, hi in zip(PC_BAND_EDGES[:-1], PC_BAND_EDGES[1:], strict=True):
@@ -275,7 +372,7 @@ def effect_split(frame: pd.DataFrame) -> dict[str, Any]:
                 "n_raised_by_shift": int(np.nansum(ratio > 1.0)),
             }
         )
-    return {"n_events": int(len(frame)), "bands": rows}
+    return rows
 
 
 def unscoreable_objects(

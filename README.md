@@ -60,7 +60,15 @@ What works today:
   probabilities side by side over probability
   bands, and names the objects whose storm term ran outside the linear theory. Those events carry
   no probability at all: `unscoreable`, with the reason on the row and excluded from every
-  aggregate.
+  aggregate. It did its job twice: it excluded the artefact, and then it **falsified the
+  explanation** the headline result had been given. A storm still lowers the probability on most
+  events, but not through any cancellation between the two objects — the ratio is 1.91 out of a
+  possible 2, so the two displacements are nearly independent. See `docs/storm-term.md`.
+- Every aggregate the tool prints is reported **twice**: over the events whose two objects both
+  have a ballistic coefficient measured from their own decay (`validated`), and over the rest
+  (`indicative`). Step 4 measured the storm term against May 2024 and found it predictive at
+  r = 0.88 with a measured coefficient and of no demonstrated skill without one, so the split is
+  the difference between a measurement and an extrapolation. `storm_validity` is on every row.
 - `driftwatch snapshot-as-of --date <when>` rebuilds the catalogue as it stood on a past date
   from `gp_history`, taking each object's newest element set **at or before** that date and
   nothing later, bounded by an altitude range or a launch's international designator to keep the

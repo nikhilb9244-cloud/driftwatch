@@ -325,9 +325,19 @@ BALLISTIC_REFIT_SPAN_GROWTH_DAYS = 7.0
 # uncertainty that does NOT cancel against the fitted ballistic coefficient: only the product
 # B*rho is observable from a decay, so a model biased by a constant factor gives a coefficient
 # biased the other way and a product that is right, but nothing corrects an error in the ratio
-# between stormy and quiet. Thirty per cent is a prior. Step 4 measures it against May 2024 and
-# should replace it; the published comparisons of that storm had the empirical models low on
-# the enhancement, so if this moves it is likely to move up.
+# between stormy and quiet. Thirty per cent is a prior.
+#
+# Step 4 measured it against May 2024 (2026-09-03) and it is deliberately NOT changed. The
+# measurement: NRLMSIS 2.1 *over*-predicts the storm/quiet ratio by about 22 per cent, with a
+# spread of a similar size and no resolvable altitude dependence from 450 to 2,000 km. So the
+# magnitude of this prior is right and its centre is not -- and the sign is the opposite of what
+# the sentence here used to predict, which was that the published comparisons had the empirical
+# models low on the enhancement and that this would therefore move up.
+#
+# It stays a symmetric 0.30 for two reasons. One storm is not a population, and a model adjusted
+# against the data that measured it can no longer be measured by it. `tests/test_storm_validity`
+# pins this value so that the record in `docs/storm-validation.md` cannot quietly become a
+# calibration; changing it is a decision somebody has to make on purpose.
 DENSITY_STORM_RATIO_SIGMA_REL = 0.30
 # And how wrong the absolute density can be, which matters only for an object whose coefficient
 # did NOT come from a fit through this same model -- a `bstar` or `typical` one -- where the

@@ -368,6 +368,7 @@ reading order, with the ones that can be dropped at narrow widths marked:
 | Confidence | `standard` / `low` / `none` | merged into Region at < 1100 px |
 | **Commandability** | Hours from the last usable ground-station pass to the TCA | < 1100 px |
 | **Δ quiet→storm** | `pc / pc_quiet` as a multiplier with a direction arrow | — |
+| **Storm validity** | `validated` / `indicative`, from the weaker of the two coefficient sources | merged into Δ at < 1100 px |
 
 Five things about this table matter more than the rest.
 
@@ -388,10 +389,27 @@ Step 2 review, and if that work is not done the column shows `–` with a toolti
 ground stations are defined — never a plausible-looking blank.
 
 **The quiet-to-storm delta is on every row, not only on the interesting ones.** Phase 3's
-headline result is that the storm *lowers* the probability on most events through common-mode
-cancellation, and a reader who sees `×0.7` on twenty rows and `×340` on one has learned that
-result from the screen rather than from the documentation. Under the `quiet` scenario the
-column reads `—` rather than `×1.0`, because the comparison is with itself.
+headline result is that the storm *lowers* the probability on most events, and a reader who sees
+`×0.7` on twenty rows and `×340` on one has learned that result from the screen rather than from
+the documentation. Under the `quiet` scenario the column reads `—` rather than `×1.0`, because
+the comparison is with itself.
+
+> **Corrected at the Phase 3 Step 4 review (2026-09-03).** This paragraph originally attributed
+> the headline result to "common-mode cancellation", meaning that a storm displaces both objects
+> of a pair alike so that only a small relative shift reaches the miss. The result stands and the
+> mechanism does not. Measured, the relative shift is **1.91 times** the mean of the two objects'
+> own shifts out of a possible 2: the two displacements are nearly independent, because a
+> conjunction is a crossing at a median 120° between the two in-track directions. What lowers
+> most probabilities is simply that a displacement of tens of kilometres applied to a miss of a
+> few separates more pairs than it creates. See `docs/storm-term.md`, "Attacking the result".
+
+**The delta column says which of the two labels the row carries.** Step 4 measured the storm term
+against the May 2024 record and found it predictive only for objects whose ballistic coefficient
+was measured from their own decay. A row whose weaker side rests on a B\* inversion or a
+population stand-in is `indicative`, and the console must not let the multiplier be read without
+it: the delta is rendered in the row's normal weight for a `validated` event and in a muted
+weight with an `indicative` marker otherwise. §5's aggregates are reported both ways for the same
+reason. See "Storm-term validity" in `docs/methods.md`.
 
 **Unscoreable events are in their own section below the queue**, headed with the count and the
 reason, one row each carrying the object, the reason text and everything except a probability.
