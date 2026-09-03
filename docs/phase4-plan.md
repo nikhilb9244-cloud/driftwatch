@@ -687,3 +687,86 @@ predates it and records `gp_20260901T204841Z.parquet` correctly, which is how it
 loop variable is now `stored_path`, with a comment saying why it must not be `path`. The two
 stored Step 1 runs were repaired in place, with the correction recorded in their own `run.json`
 under `corrections`, and `driftwatch report` rebuilds them again.
+
+## Step 2. The daily pipeline (2026-09-03)
+
+`docs/pipeline.md` is the design document the prompt asked for -- the runtime budget, the state
+inventory, the retention rule and the failure model -- and `.github/workflows/pipeline.yml` is
+the workflow. This section records the decisions and what testing them cost.
+
+### The persistence pattern, proved in isolation before anything was built on it
+
+The prompt names `.github/workflows/supplemental.yml`'s orphan branch as the pattern for
+persisting state between runs. It had never worked, and testing it produced four findings.
+
+**The branch did not exist.** `git ls-remote` returned only `main`. The one-off setup lived in a
+comment at the head of the workflow, which is the same as not existing, so every scheduled run
+would have failed at the store checkout -- and the first cron firing after the workflow reached
+`main` did exactly that, at 18:16 UTC, before this work reached it. The job now creates the
+branch itself, in a scratch directory with its own `git init` so the first commit is genuinely
+parentless and the main working tree is never touched by an orphan checkout.
+
+**Two dispatched runs proved both halves.** Run 1 created the branch and stored one version.
+Run 2 read it back: one version in the checkout, the Actions cache restored from run 1's key,
+`Using cached 'supplemental/starlink' (age 0h02m)`, nothing refetched, nothing committed.
+
+**The fetch cache was not persisted at all, which quietly defeated CelesTrak's two-hour floor.**
+A fresh runner has no cache, so every run refetched, and `store_supplemental` names versions by
+fetch time rather than by content -- two runs an hour apart would have stored two near-identical
+0.74 MB files. Committing the cache instead would have been worse: the supplemental payload is
+**5.1 MB of JSON per fetch**, seven times the parquet it produces. So the state is now split by
+character: the store on the branch, the cache in the Actions cache, where eviction costs one
+polite refetch and never any data.
+
+**Branch-as-storage cannot stay small, and pruning does not help.** Measured locally: three
+supplemental versions committed in sequence cost 2.19 MB of `.git` for 2.22 MB of files -- zstd
+parquet deltas against nothing -- and deleting two of them left `.git` at 2.19 MB.
+`prune_supplemental` thins the checkout and reclaims **nothing** from the history. At eight runs
+a day that is 5.9 MB/day and about 2.2 GB a year. The branch is therefore rebuilt from its own
+tip past a commit threshold: same tree, one commit, no history. Nothing that matters is lost,
+because every stored version is named by its own fetch time -- the store is its own log.
+
+**And the compaction trigger could never have fired.** `actions/checkout` clones the store at
+`fetch-depth: 1`, which is what keeps every run cheap however long the branch gets, so
+`git rev-list --count HEAD` reads 1 for ever. Found by running it: the step reported
+`1 commits, limit 1` on a branch that had two. The counter is now a file in the store, which is
+shallow-clone-proof and needs no API call. A third dispatch with the threshold forced to zero
+compacted the branch for real: it is now a single parentless commit holding the `.gitignore`,
+the README, the counter and the stored version, confirmed from a local fetch.
+
+A fourth thing the same step nearly did: `git add -A` in the compaction would have swept the
+restored Actions cache -- those 5.1 MB of JSON -- into the very history the step exists to
+prevent. `--orphan` keeps the index, so the right tree is already staged and no `add -A` is
+wanted. The store branch also carries its own `.gitignore` now, so no future step can do it by
+accident.
+
+### Why the run archive is not on a branch
+
+The retention rule added at this review is that **every daily run is kept**, so that warning
+stability can be measured later. That decides the storage, because a run directory is 4.8 MB and
+a snapshot 3.8 MB: **8.6 MB a day, about 3.1 GB a year**. Compaction bounds a branch's history to
+its tip, but the tip *is* 3.1 GB after a year, past what GitHub asks a repository to stay under.
+
+Release assets are not stored in git at all -- they do not count against the repository, each may
+be 2 GB, and a release may carry any number. One release a month, one compressed run a day, is
+145 MB a month in objects that never touch a clone. **Cloudflare R2** would also work and the
+project has the account, but it needs a bucket, a token scope this project's Cloudflare token
+does not have, and a second place to look for data; the release asset needs `gh release upload`.
+
+The threshold at which that stops being true is worth stating: a fleet ten times larger is about
+50 MB a day and 18 GB a year, which is where an object store becomes the answer rather than the
+alternative. **The archive as designed is good to about a tenfold growth in fleet size.**
+
+### The schema warning stability needs, and the reason it is a report rather than a build
+
+Reported in `docs/pipeline.md` and deliberately not implemented. The substantive finding is that
+**`event_id` cannot join runs**: it is `<snapshot stamp>:<primary>:<secondary>:<tca to the
+minute>`, and the snapshot stamp changes daily by construction while the time of closest approach
+itself moves as the orbits are refitted. The series has to be assembled on the object pair plus
+the time of closest approach within a tolerance -- the same greedy nearest-time match the Step 1
+comparison used, and delicate in the same place, a pair with repeated close passes.
+
+Every column such an analysis needs is **already written** by `events.parquet` and
+`risk_<scenario>.parquet`, so no schema change is required. What a later phase should add is a
+narrow per-run *stability slice* so the analysis need not open 365 run directories to follow one
+pair. That file is not being created now.

@@ -1,0 +1,310 @@
+name: pipeline
+
+# The daily run: fetch, screen, score every scenario, rebuild the bundle, deploy.
+#
+# docs/pipeline.md is the design -- the runtime budget, where each piece of state lives and
+# why, the retention rule and the failure model. Three things from it that this file must not
+# be edited against:
+#
+#   1. Every fetch happens here. CelesTrak firewalls by IP and Cloudflare Worker egress
+#      addresses are shared between tenants, so a Worker's fetches can start returning 522 on
+#      every source because another tenant earned the block. A Worker or a Pages deployment may
+#      serve the bundle; it must never fetch.
+#   2. A failure never publishes. Every check exits non-zero and every check is before the
+#      deploy, so a failed run leaves the previous site standing rather than replacing it with
+#      something built on bad input.
+#   3. Every run is retained. Not a rolling window -- warning stability is unrecoverable if a
+#      run is dropped, because the catalogue it screened is gone.
+#
+# Each step records its own duration from bash's SECONDS, which restarts per step, and the last
+# step turns that into the job summary. Measuring the run is a requirement of the step that
+# specified this pipeline, not a nicety: the planning figures in docs/pipeline.md came off a
+# laptop and this is what checks them.
+
+on:
+  schedule:
+    # 06:20 UTC. After CelesTrak's overnight refits, and clear of the top of the hour where
+    # every scheduled workflow on GitHub piles up and starts late.
+    - cron: "20 6 * * *"
+  workflow_dispatch:
+    inputs:
+      fleet:
+        description: "Fleet file"
+        required: false
+        default: "fleets/demo.yaml"
+      scenarios:
+        description: "Scenarios to score after quiet, comma separated"
+        required: false
+        default: "forecast,storm-g3,storm-g4,storm-g5"
+      deploy:
+        description: "Deploy to Pages: production, preview, or no"
+        required: false
+        default: "production"
+
+concurrency:
+  # One run at a time, and never cancelled: a run interrupted mid-deploy is the one case that
+  # could leave a half-uploaded bundle live.
+  group: pipeline
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+env:
+  STORE_BRANCH: pipeline-store
+  FLEET: ${{ inputs.fleet || 'fleets/demo.yaml' }}
+  SCENARIOS: ${{ inputs.scenarios || 'forecast,storm-g3,storm-g4,storm-g5' }}
+  DEPLOY: ${{ inputs.deploy || 'production' }}
+  # The snapshot the run screened must be fresher than this, or the bundle is not published.
+  # Six hours: a daily pipeline whose fetch silently fell back to yesterday's cache has not
+  # run, whatever its exit code said.
+  MAX_SNAPSHOT_AGE_HOURS: "6"
+  DRIFTWATCH_DATA_DIR: ${{ github.workspace }}/store/data
+  PAGES_PROJECT: driftwatch
+  TIMINGS: ${{ runner.temp }}/timings.csv
+
+jobs:
+  run:
+    runs-on: ubuntu-latest
+    # Well clear of the ~3 h planning figure in docs/pipeline.md and under the 6 h ceiling.
+    timeout-minutes: 330
+    steps:
+      - uses: actions/checkout@v4
+
+      # First run bootstraps the store, in a scratch directory with its own `git init`, so the
+      # first commit is parentless and the main working tree is never touched by an orphan
+      # checkout. The same pattern as supplemental.yml, which was proved in isolation first.
+      - name: Ensure the store branch exists
+        env:
+          REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+        run: |
+          if git ls-remote --exit-code --heads "$REPO_URL" "$STORE_BRANCH" >/dev/null 2>&1; then
+            echo "Store branch $STORE_BRANCH already exists."
+            exit 0
+          fi
+          echo "Creating $STORE_BRANCH."
+          scratch="$(mktemp -d)"
+          cd "$scratch"
+          git init -q -b "$STORE_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          {
+            echo '# driftwatch pipeline store'
+            echo
+            echo 'Data only. Written by `.github/workflows/pipeline.yml`; the code is on `main`.'
+            echo 'What is here and what is deliberately not: `docs/pipeline.md`.'
+          } > README.md
+          {
+            echo 'data/cache/'
+            echo 'data/spacex/'
+            echo 'data/history/'
+            echo 'data/conjunctions/'
+          } > .gitignore
+          git add README.md .gitignore
+          git commit -q -m "Pipeline store"
+          git push -q "$REPO_URL" "$STORE_BRANCH"
+
+      - name: Check out the store branch
+        uses: actions/checkout@v4
+        with:
+          ref: pipeline-store
+          path: store
+
+      # Rebuildable state only: a rolling cache whose key never hits, so it always saves, with a
+      # prefix restore that always picks up the newest. Losing any of this costs time, never
+      # data. What must NOT be here is the ballistic and supplemental stores -- they are on the
+      # branch, because the cache evicts after seven days and those two cannot be allowed to
+      # evaporate. docs/pipeline.md has the reasoning.
+      - name: Restore the rebuildable caches
+        uses: actions/cache@v4
+        with:
+          path: |
+            store/data/cache
+            store/data/spacex
+            store/data/history
+          key: pipeline-cache-${{ github.run_id }}
+          restore-keys: pipeline-cache-
+
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - run: uv sync --no-dev
+
+      - name: Fetch the catalogue
+        env:
+          SPACETRACK_USER: ${{ secrets.SPACETRACK_USER }}
+          SPACETRACK_PASS: ${{ secrets.SPACETRACK_PASS }}
+          DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
+        run: |
+          uv run driftwatch fetch
+          echo "fetch,$SECONDS" >> "$TIMINGS"
+
+      - name: Refresh the space weather tables
+        env:
+          DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
+        run: |
+          uv run driftwatch weather --days 7
+          echo "weather,$SECONDS" >> "$TIMINGS"
+
+      # `driftwatch spacex` ranks Starlink secondaries by closest approach, so it needs a run to
+      # rank. In steady state that is yesterday's, which is why this seeding screen is skipped
+      # after the first day: the Starlink objects near a fixed fleet do not change much in a day
+      # and the pass costs four minutes. docs/pipeline.md.
+      - name: Seed the ephemeris selection, first run only
+        env:
+          SPACETRACK_USER: ${{ secrets.SPACETRACK_USER }}
+          SPACETRACK_PASS: ${{ secrets.SPACETRACK_PASS }}
+        run: |
+          if ls -d store/data/conjunctions/*_*Z >/dev/null 2>&1; then
+            echo "A previous run exists; it ranks this run's ephemeris fetch."
+            exit 0
+          fi
+          echo "No previous run: screening once with --no-spacex to seed the ephemeris ranking."
+          uv run driftwatch screen --fleet "$FLEET" --no-spacex --no-viewer --no-sweep
+          echo "seed_screen,$SECONDS" >> "$TIMINGS"
+
+      # Writes nothing and exits non-zero if the published states' frame has changed at the
+      # source: it propagates the matching supplemental set over the first three hours of every
+      # fetched file and compares, with a 5 km threshold an order of magnitude clear of both the
+      # published fit residual and a frame error.
+      - name: Fetch SpaceX ephemerides, with the frame check
+        env:
+          DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
+        run: |
+          uv run driftwatch spacex latest
+          echo "spacex,$SECONDS" >> "$TIMINGS"
+
+      - name: Screen, fit the covariance and score quiet
+        env:
+          SPACETRACK_USER: ${{ secrets.SPACETRACK_USER }}
+          SPACETRACK_PASS: ${{ secrets.SPACETRACK_PASS }}
+        run: |
+          set -o pipefail
+          uv run driftwatch screen --fleet "$FLEET" --no-viewer | tee "$RUNNER_TEMP/screen.out"
+          echo "screen,$SECONDS" >> "$TIMINGS"
+          # `driftwatch screen` prints the run directory as its last line.
+          echo "RUN_DIR=$(tail -1 "$RUNNER_TEMP/screen.out")" >> "$GITHUB_ENV"
+
+      # Before a single scenario is scored: does this run's recorded provenance resolve, is the
+      # recorded snapshot actually a snapshot, and is it fresh enough to publish? The age is read
+      # from the snapshot's own fetched_at column, not from its file name, so a rename cannot
+      # fake freshness. This guards the failure that already happened once -- a run recording a
+      # supplemental element-set file as its snapshot, silently, with every test green.
+      - name: Check the run's provenance and its snapshot's age
+        run: |
+          uv run driftwatch check-run "$RUN_DIR" --max-snapshot-age-hours "$MAX_SNAPSHOT_AGE_HOURS"
+          echo "check_run,$SECONDS" >> "$TIMINGS"
+
+      - name: Score every scenario
+        env:
+          DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
+        run: |
+          IFS=',' read -ra names <<< "$SCENARIOS"
+          for name in "${names[@]}"; do
+            [ -n "$name" ] || continue
+            echo "== $name"
+            before=$SECONDS
+            uv run driftwatch risk "$RUN_DIR" --scenario "$name"
+            echo "risk_$name,$(( SECONDS - before ))" >> "$TIMINGS"
+          done
+
+      - name: Storm check
+        run: |
+          uv run driftwatch storm-check "$RUN_DIR"
+          echo "storm_check,$SECONDS" >> "$TIMINGS"
+
+      # Two halves of the bundle: `propagate` writes the catalogue side (elements.bin,
+      # reference.bin, objects.json, manifest.json) at a reference time, `report` the
+      # conjunctions side. Neither rescreens.
+      - name: Export the viewer bundle
+        run: |
+          uv run driftwatch propagate --at "$(date -u +%Y-%m-%dT%H:%M:00Z)"
+          uv run driftwatch report "$RUN_DIR" --scenario quiet
+          echo "export,$SECONDS" >> "$TIMINGS"
+
+      - name: Build the viewer
+        run: |
+          npm --prefix web ci
+          npm --prefix web run build
+          echo "build,$SECONDS" >> "$TIMINGS"
+
+      # Over dist/, because dist/ is what is uploaded: the built app plus whatever the build
+      # copied out of public/. Refuses on a redistributed SpaceX file, on the literal value of
+      # any credential, and on any file over Cloudflare Pages' 25 MiB limit. The credentials are
+      # in the environment precisely so it can check for them.
+      - name: Check the built bundle
+        env:
+          SPACETRACK_USER: ${{ secrets.SPACETRACK_USER }}
+          SPACETRACK_PASS: ${{ secrets.SPACETRACK_PASS }}
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          uv run driftwatch check-bundle --dir web/dist
+          echo "check_bundle,$SECONDS" >> "$TIMINGS"
+
+      - name: Deploy to Cloudflare Pages
+        if: env.DEPLOY != 'no'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          branch=main
+          [ "$DEPLOY" = "preview" ] && branch=preview
+          npx --yes wrangler@4 pages deploy web/dist \
+            --project-name "$PAGES_PROJECT" --branch "$branch" --commit-dirty=true
+          echo "deploy,$SECONDS" >> "$TIMINGS"
+
+      # After the deploy, so nothing is archived that was not published. Release assets rather
+      # than the store branch: a run is 4.8 MB, so retaining every one is 1.8 GB a year, git
+      # keeps every blob for ever, and release assets are not stored in git at all.
+      # docs/pipeline.md has the arithmetic and the R2 alternative that was not taken.
+      - name: Archive the run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          name="$(basename "$RUN_DIR")"
+          month="runs-$(date -u +%Y-%m)"
+          tar -C "$(dirname "$RUN_DIR")" -czf "$RUNNER_TEMP/$name.tar.gz" "$name"
+          gh release view "$month" >/dev/null 2>&1 || gh release create "$month" \
+            --title "Run archive $(date -u +%Y-%m)" \
+            --notes "Daily pipeline runs, one asset each. Rebuild any of them with \`driftwatch report\`; see docs/pipeline.md."
+          gh release upload "$month" "$RUNNER_TEMP/$name.tar.gz" --clobber
+          echo "Archived $name.tar.gz ($(du -h "$RUNNER_TEMP/$name.tar.gz" | cut -f1)) to release $month."
+          echo "archive,$SECONDS" >> "$TIMINGS"
+
+      - name: Commit the accumulating stores
+        working-directory: store
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # Snapshots, supplemental versions, the ballistic-coefficient cache and the weather
+          # tables. Not the run directories, not the fetch cache, not the ephemerides: the
+          # .gitignore on this branch keeps those out, and -f is deliberately not used here so
+          # that it cannot be overridden by accident.
+          git add data/snapshots data/supplemental data/ballistic data/weather 2>/dev/null || true
+          if git diff --cached --quiet; then
+            echo "Nothing new to store."
+          else
+            git commit -m "Pipeline stores, $(date -u +%Y-%m-%dT%H:%MZ)"
+            git push
+          fi
+          echo "store,$SECONDS" >> "$TIMINGS"
+
+      - name: Report what the run cost
+        if: always()
+        run: |
+          {
+            echo "### Daily pipeline"
+            echo
+            if [ -s "$TIMINGS" ]; then
+              echo "| Step | Seconds | Minutes |"
+              echo "| --- | ---: | ---: |"
+              awk -F, '{ printf "| `%s` | %d | %.1f |\n", $1, $2, $2/60; t += $2 } \
+                       END { printf "| **total** | **%d** | **%.1f** |\n", t, t/60 }' "$TIMINGS"
+            else
+              echo "The run failed before any step finished."
+            fi
+            echo
+            echo "Planning figures are in \`docs/pipeline.md\`. If these disagree with them, that page is wrong."
+          } >> "$GITHUB_STEP_SUMMARY"
