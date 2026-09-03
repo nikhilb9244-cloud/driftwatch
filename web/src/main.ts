@@ -14,11 +14,18 @@ import { loadBundle, type Bundle } from "./data";
 import { FrameStore } from "./frames";
 import { pick } from "./picking";
 import { CataloguePoints, SCENE_PER_KM } from "./points";
+import { bindReplayControl, buildReplay, dataBase, isReplay, loadTimeline } from "./replay";
+import { ScenarioState } from "./scenarios";
+import { buildStormControl } from "./storm";
 import { bindClock, buildFilterControls, describe, el, filterMask, findObject, showSelected, showTooltip } from "./ui";
 
 async function main(): Promise<void> {
   const loading = el<HTMLDivElement>("loading");
-  const bundle = await loadBundle("data/");
+  // Replay mode reads a different directory: the historical catalogue for 9 May 2024, that
+  // run's own conjunctions, and the storm timeline. Nothing of it is fetched otherwise. See
+  // replay.ts for why entering the mode is a navigation rather than a swap in place.
+  const base = dataBase();
+  const bundle = await loadBundle(base);
   loading.textContent = `Propagating ${bundle.n.toLocaleString()} objects…`;
 
   // Globe ----------------------------------------------------------------------
@@ -115,9 +122,14 @@ async function main(): Promise<void> {
 
   // Conjunctions panel: Python's events, drawn here. Selecting one jumps the clock to the
   // time of closest approach, highlights both objects and draws ten minutes of each track.
+  //
+  // Storm mode sits on top of it: the scenario control re-renders this panel and nothing else.
+  // The point cloud, the worker and the tracks are geometry and do not depend on the scenario,
+  // which is the Phase 1 rule and the reason a storm costs no frames.
   const tracks = new ConjunctionTracks(bundle.conjunctions?.tracks.samples ?? 0);
   globe.scene().add(tracks.object3d);
-  buildConjunctionPanel(bundle, (selection: ConjunctionSelection | null) => {
+  const scenarios = new ScenarioState(bundle, bundle.conjunctions?.scenario ?? "quiet");
+  const panel = buildConjunctionPanel(bundle, scenarios, (selection: ConjunctionSelection | null) => {
     if (!selection) {
       pairSecondary = -1;
       tracks.hide();
@@ -132,6 +144,23 @@ async function main(): Promise<void> {
     showSelected(selected >= 0 ? describe(bundle, points, selected) : null);
     tracks.show(bundle, selection.event);
   });
+  buildStormControl(bundle, scenarios, () => panel.refresh());
+  bindReplayControl();
+  // Fetched after the first paint, never before it: the critical path is the size it was
+  // before storm mode existed, and a reader who never touches the control never pays for it.
+  const idle = (window as unknown as { requestIdleCallback?: (fn: () => void) => void }).requestIdleCallback;
+  const fetchOverlays = () => void scenarios.load(base);
+  if (idle) idle(fetchOverlays);
+  else setTimeout(fetchOverlays, 500);
+
+  // Replay: the Kp bar, the density ratios and the Sun, all driven by the same clock as the
+  // objects, so scrubbing moves everything together.
+  let tickReplay: (() => void) | null = null;
+  if (isReplay()) {
+    const timeline = await loadTimeline(base);
+    if (timeline) tickReplay = buildReplay(timeline, clock, base);
+    else console.warn("Replay mode without a timeline; run `driftwatch replay-bundle <run>`");
+  }
 
   // Hover picking, throttled.
   let lastPick = 0;
@@ -173,6 +202,7 @@ async function main(): Promise<void> {
       points.setHighlight(i >= 0 ? i : selected, pairSecondary);
     }
     if (selected >= 0 && (now | 0) % 8 === 0) showSelected(describe(bundle, points, selected));
+    if (tickReplay) tickReplay();
     requestAnimationFrame(loop);
   };
   clock.onChange(() => void 0);
@@ -256,5 +286,8 @@ main().catch((err) => {
   console.error(err);
   const loading = el<HTMLDivElement>("loading");
   loading.hidden = false;
-  loading.textContent = `Failed to start: ${err instanceof Error ? err.message : String(err)}. Run "uv run driftwatch propagate --at <time>" first.`;
+  const how = isReplay()
+    ? 'Run "uv run driftwatch propagate --snapshot <as-of file> --at 2024-05-09T00:00:00Z --export-dir web/public/data/replay", then "driftwatch report <replay run> --out-dir web/public/data/replay" and "driftwatch replay-bundle <replay run>".'
+    : 'Run "uv run driftwatch propagate --at <time>" first.';
+  loading.textContent = `Failed to start: ${err instanceof Error ? err.message : String(err)}. ${how}`;
 });

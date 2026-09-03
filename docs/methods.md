@@ -577,6 +577,57 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   globe is a sphere. Objects are drawn as fixed-size points regardless of their real
   size or distance.
 
+### Storm mode and replay (Phase 3, Step 5)
+
+- **The scenario control changes numbers in the panel and nothing else.** The point cloud, the
+  propagation worker and the drawn tracks are geometry, and geometry does not depend on the
+  scenario. A storm displaces an object *along* the track already drawn, by tens of kilometres
+  against a covariance of kilometres, and redrawing the track at the displaced position would
+  assert a precision the covariance denies. So the displacement is a number in the panel. This
+  is also what keeps Phase 1's frame budget: switching scenario costs one re-render of a list.
+- **The miss shown under a scenario is the shifted miss.** `miss_km` is what the two element
+  sets predicted and `miss_shifted_km` is where the scenario's term put them, which is what its
+  probability was computed from. Everything that summarises a scenario — the queue, the pair
+  rollup, the report's tables — reads the shifted one; the detail view and the per-event tables
+  show both, and their difference is the storm's whole effect on the geometry.
+- **`scenarios.json` is a lazily fetched overlay, not a second bundle.** It carries only the
+  columns a scenario changes, in arrays parallel to the base bundle's events and pairs, and is
+  requested on an idle callback after first paint. Label columns are dictionary-encoded. On the
+  demo run it is 1.2 MB for three scenarios against a 3.4 MB base bundle, and none of it is on
+  the critical path. If it fails to load the viewer says so and goes on showing the one scenario
+  the bundle carries, which is a complete answer rather than a degraded one.
+- **The Δ against quiet is suppressed where both probabilities are below 1e-12.** A storm that
+  takes an event from 1e-95 to 1e-24 has multiplied it by 1e71 and changed nothing anybody could
+  act on. Below that floor the two numbers are indistinguishable from zero and their ratio is
+  numerical noise — the same floor `driftwatch storm-check` bands on. Where one side is below it
+  and the other above, the cell reads `↑ from ~0` rather than an exponent, because crossing the
+  level at which a probability means anything is the statement worth making.
+- **Replay is a separate document, reached by a navigation.** `?replay` reloads the viewer
+  against `web/public/data/replay/`: the historical catalogue for 9 May 2024, that run's own
+  conjunctions, and the storm timeline. Holding two catalogues in memory and swapping the point
+  cloud's buffers would put a second code path through the one part of the viewer Phase 1 asked
+  not to be touched; a reload keeps exactly one catalogue alive and makes a replay a link
+  somebody can send. Nothing of the replay bundle is fetched until that navigation happens.
+- **The replay scrubber is the simulation clock.** There is no second timeline. The Kp bar is
+  the clock's background, and the density readout, the Sun image and the objects all read the
+  same `tMs`, which is what makes them move together by construction rather than by
+  synchronisation.
+- **Kp is read from the interval the clock is inside, not the nearest one.** Kp is a three-hour
+  average; showing the next interval's value before it has happened would be a small forecast.
+- **The replay's density ratio is NRLMSIS at a fixed altitude, averaged over 24 local solar
+  times, over the same average across the Gannon quiet control window.** The day-night contrast
+  at these altitudes is a factor of two, so a single longitude would make the ratio a coin toss.
+  The denominator is deliberately the one Step 4's measurement used, so the number on screen and
+  the number in `docs/storm-validation.md` mean the same thing. It is a ratio at a *fixed
+  height*, not along any orbit, and it is uncorrected for the 22 per cent over-prediction that
+  same section records.
+- **A Sun frame is the nearest image Helioviewer holds to the time asked for**, which during a
+  data gap can be hours away. The lag is carried on every frame and the viewer renders it above
+  15 minutes. Four frames a day, ~360 kB each, fetched one at a time as the scrubber passes
+  them.
+- **The replay fleet is not the demo fleet.** Sentinel-1A stands in for Sentinel-1C, which did
+  not launch until December 2024. `fleets/demo-2024.yaml` records the substitution.
+
 ## Not yet modelled (later phases)
 
 - Manoeuvres, beyond the three-valued flag, the history check and the Starlink

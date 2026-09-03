@@ -7,12 +7,14 @@ the moment it matters most. driftwatch will screen a chosen fleet against the wh
 catalogue and show how miss distances and probabilities move under quiet and stormy
 conditions, live and in replay of past storms.
 
-**Status: Phase 2 of 5 complete** (conjunction screening: Space-Track merged in, the demo
-fleet defined, three-stage screening, an empirical covariance and a probability of
-collision on every event, a weekly report and a conjunctions panel in the viewer). Phase 1
-(catalogue and globe) is complete. Phase 3 adds the storm layer. See `ROADMAP.md` for the
-full plan, `docs/phase1-plan.md` for what Phase 1 built and why, and `docs/phase2-plan.md`
-for the Phase 2 plan and every decision taken along the way.
+**Status: Phase 3 of 5 built** (the storm layer: space weather ingested with provenance,
+NRLMSIS density along every orbit, a ballistic coefficient per object, the in-track storm
+term derived and verified against a numerical integration, five scenarios rescoring stored
+events, validation against the May 2024 Gannon storm and the February 2022 Starlink loss,
+and a storm mode and May 2024 replay in the viewer). Phases 1 and 2 are complete. Phase 4 is
+the visual pass and the operator console. See `ROADMAP.md` for the full plan,
+`docs/phase3-plan.md` for the Phase 3 plan and every decision taken along the way, and
+`docs/design-brief.md` for what Phase 4 will look like.
 
 What works today:
 
@@ -85,6 +87,26 @@ What works today:
   track either side and opens an inset of the encounter plane with the covariance
   ellipse, the hard-body disc, the miss vector and the probabilities. Every number is
   Python's; the browser computes no screening result.
+- **Storm mode** switches the panel between `quiet`, `forecast` and the three synthetic storm
+  levels. Every row then carries the miss and probability *under that scenario*, its region and
+  confidence, whether the storm term is validated or indicative for it, and `Δ vs quiet` as a
+  multiplier — on every row, not only the interesting ones, so the phase's result is learnt from
+  the screen. The detail view adds the pre-storm miss, the relative displacement, the shift-only
+  and variance-only probabilities, and the quiet ellipse behind the scenario's with an arrow
+  between the two misses. Events the storm term cannot score sit in their own section below the
+  queue with the reason, never in the queue with a blank. **The control changes numbers in the
+  panel and nothing else** — the point cloud, the worker and the tracks are geometry and do not
+  depend on the scenario, which is what keeps Phase 1's frame budget.
+- **Replay mode** (`?replay`) loads a second, self-contained bundle: the catalogue as it stood on
+  9 May 2024, that run's own screening under the observed record, and a timeline. The Kp bar is
+  the background of the scrubber, the density ratio at 400 and 500 km is drawn over it, the Sun
+  in SDO/AIA 193 Å sits beside it, and all of them plus the objects read the one simulation
+  clock — so scrubbing moves everything together by construction. Nothing of it is fetched until
+  replay is entered.
+- `driftwatch replay-bundle <run>` writes that timeline: the observed Kp and ap with their
+  provenance, the density ratios against the same quiet control window Step 4 measured the
+  enhancement against, and a few Sun frames a day from Helioviewer with the lag between the time
+  asked for and the image actually returned on each.
 - `driftwatch supplemental` fetches CelesTrak's operator-ephemeris element sets, stores
   the version, thins versions older than a fortnight to one a day, and with `--fit`
   refits the supplemental covariance across the whole store. It runs every three hours
@@ -108,7 +130,12 @@ What works today:
   the linear theory, the thrust ceiling on a satellite fitting above what its own geometry
   allows, the loud failure of a weather table that does not reach the oldest element-set epoch
   in a run, the historical snapshot builder's refusal to use an element set from after the date
-  it reconstructs, and Step 4's own measurements.
+  it reconstructs, Step 4's own measurements, the storm-term validity label and the promise that
+  it changes no number, the storm-response prior's value (so the measured 22 per cent
+  over-prediction cannot quietly become a calibration), and Step 5's exports: the scenario
+  overlay's columns staying parallel to the bundle's own order, an unscoreable event carrying
+  null rather than a small number, every aggregate present both ways, and the refusal to build a
+  replay timeline whose density baseline does not reach the quiet control window.
 
 ## Quick start
 
@@ -136,6 +163,13 @@ uv run driftwatch risk latest --scenario storm-g5
                                           # rescore under a synthetic G5 built from May 2024
 uv run driftwatch storm-check latest      # attack the storm result; name what cannot be scored
 uv run driftwatch validate gannon         # measure the term against the May 2024 storm
+
+# The May 2024 replay the viewer's `?replay` mode reads.
+uv run driftwatch propagate --snapshot data/snapshots/as-of/gp_asof_20240509T000000Z.parquet \
+    --at 2024-05-09T00:00:00Z --export-dir web/public/data/replay
+uv run driftwatch report demo-2024_20240509T000000Z --scenario replay:2024-05-09 \
+    --out-dir web/public/data/replay
+uv run driftwatch replay-bundle demo-2024_20240509T000000Z
 uv run driftwatch report latest           # weekly report + the viewer's conjunctions bundle
 cd web && npm install && npm run dev      # open the printed URL
 ```

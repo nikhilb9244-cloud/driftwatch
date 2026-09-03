@@ -76,6 +76,27 @@
         <h1>Conjunctions</h1>
         <div id="conjunctions-summary" class="sub"></div>
       </header>
+
+      <!--
+        The storm control. A segmented control of five at desktop width and a dropdown below
+        900 px, both built once so a resize never loses the selection; the stylesheet decides
+        which is visible. Replay is not a sixth segment: it is a mode with its own button,
+        because it changes the meaning of the whole screen rather than only the numbers in it.
+        See docs/design-brief.md, section 3.1.
+      -->
+      <section id="storm" hidden>
+        <h2>Scenario</h2>
+        <div id="storm-segments" class="storm-segments" role="group" aria-label="Storm scenario"></div>
+        <label class="storm-dropdown">
+          <span class="visually-hidden">Storm scenario</span>
+          <select id="storm-select" aria-label="Storm scenario"></select>
+        </label>
+        <div id="storm-note" class="muted storm-note"></div>
+        <div id="storm-summary"></div>
+        <details id="storm-unscoreable" class="storm-unscoreable-box" hidden></details>
+        <button id="replay-toggle" class="btn small">replay May 2024</button>
+      </section>
+
       <div class="row">
         <input id="conjunction-filter" type="search" placeholder="Filter by name or NORAD id"
                aria-label="Filter conjunctions" />
@@ -85,6 +106,25 @@
       <section id="conjunction-detail" hidden></section>
       <button id="conjunction-clear" class="btn small">clear selection</button>
     </aside>
+
+    <!--
+      The replay scrubber. Present only in replay mode (`?replay`), where it is the simulation
+      clock drawn with the Kp bar as its background: scrubbing it moves the objects, the Kp
+      readout, the density ratios and the Sun image together, because all four read the one
+      clock. The Sun image sits beside it rather than over the globe so that it never covers
+      the thing it is explaining.
+    -->
+    <div id="replay" hidden>
+      <div id="replay-sun-box">
+        <img id="replay-sun" alt="The Sun in SDO/AIA 193 angstroms at the selected time" hidden />
+      </div>
+      <div id="replay-panel">
+        <div id="replay-readout" class="replay-readout"></div>
+        <div id="replay-bar" class="replay-bar" title="Click to scrub"></div>
+        <div id="replay-legend" class="replay-legend"></div>
+        <div id="replay-sun-caption" class="muted"></div>
+      </div>
+    </div>
 
     <div id="tooltip" hidden></div>
     <div id="loading">Loading catalogue…</div>

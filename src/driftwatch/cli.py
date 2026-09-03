@@ -30,6 +30,7 @@ from driftwatch.drag import ballistic as ballistic_mod
 from driftwatch.drag import density as density_mod
 from driftwatch.drag.store import CoefficientStore
 from driftwatch.ephemeris import spacex
+from driftwatch.export import storm as storm_export
 from driftwatch.export.audit import audit_bundle
 from driftwatch.export.conjunctions import RunDirectory
 from driftwatch.export.report import build_bundle, write_bundle, write_report
@@ -649,13 +650,29 @@ def elements_for_run(info: dict[str, Any]) -> pd.DataFrame:
     return df
 
 
-def write_outputs(run_dir: RunDirectory, elements: pd.DataFrame, *, scenario: str, export: bool, show: int) -> None:
-    """The Step 4 outputs: the weekly markdown report, and the viewer's JSON and track binary."""
+def write_outputs(
+    run_dir: RunDirectory,
+    elements: pd.DataFrame,
+    *,
+    scenario: str,
+    export: bool,
+    show: int,
+    out_dir: Path | None = None,
+) -> None:
+    """The weekly markdown report, the viewer's JSON and track binary, and the scenario overlays.
+
+    The overlays are a separate file rather than more of the bundle because storm mode has to
+    switch between five scenarios without re-fetching the geometry, the names or the tracks --
+    none of which a scenario changes. The viewer fetches it after first paint, so the critical
+    path is the size it was before storm mode existed.
+    """
     path = write_report(run_dir, scenario=scenario)
     log.info("Report: %s", path)
     if export:
         bundle, tracks = build_bundle(run_dir, elements, scenario=scenario)
-        write_bundle(bundle, tracks)
+        target = Path(out_dir) if out_dir else config.VIEWER_DATA_DIR
+        write_bundle(bundle, tracks, target)
+        storm_export.write_overlays(storm_export.build_overlays(run_dir, bundle), target)
 
 
 def survivor_labels(df: pd.DataFrame, fleet: Fleet, result: ScreeningResult) -> pd.DataFrame:
@@ -1329,8 +1346,96 @@ def cmd_report(args: argparse.Namespace) -> int:
     if scenarios and scenario not in scenarios:
         log.error("Run %s has no scenario %r; it has %s", run_dir.name, scenario, scenarios)
         return 2
-    write_outputs(run_dir, elements_for_run(info), scenario=scenario, export=not args.no_viewer, show=0)
+    write_outputs(
+        run_dir,
+        elements_for_run(info),
+        scenario=scenario,
+        export=not args.no_viewer,
+        show=0,
+        out_dir=Path(args.out_dir) if args.out_dir else None,
+    )
     print(run_dir.path / "report.md")
+    return 0
+
+
+def cmd_replay_bundle(args: argparse.Namespace) -> int:
+    """The Step 5 replay timeline: the Kp bar, the density ratios and the Sun frames on one grid.
+
+    Writes ``storm.json`` beside the replay run's own conjunctions bundle. It does **not** write
+    the catalogue export or the conjunctions: those are `driftwatch propagate --export-dir` and
+    `driftwatch report --out-dir` over the historical snapshot, because they are the same two
+    exports the live viewer uses and duplicating them here would be a second code path that
+    could drift from the first.
+    """
+    try:
+        run_dir = resolve_run(args.run)
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    info = run_dir.read_run()
+    stored = run_dir.scenarios()
+    scenario = args.scenario or next((s for s in stored if storm_scenarios.is_replay(s)), None)
+    if scenario is None:
+        log.error(
+            "run %s has no replay scenario; score one with `driftwatch risk %s --scenario replay:<YYYY-MM-DD>`",
+            run_dir.name,
+            run_dir.name,
+        )
+        return 2
+    days = (parse_utc(info["end"]) - parse_utc(info["start"])).total_seconds() / 86400.0
+    start, end = storm_export.replay_window(scenario, days)
+    now = datetime.now(UTC)
+
+    frames = storm_export.replay_frames(start, end, offline=args.offline)
+    if not frames and not args.offline:
+        log.warning("Helioviewer returned no frames for %s to %s; the timeline will have no Sun", start, end)
+    elif not frames:
+        log.warning(
+            "No cached Sun frames for %s to %s. Run without --offline to fetch them, "
+            "a few per day as `docs/data-sources.md` describes",
+            start.date(),
+            end.date(),
+        )
+
+    sources, provenance = weather_sources(now=now, offline=args.offline, as_of=None)
+    table_start, table_end = density_mod.weather_window(start, end)
+    table = weather_table.weather_table(table_start, table_end, sources, now=now)
+    # A second table over the quiet control window, because the density ratio's denominator is
+    # three weeks earlier than its numerator and one table cannot hold both without spanning the
+    # storm it is supposed to be a baseline for.
+    quiet_start, quiet_end = (parse_utc(s) for s in config.GANNON_QUIET_WINDOW)
+    baseline_start, baseline_end = density_mod.weather_window(quiet_start, quiet_end)
+    baseline_table = weather_table.weather_table(baseline_start, baseline_end, sources, now=now)
+    out_dir = Path(args.out_dir) if args.out_dir else config.VIEWER_DATA_DIR / "replay"
+    bundle = storm_export.build_storm_bundle(
+        scenario=scenario,
+        start=start,
+        end=end,
+        table=table,
+        frames=frames,
+        out_dir=out_dir,
+        baseline_table=baseline_table,
+        run_id=info.get("run_id"),
+        snapshot=info.get("snapshot"),
+    )
+    bundle["weather_provenance"] = provenance
+    path = storm_export.write_storm_bundle(bundle, out_dir)
+    peak = max((k for k in bundle["kp"]["kp"] if k is not None), default=None)
+    print(
+        f"{path}\n"
+        f"  {len(bundle['kp']['t'])} three-hour intervals, peak Kp {peak}, "
+        f"{len(bundle['sun']['frames'])} Sun frames "
+        f"({bundle['sun']['total_bytes'] / 1024 / 1024:.1f} MiB)"
+    )
+    for altitude in storm_export.REPLAY_ALTITUDES_KM:
+        ratios = [r for r in bundle["density"][f"ratio_{int(altitude)}km"] if r is not None]
+        if ratios:
+            print(f"  density ratio at {int(altitude)} km: {min(ratios):.2f} to {max(ratios):.2f} over the window")
+    print(
+        "  the ratio's denominator is the quiet control window "
+        f"{bundle['density']['quiet_window'][0][:10]} to {bundle['density']['quiet_window'][1][:10]}, "
+        "the same one Step 4 measured the enhancement against"
+    )
     return 0
 
 
@@ -2390,10 +2495,30 @@ def build_parser() -> argparse.ArgumentParser:
     check_storm.add_argument("--show", type=int, default=25, help="unscoreable objects to print (default: 25)")
     check_storm.set_defaults(func=cmd_storm_check)
 
+    replay = sub.add_parser(
+        "replay-bundle",
+        help="write the viewer's replay timeline (Kp, density ratios, Sun frames) for a replay-scored run",
+    )
+    replay.add_argument("run", help="run directory, its name under data/conjunctions, or 'latest'")
+    replay.add_argument("--scenario", help="replay scenario name (default: the run's first replay:<date>)")
+    replay.add_argument("--out-dir", help="output directory (default: web/public/data/replay)")
+    replay.add_argument(
+        "--offline", action="store_true", help="use only cached weather and cached Sun frames; fetch nothing"
+    )
+    replay.set_defaults(func=cmd_replay_bundle)
+
     report = sub.add_parser("report", help="rewrite a stored run's markdown report and the viewer's conjunction bundle")
     report.add_argument("run", help="run directory, its name under data/conjunctions, or 'latest'")
     report.add_argument("--scenario", help="scenario to report (default: the first stored)")
     report.add_argument("--no-viewer", action="store_true", help="write the report only")
+    report.add_argument(
+        "--out-dir",
+        help=(
+            "viewer bundle directory (default: web/public/data). A replay run goes in its own "
+            "subdirectory, e.g. web/public/data/replay, because replay is a mode with its own "
+            "catalogue export and its own times"
+        ),
+    )
     report.set_defaults(func=cmd_report)
 
     check = sub.add_parser(

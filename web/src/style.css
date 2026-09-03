@@ -296,7 +296,9 @@ dd {
 #conjunction-list {
   overflow-y: auto;
   flex: 1 1 auto;
-  min-height: 80px;
+  /* The queue is what the panel is for, so it keeps a floor even when the scenario block is
+     open and the replay scrubber has taken the bottom two hundred pixels. */
+  min-height: 170px;
   border-top: 1px solid var(--border);
   padding-top: 6px;
 }
@@ -418,5 +420,314 @@ dd {
 @media (max-width: 1100px) {
   #conjunctions {
     display: none;
+  }
+}
+
+/* ------------------------------------------------------------------------------------
+   Storm mode (Phase 3, Step 5)
+
+   The segmented control and the dropdown are both in the DOM; this decides which is seen,
+   so a resize past 900 px never loses the selection. Names are never abbreviated in either:
+   `G4` alone beside a probability is too easy to read as a flag.
+   ------------------------------------------------------------------------------------ */
+
+#storm {
+  border-top: 1px solid var(--border);
+  /* The queue is the thing being read, so the scenario block is capped and scrolls rather than
+     pushing the list below the fold. `#conjunction-list` is the flex child that should grow. */
+  flex: 0 1 auto;
+  max-height: 38vh;
+  overflow-y: auto;
+}
+
+.storm-segments {
+  display: flex;
+  gap: 1px;
+  background: var(--border);
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  overflow: hidden;
+}
+
+.storm-seg {
+  flex: 1 1 0;
+  padding: 6px 4px;
+  font: inherit;
+  font-size: 11px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.02);
+  border: none;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.storm-seg:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+}
+
+.storm-seg[aria-pressed="true"] {
+  background: rgba(76, 201, 240, 0.18);
+  color: var(--text);
+  font-weight: 600;
+}
+
+.storm-seg:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.storm-dropdown {
+  display: none;
+}
+
+.storm-dropdown select {
+  width: 100%;
+  font: inherit;
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.storm-note {
+  margin: 8px 0 4px;
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.storm-note .warn,
+.warn {
+  color: #f4a261;
+}
+
+.storm-table {
+  width: 100%;
+  margin: 8px 0 4px;
+  border-collapse: collapse;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+}
+
+.storm-table th,
+.storm-table td {
+  padding: 3px 4px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+}
+
+.storm-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+  text-transform: none;
+}
+
+.storm-table th[scope="row"] {
+  text-align: left;
+  color: var(--muted);
+  font-weight: 400;
+}
+
+/* The validated column is the measured one and is read first, so it carries the weight. */
+.storm-table td:first-of-type,
+.storm-table thead th:nth-child(2) {
+  color: var(--text);
+  font-weight: 600;
+}
+
+/* The prose that explains the two columns folds away: it is needed once, not on every read. */
+.storm-explainer {
+  margin-top: 6px;
+}
+
+.storm-explainer > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.storm-explainer .caveat {
+  margin-top: 6px;
+}
+
+.storm-unscoreable-box {
+  margin: 8px 0;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 6px 8px;
+}
+
+.storm-unscoreable-box > summary {
+  cursor: pointer;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+ul.storm-unscoreable {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  max-height: 220px;
+  overflow-y: auto;
+}
+
+ul.storm-unscoreable li {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 4px 0;
+  border-top: 1px solid var(--border);
+  font-size: 11px;
+}
+
+.chip-validity {
+  margin-left: 5px;
+  padding: 0 4px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--muted);
+  font-size: 10px;
+  letter-spacing: 0.02em;
+  cursor: help;
+}
+
+.cj-delta {
+  margin-left: 6px;
+  font-variant-numeric: tabular-nums;
+}
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+/* ------------------------------------------------------------------------------------
+   The replay scrubber. Sits along the bottom, full width, with the Sun beside it.
+   ------------------------------------------------------------------------------------ */
+
+/* In replay mode the scrubber owns the bottom of the screen; the panels stop above it. */
+body[data-replay] #panel,
+body[data-replay] #conjunctions {
+  max-height: calc(100vh - 200px);
+}
+
+/* `hidden` has to win over these display rules, or the scrubber shows outside replay mode. */
+#replay[hidden],
+#replay-sun[hidden] {
+  display: none;
+}
+
+#replay {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 12px;
+  align-items: stretch;
+  padding: 10px 12px;
+  background: var(--panel);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  backdrop-filter: blur(10px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
+}
+
+#replay-panel {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+#replay-sun-box {
+  flex: 0 0 auto;
+  width: 96px;
+  height: 96px;
+  border-radius: 6px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.4);
+}
+
+#replay-sun {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.replay-readout {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+  align-items: baseline;
+  font-variant-numeric: tabular-nums;
+  margin-bottom: 6px;
+}
+
+.replay-readout .g {
+  padding: 0 4px;
+  border-radius: 3px;
+  background: rgba(226, 85, 79, 0.25);
+  color: #f4a261;
+  font-size: 11px;
+}
+
+.replay-bar {
+  height: 64px;
+  cursor: crosshair;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  background: rgba(0, 0, 0, 0.25);
+}
+
+.replay-bar svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.replay-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  margin-top: 5px;
+  font-size: 11px;
+  color: var(--muted);
+}
+
+.replay-legend .swatch {
+  display: inline-block;
+  width: 9px;
+  height: 9px;
+  margin-right: 4px;
+  border-radius: 2px;
+  vertical-align: baseline;
+}
+
+.replay-legend .swatch.kp {
+  background: linear-gradient(90deg, rgba(141, 153, 174, 0.45), #c1121f);
+}
+
+@media (max-width: 900px) {
+  .storm-segments {
+    display: none;
+  }
+
+  .storm-dropdown {
+    display: block;
+  }
+
+  #replay {
+    flex-direction: column;
+  }
+
+  #replay-sun-box {
+    width: 64px;
+    height: 64px;
   }
 }

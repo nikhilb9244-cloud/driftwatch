@@ -2,23 +2,38 @@
  * The conjunctions panel: the screening run, as Python computed it.
  *
  * Nothing here is a screening result of the browser's own. The pairs, the events, the
- * probabilities, the covariances and the tracks all come out of `conjunctions.json` and
- * `conjunction-tracks.bin`, written by `driftwatch report`. The viewer's job is to put
- * them somewhere a reader can see them: a list of pairs (repeated encounters collapsed,
- * as the Step 2 review asked), the events of a pair on demand, and, when an event is
- * selected, the clock jumped to the time of closest approach, both objects highlighted,
- * ten minutes of each track drawn either side, and the encounter plane in an inset.
+ * probabilities, the covariances and the tracks all come out of `conjunctions.json`,
+ * `scenarios.json` and `conjunction-tracks.bin`, written by `driftwatch report`. The viewer's
+ * job is to put them somewhere a reader can see them: a list of pairs (repeated encounters
+ * collapsed, as the Step 2 review asked), the events of a pair on demand, and, when an event is
+ * selected, the clock jumped to the time of closest approach, both objects highlighted, ten
+ * minutes of each track drawn either side, and the encounter plane in an inset.
  *
  * The tracks are stored in TEME, the frame SGP4 works in, and are rotated to Earth-fixed
  * here with the same GMST that the propagation worker uses (`gstime`, UTC standing in for
  * UT1, no polar motion). Doing the rotation the same way in both places is what keeps a
  * drawn track sitting on its moving dot.
+ *
+ * **Step 5 adds the scenario in force.** Every number in the list and the detail view is read
+ * through `ScenarioState`, so switching from `quiet` to `G5` re-renders the panel and touches
+ * nothing else — not the point cloud, not the worker, not the tracks, which are geometry and do
+ * not depend on the scenario. Two consequences are visible in the markup and both are
+ * deliberate:
+ *
+ * - The **miss** shown under a storm scenario is the *shifted* miss, which is what that
+ *   scenario's probability was computed from. The quiet miss is still shown, beside it, in the
+ *   detail view — they answer different questions and the difference is the storm's whole effect
+ *   on the geometry.
+ * - The **Δ against quiet** is on every row rather than only the interesting ones
+ *   (`docs/design-brief.md` §5), because a reader who sees `×0.7` twenty times and `×340` once
+ *   has learnt the phase's headline result from the screen rather than from the documentation.
  */
 
 import * as THREE from "three";
 import { gstime } from "satellite.js";
 import type { Bundle, ConjunctionEvent, ConjunctionPair } from "./data";
 import { formatUtc } from "./geodesy";
+import { eventUnder, labelOf, pairUnder, type ScenarioState } from "./scenarios";
 import { SCENE_PER_KM } from "./points";
 import { escapeHtml } from "./ui";
 
@@ -75,6 +90,11 @@ export class ConjunctionTracks {
    *
    * GMST advances about five degrees over the twenty minutes of a track, so the rotation
    * has to be per sample; using one angle for the whole track would smear it by kilometres.
+   *
+   * The tracks are the **geometry**, so they do not move when the scenario changes: a storm
+   * scenario displaces an object along that track, and the displacement is a number in the
+   * panel rather than a redrawn line. Drawing a shifted track would be drawing a position the
+   * covariance says we do not know to within many times the shift.
    */
   show(bundle: Bundle, event: ConjunctionEvent): boolean {
     const spec = bundle.conjunctions?.tracks;
@@ -127,6 +147,9 @@ function principalAxes(xx: number, xy: number, yy: number): { a: number; b: numb
   return { a: Math.sqrt(Math.max(v1, 0)), b: Math.sqrt(Math.max(v2, 0)), angle: theta };
 }
 
+const missOf = (event: ConjunctionEvent): number =>
+  event.miss_shifted_km != null && Number.isFinite(event.miss_shifted_km) ? event.miss_shifted_km : event.miss_km;
+
 /**
  * The encounter plane as an SVG: the hard-body disc at the origin, the combined covariance
  * ellipse centred on the miss, and the miss vector between them.
@@ -134,15 +157,22 @@ function principalAxes(xx: number, xy: number, yy: number): { a: number; b: numb
  * This is the picture the probability is an integral over: the plane perpendicular to the
  * relative velocity, the disc of the combined hard-body radius, and the Gaussian whose
  * mass inside that disc is the probability of collision.
+ *
+ * Under a storm scenario, `quiet` is drawn behind it as a faint outline with an arrow from the
+ * quiet miss to the scenario's — `docs/design-brief.md` §6.1. The arrow is the storm's effect on
+ * the geometry, drawn to the same scale as everything else, so a reader can see at a glance
+ * whether the displacement was large against the uncertainty or lost inside it.
  */
-export function encounterPlaneSvg(event: ConjunctionEvent, size = 260): string {
+export function encounterPlaneSvg(event: ConjunctionEvent, quiet: ConjunctionEvent | null = null, size = 260): string {
   const xx = event.enc_cov_xx_km2 ?? 0;
   const xy = event.enc_cov_xy_km2 ?? 0;
   const yy = event.enc_cov_yy_km2 ?? 0;
   const { a, b, angle } = principalAxes(xx, xy, yy);
-  const miss = event.miss_km;
+  const miss = missOf(event);
+  const quietMiss = quiet ? missOf(quiet) : null;
   const hbr = (event.hbr_m ?? 0) / 1000;
-  const extent = Math.max(miss + 3 * Math.max(a, b), 3 * Math.max(a, b), hbr * 4, 1e-6) * 1.15;
+  const far = Math.max(miss, quietMiss ?? 0);
+  const extent = Math.max(far + 3 * Math.max(a, b), 3 * Math.max(a, b), hbr * 4, 1e-6) * 1.15;
   const scale = size / 2 / extent;
   const cx = size / 2;
   const cy = size / 2;
@@ -152,11 +182,22 @@ export function encounterPlaneSvg(event: ConjunctionEvent, size = 260): string {
   // is far longer in-track than across. Drawn to scale the disc and the minor axis vanish, so
   // both get a floor of a couple of pixels and the caption says by how much the disc was grown.
   const minPx = 2.5;
-  const ring = (k: number, opacity: number) =>
-    `<ellipse cx="${mx.toFixed(2)}" cy="${cy}" rx="${Math.max(k * a * scale, minPx).toFixed(2)}" ` +
-    `ry="${Math.max(k * b * scale, 1).toFixed(2)}" ` +
-    `transform="rotate(${deg.toFixed(2)} ${mx.toFixed(2)} ${cy})" fill="rgba(76,201,240,0.10)" ` +
+  const ellipse = (x: number, k: number, opacity: number, av: number, bv: number, degv: number, fill: string) =>
+    `<ellipse cx="${x.toFixed(2)}" cy="${cy}" rx="${Math.max(k * av * scale, minPx).toFixed(2)}" ` +
+    `ry="${Math.max(k * bv * scale, 1).toFixed(2)}" ` +
+    `transform="rotate(${degv.toFixed(2)} ${x.toFixed(2)} ${cy})" fill="${fill}" ` +
     `stroke="rgba(76,201,240,${opacity})" stroke-width="1"/>`;
+  const ring = (k: number, opacity: number) => ellipse(mx, k, opacity, a, b, deg, "rgba(76,201,240,0.10)");
+
+  let quietLayer = "";
+  if (quiet && quietMiss != null && Math.abs(quietMiss - miss) * scale > 1) {
+    const q = principalAxes(quiet.enc_cov_xx_km2 ?? 0, quiet.enc_cov_xy_km2 ?? 0, quiet.enc_cov_yy_km2 ?? 0);
+    const qx = cx + quietMiss * scale;
+    quietLayer =
+      ellipse(qx, 1, 0.25, q.a, q.b, (-q.angle * 180) / Math.PI, "none") +
+      `<line x1="${qx.toFixed(2)}" y1="${cy}" x2="${mx.toFixed(2)}" y2="${cy}" stroke="#f4a261" ` +
+      `stroke-width="1.5" stroke-dasharray="3 2" marker-end="url(#shift-arrow)"/>`;
+  }
   const trueDiscPx = hbr * scale;
   const discR = Math.max(trueDiscPx, minPx);
   const magnified = trueDiscPx > 0 && discR / trueDiscPx > 1.5;
@@ -167,9 +208,15 @@ export function encounterPlaneSvg(event: ConjunctionEvent, size = 260): string {
   return `
 <svg viewBox="0 0 ${size} ${size}" width="100%" role="img"
      aria-label="Encounter plane: hard-body disc, covariance ellipse and miss vector">
+  <defs>
+    <marker id="shift-arrow" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="6" markerHeight="6" orient="auto">
+      <path d="M0 0 L8 4 L0 8 z" fill="#f4a261"/>
+    </marker>
+  </defs>
   <rect x="0" y="0" width="${size}" height="${size}" fill="rgba(8,12,20,0.55)" rx="6"/>
   <line x1="0" y1="${cy}" x2="${size}" y2="${cy}" stroke="rgba(255,255,255,0.10)"/>
   <line x1="${cx}" y1="0" x2="${cx}" y2="${size}" stroke="rgba(255,255,255,0.10)"/>
+  ${quietLayer}
   ${ring(3, 0.35)}
   ${ring(1, 0.75)}
   <line x1="${cx}" y1="${cy}" x2="${mx.toFixed(2)}" y2="${cy}" stroke="#ffd166" stroke-width="1.5"/>
@@ -189,7 +236,50 @@ const fmtPc = (v: number | null | undefined): string =>
 const fmtKm = (v: number | null | undefined, digits = 3): string =>
   v == null || !Number.isFinite(v) ? "—" : v.toFixed(digits);
 
+/**
+ * Below this, a probability is indistinguishable from zero and a ratio of two of them is
+ * numerical noise. The same floor `driftwatch storm-check` bands on, for the same reason: a
+ * storm that takes an event from 1e-95 to 1e-24 has multiplied it by 1e71 and changed nothing
+ * anybody could act on, and a column of such numbers buries the handful that matter.
+ */
+const PC_FLOOR = 1e-12;
+
+/**
+ * `pc / pc_quiet` as a multiplier with a direction arrow, or an em dash when the comparison is
+ * with itself, one of the two numbers is missing, or both are below the floor. Zero-to-zero is
+ * not a ratio and says so.
+ */
+function deltaAgainstQuiet(pc: number | null | undefined, quietPc: number | null | undefined): string {
+  if (pc == null || quietPc == null || !Number.isFinite(pc) || !Number.isFinite(quietPc)) return "—";
+  if (Math.max(pc, quietPc) < PC_FLOOR) return "—";
+  // One side below the floor and the other above: the ratio is a number like 1e47, which says
+  // "it came from nothing" in the least readable way available. Say that instead.
+  if (quietPc < PC_FLOOR) return "↑ from ~0";
+  if (pc < PC_FLOOR) return "↓ to ~0";
+  const ratio = pc / quietPc;
+  if (!Number.isFinite(ratio)) return "—";
+  const arrow = ratio > 1 ? "↑" : ratio < 1 ? "↓" : "=";
+  const text = ratio >= 100 || ratio < 0.01 ? ratio.toExponential(1) : ratio.toFixed(2);
+  return `${arrow}×${text}`;
+}
+
+/** Why a Δ is an em dash, for the cell's tooltip. */
+function deltaTitle(pc: number | null | undefined, quietPc: number | null | undefined): string {
+  if (pc != null && quietPc != null && Number.isFinite(pc) && Number.isFinite(quietPc)) {
+    if (Math.max(pc, quietPc) < PC_FLOOR) {
+      return `Both this scenario and quiet are below ${PC_FLOOR.toExponential(0)}, where the two are indistinguishable from zero and their ratio is numerical noise. The storm did move this event; it moved it from one unactionable number to another.`;
+    }
+    if (quietPc < PC_FLOOR || pc < PC_FLOOR) {
+      return `One side is below ${PC_FLOOR.toExponential(0)}, so the ratio would be a number like 1e47. The event crossed the level at which a probability means anything, which is the statement worth making.`;
+    }
+  }
+  return "This scenario's probability over the quiet one";
+}
+
 function flagChip(flag: string, confidence: string, region: string): string {
+  if (flag === "unscoreable") {
+    return `<span class="flag none" title="The storm term left the linear theory it was derived under; this event carries no probability at all">not scored</span>`;
+  }
   if (flag === "none") return "";
   const cls = confidence === "low" ? "flag low" : `flag ${flag}`;
   const title = confidence === "low" ? `${flag}, low confidence (${region} region): not actionable` : `${flag}`;
@@ -197,8 +287,14 @@ function flagChip(flag: string, confidence: string, region: string): string {
   return `<span class="${cls}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
 }
 
+/** `indicative` gets a marker; `validated` and `none` do not need one on every row. */
+function validityChip(validity: string | undefined): string {
+  if (validity !== "indicative") return "";
+  return `<span class="chip-validity" title="At least one of the two objects has no ballistic coefficient measured from its own decay. Step 4 found the storm term predictive at r = 0.88 with a measured coefficient and of no demonstrated skill without one. The number is not adjusted for this; the label says the validation does not reach it.">indicative</span>`;
+}
+
 export interface PanelHandles {
-  /** Redraw the list, e.g. after the filter changes. */
+  /** Redraw the list, e.g. after the filter or the scenario changes. */
   refresh(): void;
 }
 
@@ -208,6 +304,7 @@ export interface PanelHandles {
  */
 export function buildConjunctionPanel(
   bundle: Bundle,
+  state: ScenarioState,
   onSelect: (selection: ConjunctionSelection | null) => void,
 ): PanelHandles {
   const root = document.getElementById("conjunctions");
@@ -228,31 +325,57 @@ export function buildConjunctionPanel(
   const onlyFlagged = root.querySelector<HTMLInputElement>("#conjunction-flagged");
   if (!header || !list || !detail || !filter || !onlyFlagged) return { refresh: () => void 0 };
 
-  const red = data.pairs.filter((p) => p.flag === "red").length;
-  const yellow = data.pairs.filter((p) => p.flag === "yellow").length;
-  const lowConfidence = data.pairs.filter((p) => p.flag !== "none" && p.confidence === "low").length;
-  header.innerHTML =
-    `<div>${data.n_events_total.toLocaleString()} events over ${data.n_pairs.toLocaleString()} pairs, ` +
-    `${escapeHtml(data.window.start.slice(0, 10))} to ${escapeHtml(data.window.end.slice(0, 10))}.</div>` +
-    `<div class="muted">${red} red, ${yellow} yellow; ${lowConfidence} of them in the dilution region and ` +
-    `not actionable. Scenario <code>${escapeHtml(data.scenario)}</code>.</div>`;
+  /** The pairs under the scenario in force, ranked by its probability, with their base index. */
+  const rankedPairs = (): Array<{ pair: ConjunctionPair; index: number }> => {
+    const overlay = state.overlay;
+    const rows = data.pairs.map((pair, index) => ({ pair: pairUnder(pair, index, overlay), index }));
+    if (!overlay) return rows;
+    // Re-sorted here rather than by the exporter because the order depends on the scenario, and
+    // shipping five orderings of the same 3,000 pairs would cost more than the sort does.
+    return rows.sort((x, y) => (y.pair.max_pc ?? -1) - (x.pair.max_pc ?? -1));
+  };
+
+  const eventAt = (index: number): ConjunctionEvent => eventUnder(data.events[index], index, state.overlay);
+  const quietEventAt = (index: number): ConjunctionEvent | null => {
+    const baseline = state.baseline;
+    if (!baseline || state.current === "quiet") return null;
+    return eventUnder(data.events[index], index, baseline);
+  };
+  const quietPairAt = (index: number): ConjunctionPair | null => {
+    const baseline = state.baseline;
+    if (!baseline || state.current === "quiet") return null;
+    return pairUnder(data.pairs[index], index, baseline);
+  };
 
   let expanded: number | null = null;
 
-  const matching = (): ConjunctionPair[] => {
+  const renderHeader = () => {
+    const rows = rankedPairs().map((r) => r.pair);
+    const red = rows.filter((p) => p.flag === "red").length;
+    const yellow = rows.filter((p) => p.flag === "yellow").length;
+    const lowConfidence = rows.filter((p) => p.flag !== "none" && p.confidence === "low").length;
+    const label = labelOf(state.current);
+    header.innerHTML =
+      `<div>${data.n_events_total.toLocaleString()} events over ${data.n_pairs.toLocaleString()} pairs, ` +
+      `${escapeHtml(data.window.start.slice(0, 10))} to ${escapeHtml(data.window.end.slice(0, 10))}.</div>` +
+      `<div class="muted">${red} red, ${yellow} yellow; ${lowConfidence} of them in the dilution region and ` +
+      `not actionable. Scenario <code>${escapeHtml(label)}</code>, sorted by its probability.</div>`;
+  };
+
+  const matching = (): Array<{ pair: ConjunctionPair; index: number }> => {
     const q = filter.value.trim().toLowerCase();
-    return data.pairs.filter((p) => {
-      if (onlyFlagged.checked && p.flag === "none") return false;
+    return rankedPairs().filter(({ pair }) => {
+      if (onlyFlagged.checked && (pair.flag === "none" || pair.flag === "unscoreable")) return false;
       if (!q) return true;
       return (
-        p.secondary_name.toLowerCase().includes(q) ||
-        p.primary_name.toLowerCase().includes(q) ||
-        String(p.secondary_norad_id).includes(q)
+        pair.secondary_name.toLowerCase().includes(q) ||
+        pair.primary_name.toLowerCase().includes(q) ||
+        String(pair.secondary_norad_id).includes(q)
       );
     });
   };
 
-  const selectEvent = (pair: ConjunctionPair, event: ConjunctionEvent) => {
+  const selectEvent = (pair: ConjunctionPair, event: ConjunctionEvent, eventIndex: number) => {
     onSelect({
       pair,
       event,
@@ -260,29 +383,42 @@ export function buildConjunctionPanel(
       secondaryIndex: indexOfNorad.get(pair.secondary_norad_id) ?? -1,
     });
     detail.hidden = false;
-    detail.innerHTML = eventDetailHtml(pair, event, data.model_version);
+    detail.dataset.eventIndex = String(eventIndex);
+    detail.innerHTML = eventDetailHtml(pair, event, quietEventAt(eventIndex), data.model_version, state.current);
     detail.scrollIntoView({ block: "nearest" });
   };
 
   const render = () => {
+    renderHeader();
     const pairs = matching();
     const shown = pairs.slice(0, LIST_LIMIT);
     list.innerHTML = "";
-    for (const pair of shown) {
-      const index = data.pairs.indexOf(pair);
+    for (const { pair, index } of shown) {
+      const quiet = quietPairAt(index);
       const row = document.createElement("div");
       row.className = "cj-row";
+      const delta = quiet ? deltaAgainstQuiet(pair.max_pc, quiet.max_pc) : "";
       row.innerHTML =
         `<button class="cj-head" aria-expanded="${expanded === index}">` +
         `<span class="cj-names">${escapeHtml(pair.primary_name)} <span class="muted">vs</span> ` +
         `${escapeHtml(pair.secondary_name)}</span>` +
         // The miss quoted beside the probability is the miss of the event that produced it, which
         // for a pair seen many times is often not the closest pass. The closest is in the subtitle.
-        `<span class="cj-nums">${fmtKm(pair.miss_at_max_pc_km ?? pair.closest_km)} km · ${fmtPc(pair.max_pc)} ${flagChip(pair.flag, pair.confidence, pair.region)}</span>` +
+        `<span class="cj-nums">${fmtKm(pair.miss_at_max_pc_km ?? pair.closest_km)} km · ${fmtPc(pair.max_pc)} ` +
+        `${flagChip(pair.flag, pair.confidence, pair.region)}${validityChip(pair.storm_validity)}</span>` +
         `<span class="muted cj-sub">${pair.n_events} event${pair.n_events === 1 ? "" : "s"} · ` +
         `closest ${fmtKm(pair.closest_km)} km · ` +
         `first ${escapeHtml(pair.first_tca.slice(5, 16).replace("T", " "))} · ${escapeHtml(pair.secondary_category)}` +
-        `${pair.n_in_box > 0 ? ` · ${pair.n_in_box} in box` : ""}</span>` +
+        `${pair.n_in_box > 0 ? ` · ${pair.n_in_box} in box` : ""}` +
+        // The Δ is on every row, not only the interesting ones: seeing it small twenty times and
+        // large once is how the phase's result is learnt from the screen.
+        `${
+          delta
+            ? ` · <span class="cj-delta" title="${escapeHtml(deltaTitle(pair.max_pc, quiet!.max_pc))}">` +
+              `${escapeHtml(delta)} vs quiet</span>`
+            : ""
+        }` +
+        `</span>` +
         `</button>`;
       const head = row.querySelector<HTMLButtonElement>(".cj-head")!;
       head.addEventListener("click", () => {
@@ -298,15 +434,18 @@ export function buildConjunctionPanel(
             probabilities.</p>`;
         }
         for (const eventIndex of pair.events) {
-          const event = data.events[eventIndex];
+          const event = eventAt(eventIndex);
+          const quietEvent = quietEventAt(eventIndex);
           const button = document.createElement("button");
           button.className = "cj-event";
           button.innerHTML =
             `<span>${escapeHtml(event.tca.slice(5, 19).replace("T", " "))}</span>` +
-            `<span>${fmtKm(event.miss_km)} km</span>` +
+            `<span>${fmtKm(missOf(event))} km</span>` +
             `<span>${fmtPc(event.pc)}</span>` +
-            `<span class="muted">${escapeHtml(event.region)}</span>`;
-          button.addEventListener("click", () => selectEvent(pair, event));
+            `<span class="muted">${escapeHtml(
+              quietEvent ? deltaAgainstQuiet(event.pc, quietEvent.pc) : event.region,
+            )}</span>`;
+          button.addEventListener("click", () => selectEvent(pair, event, eventIndex));
           events.appendChild(button);
         }
         row.appendChild(events);
@@ -322,50 +461,128 @@ export function buildConjunctionPanel(
     if (!pairs.length) {
       list.innerHTML = `<p class="muted">No pair matches.</p>`;
     }
+    // A detail view left open must follow the scenario, or it is showing the previous one's
+    // numbers under the new one's name.
+    const openIndex = detail.hidden ? null : Number(detail.dataset.eventIndex);
+    if (openIndex != null && Number.isInteger(openIndex)) {
+      const event = eventAt(openIndex);
+      const pair = data.pairs.find((p) => p.events.includes(openIndex));
+      if (pair) {
+        const index = data.pairs.indexOf(pair);
+        detail.innerHTML = eventDetailHtml(
+          pairUnder(pair, index, state.overlay),
+          event,
+          quietEventAt(openIndex),
+          data.model_version,
+          state.current,
+        );
+      }
+    }
   };
 
   filter.addEventListener("input", render);
   onlyFlagged.addEventListener("change", render);
   root.querySelector<HTMLButtonElement>("#conjunction-clear")?.addEventListener("click", () => {
     detail.hidden = true;
+    delete detail.dataset.eventIndex;
     onSelect(null);
   });
   render();
   return { refresh: render };
 }
 
-function eventDetailHtml(pair: ConjunctionPair, event: ConjunctionEvent, modelVersion: string | null): string {
+const VALIDITY_TEXT: Record<string, string> = {
+  validated:
+    "validated — both objects have a ballistic coefficient fitted from their own decay, which is the " +
+    "population Step 4 measured the storm term against (r = 0.88)",
+  indicative:
+    "indicative — at least one object's coefficient is a B* inversion, a population stand-in, or absent. " +
+    "The storm term has no demonstrated skill there. The number is not adjusted for this.",
+  none: "no storm term applied under this scenario",
+};
+
+function eventDetailHtml(
+  pair: ConjunctionPair,
+  event: ConjunctionEvent,
+  quiet: ConjunctionEvent | null,
+  modelVersion: string | null,
+  scenario: string,
+): string {
+  const shifted = missOf(event);
+  const stormy = event.relative_shift_km != null && event.relative_shift_km > 0;
   const rows: Array<[string, string]> = [
+    ["Scenario", labelOf(scenario)],
     ["Time of closest approach", formatUtc(Date.parse(event.tca))],
-    ["Miss distance", `${fmtKm(event.miss_km)} km`],
+    ["Miss distance", `${fmtKm(shifted)} km${stormy ? " (after the storm term moved both objects)" : ""}`],
+  ];
+  if (stormy) {
+    rows.push(["Miss without the storm term", `${fmtKm(event.miss_km)} km`]);
+    rows.push(["Relative displacement", `${fmtKm(event.relative_shift_km)} km`]);
+  }
+  rows.push(
     ["Relative speed", `${fmtKm(event.rel_speed_kms, 2)} km/s`],
-    ["Radial, in-track, cross-track", `${fmtKm(event.miss_r_km, 2)}, ${fmtKm(event.miss_i_km, 2)}, ${fmtKm(event.miss_c_km, 2)} km`],
     ["Combined hard-body radius", `${event.hbr_m?.toFixed(1) ?? "—"} m`],
     ["In-track sigma, primary", `${fmtKm(event.sigma_i_primary_km, 2)} km`],
     ["In-track sigma, secondary", `${fmtKm(event.sigma_i_secondary_km, 2)} km`],
     ["Covariance source", event.cov_source_secondary ?? "—"],
     ["Probability", fmtPc(event.pc)],
+  );
+  if (stormy) {
+    rows.push(
+      ["… objects moved only", fmtPc(event.pc_shift_only)],
+      ["… covariance widened only", fmtPc(event.pc_variance_only)],
+    );
+  }
+  if (quiet) {
+    rows.push(["Probability under quiet", `${fmtPc(quiet.pc)} (${deltaAgainstQuiet(event.pc, quiet.pc)})`]);
+    rows.push(["Region under quiet", `${quiet.region} · ${quiet.confidence}`]);
+  }
+  rows.push(
     ["Maximum probability", `${fmtPc(event.pc_max)} at ${event.pc_max_scale?.toFixed(2) ?? "—"}× the covariance`],
     ["Region", `${event.region}${event.confidence === "low" ? " (low confidence, not actionable)" : ""}`],
-  ];
+  );
+  if (event.storm_validity && event.storm_validity !== "none") {
+    rows.push(["Storm-term validity", VALIDITY_TEXT[event.storm_validity] ?? event.storm_validity]);
+    rows.push([
+      "Coefficient sources",
+      `${event.storm_source_primary ?? "—"} / ${event.storm_source_secondary ?? "—"}`,
+    ]);
+  }
+
   const note =
-    event.region === "dilution"
-      ? `<p class="caveat">The maximum probability lies below the covariance used, so shrinking the uncertainty
-         at the same miss would raise it. The number is held up by the size of the covariance rather than by the
-         geometry: it says the trajectories are uncertain, not that a collision is likely &mdash; and equally not
-         that one is unlikely. The data cannot support a judgement either way. Better tracking would shrink the
-         covariance and move the nominal miss together, so nothing here predicts which way this would go.</p>`
-      : `<p class="caveat">The probability is limited by the geometry rather than by the uncertainty. It still
-         rests on a covariance estimated from how much each object's own element sets disagree, which is a floor
-         on the error and not a measurement of it.</p>`;
+    event.scoreable === false
+      ? `<p class="caveat">This event carries <b>no probability at all</b> under this scenario, not a small one.
+         ${escapeHtml(event.unscoreable_reason ?? "")} Past that the storm term has stopped being a small
+         correction to a known position and has become a claim about where in its orbit the object is, which
+         nothing here can support. The geometry, the covariance and the displacement all stand; only the
+         number a reader could act on is withheld.</p>`
+      : event.region === "dilution"
+        ? `<p class="caveat">The maximum probability lies below the covariance used, so shrinking the uncertainty
+           at the same miss would raise it. The number is held up by the size of the covariance rather than by the
+           geometry: it says the trajectories are uncertain, not that a collision is likely &mdash; and equally not
+           that one is unlikely. The data cannot support a judgement either way. Better tracking would shrink the
+           covariance and move the nominal miss together, so nothing here predicts which way this would go.</p>`
+        : `<p class="caveat">The probability is limited by the geometry rather than by the uncertainty. It still
+           rests on a covariance estimated from how much each object's own element sets disagree, which is a floor
+           on the error and not a measurement of it.</p>`;
+
+  const stormNote = stormy
+    ? `<p class="caveat">The dashed arrow is the storm's whole effect on the geometry: it runs from the quiet
+       miss to this scenario's, drawn to the same scale as the ellipse, so a displacement lost inside the
+       uncertainty looks lost. The two objects are displaced <i>nearly independently</i> &mdash; a conjunction
+       is a crossing, at a median 120° between their two in-track directions &mdash; and it is the relative
+       displacement above, not either object's own, that moves the miss.</p>`
+    : "";
+
   return (
     `<h2>${escapeHtml(pair.primary_name)} vs ${escapeHtml(pair.secondary_name)}</h2>` +
-    encounterPlaneSvg(event) +
+    encounterPlaneSvg(event, quiet) +
     `<p class="muted">The encounter plane: the disc is the combined hard-body radius at the primary, the
       ellipses are the one and three sigma contours of the combined covariance about the miss, and the line
       between them is the miss vector. The probability is the mass of the ellipse's Gaussian inside the disc.</p>` +
     `<dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl>` +
     note +
+    stormNote +
     `<p class="caveat">Computed by driftwatch${modelVersion ? ` (${escapeHtml(modelVersion)})` : ""}; the
       viewer only draws it.</p>`
   );

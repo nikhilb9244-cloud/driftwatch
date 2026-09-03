@@ -236,6 +236,19 @@ Design only. Nothing below is built, no file in `web/src` changes on account of 
 number here is either derived from measurements of the current bundle (recorded below) or
 stated as a budget to be met.
 
+> **Partly built at Phase 3 Step 5 (2026-09-03), on purpose.** Step 5 needed a storm control and
+> a replay, and this section had already settled what both should be, so it was built to the
+> specification rather than invented twice. What exists in `web/src` now: the scenario control of
+> §3.1 (a segmented control of five at desktop width, a dropdown below 900 px, full names, an
+> unscored scenario shown and disabled, replay as a mode with its own control), the Δ-against-
+> quiet column of §5 on every row, the unscoreable section of §5 below the queue, the encounter
+> plane's quiet ellipse and shift arrow from §6.1, and the replay scrubber with the Kp bar as its
+> background from §2. What does not: the status strip, the fleet band, the queue as a table, the
+> reading order of §1, the layout of §2, the commandability column, and the paint budget of §8 —
+> all of which are a rewrite of the viewer's shell rather than an addition to its panel, and all
+> of which remain Phase 4. The parts that were built kept this section's decisions so that Phase 4
+> inherits them instead of replacing them.
+
 The visual pass above answers "how should the viewer look". This answers a different and more
 important question: **what is the screen for, and in what order does a person read it.** The
 Phase 1 to 3 viewer is a globe with a list attached. An operator does not open a globe. They
@@ -518,25 +531,35 @@ answer to question 1 and the top of the answer to question 2.
 
 That target is a budget, and the budget is spent as follows.
 
-**What the current bundle costs, measured** (2026-09-02, `web/dist` and `web/public/data`):
+**What the current bundle costs, measured** (re-measured 2026-09-03 after Phase 3 Step 5 added
+storm mode and the replay; `web/dist` and `web/public/data`):
 
 | Asset | Bytes | On the console's critical path? |
 | --- | ---: | --- |
-| `index-*.js` (three.js, globe.gl, the viewer) | 1 911 248 | **No** |
+| `index-*.js` (three.js, globe.gl, the viewer) | 1 931 764 | **No** |
 | `index-*.js` (second chunk) | 308 863 | Partly — the console's own code is carved out of this |
 | `base-release-*.js` | 152 136 | No |
 | `propagator.worker-*.js` | 30 507 | No |
-| `index-*.css` | 5 241 | Yes |
+| `index-*.css` | 8 937 | Yes |
 | `objects.json` | 2 064 926 | No |
 | `elements.bin` | 2 847 768 | No |
-| `conjunctions.json` | 2 762 393 | **No — replaced, see below** |
+| `conjunctions.json` | 3 531 615 | **No — replaced, see below** |
+| `scenarios.json` (storm mode, lazy) | 1 280 532 | **No — fetched after first paint** |
 | `reference.bin` | 776 664 | No |
 | `conjunction-tracks.bin` | 439 200 | No |
+| `replay/` (catalogue, conjunctions, timeline, 29 Sun frames) | 15 053 168 | **No — only on `?replay`** |
 | Blue Marble texture (globe.gl default) | ~1 MB | No |
 
-Roughly 11 MB of transfer today, of which about 60 KB is on the console's critical path once
-the split below is made. That is the whole design: the console is a different, much smaller
-document that happens to share a repository with the globe.
+Roughly 13 MB of transfer for the live viewer today, plus 15 MB more that only a reader who
+enters replay ever fetches, of which about 60 KB is on the console's critical path once the split
+below is made. That is the whole design: the console is a different, much smaller document that
+happens to share a repository with the globe.
+
+**Step 5 cost the critical path nothing**, which was the point of building it the way it was
+built. The viewer's own JavaScript grew by 20 KB and its stylesheet by 3.7 KB; `scenarios.json`
+and the whole replay directory are behind an idle callback and a navigation respectively, and
+neither is fetched by a reader who does not use them. The largest single file is 3.5 MB against
+Cloudflare Pages' 25 MiB limit, and the largest Sun frame is 380 KB.
 
 **What ships on the critical path:**
 

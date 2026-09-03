@@ -435,3 +435,57 @@ directory holds the rest.
 Positions are TEME because that is what SGP4 produces and what the viewer's own
 propagator returns; the browser rotates each sample to the Earth-fixed frame with the
 GMST of that sample's own time, the same way the propagation worker does.
+
+### The scenario overlays: `scenarios.json`
+
+Written beside `conjunctions.json` by `driftwatch report` whenever a run has more than one
+scored scenario (Phase 3, Step 5). It carries **only what a scenario changes**, in columns
+parallel to `conjunctions.json`'s `events` and `pairs` arrays and in the same order, so the
+browser indexes into them and joins nothing. Fetched on an idle callback after first paint,
+never on the critical path: the base bundle is the size it was before storm mode existed.
+
+```
+{ "overlay_version": 1, "run_id": ..., "n_events": 2052, "n_pairs": 3030,
+  "scenarios": { "storm-g5": { "events": {...}, "pairs": {...},
+                               "summary": {...}, "unscoreable": [...] }, ... } }
+```
+
+| Block | Content |
+| --- | --- |
+| `events` | Per event, in the base bundle's event order: `pc`, `pc_shift_only`, `pc_variance_only`, `pc_max`, `pc_max_scale`, `miss_shifted_km`, `relative_shift_km`, the two in-track shifts and sigmas, the three encounter-plane covariance terms, and `scoreable`. Numeric columns are plain arrays with `null` where the value is absent. |
+| `events` (labels) | `region`, `flag`, `confidence`, `storm_validity`, `storm_source_primary`, `storm_source_secondary`, `unscoreable_reason`, each **dictionary-encoded** as `{"v": [distinct values], "i": [codes]}`. These columns are a handful of values repeated thousands of times; encoded they cost a third of what they did as strings. |
+| `pairs` | Per pair, in the base bundle's pair order: `max_pc`, `closest_km`, `miss_at_max_pc_km`, `pc_cumulative`, `max_pc_max`, `n_scoreable`, and the same four label columns encoded the same way. Recollapsed per scenario rather than reused, because the worst event of a pair is not always the same event under a different scenario. |
+| `summary` | The aggregate figures, keyed `validated`, `indicative`, `combined` **in that order**: events, events moved, median and p90 relative shift, median `pc / pc_variance_only`, how many the shift lowered and raised, and the flag counts. `combined` is always present and always last, and the viewer never renders it alone. |
+| `unscoreable` | One row per event this scenario refused to score, with the two names, the time, the pre-storm miss and the reason. They cannot be ranked by a number they do not have, so they sit in their own section below the queue rather than in it. |
+
+**A null in a probability column is not a small probability.** It means the event is
+unscoreable: one of its two objects' in-track displacement ran past a quarter of its orbit's
+circumference, past the linearisation the storm term was derived under.
+
+**The miss in this file is the shifted miss.** `conjunctions.json`'s `miss_km` is the geometry —
+what the two element sets predicted — and `miss_shifted_km` is where the scenario's term put
+them, which is what its probability was computed from. The two answer different questions, and
+the second is the one that belongs beside a scenario's probability.
+
+### The replay bundle: `web/public/data/replay/`
+
+A complete second bundle for one historical window, loaded only when the viewer is entered with
+`?replay`. Four of its files are the ordinary exports pointed at another directory; the fifth is
+new.
+
+| File | Written by | Content |
+| --- | --- | --- |
+| `manifest.json`, `objects.json`, `elements.bin`, `reference.bin` | `driftwatch propagate --snapshot <as-of file> --at <date> --export-dir web/public/data/replay` | The catalogue as it stood on the replay date, from `data/snapshots/as-of/`. 13,376 objects for 9 May 2024, against 32,361 today. |
+| `conjunctions.json`, `conjunction-tracks.bin`, `scenarios.json` | `driftwatch report <replay run> --out-dir web/public/data/replay` | That run's own screening, scored under `quiet` and `replay:<date>`. |
+| `storm.json` | `driftwatch replay-bundle <replay run>` | The timeline (below). |
+| `sun/aia193_*.png` | the same command | The cached Helioviewer frames, copied. About 360 kB each and fetched one at a time as the scrubber passes them. |
+
+`storm.json`:
+
+| Key | Content |
+| --- | --- |
+| `window` | The replay window, which is the run's own window shifted to the historical date. |
+| `kp` | Parallel arrays `t`, `kp`, `ap`, `provenance`, three-hourly, from CelesTrak's SW-All observed record. `provenance` is per row: the viewer draws a forecast interval paler than an observed one. |
+| `density` | `altitudes_km` (400 and 500), `t`, and one `ratio_<n>km` array per altitude. Each ratio is NRLMSIS at that height averaged over 24 local solar times, over the same average across the **Gannon quiet control window** — the denominator Step 4's measured enhancement used, recorded in `quiet_window` and `quiet_baseline_kg_m3` so it can be checked. Uncorrected for the 22 per cent over-prediction `docs/storm-validation.md` §1 records. |
+| `sun` | One entry per frame: the time **asked for**, the time the image actually is, the lag in minutes, the path and the size. Helioviewer returns the nearest image it holds, which during a data gap is hours away, so the lag travels to the viewer and is shown above 15 minutes. |
+| `notes` | The three sentences above, in the file, for anybody reading it without the docs. |

@@ -286,6 +286,90 @@ def test_bundle_json_is_finite_and_serialisable(run):
     assert "NaN" not in text and "Infinity" not in text
 
 
+def test_the_bundles_storm_summary_counts_the_whole_scenario_not_the_detailed_events(tmp_path, monkeypatch):
+    """The base bundle and the lazily fetched overlay must agree, or numbers move on their own.
+
+    `conjunctions.json` carries the events of the pairs a reader can act on -- 2,052 of 5,704 on
+    the demo run -- while `scenarios.json` summarises every event of the scenario. When the
+    summary in the bundle was computed over the narrowed set, the storm figures changed the
+    moment the overlay landed, with no interaction in between. Both are statements about the
+    whole scenario and both must count it.
+    """
+    from driftwatch.export import report as report_mod
+    from driftwatch.export.storm import build_overlays
+
+    primary = primary_satrec()
+    members = {PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH)}
+    for k in range(4):
+        t_star = START + timedelta(hours=1, minutes=20 + 17 * k)
+        secondary, _ = make_conjunction(
+            primary,
+            t_star,
+            miss_km=0.4 + 0.3 * k,
+            crossing_angle_deg=70.0 + 10.0 * k,
+            miss_direction_deg=20.0 * k,
+            norad_id=91000 + k,
+        )
+        members[91000 + k] = (secondary, f"SECONDARY-{k}", t_star)
+    snap = snapshot_from(members)
+    fleet = fleet_of((PRIMARY_ID, "Primary", True))
+    result = screen_fleet(snap, fleet, config=ScreeningConfig(days=0.3), start=START)
+    objects = objects_from_snapshot(sorted(members), snap, fleet)
+
+    run_dir = RunDirectory.for_run("many", START, tmp_path)
+    run_dir.write_events(result.events, snapshot="gp_test.parquet")
+    run_dir.write_objects(objects)
+    run_dir.write_covariance(pd.DataFrame({"kind": [], "norad_id": []}))
+    run_dir.write_risk(
+        run_risk(result.events, objects, Isotropic(0.05), scenario="quiet", run_id="r-2", snapshot="gp_test.parquet"),
+        "quiet",
+    )
+    run_dir.write_run(
+        {
+            "run_id": "r-2",
+            "snapshot": "gp_test.parquet",
+            "fleet_name": "many",
+            "start": START.isoformat(),
+            "end": (START + timedelta(days=0.3)).isoformat(),
+            "covariance": {"model_version": "test/1"},
+            "scenarios": ["quiet"],
+        }
+    )
+    run_dir.rebuild_conjunctions()
+
+    # One detailed pair out of several, which is the situation the demo run is always in --
+    # forced directly, because `detail_pairs` keeps every pair with an event inside the
+    # notification box whatever the limit says, and all four of these are inside it.
+    monkeypatch.setattr(report_mod, "detail_pairs", lambda pairs, limit=None: pairs.head(1))
+    bundle, _ = build_bundle(run_dir, snap, scenario="quiet")
+    assert bundle["n_pairs"] > bundle["n_pairs_detailed"], "the fixture must actually narrow"
+    assert len(bundle["events"]) < bundle["n_events_total"]
+
+    combined = bundle["storm"]["summary"]["combined"]["n_events"]
+    assert combined == bundle["n_events_total"]
+    overlays = build_overlays(run_dir, bundle)
+    assert combined == overlays["scenarios"]["quiet"]["summary"]["combined"]["n_events"]
+    assert len(bundle["storm"]["unscoreable"]) == len(overlays["scenarios"]["quiet"]["unscoreable"])
+
+
+def test_the_overlay_columns_are_parallel_to_the_bundle_it_was_built_from(run):
+    """The browser indexes into these by position; a length mismatch would misattribute rows."""
+    from driftwatch.export.storm import build_overlays
+
+    run_dir, snap = run
+    bundle, _ = build_bundle(run_dir, snap, scenario="quiet")
+    overlays = build_overlays(run_dir, bundle)
+    assert overlays["n_events"] == len(bundle["events"])
+    assert overlays["n_pairs"] == len(bundle["pairs"])
+    events = overlays["scenarios"]["quiet"]["events"]
+    assert len(events["pc"]) == len(bundle["events"])
+    assert len(events["region"]["i"]) == len(bundle["events"])
+    assert len(overlays["scenarios"]["quiet"]["pairs"]["max_pc"]) == len(bundle["pairs"])
+    # And under a scenario with no storm layer the overlay agrees with the bundle event by event.
+    for k, record in enumerate(bundle["events"]):
+        assert events["pc"][k] == pytest.approx(record["pc"], rel=1e-6, abs=1e-30)
+
+
 def test_sample_tracks_refuses_an_object_it_has_no_elements_for(run):
     run_dir, snap = run
     events = run_dir.read_events().head(1)

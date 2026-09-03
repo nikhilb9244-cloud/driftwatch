@@ -67,6 +67,29 @@ export interface ConjunctionEvent {
   enc_cov_xy_km2: number | null;
   enc_cov_yy_km2: number | null;
   pc: number | null;
+  /** Phase 3: the objects moved, scored against the covariance the run would have had. */
+  pc_shift_only?: number | null;
+  /** Phase 3: the covariance widened, the objects left where their element sets put them. */
+  pc_variance_only?: number | null;
+  /**
+   * The miss under the scenario in force, after the storm term moved both objects. Under
+   * `quiet` it equals `miss_km`; under a storm scenario the two answer different questions
+   * and this is the one the probability was computed from.
+   */
+  miss_shifted_km?: number | null;
+  /** The displacement that actually entered the miss: a vector norm, not a difference of the two. */
+  relative_shift_km?: number | null;
+  storm_source_primary?: string;
+  storm_source_secondary?: string;
+  /**
+   * How far Step 4's May 2024 validation reaches this event: `validated` when both objects have
+   * a ballistic coefficient measured from their own decay, `indicative` otherwise, `none` under
+   * a scenario with no storm layer. Not a confidence and not a weighting.
+   */
+  storm_validity?: string;
+  /** False when the storm term left the linear theory it was derived under; then every pc is null. */
+  scoreable?: boolean;
+  unscoreable_reason?: string;
   pc_max: number | null;
   pc_max_scale: number | null;
   region: string;
@@ -95,6 +118,10 @@ export interface ConjunctionPair {
   region: string;
   flag: string;
   confidence: string;
+  /** The validity of the event this pair is judged on. See `ConjunctionEvent.storm_validity`. */
+  storm_validity?: string;
+  /** Events of this pair that carry a probability under the scenario in force. */
+  n_scoreable?: number;
   manoeuvre_secondary: string;
   secondary_ephemeris: string;
   cov_source_secondary: string | null;
@@ -132,6 +159,14 @@ export interface Conjunctions {
   pairs: ConjunctionPair[];
   events: ConjunctionEvent[];
   tracks: TracksSpec;
+  /** Storm mode's entry point: where the overlays are, and the figures for the scenario in force. */
+  storm?: {
+    overlays: string;
+    baseline: string;
+    scored: string[];
+    summary: Record<string, import("./scenarios").ScenarioFigures>;
+    unscoreable: import("./scenarios").UnscoreableRow[];
+  };
   caveats: string[];
   supplemental?: Array<{ name: string; version: string; n_applied: number }> | null;
 }

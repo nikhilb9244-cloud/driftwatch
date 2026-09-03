@@ -77,6 +77,7 @@ PAIR_COLUMNS: tuple[str, ...] = (
     "region",
     "flag",
     "confidence",
+    "storm_validity",
     "n_in_box",
     "manoeuvre_secondary",
     "secondary_ephemeris",
@@ -115,6 +116,14 @@ def normalise(conjunctions: pd.DataFrame) -> pd.DataFrame:
         from driftwatch.risk.pc import slow_encounters
 
         df["slow_encounter"] = slow_encounters(pd.to_numeric(df["rel_speed_kms"], errors="coerce").to_numpy())
+    # The miss under the scenario in force: `miss_km` is what the two element sets predicted,
+    # and a storm scenario moved both objects before computing its probability. Quoting the
+    # pre-storm miss beside a post-storm probability puts two answers to different questions on
+    # one row, so everything that summarises a scenario reads this column and everything that
+    # describes the geometry goes on reading `miss_km`. Under `quiet` they are the same number.
+    geometry = pd.to_numeric(df["miss_km"], errors="coerce")
+    shifted = pd.to_numeric(df["miss_shifted_km"], errors="coerce") if "miss_shifted_km" in df.columns else geometry
+    df["miss_scenario_km"] = shifted.fillna(geometry)
     return df
 
 
@@ -135,7 +144,7 @@ def collapse_pairs(conjunctions: pd.DataFrame) -> pd.DataFrame:
     ):
         group = group.sort_values("tca")
         worst = group.loc[group["pc"].idxmax()] if group["pc"].notna().any() else group.iloc[0]
-        closest = group.loc[group["miss_km"].idxmin()]
+        closest = group.loc[group["miss_scenario_km"].idxmin()]
         rows.append(
             {
                 "scenario": scenario,
@@ -146,17 +155,20 @@ def collapse_pairs(conjunctions: pd.DataFrame) -> pd.DataFrame:
                 "secondary_category": group["secondary_category"].iloc[0],
                 "n_events": int(len(group)),
                 "first_tca": group["tca"].iloc[0],
-                "closest_km": float(closest["miss_km"]),
+                "closest_km": float(closest["miss_scenario_km"]),
                 "closest_tca": closest["tca"],
                 "max_pc": float(worst["pc"]) if pd.notna(worst["pc"]) else float("nan"),
                 "max_pc_tca": worst["tca"],
-                "miss_at_max_pc_km": float(worst["miss_km"]),
+                "miss_at_max_pc_km": float(worst["miss_scenario_km"]),
                 "pc_cumulative": cumulative_pc(group["pc"].to_numpy()),
                 "max_pc_max": float(pd.to_numeric(group["pc_max"], errors="coerce").max()),
                 "pc_max_scale_at_max_pc": float(worst["pc_max_scale"]) if pd.notna(worst["pc_max_scale"]) else np.nan,
                 "region": worst.get("region", "unknown"),
                 "flag": worst.get("flag", "none"),
                 "confidence": worst.get("confidence", "low"),
+                # A pair is only as validated as the event it is judged on, for the same reason
+                # an event is only as validated as its weaker object.
+                "storm_validity": worst.get("storm_validity", "none"),
                 "n_in_box": int(group["in_box"].sum()),
                 "manoeuvre_secondary": group["manoeuvre_secondary"].iloc[0],
                 "secondary_ephemeris": group["secondary_ephemeris"].iloc[0],
@@ -317,6 +329,18 @@ EVENT_JSON_COLUMNS: list[str] = [
     "enc_cov_xy_km2",
     "enc_cov_yy_km2",
     "pc",
+    # Step 3's storm columns, carried at Step 5 so the panel can say what moved a number rather
+    # than only that it moved. Present and inert under `quiet`, which is what makes the storm
+    # control a re-render rather than a different code path.
+    "pc_shift_only",
+    "pc_variance_only",
+    "miss_shifted_km",
+    "relative_shift_km",
+    "storm_source_primary",
+    "storm_source_secondary",
+    "storm_validity",
+    "scoreable",
+    "unscoreable_reason",
     "pc_max",
     "pc_max_scale",
     "region",
@@ -340,6 +364,7 @@ PAIR_JSON_COLUMNS: list[str] = [
     "region",
     "flag",
     "confidence",
+    "storm_validity",
     "manoeuvre_secondary",
     "secondary_ephemeris",
     "cov_source_secondary",
@@ -363,6 +388,8 @@ _ROUND = {
     "enc_cov_xx_km2": 8,
     "enc_cov_xy_km2": 8,
     "enc_cov_yy_km2": 8,
+    "miss_shifted_km": 4,
+    "relative_shift_km": 4,
 }
 
 
@@ -374,12 +401,20 @@ def build_bundle(
     limit_tracks: int = MAX_TRACKED_EVENTS,
 ) -> tuple[dict[str, Any], Tracks]:
     """The viewer's conjunctions JSON and the track binary for one scenario of a run."""
+    from driftwatch.export import storm as storm_export
+
     info = run.read_run()
     joined = run.read_conjunctions()
     scenarios = sorted(str(s) for s in joined["scenario"].dropna().unique())
     scenario = scenario or (scenarios[0] if scenarios else "quiet")
     rows = normalise(joined[joined["scenario"] == scenario])
     rows["tca"] = pd.to_datetime(rows["tca"], utc=True)
+    # Kept before `rows` is narrowed to the detail set below, because the storm summary and the
+    # unscoreable list are statements about the whole scenario. Computed over the detail subset
+    # they disagreed with `scenarios.json` -- 2,052 events against 5,704 -- and the disagreement
+    # showed up as numbers changing when the overlay landed rather than when the reader did
+    # anything, which is the one failure mode a lazily fetched overlay must not have.
+    all_rows = rows
     pairs = collapse_pairs(rows)
 
     detailed = detail_pairs(pairs)
@@ -422,6 +457,16 @@ def build_bundle(
         "supplemental": info.get("supplemental"),
         "screening": info.get("config"),
         "thresholds": {"red": RED_PC, "yellow": YELLOW_PC},
+        # Storm mode fetches `scenarios.json` lazily and switches between these without
+        # re-fetching anything here. `quiet` is the Phase 2 baseline every other one is read
+        # against, so the viewer offers it as the comparison whichever scenario is in force.
+        "storm": {
+            "overlays": "scenarios.json",
+            "baseline": "quiet",
+            "scored": scenarios,
+            "summary": storm_export.scenario_summary(all_rows),
+            "unscoreable": storm_export.unscoreable_rows(all_rows),
+        },
         "n_events": len(event_records),
         "n_events_total": int(len(joined[joined["scenario"] == scenario])),
         "n_pairs": len(pair_records),
@@ -442,6 +487,18 @@ def build_bundle(
         },
         "caveats": [
             "Every number here comes from Python: the browser draws them and computes no screening result.",
+            "Under a storm scenario the miss shown is the shifted miss, which is what that scenario's "
+            "probability was computed from; the geometry's own miss is what the two element sets predicted "
+            "before the storm term moved them, and the two answer different questions.",
+            "storm_validity says how far Step 4's May 2024 validation reaches an event: validated when both "
+            "objects have a ballistic coefficient fitted from their own decay, indicative otherwise. The "
+            "storm term is predictive at a correlation of 0.88 for the first group and has no demonstrated "
+            "skill for the second. Nothing is weighted or withheld by the label and every aggregate is "
+            "reported both ways.",
+            "The storm displaces the two objects of a pair nearly independently, not in common: the relative "
+            "shift is a median 1.91 times the mean of the two absolute shifts, out of a possible 2. That a "
+            "storm lowers most probabilities is measured; it happens because a displacement of tens of "
+            "kilometres applied to a miss of a few separates more pairs than it creates.",
             "A pair's cumulative probability is one minus the product of the complements over its events. "
             "The events are repeated passes of the same two objects propagated from the same two element "
             "sets, so they are not independent and the true combined probability is lower.",
@@ -563,18 +620,24 @@ def _event_details(rows: pd.DataFrame, pairs: pd.DataFrame, limit: int = 10) -> 
             f"({int(p['n_events'])} events, closest {p['closest_km']:.3f} km)</summary>"
         )
         lines.append("")
-        lines.append("| TCA | Miss (km) | Rel. speed (km/s) | R, I, C (km) | Pc | Max Pc (scale) | Region |")
-        lines.append("| --- | ---: | ---: | --- | ---: | ---: | --- |")
+        # The pre-storm miss is only worth a column when the storm term actually moved something;
+        # under `quiet` it would be the same number twice.
+        moved = bool((pd.to_numeric(events.get("relative_shift_km"), errors="coerce").fillna(0) > 0).any())
+        miss_head = "Miss (km) | Before the storm (km)" if moved else "Miss (km)"
+        miss_align = "---: | ---:" if moved else "---:"
+        lines.append(f"| TCA | {miss_head} | Rel. speed (km/s) | R, I, C (km) | Pc | Max Pc (scale) | Region |")
+        lines.append(f"| --- | {miss_align} | ---: | --- | ---: | ---: | --- |")
         for _, e in shown.iterrows():
             ric = f"{e['miss_r_km']:+.2f}, {e['miss_i_km']:+.2f}, {e['miss_c_km']:+.2f}"
             scale = f"{e['pc_max_scale']:.2f}" if np.isfinite(e["pc_max_scale"]) else "—"
+            miss = f"{e['miss_scenario_km']:.3f}" + (f" | {e['miss_km']:.3f}" if moved else "")
             lines.append(
-                f"| {pd.Timestamp(e['tca']).strftime('%Y-%m-%d %H:%M:%S')} | {e['miss_km']:.3f} "
+                f"| {pd.Timestamp(e['tca']).strftime('%Y-%m-%d %H:%M:%S')} | {miss} "
                 f"| {e['rel_speed_kms']:.2f} | {ric} | {_fmt_pc(e['pc'])} | {_fmt_pc(e['pc_max'])} ({scale}) "
                 f"| {e['region']} |"
             )
         if more > 0:
-            lines.append(f"| … {more} more events | | | | | | |")
+            lines.append(f"| … {more} more events |{' |' * (6 if moved else 5)} |")
         lines.append("")
         lines.append("</details>")
     return lines
@@ -740,7 +803,7 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         f"| Flagged pairs in the robust region | {len(actionable)} |",
         f"| Events not scored (the storm term left its own derivation) | {n_unscoreable} |",
         *_validity_summary_rows(rows),
-        f"| Closest approach | {rows['miss_km'].min():.3f} km |",
+        f"| Closest approach | {rows['miss_scenario_km'].min():.3f} km |",
         f"| Highest probability | {_fmt_pc(rows['pc'].max())} |",
         "",
     ]
@@ -831,6 +894,10 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         "numbers in hand, not a forecast of what a better orbit would give.",
         "- **Cumulative probability is an upper bound.** The events of a pair are repeated passes of the same "
         "two objects from the same two element sets, so they are not independent.",
+        "- **The miss quoted is the one under this scenario.** Under `quiet` it is what the two element sets "
+        "predicted. Under a storm scenario the term has moved both objects along track first, and this is the "
+        "miss its probability was computed from; the per-event tables carry the pre-storm miss beside it, and "
+        "the difference between the two is the storm's whole effect on the geometry.",
         "- **Manoeuvres are not predicted.** An object marked `known` or `observed` can move at any time, and "
         "no element set here knows about a burn that has not happened yet.",
     ]

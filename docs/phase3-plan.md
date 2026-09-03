@@ -1404,3 +1404,122 @@ calibration.
 
 What the case establishes is narrower and more useful than a model correction: **at insertion
 altitude the enhancement is not the warning, the baseline is.**
+
+## Step 5 decisions (viewer storm mode and replay, built 2026-09-03)
+
+The prompt asks for three things: a storm control that switches the panel between scenarios and
+shows the change per event, a May 2024 replay with the Kp bar, the density ratio, the Sun image
+and the conjunction list all moving together, and Phase 1's performance untouched. The console
+specification in `docs/design-brief.md` had already settled how the first should look, so it was
+built to that rather than invented a second time — and the brief now records which of its parts
+exist and which remain Phase 4.
+
+### The one rule, and what it decided
+
+**The scenario control changes numbers in the panel, not the point cloud.** That is the Phase 1
+rule restated, and it settled more than performance. A storm displaces an object *along* the
+track already drawn, by tens of kilometres against a covariance of kilometres. Redrawing the
+track at the displaced position would assert a precision the covariance denies — the displacement
+is smaller than the uncertainty on it for most objects — so the displacement is a number in the
+panel and the track is geometry. The point cloud, the propagation worker and the tracks never
+learn that a scenario exists.
+
+### `scenarios.json`: an overlay, not a second bundle
+
+The conjunctions bundle is 3.4 MB and carries one scenario. Five of them is 17 MB, and four
+fifths of that would be geometry, names and tracks that no scenario changes. So a scenario ships
+as **only what it changes**, in columns parallel to the base bundle's `events` and `pairs`
+arrays: the browser indexes into them and joins nothing. Label columns are dictionary-encoded
+(`{v: [...], i: [...]}`), which took the file from 1.9 MB to 1.25 MB for three scenarios, because
+a third of it was `robust`/`history`/`validated` written out thousands of times. Wide numeric
+columns went from eight decimals to four significant figures for the same reason.
+
+It is fetched on an idle callback **after first paint** and never on the critical path, so the
+base bundle is the size it was before storm mode existed. Until it lands the control is disabled
+and says so; if it fails to load the panel says which one scenario is available and goes on
+showing it, which is a complete answer rather than a degraded one.
+
+### Two bugs the build found, both about which miss is shown
+
+**The first was silent.** The base bundle's pair rollup summarised by the *geometry's* miss while
+the overlay summarised by the *shifted* one, so the miss on a row changed when the overlay landed
+even though the scenario had not. ISS versus YAM-3 read 11.466 km and then 3.402 km with no
+interaction in between. `normalise()` now derives one `miss_scenario_km` that everything
+summarising a scenario reads — the queue, the pair rollup, the report's tables — while everything
+describing the geometry goes on reading `miss_km`, and the per-event tables carry both so the
+difference is visible rather than chosen between. Under `quiet` they are the same number.
+
+**The second was loud once it was looked at.** The joined `conjunctions.parquet` was carrying
+`pc` alone out of Step 3's five probability-and-shift columns, because `EXPORT_COLUMNS` predates
+them. The report and the viewer both read that file rather than the risk parquets, so a storm
+probability could be shown with nothing beside it to say what had moved it. Fixed by adding the
+columns; no rescore was needed, because the join is rebuilt from the stored risk tables.
+
+### Replay is a navigation, and that is the deliberate choice
+
+Replay changes the catalogue: 13,376 objects as they stood on 9 May 2024, against 32,361 today.
+Holding two catalogues in memory and swapping the point cloud's buffers would put a second code
+path through the one part of this project Phase 1 asked not to be touched, for a mode a reader
+enters once. So `?replay` reloads the viewer against `web/public/data/replay/` — one catalogue
+alive at a time, the propagation worker's initialisation unchanged, nothing of the replay bundle
+fetched until the navigation happens, and a replay becomes a link somebody can send.
+
+The replay bundle is four ordinary exports pointed at another directory plus one new file. That
+was a decision too: `driftwatch replay-bundle` writes the timeline and **not** the catalogue or
+the conjunctions, because those are `propagate --export-dir` and `report --out-dir` over the
+historical snapshot, and a second path for them could drift from the first.
+
+### The scrubber is the clock
+
+There is no second timeline. The Kp bar is drawn as the background of the simulation clock's own
+scrubber, and the density readout, the Sun image and the objects all read the same `tMs`. They
+move together by construction rather than by synchronisation, which is the only version of this
+that cannot fall out of step.
+
+Three smaller decisions inside it. **Kp is read from the interval the clock is inside**, not the
+nearest one, because Kp is a three-hour average and the next interval's value is a forecast until
+it has happened. **The density ratio's denominator is the Gannon quiet control window**, the same
+one Step 4 measured the enhancement against, so the number on screen and the number in
+`docs/storm-validation.md` mean the same thing; getting that wrong is how the first build
+produced a timeline of NaN, and a baseline table that does not reach the quiet window is now an
+exception rather than a silent all-null column. **A Sun frame carries its lag** — Helioviewer
+returns the nearest image it holds, which during a data gap is hours away — and the viewer shows
+it above fifteen minutes, because a stale Sun with no label would be worse than none.
+
+### The delta column, and where it is suppressed
+
+`docs/design-brief.md` §5 puts `pc / pc_quiet` on every row rather than only the interesting ones,
+so that a reader who sees `×0.7` twenty times and `×340` once has learnt the phase's result from
+the screen. Built as specified, with one addition the first screenshot forced: a column of
+`↑×3.8e+70` is arithmetically true and operationally meaningless. Below **1e-12** — the same floor
+`storm-check` bands on, and for the same reason — two probabilities are indistinguishable from
+zero and their ratio is noise, so the cell reads an em dash with the reason in its tooltip. Where
+one side is below the floor and the other above, it reads `↑ from ~0`, because crossing the level
+at which a probability means anything is the statement worth making and an exponent is not.
+
+### What the replay run shows
+
+The control in replay mode offers `quiet` and `observed record, 9 May 2024` and **not** the
+synthetic storm levels, even greyed out. A G5 profile dropped into May 2024 would be a different
+object from the storm that actually happened, and offering the two side by side would invite
+exactly that reading. The numbers: 1,722 events over 1,413 pairs, a median relative shift of
+27.4 km, a median `pc / pc_variance_only` of 0.65 over the validated events and 0.78 over the
+indicative ones, and exactly **one** event the storm term could not score. Scrubbing to 11 May
+gives Kp 9.00 (G5), ap 400, and a density ratio of ×2.33 at 400 km and ×2.84 at 500 km against
+the quiet window — which is the same enhancement `docs/storm-validation.md` §1 measures the model
+over-predicting by 22 per cent, and it is not corrected for that here either.
+
+### Questions for the Step 5 review
+
+1. **The replay is a page reload.** It is honest and it keeps the point cloud untouched, but it
+   loses the scenario selection and the camera. Should it instead be a route with the catalogue
+   swapped in place, accepting a second initialisation path through the worker?
+2. **`scenarios.json` is 1.25 MB for three scenarios** and would be about 2 MB for five. It is off
+   the critical path, but a reader on a phone who touches the control pays for all five at once.
+   Should it be one file per scenario, fetched on first use of each?
+3. **The storm summary's two populations are shown as columns of a table.** At 360 px that table
+   is tight, and Phase 4's console has more room. Is the table the right form, or should the
+   validated figure lead with the indicative one as a subordinate note?
+4. **The Sun imagery is 10.4 MiB for 29 frames** at four a day over a seven-day window. One frame
+   loads at a time, so the cost is per-frame rather than up front, but the bundle is the bundle.
+   Fewer frames a day, or smaller images, or is a 360 kB image per twelve hours of replay right?
