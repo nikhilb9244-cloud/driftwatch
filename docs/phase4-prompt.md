@@ -73,6 +73,28 @@ Phase 2 added that residual in quadrature on every served covariance
 say plainly whether removing it does. If the answer is that nothing moves, that is a result worth
 publishing too — it bounds how much this whole class of error matters.
 
+## Precondition check, before Step 2
+
+Run this before writing a line of the pipeline, and **report what is missing rather than
+proceeding**. All three are things the workflow cannot discover for itself, and each of them fails
+in a way that either wastes a scheduled run or leaks something that must not leave this machine.
+
+- **A GitHub remote exists and `main` is pushed to it.** A scheduled workflow that lives only in a
+  local repository never runs, and the first symptom is silence rather than an error.
+- **The four Actions secrets exist**: `SPACETRACK_USER`, `SPACETRACK_PASS`, `CLOUDFLARE_API_TOKEN`
+  and `CLOUDFLARE_ACCOUNT_ID`. Check the **names only**. Never print, echo or log a value, and never
+  write one into a file the run might publish. Listing secrets needs admin rights on the repository,
+  so if the check cannot see them, report that it **could not verify** them — not that they are
+  absent.
+- **`.gitignore` excludes the SpaceX ephemeris files, the ESA Kelvins dataset and every cache
+  directory.** A run inside Actions must not be able to commit redistributable data, or a
+  several-hundred-megabyte cache, back into the repository. `docs/data-sources.md` is the authority
+  on which of these may never be redistributed; the caches are excluded for size and for the account
+  identifiers some of them hold.
+
+If any of the three is missing, **stop and report it**. Do not create the secrets, do not invent a
+remote, and do not start Step 2 on a partial list.
+
 ## Step 2. The daily pipeline, as a GitHub Actions workflow
 
 **Build** a scheduled workflow that fetches, screens, scores every scenario, rebuilds the bundle and
@@ -206,8 +228,8 @@ All six are in `ROADMAP.md` with their reasoning. Restated with what each needs:
 (The RIPE Atlas Starlink latency overlay is already resolved: the Phase 3 Step 2 review moved it out
 of the pipeline and into the write-up as context. It is Step 7's business, not this step's.)
 
-**Recommendation: build 1 and 2, manoeuvre burden and commandability.** The reasoning, so it can be
-argued with:
+**Recommendation: build 2 and 1 — commandability first, manoeuvre burden second.** The reasoning,
+so it can be argued with:
 
 - They are the two that make a probability **actionable**, which is the premise the whole console is
   built on. Everything else on the list is context around a number; these two turn the number into a
@@ -227,8 +249,22 @@ argued with:
   deserve their own tool rather than a corner of this one; the Hermanus panel is a ground
   measurement that never touches an orbit. Park them again, with that written down.
 
-Build the two, and leave the other four in `ROADMAP.md` with this reasoning attached so the next
-review can disagree with it on the record.
+**The order between them, and why it is that way round.**
+
+- **Commandability first.** Nobody else publishes it. Every public conjunction feed gives a distance
+  and a probability; none of them tells you whether you can reach the spacecraft before the
+  encounter. The console specification already reserves the column and currently renders it as a
+  dash with a tooltip explaining that no ground stations are defined, so the shape it has to fit is
+  already fixed. And it is the one a small operator feels immediately: a probability with no pass
+  before the time of closest approach is not a decision, it is a notification.
+- **Manoeuvre burden second.** It is the number an insurer, a regulator or a licensing authority
+  would ask for — how much more often would you have had to act — and that is a slower audience than
+  the operator watching a storm arrive. It is also a summary over risk tables that already exist, so
+  it neither blocks nor is blocked by anything else in the phase, and it loses nothing by waiting
+  until the fleet files have grown ground stations for the first item.
+
+Build the two in that order, and leave the other four in `ROADMAP.md` with this reasoning attached
+so the next review can disagree with it on the record.
 
 ## Step 7. The write-up
 
@@ -256,6 +292,26 @@ A short paper or a long blog post. It has to cover, and be honest about, four th
   disagrees with the published assessments and most of that disagreement is a category difference
   (model density at a fixed altitude against density inferred from a decaying orbit's own decay,
   integrated over three days) rather than a discrepancy.
+
+**What it would take to move from indicative to operational.** A short section, and an honest one,
+because the whole tool sits on one side of that line and the landing page says so. Set out what the
+gap actually consists of: orbits better than a public element set, meaning operator or tracking-
+derived ephemerides for *both* objects rather than one; a covariance that comes from the orbit
+determination itself rather than being inferred from the scatter of consecutive element-set fits; a
+three-dimensional integration for the slow encounters the two-dimensional method is known to
+underestimate; and a screening cadence tied to fresh tracking rather than to whenever the catalogue
+last published. Say what each of those would buy and roughly what it would cost to get.
+
+Then state plainly that **two findings stand regardless of that gap**, because neither depends on
+how well the orbits are known:
+
+- **The storm-term validity split**, and the reporting of every aggregate both ways that follows from
+  it. It is a statement about which objects the storm term describes, not about the precision of
+  their positions, so no improvement in the orbits removes the need for it.
+- **The storm term has demonstrated skill only for objects with a measured ballistic coefficient.**
+  Better orbits do not supply a ballistic coefficient; only an object's own decay history does. An
+  operational feed with real covariance would still have nothing to say about the storm response of
+  an object whose coefficient has never been measured.
 
 **Two things belong in the write-up that belong nowhere else.**
 
