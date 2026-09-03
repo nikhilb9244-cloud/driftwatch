@@ -120,6 +120,42 @@ Do. Offer free screening reports to five small operators or university teams and
 
 Milestone. A clear answer on whether to keep building a product or to treat it as a portfolio piece and take the job.
 
+## Successor projects (not to be built now)
+
+Ideas large enough to be their own repository rather than a phase of this one. **Nothing here
+starts before Phase 4 is published.** Recorded so they are not lost and not started early.
+
+### Beyond Earth orbit: a cislunar and solar system companion
+
+Extend the viewer outward from low Earth orbit to cislunar space and the solar system, plotting
+**every human-made object beyond Earth orbit** — the deep space probes, the Lagrange point
+observatories, the Mars and lunar orbiters, the derelict upper stages in heliocentric orbit, the
+objects parked at the Earth–Moon Lagrange points. Ephemerides come from **NASA JPL Horizons**,
+which is free, needs no account and serves state vectors for essentially every tracked body in
+the solar system.
+
+**A companion, not a phase.** It reuses driftwatch's rendering and time controls — the point
+cloud, the frame budget, the scrubber, the replay machinery — and **shares no screening or
+covariance code**. There are no conjunctions to screen out there, no element sets, no
+consistency-derived covariance, and no storm term: the whole risk half of this project is
+irrelevant to it. Sharing the viewer and nothing else is what makes it a separate repository
+rather than a mode.
+
+**What it actually needs, which is not what it looks like it needs.**
+
+- **Nested coordinate systems.** Geocentric for Earth orbit, selenocentric for the lunar
+  neighbourhood, barycentric for the solar system, with the transformations between them and a
+  camera that knows which frame it is in. This is the real work, and it is the part that has
+  nothing in common with anything driftwatch has built.
+- **Logarithmic depth buffering.** A scene spanning from a 400 km orbit to Neptune is fourteen
+  orders of magnitude, and an ordinary depth buffer collapses long before that.
+
+**Explicitly out of scope for now: the observable-universe scale.** Stars, galaxies, large-scale
+structure. It is a different problem again, and **Gaia Sky and OpenSpace already occupy that
+ground** and do it far better than a side project would. The interesting, unoccupied gap is the
+human-made objects between the Earth's surface and the outer planets, which is where this would
+sit.
+
 ## Validation cases
 
 - The May 10 to 12, 2024 Gannon storm, the largest in two decades, poorly forecast even a day out, with heavy drag and mass Starlink manoeuvres.

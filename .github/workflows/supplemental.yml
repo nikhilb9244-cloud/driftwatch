@@ -11,14 +11,26 @@ name: supplemental
 # hours, the fit stops being an extrapolation, and the model's validity horizon moves out
 # on its own.
 #
-# One-off setup, because the store lives on its own branch (data/ is gitignored on main):
+# The store lives on its own orphan branch, because data/ is gitignored on main and a
+# scheduled job must not commit data into the branch people read the code from. The branch
+# is created by the job itself on first run -- it used to be a manual one-off documented in
+# this comment, which meant every scheduled run failed silently at the checkout step until
+# somebody remembered. Nothing else is needed: CelesTrak's supplemental file takes no
+# credentials.
 #
-#   git switch --orphan supplemental-store
-#   git commit --allow-empty -m "Supplemental element-set store"
-#   git push -u origin supplemental-store
-#   git switch main
+# The run's state is split by character, and the split is the point:
 #
-# Nothing else is needed: CelesTrak's supplemental file takes no credentials.
+#   data/supplemental   accumulating and irreplaceable -> the orphan branch. 0.74 MB a
+#                       version; the whole value of the store is that it grows for months.
+#   data/cache          ephemeral and rebuildable -> the Actions cache. It exists to honour
+#                       CelesTrak's two-hour floor, so it only has to remember two hours,
+#                       and the cache's own eviction never matters. It must NOT go in git:
+#                       the supplemental payload is 5.1 MB of JSON per fetch, seven times
+#                       the parquet it produces, and git keeps every version forever.
+#
+# Without the second half the floor is not honoured at all: a fresh runner has no cache, so
+# every run refetches, and `store_supplemental` names versions by fetch time rather than by
+# content, so two runs an hour apart store two near-identical 0.74 MB files.
 
 on:
   schedule:
@@ -35,17 +47,65 @@ concurrency:
 permissions:
   contents: write
 
+env:
+  STORE_BRANCH: supplemental-store
+
 jobs:
   fetch:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
 
+      # First run bootstraps the store. Done in a scratch directory with its own `git init`,
+      # so the first commit is genuinely parentless and the main working tree is never
+      # touched by an orphan checkout.
+      - name: Ensure the store branch exists
+        env:
+          REPO_URL: https://x-access-token:${{ github.token }}@github.com/${{ github.repository }}.git
+        run: |
+          if git ls-remote --exit-code --heads "$REPO_URL" "$STORE_BRANCH" >/dev/null 2>&1; then
+            echo "Store branch $STORE_BRANCH already exists."
+            exit 0
+          fi
+          echo "Store branch $STORE_BRANCH does not exist; creating it."
+          scratch="$(mktemp -d)"
+          cd "$scratch"
+          git init -q -b "$STORE_BRANCH"
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          printf '%s\n' \
+            "# driftwatch supplemental store" "" \
+            "Data only. The code is on \`main\`; this branch is written by" \
+            "\`.github/workflows/supplemental.yml\` and holds nothing else." > README.md
+          git add README.md
+          git commit -q -m "Supplemental element-set store"
+          git push -q "$REPO_URL" "$STORE_BRANCH"
+          echo "Created $STORE_BRANCH."
+
       - name: Check out the store branch
         uses: actions/checkout@v4
         with:
           ref: supplemental-store
           path: store
+
+      - name: What the store held before this run
+        working-directory: store
+        run: |
+          echo "commits on $STORE_BRANCH: $(git rev-list --count HEAD)"
+          echo "versions in the store:    $(ls -1 data/supplemental 2>/dev/null | wc -l)"
+          ls -1 data/supplemental 2>/dev/null || echo "  (none: first run)"
+          echo "checkout size:            $(du -sh data 2>/dev/null | cut -f1 || echo 0)"
+          echo "history size (.git):      $(du -sh .git | cut -f1)"
+
+      # Rolling cache: a key that never hits, so it always saves, with a prefix restore that
+      # always picks up the newest. This is what makes CelesTrak's two-hour floor hold across
+      # runs; losing it costs one polite refetch, never any stored data.
+      - name: Restore the fetch cache
+        uses: actions/cache@v4
+        with:
+          path: store/data/cache
+          key: celestrak-cache-${{ github.run_id }}
+          restore-keys: celestrak-cache-
 
       - uses: astral-sh/setup-uv@v5
         with:
@@ -64,6 +124,8 @@ jobs:
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          # The store only. The fetch cache lives in the Actions cache, for the reasons in
+          # the header: it is rebuildable, and it is seven times the size of what it produces.
           git add -f data/supplemental
           if git diff --cached --quiet; then
             echo "No new version this run (CelesTrak's two-hour floor, or an unchanged file)."
@@ -71,3 +133,19 @@ jobs:
             git commit -m "Supplemental element sets, $(date -u +%Y-%m-%dT%H:%MZ)"
             git push
           fi
+
+      - name: What the store holds now
+        working-directory: store
+        run: |
+          {
+            echo "### Supplemental store"
+            echo
+            echo "| | |"
+            echo "| --- | ---: |"
+            echo "| Commits on \`$STORE_BRANCH\` | $(git rev-list --count HEAD) |"
+            echo "| Versions stored | $(ls -1 data/supplemental 2>/dev/null | wc -l) |"
+            echo "| Oldest | $(ls -1 data/supplemental 2>/dev/null | head -1) |"
+            echo "| Newest | $(ls -1 data/supplemental 2>/dev/null | tail -1) |"
+            echo "| Checkout size | $(du -sh data 2>/dev/null | cut -f1) |"
+            echo "| History size (\`.git\`) | $(du -sh .git | cut -f1) |"
+          } >> "$GITHUB_STEP_SUMMARY"
