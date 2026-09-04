@@ -16,11 +16,22 @@ the upload at the end.
 
 ## Hosting: Vercel, since 2026-09-05
 
-The site is a Vercel project — team `nikolodeon-s-projects`, project `driftwatch`, root directory
-`web`, framework Vite, **no Git connection**, so nothing builds on a push and the pipeline (or a
-hand run of `scripts/deploy-vercel.ps1`) is the only thing that ever deploys. The three Actions
-secrets it needs are `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`; with the last two in
-the environment the CLI needs no `.vercel/` link on the runner.
+The site is a Vercel project — team `nikolodeon-s-projects`, project `driftwatch`
+(`prj_h49Ply8snviYjhFTcJLqEb3Pz0Fj`, created 2026-09-03), root directory `web`, framework Vite,
+**no Git connection since 2026-09-05**, so nothing builds on a push and the pipeline (or a hand run
+of `scripts/deploy-vercel.ps1`) is the only thing that ever deploys. The three Actions secrets it
+needs are `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`; with the last two in the
+environment the CLI needs no `.vercel/` link on the runner.
+
+**The Git connection, and why it is gone.** The project was created on 2026-09-03 with the GitHub
+repository connected, and Git builds were not in fact disabled: fourteen deployments were created
+from the day's pushes that evening and every one errored in two or three seconds, and the push of
+2026-09-05 created one more — a production deployment (`driftwatch-l24uypbp2`), built from the
+repository without any data bundle, which took the production aliases
+(`driftwatch-nikolodeon-s-projects.vercel.app`, `driftwatch-coral.vercel.app`). The repository was
+disconnected the same evening with `vercel git disconnect`, so that state cannot recur; the empty
+production deployment is left standing, behind the team's authentication, for the pipeline's first
+`--prod` deploy to replace, since production is the pipeline's to publish and nobody else's.
 
 The deploy is four steps, in this order, and the order is the point: `vercel pull` fetches the
 project settings for the target (preview or production); `vercel build` runs the Vite build **on
@@ -31,6 +42,17 @@ of `VERCEL_TOKEN`), nothing over the 25 MiB per-file ceiling kept from Cloudflar
 with its own URL. Building locally and deploying prebuilt is what lets the check see the deployed
 bytes; Vercel builds nothing. A missing secret is named by a check step before any of this runs,
 rather than surfacing as an opaque CLI error after an hour of scoring.
+
+**The first deploy, and two settings to know about.** The first Vercel deploy was a preview made by
+hand on 2026-09-05 with `scripts/deploy-vercel.ps1` from the rescored 3 September run:
+<https://driftwatch-44a7rqujz-nikolodeon-s-projects.vercel.app> (63 files, 30.3 MiB, largest 3.4 MiB,
+`check-bundle` clean). Two project settings were found on the way and are recorded rather than
+changed. **Deployment protection is Vercel Authentication on every deployment except custom
+domains** — the team's default — so that preview URL, and a production `*.vercel.app` URL, answer
+a login page to anyone outside the team; the site is public only once a custom domain is attached
+or the protection is changed to previews only, and that is the account holder's decision. And the
+GitHub repository was still connected to the project, as the paragraph above records; it was
+disconnected the same evening so that only the pipeline and the script deploy, as specified.
 
 **The gate that was specified and not needed.** The move to Vercel was specified with a gate:
 until the storm-term correction of 2026-09-05 (`docs/storm-term.md`) had landed and every flag

@@ -69,12 +69,15 @@ each with a dated note where the old claim stood rather than a silent rewrite.
 - **The supplemental workflow** had failed every three hours since 2026-09-04 on nine-digit
   placeholder NORAD ids in CelesTrak's supplemental file; the propagator now initialises an
   out-of-range id as zero. A day of supplemental versions was lost.
-- **Hosting moved from Cloudflare Pages to Vercel.** The project did not exist when the session
-  started and was created (team `nikolodeon-s-projects`, root directory `web`, framework Vite, no
-  Git connection); `scripts/deploy-vercel.ps1` and the pipeline build with the Vercel CLI, run
-  `check-bundle` over the prebuilt output, and deploy `--prebuilt`. The Cloudflare project and its
-  URL are retired; `scripts/deploy-pages.ps1` stays, marked retired, until the first Vercel
-  production deploy has succeeded.
+- **Hosting moved from Cloudflare Pages to Vercel.** The project (team `nikolodeon-s-projects`,
+  `driftwatch`, root directory `web`, framework Vite) existed since 2026-09-03 **with the GitHub
+  repository connected and Git builds not in fact disabled**: fourteen Git deployments had errored
+  on 2026-09-03 and the push of 2026-09-05 created one more, a data-less production deployment
+  that now holds the production aliases behind the team's authentication. The repository was
+  disconnected on 2026-09-05, so only the pipeline and `scripts/deploy-vercel.ps1` deploy from now
+  on; both build with the Vercel CLI, run `check-bundle` over the prebuilt output, and deploy
+  `--prebuilt`. The Cloudflare project and its URL are retired; `scripts/deploy-pages.ps1` stays,
+  marked retired, until the first Vercel production deploy has succeeded.
 
 ## What is committed, and what is not
 
@@ -91,8 +94,10 @@ link and the pulled environment). All gitignored deliberately.
 
 - **No pipeline run has completed end to end.** The 2026-09-04 run reached the deploy.
 - **No deploy from CI**, on either host. The first Vercel deploy was a preview made by hand from
-  this machine with `scripts/deploy-vercel.ps1` on 2026-09-05; its URL is in the session report
-  and in `docs/pipeline.md` once the first production deploy follows it.
+  this machine with `scripts/deploy-vercel.ps1` on 2026-09-05:
+  <https://driftwatch-44a7rqujz-nikolodeon-s-projects.vercel.app>, behind Vercel Authentication
+  (the team's default protects every deployment except custom domains, so the site is not public
+  until a custom domain is attached or the protection is changed; `docs/pipeline.md`, "Hosting").
 - **No release archive and no stability file written by a runner.**
 - **No real Conjunction Data Message has been matched.** The matcher has run only against the
   Kelvins rows, where agreement is by construction.

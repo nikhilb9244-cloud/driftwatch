@@ -333,9 +333,11 @@ data for astropy, about 3 MB).
 ## Deploying the viewer
 
 Vercel, from 2026-09-05: team `nikolodeon-s-projects`, project `driftwatch`, root directory
-`web`, framework Vite, with **no Git connection**, so nothing builds on a push. Two things deploy
-and nothing else does: the daily pipeline (`.github/workflows/pipeline.yml`, production) and the
-hand-run script below (a preview by default). Both build the same way and check the same bytes.
+`web`, framework Vite, with the GitHub repository **disconnected**, so nothing builds on a push.
+Two things deploy and nothing else does: the daily pipeline (`.github/workflows/pipeline.yml`,
+production) and the hand-run script below (a preview by default). Both build the same way and
+check the same bytes. Every deployment sits behind Vercel Authentication until a custom domain is
+attached or the protection is changed (`docs/pipeline.md`, "Hosting").
 
 ```powershell
 pwsh -File scripts/deploy-vercel.ps1 -DryRun                    # export, build, check; stop before uploading
