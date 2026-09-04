@@ -97,6 +97,42 @@ Write. A short paper or a long blog post covering the problem, the method, the t
 
 Milestone. Site live, repository public, write-up published, five pieces of outside feedback received.
 
+### Plan change, 2026-09-05: Phase 4 stops at the pipeline
+
+An external review found two correctness errors (the storm term displacing operator-controlled
+objects, and a dilution-region flag quoted as a plain red) and a set of framing problems. Both are
+corrected (`docs/storm-term.md`, `docs/writeup-notes.md`). The plan changes as a result:
+
+**Steps 3 to 7 of `docs/phase4-prompt.md` and the Step 2A Office of Space Commerce validation are
+deferred indefinitely** — the landing page, the CSV and JSON export, the visual pass with the mobile
+layout and its paint budget, manoeuvre burden and commandability, the write-up, and the 20 GB OSC
+comparison. The reason is one sentence: **they change nobody's decision while no operator uses the
+output.** A landing page explains a tool to people who are not yet asking; an export packages numbers
+nobody is yet taking away; a paint budget is a property of a page nobody yet loads; a validation
+against a government test set says how well the screening matches a reference, which matters only
+once somebody relies on the screening. The pipeline, which fetches, screens, scores and publishes
+every day and keeps every run, is the part that does something whether or not anybody is watching,
+and it is what Phase 4 now ends at.
+
+They are replaced by two items, and both are about the same thing — putting the project in front of
+the one reader who can change what it does, an operator with real warnings:
+
+1. **A findings-and-corrections page at the top of the README** (built 2026-09-05). Two pages: the
+   drift curve between SpaceX's published states and CelesTrak's fit to them; the frame and the
+   48-hour seam findings in the published files; the storm-term predictability split with its
+   lead-time structure (skill at three to four days, near zero inside two); and the two falsified
+   headlines — common-mode cancellation, and the EOS SAT-1 red — each with its dated correction. It
+   is what a reviewer reads first, and it is the honest form of the write-up Step 7 would have been.
+2. **A CCSDS CDM parser and matcher** (built 2026-09-05; `src/driftwatch/cdm/`, `driftwatch cdm`).
+   Reads Conjunction Data Messages in both forms of the standard, matches them to driftwatch events
+   on the object pair and a TCA tolerance, and reports which operator-warned events public data
+   found and at what miss and probability, and which public-data flags the operator never received.
+   Built against ESA's Kelvins rows as test input — real operational CDMs with the identities removed
+   — so the path is exercised before a real message arrives. It is the instrument that turns the
+   first operator conversation into a measurement, which is why it is built now rather than then.
+
+Phase 5 is unchanged, and this is what it now begins with: a CDM from someone.
+
 Parked for this phase (added 2026-09-02 at the Phase 2 Step 1 review; not to be built before Phase 4):
 
 - ~~**Stage C should interpolate the SpaceX ephemeris states directly for served events, so the trajectory and the covariance share a source.**~~ **Built, Phase 4 Step 1, 2026-09-03** — and it was a bigger item than this entry supposed. The 0.2 km figure is CelesTrak's fit residual over the arc the fit was made on, not over the file: measured on nineteen matched files, the propagated element set sits a median 0.30 km from the published ephemeris inside 12 hours but **2.8 km at 12 to 24, 28 km at 36 to 48 and 83 km at 60 to 72**, almost all in-track. Three consequences. The Phase 2 patch was the right shape at a hundredth of the right size at the far end of the horizon. Serving SpaceX's 3.8 km control box on a trajectory 83 km out **understated** the uncertainty on the events furthest ahead. And "a decision about what Stage B screens on" had only one defensible answer: Stage B screens on the published states too, because no pad covers 83 km. The states are stored on a 120-second grid (measured interpolation error: median 5.7 m, maximum 6.8 m), rotated out of the files' MEME/J2000 frame into TEME (44 km if you get that wrong), and split at every discontinuity — every file carries one at exactly 48 hours. The fit residual now applies per event rather than globally. See `docs/phase4-plan.md` and `docs/spacex-ephemerides.md`.

@@ -3,18 +3,140 @@
 Conjunction screening for low Earth orbit that shows how geomagnetic storms change
 collision risk. A storm heats the upper atmosphere, drag rises, predicted positions
 drift along-track, and screening built on the public catalogue quietly gets worse at
-the moment it matters most. driftwatch will screen a chosen fleet against the whole
-catalogue and show how miss distances and probabilities move under quiet and stormy
-conditions, live and in replay of past storms.
+the moment it matters most. driftwatch screens a chosen fleet against the whole
+catalogue every day and shows how miss distances and probabilities move under quiet and
+stormy conditions, live and in replay of past storms.
 
-**Status: Phase 3 of 5 built** (the storm layer: space weather ingested with provenance,
-NRLMSIS density along every orbit, a ballistic coefficient per object, the in-track storm
-term derived and verified against a numerical integration, five scenarios rescoring stored
-events, validation against the May 2024 Gannon storm and the February 2022 Starlink loss,
-and a storm mode and May 2024 replay in the viewer). Phases 1 and 2 are complete. Phase 4 is
-the visual pass and the operator console. See `ROADMAP.md` for the full plan,
-`docs/phase3-plan.md` for the Phase 3 plan and every decision taken along the way, and
-`docs/design-brief.md` for what Phase 4 will look like.
+## Findings and corrections
+
+What this project has found, and what it has had to take back, in the order a reviewer should
+read them. Every number here is reproduced from a stored run or a stored measurement named in
+the linked page, and every correction carries its date. Written 2026-09-05, after an external
+review found two correctness errors and a set of framing problems; the plan changed as a result
+(`ROADMAP.md`, "Plan change").
+
+### 1. The public catalogue's fit to an operator's ephemeris drifts from it by kilometres inside a day
+
+CelesTrak publishes SGP4 element sets fitted to SpaceX's own Starlink ephemerides, with a fit
+residual of about 0.20 km. That residual is measured over the arc the fit was made on, not over
+the 72-hour file. Measured directly on nineteen matched files (2026-09-03), the propagated element
+set sits this far from the published states, almost all of it along track:
+
+| Lead from the file's start | under 12 h | 12 to 24 h | 24 to 36 h | 36 to 48 h | 48 to 60 h | 60 to 72 h |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| Median distance | 0.30 km | 2.8 km | 11.5 km | 28.3 km | 51.8 km | 82.9 km |
+
+Two consequences were recorded rather than tidied away. Phase 2 had patched the gap with the 0.20 km
+residual in quadrature and measured that the patch moved no flag; that measurement was true of the
+patch and not of the error, which is a hundred times larger at the far end. And serving SpaceX's
+published covariance on top of a trajectory 83 km away understated the uncertainty on the events
+furthest ahead. So Stage C now screens on the published states themselves where they exist
+(`docs/methods.md`, "Where an operator publishes states, those are the trajectory";
+`docs/spacex-ephemerides.md`).
+
+### 2. The published files are in a different frame from the one the catalogue uses, and only the filename says so
+
+SpaceX's states are in MEME (J2000). The file header names the covariance frame and never the
+states'. MEME is 0.36 degrees from TEME by 2026, about **44 km** at low Earth orbit radius: read as
+TEME the states sit 36.2 km from CelesTrak's fit to the same file, rotated into TEME they sit
+0.356 km away, which is the published residual. Getting this wrong would have introduced a 44 km
+error in the course of removing a 0.2 km one, silently. Every fetch re-runs the comparison and
+refuses to write the store if it fails (`docs/ephemeris-frame.md`).
+
+### 3. Every published file has a seam at exactly 48 hours
+
+Ten of ten files, then nineteen of nineteen: the position steps by a few hundred metres at
+exactly 48 hours after the file's start, and the published velocity there disagrees with the
+central difference of the positions by 16 m/s. It is at the same lead in every file, so it is not
+a manoeuvre; the header labels the product `blend`, and two arcs joined at a fixed offset with no
+attempt to match derivatives is the likely explanation. An interpolant must not span it, and any
+use of these files that assumes one smooth 72-hour arc is wrong by a few hundred metres for part
+of it (`docs/methods.md`, screening; `docs/spacex-ephemerides.md`).
+
+### 4. The storm term has demonstrated skill for one population, at one end of the window
+
+The in-track displacement a storm produces was measured against the May 2024 Gannon storm as a
+forecast test: each object's last pre-storm element set propagated through the storm and compared
+with the sets issued during it, against a quiet control at the same lead times
+(`docs/storm-validation.md`).
+
+- **It is predictive only where the ballistic coefficient was measured from the object's own
+  decay** (correlation 0.88 over 422 comparisons), and has **no demonstrated skill** for an object
+  carrying a B\* inversion or a population stand-in (correlation −0.10 over the free-flying
+  population as a whole; a B\* coefficient regresses at slope −1.39). Every event therefore carries
+  `storm_validity`, and every aggregate is reported over the validated events, the indicative ones
+  and both, never both alone.
+- **The skill is concentrated at three to four days of lead and is near zero inside two**
+  (recomputed 2026-09-05). On the validated population the observed sign agrees with the
+  predicted one on 39 and 41 per cent of comparisons at one and two days, chance being 50, and on
+  91 and 96 per cent at three and four; the robust slope is −0.15 and −0.04 inside two days
+  against 0.63 and 0.71 beyond. The quiet-time propagation error is already 10 km at three days,
+  and a predicted storm shift of 2 to 5 km at one or two days is inside it. A storm forecast one
+  or two days out is an uncertainty on an event, not a correction to it.
+- **NRLMSIS 2.1 over-predicts the storm's three-day density enhancement by about 22 per cent**
+  over 450 to 2,000 km with no resolvable altitude dependence, in the opposite direction to the
+  published accelerometer assessments, which measure a different quantity (the peak, at a point).
+  Recorded and deliberately not applied; a test pins the untuned prior.
+- **Corrected 2026-09-05: the term must not be applied to operator-controlled objects.** A
+  trajectory that is the operator's — SpaceX's published states, or CelesTrak's fit to them —
+  already carries the operator's drag model and planned burns, so the excess over SGP4's
+  atmosphere is undefined for it, and a station-kept satellite will burn rather than drift.
+  Before the correction every object with a coefficient was displaced, which put shifts of up to
+  31,000 km on Starlinks whose supplemental B\* described a thrusting plan and reported their
+  events as "outside the linear theory" — 42 objects on the 1 September run, 36 on the
+  3 September one, every one a Starlink, and explained at the time as a physical population in
+  the densest shell. That explanation was wrong: it was this category error seen from the other
+  side. Such objects now get no mean shift, are labelled `operator-controlled`, and an event with
+  one such side is judged on its free-flying side alone (`docs/storm-term.md`, "Corrected
+  2026-09-05"). Rescored, the 3 September run has no unscoreable event; its `forecast` tally moved
+  from 0 red, 16 yellow and 71 unscoreable to 1 red, 19 yellow and none, and the storm scenarios
+  likewise, the one red being the dilution-region flag in item 5.
+
+### 5. Two headlines were falsified, and both corrections are dated
+
+**"A storm lowers the probability on most events, because the two objects are displaced alike."**
+Falsified twice. The explanation, common-mode cancellation, went on 2026-09-03: the diagnostic
+built to test it found the relative displacement that reaches the miss to be a median **1.91
+times** the mean of the two objects' own displacements, out of a possible 2, flat across
+coefficient sources and across the altitude difference between the two orbits, because a
+conjunction is a crossing at a median 120° between the two in-track directions. The result itself
+went on 2026-09-05: the lowering — a median `pc / pc_variance_only` of 0.16 to 0.40 on the
+validated events — lived entirely in events with an operator-controlled side, displaced by the
+category error in item 4. On the 981 events of the 3 September run with both objects free-flying,
+whose displacements were legitimate and which the correction did not touch, the probability is
+lowered on 55 and raised on 43 under a G5, at a median ratio of 0.98. What is measured now is
+narrower: on this fleet the storm term moves a free-flying event's probability little either way
+(median relative displacement 2 to 7 km against covariances of kilometres to tens of kilometres),
+the two displacements of a free-flying pair are nearly independent (1.85 of 2), and no general
+claim about the direction should be made until a fleet with low free-flying primaries has been
+screened through a real storm (`docs/storm-term.md`, "Attacking the result" and "Corrected
+2026-09-05").
+
+**"Screening on the operator's own published states gives the demo fleet its one red flag."** The
+flag exists — EOS SAT-1 (shown on the public page as `payload 55053`) against Starlink 61705,
+2.780 km at a fifteen-hour lead, probability 1.076 × 10⁻⁴ against 6.19 × 10⁻⁶ on the catalogue's
+fit — and the write-up quoted it as a red. Corrected 2026-09-05: it is **in the dilution region at
+low confidence**, with its maximum probability over covariance scale factors at 0.85 times the
+covariance in hand, so the number is held up by the size of the uncertainty rather than by the
+geometry and is not an actionable warning. Every mention now leads with the region and the
+confidence, in the notes, the report and the viewer. What survives is that the choice of
+trajectory moved a dilution-region probability across the red threshold at a fifteen-hour lead,
+which the term Phase 2 carried for that choice could not have done (`docs/writeup-notes.md`).
+
+Everything above is indicative, not operational: the covariances come from the consistency of
+public element sets, which is a floor on the error rather than a measurement of it, and the
+probabilities are computed by the two-dimensional method, which is a known underestimate for slow
+encounters. `docs/methods.md` lists every approximation, with the precedent this rests on
+(Flohrer, Krag and Klinkrad, 2008; Parker and Linares, 2024) and what is done differently.
+
+**Status: Phases 1 to 3 built; Phase 4 stops at the pipeline** (a daily GitHub Actions run that
+fetches, screens, scores every scenario, publishes to Vercel and keeps every run). The landing
+page, the export, the visual pass, the parked research items, the write-up and the Office of
+Space Commerce validation are deferred indefinitely, because they change nobody's decision while
+no operator uses the output; they are replaced by this page and by a Conjunction Data Message
+parser and matcher (`docs/cdm-matching.md`), which is what turns the first operator conversation
+into a measurement. `docs/state-of-play.md` is where a fresh session starts; `ROADMAP.md` has the
+plan and the change to it.
 
 What works today:
 
@@ -63,9 +185,11 @@ What works today:
   bands, and names the objects whose storm term ran outside the linear theory. Those events carry
   no probability at all: `unscoreable`, with the reason on the row and excluded from every
   aggregate. It did its job twice: it excluded the artefact, and then it **falsified the
-  explanation** the headline result had been given. A storm still lowers the probability on most
-  events, but not through any cancellation between the two objects — the ratio is 1.91 out of a
-  possible 2, so the two displacements are nearly independent. See `docs/storm-term.md`.
+  explanation** the headline result had been given — the relative-to-absolute ratio is 1.85 out
+  of a possible 2 over the free-flying pairs, so the two displacements are nearly independent.
+  What it could not find was that the result itself rested on displacing operator-controlled
+  objects; an external review did (2026-09-05), and the ratio is now taken over free-flying
+  pairs only. See `docs/storm-term.md`.
 - Every aggregate the tool prints is reported **twice**: over the events whose two objects both
   have a ballistic coefficient measured from their own decay (`validated`), and over the rest
   (`indicative`). Step 4 measured the storm term against May 2024 and found it predictive at
@@ -128,6 +252,12 @@ What works today:
   the data: with the combined radius taken as `(t_span + c_span) / 2` and nothing fitted,
   the 162,634-row training set is reproduced to a median residual of 0.07 % with 87 % of
   the high-risk tail within a factor of two (`docs/kelvins-reproduction.md`).
+- `driftwatch cdm match <run> --cdm <dir>` reads an operator's Conjunction Data Messages
+  (CCSDS 508.0-B-1, KVN or XML), matches them to a stored run's events on the object pair and
+  a ten-minute TCA tolerance, and reports which operator-warned conjunctions public data found
+  and at what miss and probability, which it missed, and which public-data flags the operator
+  never received. Built against the Kelvins rows as test input, which `driftwatch cdm
+  from-kelvins` writes out as messages with synthetic identities (`docs/cdm-matching.md`).
 - Tests cover the official SGP4 verification cases, frame conversions against skyfield,
   a real ISS pass over Durban, the cache rules, the snapshot schema, the export, the
   Space-Track client, the fleet files, the screening (synthetic conjunctions with a
@@ -202,47 +332,53 @@ data for astropy, about 3 MB).
 
 ## Deploying the viewer
 
-Cloudflare Pages, by direct upload. There is no CI and nothing scheduled: the automated
-daily pipeline is Phase 4. One script does the four steps.
+Vercel, from 2026-09-05: team `nikolodeon-s-projects`, project `driftwatch`, root directory
+`web`, framework Vite, with **no Git connection**, so nothing builds on a push. Two things deploy
+and nothing else does: the daily pipeline (`.github/workflows/pipeline.yml`, production) and the
+hand-run script below (a preview by default). Both build the same way and check the same bytes.
 
 ```powershell
-pwsh -File scripts/deploy-pages.ps1 -DryRun        # export, build, check; stop before uploading
-pwsh -File scripts/deploy-pages.ps1                # deploy to the `preview` branch
-pwsh -File scripts/deploy-pages.ps1 -Branch main   # deploy to production
+pwsh -File scripts/deploy-vercel.ps1 -DryRun                    # export, build, check; stop before uploading
+pwsh -File scripts/deploy-vercel.ps1 -Run <run> -Scenario quiet  # a preview deploy with its own URL
+pwsh -File scripts/deploy-vercel.ps1 -Production -Run <run> -Scenario quiet
 ```
 
 1. **Export a fresh bundle.** `driftwatch propagate --at <now>` writes the catalogue side
-   (`manifest.json`, `objects.json`, `elements.bin`, `reference.bin`) and
-   `driftwatch report latest` the conjunctions side (`conjunctions.json`,
-   `conjunction-tracks.bin`). Neither rescreens. `-SkipExport` deploys what is already in
-   `web/public/data`, `-Run` and `-Scenario` choose which stored run and scenario to show.
-2. **Build.** `npm --prefix web run build`, which copies `public/` into `dist/`.
-3. **Check what is about to be published**, over `dist/` rather than the source bundle,
-   because the build is what ships:
+   (`manifest.json`, `objects.json`, `elements.bin`, `reference.bin`) and `driftwatch report`
+   the conjunctions side (`conjunctions.json`, `scenarios.json`, `conjunction-tracks.bin`).
+   Neither rescreens. `-SkipExport` deploys what is already in `web/public/data`; `-Run` and
+   `-Scenario` choose which stored run and scenario to show. On the public page, fleet members
+   other than stations appear by category and NORAD id, not by name, until their operator has
+   agreed to appear.
+2. **Build with the Vercel CLI.** `vercel pull` fetches the project settings and `vercel build`
+   runs the Vite build locally into `.vercel/output/`. Building here and deploying prebuilt is
+   what lets the next step check exactly the files that will be served.
+3. **Check what is about to be published**, over the prebuilt output:
 
    ```bash
-   uv run driftwatch check-bundle --dir web/dist
+   uv run driftwatch check-bundle --dir .vercel/output
    ```
 
    It refuses to continue if any file is a raw SpaceX ephemeris or a copy of the derived
    covariance store (analysis only, never redistributed — `docs/spacex-ephemerides.md`), if
    anything matches a credential pattern or the literal value of `SPACETRACK_USER`,
-   `SPACETRACK_PASS` or `CLOUDFLARE_API_TOKEN` in the environment, or if any file is over
-   Cloudflare Pages' 25 MiB limit. The rules are in `src/driftwatch/export/audit.py` and the
-   tests in `tests/test_audit.py`.
-4. **Upload.** `npx wrangler pages deploy web/dist --project-name driftwatch --branch <branch>`.
-   Pages treats the project's production branch by name and gives every other branch its own
-   preview URL, which is why the branch is an explicit argument rather than a flag.
+   `SPACETRACK_PASS` or `VERCEL_TOKEN` in the environment, or if any file is over the 25 MiB
+   per-file ceiling (Cloudflare Pages' upload limit, kept as the project's own). The rules are in
+   `src/driftwatch/export/audit.py` and the tests in `tests/test_audit.py`.
+4. **Upload.** `vercel deploy --prebuilt`, with `--prod` for production. Vercel builds nothing.
 
-Authentication is wrangler's: run `npx wrangler login` once, or set `CLOUDFLARE_API_TOKEN`
-and `CLOUDFLARE_ACCOUNT_ID` in the environment. The first deploy creates the project if the
-account has none by that name.
+Authentication is the Vercel CLI's: `npx vercel login` once on a machine, or `VERCEL_TOKEN` with
+`VERCEL_ORG_ID` and `VERCEL_PROJECT_ID` in the environment, which is how the pipeline runs it.
+The pipeline names a missing secret before it builds anything.
 
-**Current sizes** (2 September 2026): 26 files, 22.9 MiB total, the largest being the 8.2 MiB
-JavaScript source map, then `elements.bin` at 2.7 MiB and `conjunctions.json` at 2.6 MiB. Well
-inside the 25 MiB per-file limit, so nothing is split or compressed; Pages serves gzip and
-brotli itself, and `conjunctions.json` is 544 kB compressed. The source map is published
-deliberately — the source is open, and it makes a bug report from a stranger legible.
+**Retired: Cloudflare Pages.** The project `driftwatch` and <https://driftwatch-2wg.pages.dev>
+are retired; they last served the 2026-09-03 run under the uncorrected storm term.
+`scripts/deploy-pages.ps1` stays, marked retired, until the first Vercel production deploy has
+succeeded. `docs/pipeline.md` has the deploy design and why the host changed.
+
+**Current sizes** (5 September 2026): the prebuilt output is 31 MiB in all, the largest files
+`elements.bin` at 2.7 MiB and `conjunctions.json` at about 3 MiB, well inside the 25 MiB per-file
+ceiling. Source maps are not published (`web/vite.config.ts`).
 
 ## What you are looking at
 
@@ -274,7 +410,8 @@ src/driftwatch/         Python package (CLI: driftwatch)
   drag/                 NRLMSIS density along an orbit, and the ballistic coefficient per object
   risk/                 covariance model and fit, manoeuvre flag, probability of collision, scenarios, Kelvins
   export/               viewer bundle, conjunction run directory, weekly report, pre-deploy audit
-scripts/                deploy to Cloudflare Pages, register the supplemental fetch task
+  cdm/                  CCSDS Conjunction Data Messages: parser, matcher, the Kelvins test adapter
+scripts/                deploy to Vercel (deploy-vercel.ps1; deploy-pages.ps1 is retired), register the supplemental fetch task
 fleets/                 YAML fleet definitions (the primaries to screen)
 tests/                  pytest
 docs/                   physics background, frames and time, data schema, methods, data sources, plans
@@ -299,6 +436,8 @@ data/                   cache, snapshots, history, supplemental and SpaceX ephem
 - `docs/methods.md`: the running list of approximations.
 - `docs/kelvins-reproduction.md`: the ESA Kelvins reproduction as the command writes it,
   with `docs/kelvins-reproduction.svg`, the residual against ESA's risk.
+- `docs/cdm-matching.md`: the Conjunction Data Message parser and matcher, what the three
+  outputs mean, and why the Kelvins rows are its test input and not a validation.
 - `docs/data-sources.md`: each data provider's terms, the Space-Track redistribution
   clause as checked, and the citation format.
 - `docs/spacex-ephemerides.md`: whether SpaceX's published Starlink ephemerides may be
