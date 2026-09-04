@@ -458,6 +458,52 @@ def correlation(predicted: pd.Series, observed: pd.Series) -> float | None:
     return round(float(np.corrcoef(p[ok], o[ok])[0, 1]), 3)
 
 
+def sign_agreement(predicted: pd.Series, observed: pd.Series) -> float | None:
+    """The fraction of comparisons whose observed shift has the sign the term predicted.
+
+    The bluntest per-event statistic and the one least moved by a tail: a term with no skill at
+    a lead sits at one half here whatever its least-squares slope says, because the slope and
+    the correlation are carried by the handful of largest events. Reported beside them because
+    on the May 2024 record the three disagree inside two days of lead and agree beyond it, and
+    that disagreement is the finding.
+    """
+    p = np.asarray(predicted, dtype=float)
+    o = np.asarray(observed, dtype=float)
+    ok = np.isfinite(p) & np.isfinite(o) & (p != 0) & (o != 0)
+    if ok.sum() < 3:
+        return None
+    return round(float(np.mean(np.sign(p[ok]) == np.sign(o[ok]))), 3)
+
+
+def lead_time_table(frame: pd.DataFrame, *, min_rows: int = 5) -> dict[int, dict[str, Any]]:
+    """One row per whole day of lead: the statistics of the comparisons at that lead.
+
+    Whole days rather than finer bins because the element sets arrive when the catalogue issues
+    them, so a half-day bin at one day holds a couple of dozen comparisons. ``median_abs_residual_km``
+    is added beside the slope pair and the correlation because it is the number an operator would
+    actually feel: how far from the prediction the object typically turned out to be.
+    """
+    out: dict[int, dict[str, Any]] = {}
+    if not len(frame):
+        return out
+    for lead, group in frame.groupby(np.round(frame["lead_days"]).astype(int)):
+        if len(group) < min_rows:
+            continue
+        out[int(lead)] = {
+            "n": int(len(group)),
+            "n_objects": int(group["norad_id"].nunique()),
+            "median_observed_km": round(float(group["corrected_shift_km"].median()), 3),
+            "median_predicted_km": round(float(group["predicted_shift_km"].median()), 3),
+            "median_abs_residual_km": round(float(group["residual_km"].abs().median()), 3),
+            "p84_abs_residual_km": round(float(group["residual_km"].abs().quantile(0.84)), 3),
+            "slope": slope_through_origin(group["predicted_shift_km"], group["corrected_shift_km"]),
+            "slope_robust": robust_slope(group["predicted_shift_km"], group["corrected_shift_km"]),
+            "correlation": correlation(group["predicted_shift_km"], group["corrected_shift_km"]),
+            "sign_agreement": sign_agreement(group["predicted_shift_km"], group["corrected_shift_km"]),
+        }
+    return out
+
+
 def residual_summary(frame: pd.DataFrame, *, by_altitude: pd.Series | None = None) -> dict[str, Any]:
     """The distribution the review asks for, and its dependence on lead time and altitude."""
     if not len(frame):
@@ -478,6 +524,7 @@ def residual_summary(frame: pd.DataFrame, *, by_altitude: pd.Series | None = Non
             "slope": slope_through_origin(f["predicted_shift_km"], f["corrected_shift_km"]),
             "slope_robust": robust_slope(f["predicted_shift_km"], f["corrected_shift_km"]),
             "correlation": correlation(f["predicted_shift_km"], f["corrected_shift_km"]),
+            "sign_agreement": sign_agreement(f["predicted_shift_km"], f["corrected_shift_km"]),
             "median_ratio": round(float(f["ratio"].median()), 3),
             "median_residual_sigmas": round(float(f["residual_sigmas"].median()), 3),
         }
@@ -500,6 +547,10 @@ def residual_summary(frame: pd.DataFrame, *, by_altitude: pd.Series | None = Non
         **stats(measured),
         "n_objects": int(measured["norad_id"].nunique()),
         "definition": "no manoeuvre between the pivot and the comparison, and B fitted from the object's own decay",
+        # The lead-time structure of the skill, on the population the term is a claim about
+        # (added 2026-09-05). The headline correlation is a population figure; where in the
+        # window it comes from is the operational question, and the answer is not uniform.
+        "by_lead_day": lead_time_table(measured),
     }
     usable = quiet_flying if len(quiet_flying) >= 30 else usable
     out["by_lead_day"] = {
@@ -593,6 +644,7 @@ __all__ = [
     "decay_rates",
     "density_ratios",
     "in_track_errors",
+    "lead_time_table",
     "lifetime_from_decay",
     "modelled_density_ratio",
     "observed_density_ratio",
@@ -600,6 +652,7 @@ __all__ = [
     "correlation",
     "residual_summary",
     "robust_slope",
+    "sign_agreement",
     "slope_through_origin",
     "residuals",
     "storm_ratio_at",

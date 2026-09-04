@@ -261,19 +261,49 @@ about a quarter, and the observed-over-predicted slope should sit below one. It 
 more than the density measurement alone accounts for, which leaves the remainder to the
 coefficients and to the linearisation.
 
-By lead time, on that population:
+### By lead time: the skill is at three to four days and near zero inside two
 
-| Lead | n | observed (km) | predicted (km) | slope |
-| --- | ---: | ---: | ---: | ---: |
-| 1 day | 28 | −0.35 | 2.02 | 1.06 |
-| 2 days | 150 | −0.31 | 5.01 | 0.81 |
-| 3 days | 124 | 10.9 | 18.9 | 1.62 |
-| 4 days | 115 | 26.5 | 34.5 | 1.17 |
+> **Recomputed 2026-09-05**, after an external review asked where in the window the r = 0.88
+> comes from. On the free-flying measured-coefficient population (422 comparisons, 81 objects),
+> by whole day of lead, with the sign agreement and the typical residual beside the slope pair
+> and the correlation. `driftwatch validate gannon` now writes this table as
+> `free_flying_measured_coefficient.by_lead_day`; the numbers below were computed by the same
+> function over the stored per-comparison file of the 2026-09-02 run.
 
-The quadratic growth is there in both columns — a median observed shift going 0, 0, 11, 27 km
-against a predicted 2, 5, 19, 34 km — which is the shape the derivation predicts and the
-strongest single piece of evidence here, because a term with the wrong physics could match a
-magnitude at one lead by accident and cannot match a growth curve at four.
+| Lead | n | objects | observed (km) | predicted (km) | slope | robust slope | correlation | sign agreement | median \|residual\| (km) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 day | 28 | 26 | −0.35 | 2.02 | 1.06 | **−0.15** | 0.96 | **39 %** | 2.2 |
+| 2 days | 150 | 74 | −0.31 | 5.01 | 0.81 | **−0.04** | 0.62 | **41 %** | 6.3 |
+| 3 days | 124 | 59 | 10.9 | 18.8 | 1.62 | **0.63** | 0.94 | **91 %** | 8.5 |
+| 4 days | 115 | 53 | 26.5 | 34.4 | 1.17 | **0.71** | 0.87 | **96 %** | 10.0 |
+
+**The plain statement: the storm term's skill is concentrated at three to four days of lead and
+is near zero inside two.** Inside two days the median observed shift is within a kilometre of
+zero against a predicted 2 to 5 km, the observed sign agrees with the predicted one on 39 and 41
+per cent of comparisons — chance is 50 — and the robust slope is zero or negative. The
+least-squares slope and the Pearson correlation in those two rows (1.06 and 0.96 at one day, on 28
+comparisons) are carried by a handful of large events and are not evidence of per-event skill;
+the sign agreement is the statistic that cannot be carried by a tail, and it says there is none.
+At three and four days the sign agrees on 91 and 96 per cent, the robust slope is 0.63 and 0.71,
+the correlation 0.94 and 0.87, and the typical residual is 8 to 10 km against a predicted 19 to
+34. Split at two and a half days: 178 comparisons inside with a sign agreement of 40 per cent and
+a robust slope of −0.03; 244 beyond with 93 per cent and 0.71.
+
+Why it is so is not mysterious and is not a defect in the term. The quiet control drifts a median
+10 km along track in three days by itself (above), so a predicted storm shift of 2 to 5 km at one
+or two days is inside the noise of the comparison, whatever the term's physics; the storm's
+displacement grows with the square of the elapsed time and only clears that noise on the third
+day. What it does mean for a screening is that **a storm forecast one or two days out does not
+move an individual event's probability in a direction this validation can support**, and the
+`forecast` scenario's day-one and day-two shifts should be read as an uncertainty, not a
+correction. The headline r = 0.88 is a population figure and stands; where in the window it lives
+is this table.
+
+The quadratic growth is still there in the observed column — a median observed shift going 0, 0,
+11, 27 km against a predicted 2, 5, 19, 34 km — which is the shape the derivation predicts, and a
+term with the wrong physics could match a magnitude at one lead by accident and cannot match a
+growth curve at four. But that is a statement about the population's growth curve, and the two
+rows inside two days show that a right growth curve is not the same thing as per-event skill.
 
 ### Where it fails, and why that is reported rather than fixed
 
@@ -292,10 +322,11 @@ sharper statement than Step 2's "treat `B*` as noisy": for this purpose it is no
 the honest reading of a storm term computed on a `bstar` coefficient is that its magnitude is
 a guess with a label on it. The label is already on every row.
 
-**Sign agreement is 71 per cent, not 100.** Three comparisons in ten have the observed shift
-on the opposite side of zero from the predicted one. At one and two days' lead the predicted
-shift is a few kilometres and the quiet-time propagation error is ten, so the sign is decided by
-noise; by three and four days, where the shift is tens of kilometres, it is not.
+**Sign agreement is 71 per cent, not 100, and the lead-time table above says where the other 29
+are.** They are almost all inside two days: 39 and 41 per cent agreement at one and two days
+against 91 and 96 at three and four. At one and two days' lead the predicted shift is a few
+kilometres and the quiet-time propagation error is ten, so the sign is decided by noise; by
+three and four days, where the shift is tens of kilometres, it is not.
 
 ---
 
@@ -545,7 +576,15 @@ something external to disagree with, and so a reader can see where they do.
   enhancement over the whole LEO catalogue. Reports up to a sixfold density increase at 400 km
   at the peak against a baseline twelve hours earlier, and a fourfold rise in decay rate on a
   single object (38 to 180 m/day). A peak against a short baseline is a different quantity from
-  our three-day window ratio and the two are not directly comparable.
+  our three-day window ratio and the two are not directly comparable. What §2 adds to their
+  method is set out in `docs/methods.md`, "Precedent, and what this adds".
+- Flohrer, T., Krag, H. and Klinkrad, H. (2008), *Assessment and Categorisation of TLE Orbit
+  Errors for the US SSN Catalogue*, Proceedings of the Advanced Maui Optical and Space
+  Surveillance Technologies Conference (AMOS), Maui — ESA's Space Debris Office's derivation of
+  TLE position uncertainty **from the consistency of successive element sets**, tabulated by
+  orbit class. The per-band prior at the bottom of driftwatch's covariance fallback chain is a
+  table of that kind, and the consistency method the whole chain rests on is theirs; see
+  `docs/methods.md`, "Precedent, and what this adds", for what is done differently here.
 - Bruinsma, S. et al. (2021), *Thermosphere modeling capabilities assessment: geomagnetic
   storms*, J. Space Weather Space Clim. 11, 12.
   <https://www.swsc-journal.org/articles/swsc/full_html/2021/01/swsc200061/swsc200061.html>

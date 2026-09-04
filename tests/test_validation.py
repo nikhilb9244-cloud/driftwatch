@@ -227,6 +227,26 @@ def test_the_control_is_subtracted_at_the_matching_lead_time():
     assert summary["free_flying"]["n"] == 3
     assert summary["free_flying_measured_coefficient"]["n"] == 3
     assert summary["slope"] is not None
+    # The lead-time structure travels with the measured population (2026-09-05), with the sign
+    # agreement beside the slope pair: three rows here, so no day reaches the five-row floor.
+    assert summary["free_flying_measured_coefficient"]["by_lead_day"] == {}
+    assert summary["sign_agreement"] == 1.0
+    table = val.lead_time_table(pd.concat([out] * 3, ignore_index=True), min_rows=3)
+    assert set(table) == {1, 2, 3}
+    assert table[3]["n"] == 3 and table[3]["median_abs_residual_km"] == 3.0 and table[3]["sign_agreement"] == 1.0
+
+
+def test_sign_agreement_is_blind_to_the_tail_that_carries_the_slope():
+    """Inside two days of lead the slope and the correlation are carried by a few large events.
+
+    The sign agreement is the statistic that says so: a population whose typical comparison has
+    the wrong sign sits below one half here however well its largest events fit.
+    """
+    predicted = pd.Series([1.0, 1.0, 1.0, 1.0, 40.0, 60.0])
+    observed = pd.Series([-0.5, -0.4, -0.6, -0.3, 38.0, 61.0])
+    assert val.correlation(predicted, observed) > 0.99
+    assert val.sign_agreement(predicted, observed) == pytest.approx(2 / 6, abs=1e-3)
+    assert val.sign_agreement(pd.Series([1.0, 2.0]), pd.Series([1.0, 2.0])) is None
 
 
 def test_a_short_lived_object_gets_altitudes_but_not_a_decay_rate(monkeypatch):
