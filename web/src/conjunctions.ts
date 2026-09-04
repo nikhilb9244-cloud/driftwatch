@@ -288,21 +288,39 @@ function deltaTitle(pc: number | null | undefined, quietPc: number | null | unde
   return "This scenario's probability over the quiet one";
 }
 
+/**
+ * A flag chip that **leads with the region and the confidence**, never with the colour.
+ *
+ * A red in the dilution region is a statement about the size of the covariance, not about the
+ * encounter, and a reader who sees "red" first has drawn the wrong conclusion before the qualifier
+ * arrives. Corrected 2026-09-05, after an external review found the write-up quoting a
+ * dilution-region red as a plain red.
+ */
 function flagChip(flag: string, confidence: string, region: string): string {
   if (flag === "unscoreable") {
     return `<span class="flag none" title="The storm term left the linear theory it was derived under; this event carries no probability at all">not scored</span>`;
   }
   if (flag === "none") return "";
-  const cls = confidence === "low" ? "flag low" : `flag ${flag}`;
-  const title = confidence === "low" ? `${flag}, low confidence (${region} region): not actionable` : `${flag}`;
-  const label = confidence === "low" ? `${flag} · low` : flag;
-  return `<span class="${cls}" title="${escapeHtml(title)}">${escapeHtml(label)}</span>`;
+  if (confidence === "low") {
+    const title =
+      `${region} region, low confidence: the maximum probability sits below the covariance in hand, so ` +
+      `the number is held up by the size of the uncertainty rather than by the geometry. Not actionable. ` +
+      `Flag: ${flag}.`;
+    return `<span class="flag low" title="${escapeHtml(title)}">${escapeHtml(`${region} · low confidence · ${flag}`)}</span>`;
+  }
+  const title = `${region} region, ${confidence} confidence: the number is set by the geometry. Flag: ${flag}.`;
+  return `<span class="flag ${flag}" title="${escapeHtml(title)}">${escapeHtml(`${region} · ${flag}`)}</span>`;
 }
 
-/** `indicative` gets a marker; `validated` and `none` do not need one on every row. */
+/** `indicative` and `operator-controlled` get a marker; `validated` and `none` do not need one on every row. */
 function validityChip(validity: string | undefined): string {
-  if (validity !== "indicative") return "";
-  return `<span class="chip-validity" title="At least one of the two objects has no ballistic coefficient measured from its own decay. Step 4 found the storm term predictive at r = 0.88 with a measured coefficient and of no demonstrated skill without one. The number is not adjusted for this; the label says the validation does not reach it.">indicative</span>`;
+  if (validity === "indicative") {
+    return `<span class="chip-validity" title="At least one of the two objects has no ballistic coefficient measured from its own decay. Step 4 found the storm term predictive at r = 0.88 with a measured coefficient and of no demonstrated skill without one. The number is not adjusted for this; the label says the validation does not reach it.">indicative</span>`;
+  }
+  if (validity === "operator-controlled") {
+    return `<span class="chip-validity" title="Both objects are under operator control: on an operator's published trajectory, or station-kept or observed manoeuvring. The storm term applies no displacement to either, because the excess over SGP4's atmosphere is undefined for a trajectory that already carries the operator's drag model and burns. The storm's whole effect on this pair is the widened covariance.">operator-controlled</span>`;
+  }
+  return "";
 }
 
 export interface PanelHandles {
@@ -368,15 +386,18 @@ export function buildConjunctionPanel(
 
   const renderHeader = () => {
     const rows = rankedPairs().map((r) => r.pair);
-    const red = rows.filter((p) => p.flag === "red").length;
-    const yellow = rows.filter((p) => p.flag === "yellow").length;
-    const lowConfidence = rows.filter((p) => p.flag !== "none" && p.confidence === "low").length;
+    const flagged = rows.filter((p) => p.flag === "red" || p.flag === "yellow");
+    const red = flagged.filter((p) => p.flag === "red").length;
+    const yellow = flagged.filter((p) => p.flag === "yellow").length;
+    const lowConfidence = flagged.filter((p) => p.confidence === "low").length;
     const label = labelOf(state.current);
+    // Region and confidence before the colours, here as on every row.
     header.innerHTML =
       `<div>${data.n_events_total.toLocaleString()} events over ${data.n_pairs.toLocaleString()} pairs, ` +
       `${escapeHtml(data.window.start.slice(0, 10))} to ${escapeHtml(data.window.end.slice(0, 10))}.</div>` +
-      `<div class="muted">${red} red, ${yellow} yellow; ${lowConfidence} of them in the dilution region and ` +
-      `not actionable. Scenario <code>${escapeHtml(label)}</code>, sorted by its probability.</div>`;
+      `<div class="muted">${lowConfidence} of ${flagged.length} flagged pairs are in the dilution region at low ` +
+      `confidence and not actionable; ${flagged.length - lowConfidence} in the robust region. ` +
+      `Flags: ${red} red, ${yellow} yellow. Scenario <code>${escapeHtml(label)}</code>, sorted by its probability.</div>`;
   };
 
   const matching = (): Array<{ pair: ConjunctionPair; index: number }> => {
@@ -517,10 +538,14 @@ export function buildConjunctionPanel(
 const VALIDITY_TEXT: Record<string, string> = {
   validated:
     "validated — both objects have a ballistic coefficient fitted from their own decay, which is the " +
-    "population Step 4 measured the storm term against (r = 0.88)",
+    "population Step 4 measured the storm term against (r = 0.88). Skill is concentrated at three to " +
+    "four days of lead and near zero inside two.",
   indicative:
     "indicative — at least one object's coefficient is a B* inversion, a population stand-in, or absent. " +
     "The storm term has no demonstrated skill there. The number is not adjusted for this.",
+  "operator-controlled":
+    "operator-controlled — both objects are on an operator's trajectory or under known or observed " +
+    "control, so neither was displaced; the storm's whole effect here is the widened covariance.",
   none: "no storm term applied under this scenario",
 };
 
@@ -533,8 +558,16 @@ function eventDetailHtml(
 ): string {
   const shifted = missOf(event);
   const stormy = event.relative_shift_km != null && event.relative_shift_km > 0;
+  // The region and the confidence are the first thing said about an event, before its miss and
+  // its probability: they decide whether either number may be acted on.
+  const regionText =
+    event.scoreable === false
+      ? "not scored — no probability under this scenario"
+      : `${event.region} region, ${event.confidence} confidence` +
+        (event.confidence === "low" ? " — not actionable" : "");
   const rows: Array<[string, string]> = [
     ["Scenario", labelOf(scenario)],
+    ["Region and confidence", regionText],
     ["Time of closest approach", formatUtc(Date.parse(event.tca))],
     ["Miss distance", `${fmtKm(shifted)} km${stormy ? " (after the storm term moved both objects)" : ""}`],
   ];
@@ -560,10 +593,10 @@ function eventDetailHtml(
     rows.push(["Probability under quiet", `${fmtPc(quiet.pc)} (${deltaAgainstQuiet(event.pc, quiet.pc)})`]);
     rows.push(["Region under quiet", `${quiet.region} · ${quiet.confidence}`]);
   }
-  rows.push(
-    ["Maximum probability", `${fmtPc(event.pc_max)} at ${event.pc_max_scale?.toFixed(2) ?? "—"}× the covariance`],
-    ["Region", `${event.region}${event.confidence === "low" ? " (low confidence, not actionable)" : ""}`],
-  );
+  rows.push([
+    "Maximum probability",
+    `${fmtPc(event.pc_max)} at ${event.pc_max_scale?.toFixed(2) ?? "—"}× the covariance`,
+  ]);
   if (event.storm_validity && event.storm_validity !== "none") {
     rows.push(["Storm-term validity", VALIDITY_TEXT[event.storm_validity] ?? event.storm_validity]);
     rows.push([
@@ -594,7 +627,8 @@ function eventDetailHtml(
        miss to this scenario's, drawn to the same scale as the ellipse, so a displacement lost inside the
        uncertainty looks lost. The two objects are displaced <i>nearly independently</i> &mdash; a conjunction
        is a crossing, at a median 120° between their two in-track directions &mdash; and it is the relative
-       displacement above, not either object's own, that moves the miss.</p>`
+       displacement above, not either object's own, that moves the miss. An operator-controlled object is
+       not displaced at all; its side of the displacement is zero by rule.</p>`
     : "";
 
   return (

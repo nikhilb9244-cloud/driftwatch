@@ -59,7 +59,7 @@ import pandas as pd
 from driftwatch import config
 from driftwatch.drag import density as dn
 from driftwatch.orbit.time import parse_utc
-from driftwatch.risk.covariance import CovarianceModel, ObjectRef, RicCovariance, relabel
+from driftwatch.risk.covariance import CovarianceModel, ObjectRef, RicCovariance, relabel, source_array
 from driftwatch.storm import term
 from driftwatch.weather import table as weather_table
 
@@ -302,6 +302,61 @@ def build_scenario(
 # The covariance model a scenario hands to `risk`
 
 
+#: Why an object's storm mean shift is zeroed, most specific first. The first two are about the
+#: **trajectory**: the excess density is measured against SGP4's own atmosphere through the
+#: element set's B*, and a trajectory that was never SGP4's -- the operator's published states,
+#: or CelesTrak's fit to them -- carries the operator's drag model and planned burns, so there is
+#: no excess to measure and nothing is added at all. The last two are about the **object**: a
+#: station-kept or observed-manoeuvring satellite on a tracking-derived element set will burn
+#: rather than drift, so the direction of its displacement is the operator's and the mean is
+#: undefined, while the size of the storm's push is still a legitimate uncertainty and stays in
+#: the in-track variance.
+CONTROL_SERVED = "served"
+CONTROL_OPERATOR_EPHEMERIS = "operator-ephemeris"
+CONTROL_KNOWN = "known"
+CONTROL_OBSERVED = "observed"
+CONTROLLED_PREFIX = term.CONTROLLED_PREFIX
+#: The covariance label the SpaceX layer writes where the event's geometry came from the
+#: published states themselves (`ephemeris/spacex.py`); the trajectory is the operator's there.
+SERVED_TRAJECTORY_LABEL = "spacex-ephemeris"
+
+
+def controlled_objects(objects: pd.DataFrame) -> dict[int, str]:
+    """NORAD id to the reason its storm mean shift is undefined, for every object it is.
+
+    From the run's objects table: ``ephemeris == "supplemental"`` means the element set is
+    CelesTrak's SGP4 fit to the operator's own ephemeris (:data:`CONTROL_OPERATOR_EPHEMERIS`);
+    otherwise a ``manoeuvre_level`` of ``known`` or ``observed`` (`risk/manoeuvre.py`). Objects
+    served from the published states at an event are recognised per time by
+    :class:`StormCovariance` from the covariance label, since that is per event rather than per
+    object. Everything else is free-flying and absent from the result.
+    """
+    out: dict[int, str] = {}
+    if not len(objects):
+        return out
+    ephemeris = (
+        objects["ephemeris"].astype(str) if "ephemeris" in objects.columns else pd.Series("gp", index=objects.index)
+    )
+    levels = objects["manoeuvre_level"].astype(str) if "manoeuvre_level" in objects.columns else None
+    for position, norad_id in enumerate(objects["norad_id"].to_numpy()):
+        if ephemeris.iloc[position] == "supplemental":
+            out[int(norad_id)] = CONTROL_OPERATOR_EPHEMERIS
+        elif levels is not None and levels.iloc[position] in (CONTROL_KNOWN, CONTROL_OBSERVED):
+            out[int(norad_id)] = str(levels.iloc[position])
+    return out
+
+
+def skips_storm_term(reason: str) -> bool:
+    """Whether a control reason drops the storm term entirely (mean **and** variance).
+
+    True for the trajectory reasons: the excess over SGP4's atmosphere is undefined against a
+    trajectory that never used it, so a variance derived from that excess is as undefined as
+    the mean. False for the object reasons, where the excess is defined and only the response
+    is the operator's.
+    """
+    return reason in (CONTROL_SERVED, CONTROL_OPERATOR_EPHEMERIS)
+
+
 class StormCovariance:
     """A base model with an in-track mean shift and an in-track variance from the storm term.
 
@@ -309,31 +364,78 @@ class StormCovariance:
     in-track element of the covariance, which is where an along-track displacement's
     uncertainty belongs, and the shift is returned beside it on the protocol's new field for
     :func:`driftwatch.risk.scenario.run_risk` to apply to the miss vector.
+
+    **Operator-controlled objects get no mean shift** (corrected 2026-09-05). ``controlled``
+    maps NORAD id to the reason (:func:`controlled_objects`); a served trajectory is recognised
+    per time from the base label. For a trajectory reason nothing is added at all; for an object
+    reason the in-track variance is kept and the mean is zero. The source label says which:
+    ``...+storm:operator-controlled/<reason>``. Before this correction every object with a
+    coefficient was displaced, which put a 30,000 km shift on Starlinks whose B* describes a
+    thrusting plan rather than drag, and reported their events as outside the linear theory --
+    the same category error seen from the other side. ``docs/storm-term.md``.
     """
 
-    def __init__(self, base: CovarianceModel, shifts: Mapping[int, term.ShiftSeries], *, scenario: str) -> None:
+    def __init__(
+        self,
+        base: CovarianceModel,
+        shifts: Mapping[int, term.ShiftSeries],
+        *,
+        scenario: str,
+        controlled: Mapping[int, str] | None = None,
+    ) -> None:
         self.base = base
         self.shifts = dict(shifts)
+        self.controlled: dict[int, str] = {int(k): str(v) for k, v in (controlled or {}).items()}
         self.scenario = str(scenario)
-        self.version = f"{base.version}+storm/{self.scenario}/1"
+        # /2: operator-controlled objects carry no mean shift (2026-09-05). /1 displaced them.
+        self.version = f"{base.version}+storm/{self.scenario}/2"
 
     def growth_for(self, obj: ObjectRef) -> tuple[Any, str]:
         return self.base.growth_for(obj)  # type: ignore[attr-defined]
 
+    def applies_shift_to(self, norad_id: int) -> bool:
+        """Whether this scenario moves the object at all; false for every operator-controlled one."""
+        return int(norad_id) not in self.controlled
+
     def covariance_ric(self, obj: ObjectRef, epoch: datetime, at: np.ndarray) -> RicCovariance:
         inner = self.base.covariance_ric(obj, epoch, at)
+        n = len(np.asarray(at))
+        labels = source_array(inner.source, n)
+        served = np.array([str(s) == SERVED_TRAJECTORY_LABEL for s in labels], dtype=bool)
+        reason = self.controlled.get(int(obj.norad_id))
         series = self.shifts.get(int(obj.norad_id))
-        if series is None or not len(series.seconds):
-            return RicCovariance(inner.cov_km2, relabel(inner.source, "{}+storm:none"), inner.mean_shift_ric_km)
-        shift_m, sigma_m = series.at(term.times_since_epoch_s(epoch, at))
+        has_series = series is not None and len(series.seconds) > 0
+        if reason is None and not served.any():
+            if not has_series:
+                return RicCovariance(inner.cov_km2, relabel(inner.source, "{}+storm:none"), inner.mean_shift_ric_km)
+            shift_m, sigma_m = series.at(term.times_since_epoch_s(epoch, at))
+            cov = np.array(inner.cov_km2, dtype=float, copy=True)
+            cov[:, 1, 1] += (sigma_m / 1000.0) ** 2
+            mean = np.zeros((len(cov), 3))
+            mean[:, 1] = shift_m / 1000.0
+            if inner.mean_shift_ric_km is not None:
+                mean = mean + np.asarray(inner.mean_shift_ric_km, dtype=float)
+            label = series.b_source if series.valid else f"{series.b_source}!extrapolated"
+            return RicCovariance(cov, relabel(inner.source, "{}+storm:" + label), mean)
+
+        # Operator-controlled, for at least some of the times asked about. The mean is zero at
+        # every one of them; the variance is kept only where the trajectory is SGP4's and the
+        # object's reason is about its behaviour rather than about the trajectory.
         cov = np.array(inner.cov_km2, dtype=float, copy=True)
-        cov[:, 1, 1] += (sigma_m / 1000.0) ** 2
-        mean = np.zeros((len(cov), 3))
-        mean[:, 1] = shift_m / 1000.0
+        per_time = np.empty(n, dtype=object)
+        keep_variance = np.zeros(n, dtype=bool)
+        for k in range(n):
+            why = CONTROL_SERVED if served[k] else (reason or CONTROL_SERVED)
+            per_time[k] = f"{CONTROLLED_PREFIX}/{why}"
+            keep_variance[k] = not skips_storm_term(why)
+        if has_series and keep_variance.any():
+            _, sigma_m = series.at(term.times_since_epoch_s(epoch, at))
+            cov[keep_variance, 1, 1] += (sigma_m[keep_variance] / 1000.0) ** 2
+        mean = np.zeros((n, 3))
         if inner.mean_shift_ric_km is not None:
             mean = mean + np.asarray(inner.mean_shift_ric_km, dtype=float)
-        label = series.b_source if series.valid else f"{series.b_source}!extrapolated"
-        return RicCovariance(cov, relabel(inner.source, "{}+storm:" + label), mean)
+        source = np.array([f"{s}+storm:{why}" for s, why in zip(labels, per_time, strict=True)], dtype=object)
+        return RicCovariance(cov, source, mean)
 
     def to_frame(self) -> pd.DataFrame:
         return self.base.to_frame() if hasattr(self.base, "to_frame") else pd.DataFrame()
@@ -383,12 +485,18 @@ def shifts_for_objects(
     end: datetime,
     step_s: float | None = None,
     norad_ids: set[int] | None = None,
+    skip: set[int] | None = None,
 ) -> dict[int, term.ShiftSeries]:
     """The storm term for every object of a run, keyed by NORAD id.
 
     One density track per object from its own element-set epoch to ``end``, not one per event:
     the shift is a function of time, and the events read it at their own times of closest
     approach.
+
+    ``skip`` names the objects whose storm term is dropped entirely -- those on an operator's
+    trajectory, for which the excess is undefined (:func:`skips_storm_term`) -- so no density
+    track is computed for them. On the demo fleet that is six Starlinks in ten, and the density
+    tracks are what the scenario step's runtime is made of.
     """
     if scenario.table is None:
         return {}
@@ -399,12 +507,23 @@ def shifts_for_objects(
     perturbed = dn.weather_grid(scenario.perturbed_table) if scenario.perturbed_table is not None else None
     out: dict[int, term.ShiftSeries] = {}
     n_without = 0
+    skipped = {int(i) for i in (skip or ())}
     started = time.perf_counter()
-    total = len(elements) if norad_ids is None else len(norad_ids)
-    log.info("Storm term for %s: %d objects, two density tracks each", scenario.name, total)
+    wanted = elements["norad_id"].astype(int) if norad_ids is None else elements["norad_id"].astype(int).isin(norad_ids)
+    total = int(len(elements) if norad_ids is None else wanted.sum())
+    n_skipped = int(elements["norad_id"].astype(int).isin(skipped).sum())
+    log.info(
+        "Storm term for %s: %d objects, two density tracks each; %d on an operator's trajectory get no term "
+        "and no track",
+        scenario.name,
+        total - n_skipped,
+        n_skipped,
+    )
     for position, (_, row) in enumerate(elements.iterrows()):
         norad_id = int(row["norad_id"])
         if norad_ids is not None and norad_id not in norad_ids:
+            continue
+        if norad_id in skipped:
             continue
         coefficient = by_id.loc[norad_id] if norad_id in by_id.index else None
         if coefficient is None:

@@ -21,13 +21,14 @@ probability would be showing two answers to different questions side by side, so
 carries the shifted miss and the viewer's Miss column reads from it.
 
 **Every aggregate in the summary is given both ways**, over the events whose two objects both
-have a ballistic coefficient measured from their own decay and over the rest. Step 4 measured
-the storm term against the May 2024 record and found it predictive at r = 0.88 for the first
-group and of no demonstrated skill for the second, and the split turns out to matter: on the
-demo run the median ``pc / pc_variance_only`` is 0.16 over the validated events and 0.89 over
-the indicative ones. A single combined figure averages a large real effect with a near-absent
-unmeasured one, weighted by the coverage of the coefficient fit rather than by physics. See
-`docs/methods.md`, "Storm-term validity".
+have a ballistic coefficient measured from their own decay and over the rest, plus a third
+population for events whose two objects are both operator-controlled and so were not displaced
+(2026-09-05). Step 4 measured the storm term against the May 2024 record and found it predictive
+at r = 0.88 for the first group and of no demonstrated skill for the second. A single combined
+figure averages populations the validation reaches differently, weighted by the coverage of the
+coefficient fit rather than by physics. (The 0.16-against-0.89 split this docstring used to quote
+was an artefact of displacing operator-controlled objects; `docs/storm-term.md`, "Corrected
+2026-09-05".) See `docs/methods.md`, "Storm-term validity".
 
 ## `storm.json`: the replay timeline
 
@@ -58,7 +59,7 @@ import pandas as pd
 from driftwatch import __version__, config
 from driftwatch.drag import density as dn
 from driftwatch.export.conjunctions import RunDirectory
-from driftwatch.export.report import cumulative_pc, normalise
+from driftwatch.export.report import anonymise_primaries, cumulative_pc, normalise
 from driftwatch.storm import term
 from driftwatch.weather import helioviewer
 
@@ -264,7 +265,7 @@ def scenario_summary(rows: pd.DataFrame) -> dict[str, Any]:
     decoration: on the demo run the two populations disagree by a factor of five on the one
     number this phase is about.
     """
-    labels = [term.VALIDATED, term.INDICATIVE]
+    labels = [term.VALIDATED, term.INDICATIVE, term.OPERATOR_CONTROLLED]
     groups: list[tuple[str, pd.DataFrame]] = []
     if "storm_validity" in rows.columns:
         for label in labels:
@@ -339,7 +340,8 @@ def build_overlays(run: RunDirectory, bundle: dict[str, Any]) -> dict[str, Any]:
     stored = sorted(str(s) for s in joined["scenario"].dropna().unique())
     scenarios: dict[str, Any] = {}
     for name in stored:
-        rows = normalise(joined[joined["scenario"] == name]).copy()
+        # The same anonymisation as the base bundle: the overlay's unscoreable rows name the primary.
+        rows = anonymise_primaries(normalise(joined[joined["scenario"] == name])).copy()
         rows["tca"] = pd.to_datetime(rows["tca"], utc=True)
         detail = rows[rows["event_id"].isin(set(event_ids))]
         scenarios[name] = {
@@ -375,6 +377,12 @@ def build_overlays(run: RunDirectory, bundle: dict[str, Any]) -> dict[str, Any]:
             "their own decay and indicative otherwise. The storm term is predictive at r = 0.88 for "
             "the first group and has no demonstrated skill for the second, so every aggregate is "
             "given both ways. Nothing is weighted or withheld by the label.",
+            "An operator-controlled object -- one on an operator's published trajectory, or a "
+            "station-kept or observed-manoeuvring satellite -- is given no mean shift under any "
+            "scenario, because the storm excess is undefined for a trajectory that already carries "
+            "the operator's drag model and burns; its label says operator-controlled/<reason>. An "
+            "event with one such side is validated or indicative on the free-flying side alone, and "
+            "an event with both sides controlled is labelled operator-controlled.",
             "An unscoreable event carries null in every probability: its in-track displacement left "
             "the linear theory the term was derived under. It is not a small probability.",
         ],

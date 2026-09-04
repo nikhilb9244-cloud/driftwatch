@@ -132,6 +132,18 @@ VALIDATED = "validated"
 INDICATIVE = "indicative"
 #: No storm layer applied at all: `quiet`, and any plain labelled rescore.
 NO_STORM_TERM = "none"
+#: Both objects under operator control, so the scenario applied no mean shift to either side and
+#: the event's relative displacement is zero by construction rather than by measurement.
+OPERATOR_CONTROLLED = "operator-controlled"
+#: The ``storm_source_*`` label of an object whose mean shift was zeroed, followed by the reason:
+#: ``operator-controlled/served``, ``/operator-ephemeris``, ``/known`` or ``/observed``. See
+#: :class:`driftwatch.storm.scenarios.StormCovariance`.
+CONTROLLED_PREFIX = "operator-controlled"
+
+
+def is_operator_controlled(label: Any) -> bool:
+    """Whether a ``storm_source_*`` label says the object's storm mean shift was zeroed."""
+    return str(label).split("/", 1)[0].strip() == CONTROLLED_PREFIX
 
 
 def coefficient_source(label: Any) -> str:
@@ -139,13 +151,17 @@ def coefficient_source(label: Any) -> str:
 
     The label a scenario writes can carry the ``!extrapolated`` marker
     (:meth:`ShiftSeries.summary`), which says the implied decay was large -- a separate
-    statement from where the coefficient came from. Strip it.
+    statement from where the coefficient came from. Strip it. An operator-controlled label is
+    returned whole: it is not a coefficient source and must not be read as one.
     """
-    return str(label).split("!", 1)[0].strip() or NO_STORM_TERM
+    text = str(label)
+    if is_operator_controlled(text):
+        return text.strip()
+    return text.split("!", 1)[0].strip() or NO_STORM_TERM
 
 
 def event_validity(primary: Any, secondary: Any) -> str:
-    """``validated``, ``indicative`` or ``none`` for one event, from its two coefficient sources.
+    """``validated``, ``indicative``, ``operator-controlled`` or ``none`` for one event.
 
     **The weaker of the two decides**, because a relative shift is the difference of two
     displacements and the worse-known one bounds what can be said about it. Step 4 measured the
@@ -154,10 +170,23 @@ def event_validity(primary: Any, secondary: Any) -> str:
     carrying a B\\* inversion (regression slope -1.39) or a population stand-in. So two measured
     sides is ``validated`` and everything else is ``indicative``.
 
+    **An operator-controlled side is neutral** (corrected 2026-09-05). Its mean shift was zeroed
+    because the storm excess is undefined for a trajectory that carries the operator's own drag
+    model and burns, so the event's relative displacement is the free-flying side's alone and the
+    free-flying side's coefficient decides: ``validated`` if it was measured, ``indicative``
+    otherwise. Both sides controlled is its own label, ``operator-controlled``: no displacement
+    was applied at all, and the validation has nothing to reach.
+
     ``indicative`` is not a smaller number and nothing downstream downweights it: the sigma such
     an object carries is the one :func:`object_shift` derived, unchanged. The label says the
     validation does not reach the event. ``docs/methods.md``, "Storm-term validity".
     """
+    controlled_a, controlled_b = is_operator_controlled(primary), is_operator_controlled(secondary)
+    if controlled_a and controlled_b:
+        return OPERATOR_CONTROLLED
+    if controlled_a or controlled_b:
+        free = coefficient_source(secondary if controlled_a else primary)
+        return VALIDATED if free == MEASURED_B_SOURCE else INDICATIVE
     a, b = coefficient_source(primary), coefficient_source(secondary)
     if a == NO_STORM_TERM and b == NO_STORM_TERM:
         return NO_STORM_TERM
@@ -512,17 +541,33 @@ def validity(decay_m: float, shift_m: float, a_m: float) -> tuple[float, float, 
     return fraction, revolutions, ok
 
 
-def shift_summary(series: dict[int, ShiftSeries]) -> dict[str, Any]:
-    """What a set of shifts amounts to, for the log and the run record."""
-    ends = [float(s.shift_m[-1]) / 1000.0 for s in series.values() if len(s.shift_m)]
-    sigmas = [float(s.sigma_m[-1]) / 1000.0 for s in series.values() if len(s.sigma_m)]
+def shift_summary(series: dict[int, ShiftSeries], controlled: dict[int, str] | None = None) -> dict[str, Any]:
+    """What a set of shifts amounts to, for the log and the run record.
+
+    ``controlled`` maps NORAD id to the reason its storm mean shift is zeroed (see
+    :func:`driftwatch.storm.scenarios.controlled_objects`). Those objects are counted by
+    reason and left out of the unscoreable and outside-the-linear-theory counts, because a
+    displacement that is never applied cannot make an event unscoreable.
+    """
+    controlled = dict(controlled or {})
+    free = {k: s for k, s in series.items() if k not in controlled}
+    ends = [float(s.shift_m[-1]) / 1000.0 for s in free.values() if len(s.shift_m)]
+    sigmas = [float(s.sigma_m[-1]) / 1000.0 for s in free.values() if len(s.sigma_m)]
+    by_reason = {str(k): int(v) for k, v in pd.Series(list(controlled.values()), dtype=object).value_counts().items()}
     if not ends:
-        return {"n_objects": len(series), "n_with_shift": 0}
+        return {
+            "n_objects": len(series) + len(set(controlled) - set(series)),
+            "n_with_shift": 0,
+            "n_operator_controlled": len(controlled),
+            "by_control_reason": by_reason,
+        }
     absolute = np.abs(ends)
     return {
-        "n_objects": len(series),
+        "n_objects": len(series) + len(set(controlled) - set(series)),
         "n_with_shift": len(ends),
-        "n_without_coefficient": sum(1 for s in series.values() if not len(s.shift_m)),
+        "n_operator_controlled": len(controlled),
+        "by_control_reason": by_reason,
+        "n_without_coefficient": sum(1 for s in free.values() if not len(s.shift_m)),
         "shift_km": {
             "median_abs": round(float(np.median(absolute)), 3),
             "p90_abs": round(float(np.quantile(absolute, 0.9)), 3),
@@ -535,11 +580,11 @@ def shift_summary(series: dict[int, ShiftSeries]) -> dict[str, Any]:
             "p90": round(float(np.quantile(sigmas, 0.9)), 3),
         },
         "by_b_source": {
-            str(k): int(v) for k, v in pd.Series([s.b_source for s in series.values()]).value_counts().items()
+            str(k): int(v) for k, v in pd.Series([s.b_source for s in free.values()]).value_counts().items()
         },
-        "n_outside_linear_theory": int(sum(1 for s in series.values() if len(s.shift_m) and not s.valid)),
-        "n_unscoreable": int(sum(1 for s in series.values() if len(s.shift_m) and not s.scoreable)),
-        "n_decay_only": int(sum(1 for s in series.values() if len(s.shift_m) and s.scoreable and not s.valid)),
+        "n_outside_linear_theory": int(sum(1 for s in free.values() if len(s.shift_m) and not s.valid)),
+        "n_unscoreable": int(sum(1 for s in free.values() if len(s.shift_m) and not s.scoreable)),
+        "n_decay_only": int(sum(1 for s in free.values() if len(s.shift_m) and s.scoreable and not s.valid)),
     }
 
 

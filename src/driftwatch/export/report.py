@@ -407,7 +407,10 @@ def build_bundle(
     joined = run.read_conjunctions()
     scenarios = sorted(str(s) for s in joined["scenario"].dropna().unique())
     scenario = scenario or (scenarios[0] if scenarios else "quiet")
-    rows = normalise(joined[joined["scenario"] == scenario])
+    # The bundle is the public page. Fleet members other than stations are shown by category and
+    # NORAD id until their operator has agreed to appear (2026-09-05); the run directory keeps
+    # the names, because it is the operator's own report.
+    rows = anonymise_primaries(normalise(joined[joined["scenario"] == scenario]))
     rows["tca"] = pd.to_datetime(rows["tca"], utc=True)
     # Kept before `rows` is narrowed to the detail set below, because the storm summary and the
     # unscoreable list are statements about the whole scenario. Computed over the detail subset
@@ -495,16 +498,24 @@ def build_bundle(
             "storm term is predictive at a correlation of 0.88 for the first group and has no demonstrated "
             "skill for the second. Nothing is weighted or withheld by the label and every aggregate is "
             "reported both ways.",
-            "The storm displaces the two objects of a pair nearly independently, not in common: the relative "
-            "shift is a median 1.91 times the mean of the two absolute shifts, out of a possible 2. That a "
-            "storm lowers most probabilities is measured; it happens because a displacement of tens of "
-            "kilometres applied to a miss of a few separates more pairs than it creates.",
+            "The storm displaces the two objects of a free-flying pair nearly independently, not in common: "
+            "the relative shift is a median 1.85 times the mean of the two absolute shifts, out of a possible "
+            "2. Whether a displacement lowers or raises an event's probability depends on its size against "
+            "the miss and the covariance; on the demo fleet the free-flying displacements are a few "
+            "kilometres and the probabilities move little either way.",
+            "Operator-controlled objects -- on an operator's published trajectory, or station-kept or "
+            "observed manoeuvring -- are not displaced by any scenario, because the storm excess is undefined "
+            "for a trajectory that already carries the operator's drag model and burns. Their label says so.",
             "A pair's cumulative probability is one minus the product of the complements over its events. "
             "The events are repeated passes of the same two objects propagated from the same two element "
             "sets, so they are not independent and the true combined probability is lower.",
             "A flag in the dilution region is reported at low confidence: the probability there is held up "
             "by the size of the covariance rather than by the geometry, and is not actionable. It means the "
-            "data cannot support a judgement either way, not that better data would clear the flag.",
+            "data cannot support a judgement either way, not that better data would clear the flag. Every "
+            "flag is shown with its region and confidence first.",
+            "Fleet members other than stations are shown by category and NORAD id, not by name, until "
+            "their operator has agreed to appear on this page. The catalogue's own object names are the "
+            "public record and are unchanged.",
             "Every pair is listed. Individual events are carried for the flagged pairs, the pairs with an "
             "event inside the notification box, and the highest-probability pairs; the parquet in the run "
             "directory holds every event of every pair.",
@@ -543,28 +554,37 @@ def _fmt_pc(value: float) -> str:
 
 
 def _fmt_flag(flag: str, confidence: str, region: str) -> str:
+    """A flag cell that **leads with the region and the confidence**, never with the colour.
+
+    A red in the dilution region is a statement about the size of the covariance, not about the
+    encounter, and a reader who sees "red" first has already drawn the wrong conclusion by the
+    time the qualifier arrives. So the region and the confidence come first everywhere a flag is
+    rendered (corrected 2026-09-05, after an external review found the write-up quoting a
+    dilution-region red as a plain red).
+    """
     if flag == "none":
         return "—"
     if flag == "unscoreable":
         return "**unscoreable**"
     if confidence == "low":
-        return f"**{flag}** (low confidence, {region})"
-    return f"**{flag}**"
+        return f"**{region} region, low confidence** · {flag}, not actionable"
+    return f"{region} region, {confidence} confidence · **{flag}**"
 
 
 def _verdicts(flagged: pd.DataFrame) -> list[str]:
-    """One plain sentence per flagged pair saying which region it is in and what that means.
+    """One plain sentence per flagged pair, leading with the region and the confidence.
 
     The Phase 3 Step 0 review asked for this: the tables carry `region` and `confidence`
     in every row, but a reader should not have to decode a column to learn whether the
-    week's red is a real geometry or an artefact of the uncertainty.
+    week's red is a real geometry or an artefact of the uncertainty. The order was fixed at
+    the 2026-09-05 correction: region and confidence first, then the flag and its numbers.
     """
     if not len(flagged):
         return ["## The flags, plainly", "", "No pair is flagged this week.", ""]
     lines = [
         "## The flags, plainly",
         "",
-        "Every flagged pair, with the region of the event that raised the flag. **Robust** means the "
+        "Every flagged pair, led by the region of the event that raised the flag. **Robust** means the "
         "maximum of the probability over covariance scale factors sits at or above the covariance in "
         "hand, so the number is set by the geometry: worth a second look. **Dilution** means it sits "
         "below, so the probability is held up by the size of the uncertainty rather than by the "
@@ -575,18 +595,52 @@ def _verdicts(flagged: pd.DataFrame) -> list[str]:
     for _, p in flagged.sort_values("max_pc", ascending=False).iterrows():
         scale = p["pc_max_scale_at_max_pc"]
         scale_txt = f"{scale:.2f}×" if np.isfinite(scale) else "an unknown scale"
-        verdict = {
-            "robust": f"**robust** (maximum at {scale_txt} the covariance)",
-            "dilution": f"**dilution**, not robust (maximum at {scale_txt} the covariance)",
-        }.get(str(p["region"]), "**unclassified**: the covariance-scale sweep did not run")
+        lead = {
+            "robust": f"**Robust region, {p['confidence']} confidence** (maximum at {scale_txt} the covariance)",
+            "dilution": (
+                f"**Dilution region, {p['confidence']} confidence**, not actionable "
+                f"(maximum at {scale_txt} the covariance)"
+            ),
+        }.get(str(p["region"]), "**Unclassified region**: the covariance-scale sweep did not run")
         miss = p.get("miss_at_max_pc_km", p["closest_km"])
         lines.append(
-            f"- **{p['primary_name']} versus {p['secondary_name']} ({int(p['secondary_norad_id'])})**: "
+            f"- {lead}: {p['primary_name']} versus {p['secondary_name']} ({int(p['secondary_norad_id'])}), "
             f"{p['flag']} at `pc` {_fmt_pc(p['max_pc'])}, at a miss of {float(miss):.3f} km on "
-            f"{pd.Timestamp(p['max_pc_tca']).strftime('%Y-%m-%d %H:%M')} UTC. {verdict}."
+            f"{pd.Timestamp(p['max_pc_tca']).strftime('%Y-%m-%d %H:%M')} UTC."
         )
     lines.append("")
     return lines
+
+
+#: Fleet members in these categories are named on the public page; the rest are shown by category
+#: and NORAD id until their operator has agreed to appear. A station is public infrastructure with
+#: a published position; a small operator's satellite in a conjunction warning is not.
+PUBLICLY_NAMED_CATEGORIES: frozenset[str] = frozenset({"station"})
+
+
+def public_primary_name(name: Any, category: Any, norad_id: Any) -> str:
+    """The name a fleet member is shown under on the public page.
+
+    ``ISS (Zarya)`` stays ``ISS (Zarya)``; a payload becomes ``payload 55053``. The catalogue's
+    own object names are untouched -- they are the public record -- and so is everything in the
+    run directory, which is the operator's own report. Only the published bundle is anonymised.
+    """
+    if str(category) in PUBLICLY_NAMED_CATEGORIES:
+        return str(name)
+    return f"{str(category).replace('_', ' ')} {int(norad_id)}"
+
+
+def anonymise_primaries(rows: pd.DataFrame) -> pd.DataFrame:
+    """``primary_name`` replaced by :func:`public_primary_name` on every row, for the public exports."""
+    if not len(rows) or "primary_name" not in rows.columns:
+        return rows
+    out = rows.copy()
+    categories = out["primary_category"] if "primary_category" in out.columns else pd.Series("payload", index=out.index)
+    out["primary_name"] = [
+        public_primary_name(name, category, norad_id)
+        for name, category, norad_id in zip(out["primary_name"], categories, out["primary_norad_id"], strict=True)
+    ]
+    return out
 
 
 def _pair_rows(pairs: pd.DataFrame) -> list[str]:
@@ -650,10 +704,16 @@ def _validity_summary_rows(rows: pd.DataFrame) -> list[str]:
     counts = rows["storm_validity"].astype(str).value_counts()
     if not counts.drop(labels=["none"], errors="ignore").sum():
         return []
-    return [
+    out = [
         f"| Events with the storm term validated (both coefficients measured) | {int(counts.get('validated', 0))} |",
         f"| Events with the storm term indicative only | {int(counts.get('indicative', 0))} |",
     ]
+    if counts.get("operator-controlled", 0):
+        out.append(
+            f"| Events with both objects operator-controlled (no displacement applied) "
+            f"| {int(counts.get('operator-controlled', 0))} |"
+        )
+    return out
 
 
 def attached_section(info: dict[str, Any]) -> list[str]:
@@ -763,7 +823,7 @@ def storm_section(rows: pd.DataFrame, scenario: str) -> list[str]:
         return []
     if not np.any(pd.to_numeric(rows["relative_shift_km"], errors="coerce").to_numpy(dtype=float) > 0):
         return []
-    labels = ["validated", "indicative", "combined"]
+    labels = ["validated", "indicative", "operator-controlled", "combined"]
     figures = {label: _storm_figures(_storm_rows(rows, label)) for label in labels}
     labels = [label for label in labels if figures[label]["n_events"]]
 
@@ -779,6 +839,15 @@ def storm_section(rows: pd.DataFrame, scenario: str) -> list[str]:
         "skill** otherwise, so the split is the difference between a measurement and an "
         "extrapolation. Nothing is weighted, widened or withheld by the label — the numbers are "
         "identical either way, and the label says how far the validation reaches.",
+        "",
+        "**Operator-controlled objects are not displaced** (corrected 2026-09-05). An object on the "
+        "operator's own published trajectory, or CelesTrak's fit to it, already carries the operator's "
+        "drag model and planned burns, so a storm excess over SGP4's atmosphere is undefined for it and "
+        "no term is applied at all; a station-kept or observed-manoeuvring satellite on a tracking-derived "
+        "element set will burn rather than drift, so its mean shift is zero and only the in-track variance "
+        "is kept. An event with one such side is validated or indicative on its free-flying side alone; "
+        "an event with both sides controlled is the `operator-controlled` column, where no displacement "
+        "was applied and the storm's whole effect is the widened covariance.",
         "",
         f"| | {header} |",
         "| --- | " + " | ".join(["---:"] * len(labels)) + " |",
@@ -801,17 +870,19 @@ def storm_section(rows: pd.DataFrame, scenario: str) -> list[str]:
         "**How to read the ratio.** `pc` is the scenario's probability with both effects — the "
         "objects moved and the covariance widened. `pc_variance_only` is the same covariance with "
         "the objects left where their element sets put them. A median below one says the "
-        "displacement is *protective* on most events, which is the counter-intuitive result the "
-        "phase turns on and which `driftwatch storm-check` attacks rather than asserts.",
+        "displacement lowered the probability on most events, above one that it raised it; which "
+        "way it goes is decided by the size of the displacement against the miss and the "
+        "covariance, and `driftwatch storm-check` attacks the split rather than asserting it.",
         "",
-        "**The reason is not a cancellation between the two objects.** The relative displacement "
-        "that reaches the miss is a median 1.91 times the mean of the two objects' own "
-        "displacements, out of a maximum of 2: the two are nearly independent, because a "
-        "conjunction is a crossing — a median 120° between the two in-track directions. What "
-        "lowers most probabilities is simply that a displacement of tens of kilometres applied to "
-        "a miss of a few separates more pairs than it creates. (Corrected 2026-09-03; Step 3 "
-        "attributed the same result to common-mode cancellation and `docs/storm-term.md` carries "
-        "the measurement that withdrew it.)",
+        "**The two objects' displacements are nearly independent.** Over the events with both "
+        "objects free-flying, the relative displacement that reaches the miss is a median 1.85 "
+        "times the mean of the two objects' own displacements (1.91 before operator-controlled "
+        "objects were excluded), out of a maximum of 2, because a conjunction is a crossing — a "
+        "median 120° between the two in-track directions. Step 3 explained an apparent lowering of "
+        "most probabilities by common-mode cancellation; `docs/storm-term.md` carries the "
+        "measurement that withdrew the explanation on 2026-09-03 and the correction of 2026-09-05 "
+        "that withdrew the lowering itself, which lived in displacements the term should never "
+        "have applied to operator-controlled objects.",
         "",
     ]
     return lines
@@ -855,10 +926,11 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         f"| Events | {len(rows)} |",
         f"| Distinct pairs | {len(pairs)} |",
         f"| Events inside the notification box | {int(rows['in_box'].sum())} |",
+        # Region and confidence before the colours, here as everywhere a flag is rendered.
+        f"| Flagged pairs in the dilution region (low confidence, not actionable) | {len(low)} |",
+        f"| Flagged pairs in the robust region (standard confidence) | {len(actionable)} |",
         f"| Pairs flagged red | {int((pairs['flag'] == 'red').sum())} |",
         f"| Pairs flagged yellow | {int((pairs['flag'] == 'yellow').sum())} |",
-        f"| Flagged pairs in the dilution region (low confidence) | {len(low)} |",
-        f"| Flagged pairs in the robust region | {len(actionable)} |",
         f"| Events not scored (the storm term left its own derivation) | {n_unscoreable} |",
         *_validity_summary_rows(rows),
         f"| Closest approach | {rows['miss_scenario_km'].min():.3f} km |",

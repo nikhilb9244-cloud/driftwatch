@@ -4,6 +4,45 @@ A running list of every approximation in the pipeline, with its size where it ha
 measured. Phase 4 turns this into the public methods page. Entries are grouped by where
 they enter the chain; each states what is assumed, why, and what it costs.
 
+## Precedent, and what this adds
+
+Two pieces of published work are the ground this project stands on, and the honest description
+of its contribution is what it does differently from each (added 2026-09-05).
+
+- **Flohrer, T., Krag, H. and Klinkrad, H. (2008), *Assessment and Categorisation of TLE Orbit
+  Errors for the US SSN Catalogue*, AMOS 2008.** ESA's Space Debris Office derived the position
+  uncertainty of public element sets from their **consistency** — propagating one set to the epoch
+  of the next and reading the disagreement — and tabulated it by orbit class. That is the method
+  every covariance in driftwatch rests on, and the per-band prior at the bottom of the fallback
+  chain (`default:<band>`) is a table of exactly their kind. What is done differently here: the
+  consistency fit is made **per object** from its own 45-day history, with a power law in lead
+  time per RIC component, falling back to a pool per category and altitude band and only then to
+  the class table; the label on every row says which of the three served; the same consistency
+  measure is applied to **operator-ephemeris fits** (successive CelesTrak supplemental versions)
+  with a measured validity horizon; and the fit is re-run every day on the live catalogue rather
+  than published once. None of that changes the character of the number — it is still a floor from
+  the consistency of fits by one network, blind to any error they share (see "Uncertainty and
+  probability" below) — and the class-level result they published is what the fallback still
+  quotes when an object's own history is too thin.
+- **Parker, W. E. and Linares, R. (2024), *Satellite Drag Analysis During the May 2024 Gannon
+  Geomagnetic Storm*, J. Spacecraft and Rockets 61(6).** The template for §1 of
+  `docs/storm-validation.md`: the thermospheric density enhancement of a storm measured from the
+  change in **mean motion** of the public catalogue, object by object, and compared against a
+  density model. What is added here is §2: a **forecast test** of the in-track displacement the
+  enhancement causes — the quantity a screening actually needs — run the way an operator would
+  have run it, from each object's last pre-storm element set and its own pre-storm ballistic
+  coefficient, against a quiet control at the same lead times, and reported by coefficient
+  source and by lead. That test is what produced the validity split (skill at r = 0.88 for a
+  measured coefficient, none demonstrated otherwise) and its lead-time structure (skill
+  concentrated at three to four days, near zero inside two), neither of which a density
+  enhancement measurement can see. Their density enhancement and this project's §1 are measured
+  against different baselines and are not directly comparable; `docs/storm-validation.md` says
+  how.
+
+What this project does that neither does is put the two together on a daily pipeline and report,
+per event, how far the validation reaches the number shown. That is a statement about labelling
+and provenance rather than about new physics, and it is meant to be read as one.
+
 ## Catalogue
 
 - **Coverage.** CelesTrak groups `active`, `stations`, `starlink`, `oneweb`,
@@ -472,6 +511,22 @@ they enter the chain; each states what is assumed, why, and what it costs.
   is correct and is worth knowing when comparing two runs.
 - **No coefficient means no shift**, labelled `storm:none`. That is a statement that the
   displacement is unknown, not that it is zero, and the two must not be read alike.
+- **An operator-controlled object gets no mean shift** (corrected 2026-09-05, after an external
+  review). The excess is measured against SGP4's own atmosphere through the element set's B\*.
+  For a trajectory that was never SGP4's — SpaceX's published states served by Stage C, or
+  CelesTrak's supplemental fit to those states — the trajectory already carries the operator's
+  drag model and planned burns, so there is **no excess to measure**, and no term is applied at
+  all (`storm:operator-controlled/served`, `/operator-ephemeris`). For a station-kept or
+  observed-manoeuvring satellite on a tracking-derived element set, the excess is defined but
+  the object will burn rather than drift, so the direction of its displacement is the operator's:
+  the mean is zero and the size of the storm's push stays in the in-track variance
+  (`/known`, `/observed`). An event with one controlled side is judged on its free-flying side
+  alone; both controlled is its own `storm_validity` label, `operator-controlled`. Before this
+  every object with a coefficient was displaced, which put shifts of up to 30,000 km on Starlinks
+  whose supplemental B\* described a thrusting plan and reported their events as outside the
+  linear theory — 42 objects on the 1 September run, 36 on the 3 September one, every one of
+  them a Starlink. That was the same category error seen from the other side, and
+  `docs/storm-term.md` carries the correction and what it moved.
 - **Three probabilities per row, because the scenario does two things.** `pc` (the objects
   moved and the covariance grew), `pc_shift_only` (moved, scored against the covariance the run
   would otherwise have had) and `pc_variance_only` (covariance grown, objects left where their
@@ -496,6 +551,16 @@ they enter the chain; each states what is assumed, why, and what it costs.
   > reaching the miss. `driftwatch storm-check` was built to test that claim and refuted it. The
   > wording is withdrawn wherever it appeared; the result is not. `docs/storm-term.md` carries
   > the measurement.
+  > **Corrected again 2026-09-05.** The result is now withdrawn too, as a finding of these runs.
+  > The lowering lived entirely in events with an operator-controlled side, displaced by the
+  > category error the storm-term bullet above records; on the 981 events of the 3 September run
+  > with both objects free-flying the probability is lowered on 55 and raised on 43 under a G5
+  > (median `pc / pc_variance_only` 0.98), before and after the correction alike. The ratio of
+  > 1.91 was over every event; over the free-flying population it is **1.85**, still flat in both
+  > splits, so the *independence* of the two displacements stands. Whether a storm lowers or
+  > raises a free-flying event's probability depends on its displacement against the miss and the
+  > covariance, and on this fleet that displacement is 2 to 7 km. `docs/storm-term.md`,
+  > "Corrected 2026-09-05".
 
 - **The weather table must reach behind the oldest element-set epoch in a run**, not merely
   cover the screening window: the shift is integrated from each object's own epoch, and NRLMSIS
@@ -532,6 +597,16 @@ they enter the chain; each states what is assumed, why, and what it costs.
   the one Step 3 derived, unchanged. The label says the validation does not reach it. Whether a
   B\*-only object should instead take a wider storm sigma is a Step 4 review question and is
   deliberately unanswered here.
+- **The skill is concentrated at three to four days of lead and is near zero inside two** (added
+  2026-09-05). On the validated population the observed sign agrees with the predicted one on 39
+  and 41 per cent of comparisons at one and two days — chance is 50 — and on 91 and 96 per cent
+  at three and four; the robust slope is −0.15 and −0.04 inside two days against 0.63 and 0.71
+  beyond. The r = 0.88 is a population figure that stands; where it comes from is the far half
+  of the window. A `forecast` shift at one or two days of lead is therefore an uncertainty, not a
+  correction, and the page says so. `docs/storm-validation.md` carries the table.
+- **`operator-controlled`** is a fourth value of `storm_validity`, for an event whose two objects
+  were both given no mean shift (the storm term bullet above): no displacement was applied and the
+  validation has nothing to reach. Every aggregate is reported over it as a third population.
 
 ## Validation against the record (Phase 3, Step 4)
 

@@ -225,8 +225,42 @@ def test_report_marks_a_dilution_red_as_low_confidence_everywhere_it_appears(tmp
 
     rendered = _fmt_flag(red["flag"], red["confidence"], red["region"])
     assert "low confidence" in rendered and "dilution" in rendered
-    assert _fmt_flag("red", "standard", "robust") == "**red**"
+    # The region and the confidence come first, the colour last (2026-09-05).
+    assert rendered.index("dilution") < rendered.index("red")
+    assert "not actionable" in rendered
+    robust = _fmt_flag("red", "standard", "robust")
+    assert robust.startswith("robust region") and robust.endswith("**red**")
     assert _fmt_flag("none", "standard", "robust") == "—"
+
+
+def test_the_public_bundle_names_a_station_and_anonymises_every_other_primary(run):
+    """A small operator's satellite is not named in a public warning until they have agreed."""
+    from driftwatch.export.report import anonymise_primaries, public_primary_name
+
+    assert public_primary_name("ISS (Zarya)", "station", 25544) == "ISS (Zarya)"
+    assert public_primary_name("EOS SAT-1", "payload", 55053) == "payload 55053"
+    assert public_primary_name("Some Body", "rocket_body", 9) == "rocket body 9"
+    rows = pd.DataFrame(
+        {
+            "primary_name": ["ISS (Zarya)", "EOS SAT-1"],
+            "primary_category": ["station", "payload"],
+            "primary_norad_id": [25544, 55053],
+            "secondary_name": ["A", "B"],
+        }
+    )
+    out = anonymise_primaries(rows)
+    assert out["primary_name"].tolist() == ["ISS (Zarya)", "payload 55053"]
+    assert out["secondary_name"].tolist() == ["A", "B"], "catalogue names are the public record"
+    assert rows["primary_name"].iloc[1] == "EOS SAT-1", "the input frame is not touched"
+
+    run_dir, snap = run
+    bundle, _ = build_bundle(run_dir, snap)
+    for pair in bundle["pairs"]:
+        assert pair["primary_name"] != "Primary"
+        assert pair["primary_name"].endswith(str(pair["primary_norad_id"]))
+    assert any("agreed to appear" in c for c in bundle["caveats"])
+    # The run directory's own report keeps the name: it is the operator's report, not the page.
+    assert "Primary" in weekly_report(run_dir)
 
 
 # --------------------------------------------------------------------------------------

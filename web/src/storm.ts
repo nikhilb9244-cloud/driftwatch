@@ -17,11 +17,11 @@
  * implied by a list, and it is given **both ways** — over the events whose two objects both
  * have a ballistic coefficient measured from their own decay, and over the rest. Step 4 found
  * the storm term predictive at r = 0.88 for the first group and of no demonstrated skill for
- * the second, and the split is not decoration: on the demo run's G5 the median
- * `pc / pc_variance_only` is 0.16 over the validated events and 0.89 over the indicative ones.
- * The combined figure is shown last and never alone, because it averages a large real effect
- * with a near-absent unmeasured one, weighted by the coverage of the coefficient fit rather
- * than by physics.
+ * the second. A third column, `operator-controlled`, holds the events whose two objects were both
+ * given no displacement (2026-09-05). The combined figure is shown last and never alone, because
+ * it averages populations the validation reaches differently, weighted by the coverage of the
+ * coefficient fit rather than by physics. (The 0.16-against-0.89 split this comment used to quote
+ * was an artefact of displacing operator-controlled objects and is withdrawn; docs/storm-term.md.)
  */
 
 import type { Bundle } from "./data";
@@ -46,9 +46,9 @@ const fmtRatio = (v: number | null | undefined): string =>
 const fmtKm = (v: number | null | undefined, digits = 1): string =>
   v == null || !Number.isFinite(v) ? "—" : v.toFixed(digits);
 
-/** `validated`, `indicative`, `combined` — in that order, and only those actually present. */
+/** `validated`, `indicative`, `operator-controlled`, `combined` — in that order, and only those present. */
 function orderedPopulations(summary: Record<string, ScenarioFigures>): string[] {
-  return ["validated", "indicative", "combined"].filter((k) => summary[k]);
+  return ["validated", "indicative", "operator-controlled", "combined"].filter((k) => summary[k]);
 }
 
 /**
@@ -157,22 +157,33 @@ export function buildStormControl(
       row("Not scored", (f) => String(f.n_unscoreable)) +
       `</tbody></table>` +
       // Folded away rather than dropped: it is needed once, and the queue is what is being read.
-      `<details class="storm-explainer"><summary>What these columns mean, and why a storm lowers most
-        probabilities</summary>` +
+      `<details class="storm-explainer"><summary>What these columns mean, and what the storm term does and
+        does not do</summary>` +
       `<p class="caveat"><b>Both columns, always.</b> <code>validated</code> means both objects of the event
         have a ballistic coefficient fitted from their own decay history; <code>indicative</code> means at
         least one rests on a B* inversion, a population stand-in, or no coefficient at all. Step 4 measured
         the storm term against the May 2024 record and found it predictive at a correlation of 0.88 for the
         first group and of <b>no demonstrated skill</b> for the second. Nothing is weighted or withheld by
         the label — the numbers are identical either way — but a median taken across both populations
-        together is an average of a measured effect and an unmeasured one.</p>` +
-      `<p class="caveat"><b>Why a storm usually lowers the probability.</b> It displaces the two objects by
-        tens of kilometres while their misses are a few, and a displacement that large applied to a near
-        miss separates more pairs than it creates. The two displacements are <i>not</i> alike: the relative
-        shift that reaches the miss is a median 1.91 times the mean of the two absolute shifts, out of a
-        possible 2, because a conjunction is a crossing at a median 120°. (An earlier version of this tool
-        explained the same result by common-mode cancellation between the two objects; that explanation was
-        measured and withdrawn on 2026-09-03. The result stands.)</p>` +
+        together is an average of a measured effect and an unmeasured one. Skill is concentrated at three
+        to four days of lead and is near zero inside two.</p>` +
+      `<p class="caveat"><b>Operator-controlled objects are not displaced.</b> An object on the operator's own
+        published trajectory, or on CelesTrak's fit to it, already carries the operator's drag model and
+        planned burns, so a storm excess over SGP4's atmosphere is undefined for it and no term is applied;
+        a station-kept or observed-manoeuvring satellite will burn rather than drift, so its mean shift is
+        zero and only the widened covariance is kept. An event with one such side is judged on its
+        free-flying side alone; <code>operator-controlled</code> is the column where both sides are.
+        (Corrected 2026-09-05. Before it, every object with a coefficient was displaced, and the Starlinks
+        whose B* described a thrusting plan were reported as outside the linear theory.)</p>` +
+      `<p class="caveat"><b>Which way a storm moves a probability.</b> It depends on the size of the
+        displacement against the miss and the covariance. The two displacements of a free-flying pair are
+        <i>not</i> alike: the relative shift that reaches the miss is a median 1.85 times the mean of the two
+        absolute shifts, out of a possible 2, because a conjunction is a crossing at a median 120°. On the
+        demo fleet the free-flying displacements are a few kilometres and the probabilities move little either
+        way. (Earlier versions of this tool said a storm lowers most probabilities, first explaining it by
+        common-mode cancellation — withdrawn 2026-09-03 — and then by large displacements separating near
+        misses; the lowering itself was withdrawn on 2026-09-05, because it lived in displacements applied to
+        operator-controlled objects.)</p>` +
       `</details>`;
   };
 

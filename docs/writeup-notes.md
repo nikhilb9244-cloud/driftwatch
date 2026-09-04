@@ -11,20 +11,40 @@ corrected in place with the date, in the same style as the phase plans.
 
 ## The flag that moved: EOS SAT-1 against Starlink 61705 (Phase 4 Step 1, 2026-09-03)
 
-**Name this event in the write-up.** It is the demonstration Step 1 existed to produce.
+> **Corrected 2026-09-05, after an external review.** This entry quoted a red flag without its
+> region. **The flag is in the dilution region at low confidence**: the maximum of its probability
+> over covariance scale factors sits at **0.85 times the covariance in hand**, so shrinking the
+> uncertainty at the same miss would raise the number, and the number is held up by the size of the
+> covariance rather than by the geometry. It is not an actionable warning, and the write-up must
+> lead with that wherever the event is named — as this entry, the report and the viewer now do.
+> What survives is narrower and still worth a paragraph: the choice of trajectory moved a
+> dilution-region probability across the red threshold at a fifteen-hour lead, which the 0.2 km
+> term Phase 2 carried for that choice could not have done. Under the corrected storm term
+> (`docs/storm-term.md`, 2026-09-05) both objects of this pair are operator-controlled — EOS SAT-1
+> station-keeps, Starlink 61705 is on SpaceX's published states — so no scenario displaces either;
+> the storm scenarios widen EOS SAT-1's in-track covariance and, in the dilution region, that
+> *raises* the number slightly (1.09 × 10⁻⁴ under `forecast` against 1.076 × 10⁻⁴ under `quiet`).
+> Before the correction the scenarios displaced the Starlink by a stand-in coefficient and the
+> event read yellow at 4.98 × 10⁻⁵ under every storm scenario, which was arithmetic on an undefined
+> excess. On the public page the primary appears as `payload 55053` until its operator has agreed
+> to be named.
+
+**Name this event in the write-up, region first.** It is the demonstration Step 1 existed to
+produce.
 
 A South African satellite in the demo fleet — **EOS SAT-1 (55053)**, built by Dragonfly Aerospace in
-Stellenbosch for EOS Data Analytics and owned by SAFR — gains a **red flag at a fifteen-hour
-lead** purely
-from screening on the operator's own published states rather than on a third party's fit to
-them. Nothing else changed: same catalogue snapshot, same window, same fleet, same covariance
-model, same thresholds.
+Stellenbosch for EOS Data Analytics and owned by SAFR — gains a **dilution-region, low-confidence
+red flag at a fifteen-hour lead** purely from screening on the operator's own published states
+rather than on a third party's fit to them. Nothing else changed: same catalogue snapshot, same
+window, same fleet, same covariance model, same thresholds.
 
 | | Screening on CelesTrak's SGP4 fit | Screening on SpaceX's published states |
 | --- | ---: | ---: |
+| Region, confidence | dilution, low | **dilution, low** |
 | Miss distance | 5.479 km | **2.780 km** |
 | Probability of collision | 6.19 × 10⁻⁶ | **1.076 × 10⁻⁴** |
-| Flag | none | **red** |
+| Maximum over covariance scales | | at **0.85×** the covariance |
+| Flag | none | **red** (not actionable) |
 
 The red threshold is 10⁻⁴, the one NASA applies to the ISS.
 
@@ -185,4 +205,66 @@ Three things to say with it:
   instrument that could see the fault.
 
 The corrected top row, with the filter on, is the EOS SAT-1 event: 2.780 km, 1.076 × 10⁻⁴, one red
-flag in the whole fleet.
+flag in the whole fleet — **in the dilution region at low confidence** (corrected 2026-09-05; see the
+first entry), which the page's chip now says before it says red.
+
+---
+
+## The storm term was displacing operator-controlled objects, and the headline it produced goes with it (2026-09-05)
+
+**Name this in the write-up as the second thing the project had to take back**, after the
+cancellation explanation. An external review found it; the project's own diagnostic had been
+looking straight at it for two days and had called it physics.
+
+**The error.** The storm term measures a density excess against SGP4's own atmosphere through the
+element set's B\*, and it was applied to every object with a ballistic coefficient. For a
+trajectory that is the operator's — SpaceX's published states, or CelesTrak's supplemental fit to
+them — the trajectory already carries the operator's drag model and planned burns, so there is no
+excess to measure, and the B\* of a fit to a thrusting plan is not a drag term. For a station-kept
+primary the excess is defined but the satellite will burn rather than drift, so the direction of
+its displacement is the operator's. The term now gives such objects no mean shift (no term at all
+on an operator's trajectory; the in-track variance kept for a manoeuvring object on a tracking
+set), labels them `operator-controlled/<reason>`, and judges an event with one such side on its
+free-flying side alone. `docs/storm-term.md`, "Corrected 2026-09-05".
+
+**The 42 unscoreable Starlinks were this error seen from the other side.** Step 3 reported 42
+objects (40 Starlink) whose displacement ran past a quarter of an orbit and explained them as
+operated satellites in the densest shell, faithfully evaluated outside the linear theory. They
+were Starlinks whose supplemental B\* described thrust; the inverted "implied density" was
+nonsense and so was the 31,000 km shift. Refusing to score them was the right instinct with the
+wrong cause attached. No event on the rescored run is unscoreable.
+
+**What moved on the 3 September run**, every scenario rescored:
+
+| | before | after |
+| --- | --- | --- |
+| `forecast` flags | 0 red, 16 yellow, 71 unscoreable | **1 red, 19 yellow, 0 unscoreable** |
+| `storm-g4` flags | 0 red, 15 yellow, 71 unscoreable | **1 red, 17 yellow, 0** |
+| `storm-g5` flags | 0 red, 13 yellow, 70 unscoreable | **1 red, 17 yellow, 0** |
+| EOS SAT-1 vs 61705 under the storm scenarios | yellow, 4.98 × 10⁻⁵ | **red, dilution, low confidence**, 1.09 × 10⁻⁴ |
+| relative-to-absolute ratio, both objects free-flying (981 events) | 1.85 | 1.85 (unchanged: those shifts were legitimate) |
+| median `pc / pc_variance_only`, events with a controlled side (`storm-g5`) | **0.67**, 2,045 lowered against 246 raised | 1.00 |
+| median `pc / pc_variance_only`, both objects free-flying (`storm-g5`) | 0.98, 55 lowered against 43 raised | 0.98, unchanged |
+
+**And so the Phase 3 headline is withdrawn as a finding of these runs.** "A storm lowers the
+probability on most events" — a median `pc / pc_variance_only` of 0.16 to 0.40 on the validated
+events — lived entirely in the events with an operator-controlled side. On the population whose
+displacements were legitimate the probability is lowered and raised in nearly equal numbers, and
+it was so before the correction too; the correction changed nothing about those events and
+everything about which events were being averaged. This is the second time the same result has
+lost something: on 2026-09-03 it lost its explanation (common-mode cancellation, refuted at a ratio
+of 1.91 of 2), and on 2026-09-05 it lost itself. What is measured now is narrower: on this fleet
+the storm term moves a free-flying event's probability little either way, because the free-flying
+primaries are cubesats at 540 to 815 km and the low, heavily displaced objects in the run are all
+under operator control; and the two displacements of a free-flying pair are nearly independent
+(1.85 of 2). Whether a storm lowers or raises a free-flying event's probability is decided by the
+size of its displacement against the miss and the covariance, and nothing general should be
+claimed about the direction until a fleet with low free-flying primaries has been screened through
+a real storm.
+
+**The lesson for the paper is about instruments, not atmospheres.** `driftwatch storm-check` was
+built to attack the result and did refute its explanation — but it split the ratio by coefficient
+source and by altitude, which are the axes along which a *physical* cancellation would show, and
+not by whether the objects were under control, which is the axis along which a *category error*
+shows. A diagnostic can only falsify along the axes somebody thought to give it. The review found
+the error by asking what a served trajectory means, which no split in the tool could have asked.

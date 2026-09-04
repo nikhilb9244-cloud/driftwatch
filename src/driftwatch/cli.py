@@ -27,6 +27,9 @@ import pyarrow.parquet as pq
 from driftwatch import __version__, config
 from driftwatch import stability as stability_mod
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
+from driftwatch.cdm import kelvins as cdm_kelvins
+from driftwatch.cdm import match as cdm_match
+from driftwatch.cdm import parse as cdm_parse
 from driftwatch.drag import ballistic as ballistic_mod
 from driftwatch.drag import density as density_mod
 from driftwatch.drag.store import CoefficientStore
@@ -1298,17 +1301,22 @@ def layer_storm_term(
         earliest_epoch=pd.to_datetime(elements["epoch"], utc=True).min().to_pydatetime(),
     )
     log.info("Scenario %s: %s", scenario.name, scenario.description)
+    # Operator-controlled objects (2026-09-05): no mean shift for any of them, and no density
+    # track at all for the ones on an operator's trajectory, where the excess is undefined.
+    controlled = storm_scenarios.controlled_objects(objects)
+    skip = {norad_id for norad_id, reason in controlled.items() if storm_scenarios.skips_storm_term(reason)}
     shifts = storm_scenarios.shifts_for_objects(
-        scenario, elements, coefficients, end=parse_utc(info["end"]), step_s=step_s
+        scenario, elements, coefficients, end=parse_utc(info["end"]), step_s=step_s, skip=skip
     )
-    summary = storm_term.shift_summary(shifts)
+    summary = storm_term.shift_summary(shifts, controlled)
     log.info("Storm term: %s", summary)
     info.setdefault("storm", {})[scenario.name] = {
         "description": scenario.description,
         **scenario.provenance,
         "shifts": summary,
     }
-    return storm_scenarios.StormCovariance(model, shifts, scenario=scenario.name), scenario
+    layered = storm_scenarios.StormCovariance(model, shifts, scenario=scenario.name, controlled=controlled)
+    return layered, scenario
 
 
 def _flag_counts(risk: pd.DataFrame) -> dict[str, Any]:
@@ -1339,7 +1347,12 @@ def risk_run_record(risk: pd.DataFrame, scenario: str, model: CovarianceModel, n
         **_flag_counts(risk),
         "by_storm_validity": {
             label: _flag_counts(risk[validity == label])
-            for label in (storm_term.VALIDATED, storm_term.INDICATIVE, storm_term.NO_STORM_TERM)
+            for label in (
+                storm_term.VALIDATED,
+                storm_term.INDICATIVE,
+                storm_term.OPERATOR_CONTROLLED,
+                storm_term.NO_STORM_TERM,
+            )
             if validity is not None and bool((validity == label).any())
         },
         "max_pc_variance_only": float(risk["pc_variance_only"].max()) if len(risk) else None,
@@ -1546,7 +1559,11 @@ def cmd_storm_check(args: argparse.Namespace) -> int:
         bad = diagnostics.unscoreable_objects(risk, events, objects, coefficients)
         bad_summary = diagnostics.unscoreable_summary(bad)
 
-        print(f"\n=== {name} on {run_dir.name}: {cancel.get('n_events', 0)} scoreable events ===")
+        print(
+            f"\n=== {name} on {run_dir.name}: {cancel.get('n_events', 0)} scoreable events with both objects "
+            f"free-flying ({cancel.get('n_excluded_operator_controlled', 0)} with an operator-controlled side "
+            "left out: one displacement is zero by rule there, so the ratio would be 2 by construction) ==="
+        )
         if cancel.get("n_events"):
             print(
                 f"\nOverall: relative shift {cancel['overall']['median_relative_km']} km against an absolute "
@@ -1562,6 +1579,8 @@ def cmd_storm_check(args: argparse.Namespace) -> int:
                 "\nmeasured from their own decay, which is the only population Step 4's May 2024 test"
                 "\nreaches (r = 0.88 there, no demonstrated skill otherwise). Nothing is weighted or"
                 "\nwithheld by the label; it says how far the validation goes, not how large the shift is."
+                "\nAn operator-controlled object is given no mean shift, so an event with one such side is"
+                "\njudged on its free-flying side alone (2026-09-05)."
             )
             _print_table("", cancel["by_storm_validity"])
             _print_table("By ballistic coefficient source pair", cancel["by_b_source_pair"])
@@ -1721,7 +1740,7 @@ def cmd_check_bundle(args: argparse.Namespace) -> int:
     if summary.get("headroom_mib") is not None:
         print(
             f"largest file is {summary['largest'][0]['mib']} MiB against the "
-            f"{summary['limit_mib']} MiB Cloudflare Pages limit "
+            f"{summary['limit_mib']} MiB per-file ceiling "
             f"({summary['headroom_mib']} MiB of headroom)"
         )
     for finding in findings:
@@ -2644,6 +2663,117 @@ def cmd_kelvins(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_cdm(args: argparse.Namespace) -> int:
+    """Conjunction Data Messages: parse them, match them to a run, or build test messages from Kelvins rows.
+
+    ``parse`` prints each message's summary. ``match`` joins a directory of messages to a stored
+    run on the object pair and the time of closest approach and reports which operator warnings
+    public data found, at what miss and probability, and which public-data flags the operator
+    never received; ``--out`` writes the three tables and the summary as JSON beside the run.
+    ``from-kelvins`` writes ESA's anonymised challenge rows out as KVN messages with synthetic
+    identities, which is the test input the parser and the matcher were built against.
+    """
+    if args.cdm_command == "parse":
+        messages = []
+        for item in args.paths:
+            messages.extend(cdm_parse.load_cdms(Path(item)))
+        for cdm in messages:
+            print(json.dumps(cdm.summary(), default=str))
+        print(f"{len(messages)} message(s)")
+        return 0
+    if args.cdm_command == "from-kelvins":
+        path = Path(args.csv) if args.csv else kelvins_mod.find_dataset()
+        if path is None or not Path(path).exists():
+            log.error("no Kelvins CSV: pass one, or place train_data.csv under %s", config.KELVINS_DIR)
+            return 2
+        frame = pd.read_csv(path, nrows=args.limit)
+        reference = parse_utc(args.reference_epoch) if args.reference_epoch else cdm_kelvins.DEFAULT_REFERENCE_EPOCH
+        messages = cdm_kelvins.kelvins_to_cdms(frame, reference_epoch=reference)
+        paths = cdm_kelvins.write_cdms(messages, Path(args.out_dir))
+        events = cdm_kelvins.kelvins_events(frame, reference_epoch=reference)
+        events_path = Path(args.out_dir) / "kelvins_events.parquet"
+        events.to_parquet(events_path, index=False)
+        print(f"{len(paths)} messages under {args.out_dir}, {len(events)} distinct conjunctions in {events_path}")
+        print("Object designators and times are synthetic and deterministic; every other field is the row's own.")
+        return 0
+    # match
+    try:
+        run_dir = resolve_run(args.run)
+    except FileNotFoundError as exc:
+        log.error("%s", exc)
+        return 2
+    messages = cdm_parse.load_cdms(Path(args.cdm))
+    if not messages:
+        log.error("no messages under %s", args.cdm)
+        return 2
+    joined = run_dir.read_conjunctions()
+    result = cdm_match.match_cdms(messages, joined, tolerance_s=args.tolerance_s, scenario=args.scenario)
+    print("\n".join(cdm_match.report_lines(result)))
+    if len(result.matches):
+        columns = [
+            "message_id",
+            "object1",
+            "object2",
+            "cdm_tca",
+            "dt_tca_s",
+            "cdm_miss_km",
+            "event_miss_shifted_km",
+            "cdm_pc",
+            "event_pc",
+            "event_region",
+            "event_confidence",
+            "event_flag",
+        ]
+        print("\nMatched (first rows):")
+        print(
+            result.matches[[c for c in columns if c in result.matches.columns]].head(args.show).to_string(index=False)
+        )
+    if len(result.unmatched_cdms):
+        print("\nOperator warnings public data did not find:")
+        cols = [
+            c
+            for c in ("message_id", "object1", "object2", "cdm_tca", "cdm_miss_km", "cdm_pc", "reason")
+            if c in result.unmatched_cdms
+        ]
+        print(result.unmatched_cdms[cols].head(args.show).to_string(index=False))
+    if len(result.unwarned_flags):
+        print("\nPublic-data flags the operator never received (region and confidence first):")
+        cols = [
+            c
+            for c in (
+                "region",
+                "confidence",
+                "flag",
+                "primary_norad_id",
+                "secondary_norad_id",
+                "tca",
+                "miss_km",
+                "pc",
+                "event_id",
+            )
+            if c in result.unwarned_flags
+        ]
+        print(result.unwarned_flags[cols].head(args.show).to_string(index=False))
+    if args.out:
+        out = Path(args.out)
+        out.parent.mkdir(parents=True, exist_ok=True)
+        payload = {
+            "summary": result.summary,
+            "matches": json.loads(result.matches.to_json(orient="records", date_format="iso"))
+            if len(result.matches)
+            else [],
+            "unmatched_cdms": json.loads(result.unmatched_cdms.to_json(orient="records", date_format="iso"))
+            if len(result.unmatched_cdms)
+            else [],
+            "unwarned_flags": json.loads(result.unwarned_flags.to_json(orient="records", date_format="iso"))
+            if len(result.unwarned_flags)
+            else [],
+        }
+        out.write_text(json.dumps(payload, indent=2, default=str), encoding="utf-8")
+        print(f"\n{out}")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The argparse parser for the ``driftwatch`` command."""
     parser = argparse.ArgumentParser(
@@ -2891,7 +3021,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--max-file-mib",
         type=float,
         default=25.0,
-        help="largest single file allowed, in MiB (default 25, the Cloudflare Pages limit)",
+        help="largest single file allowed, in MiB (default 25, the per-file ceiling kept from Cloudflare Pages)",
     )
     check.set_defaults(func=cmd_check_bundle)
 
@@ -3074,6 +3204,38 @@ def build_parser() -> argparse.ArgumentParser:
     kelvins.add_argument("--data", help=f"the challenge CSV (default: the first CSV under {config.KELVINS_DIR})")
     kelvins.add_argument("--out", help="write the markdown report here as well as printing it")
     kelvins.set_defaults(func=cmd_kelvins)
+
+    cdm = sub.add_parser(
+        "cdm",
+        help="CCSDS Conjunction Data Messages: parse, match to a run, or build test messages from Kelvins rows",
+    )
+    cdm_sub = cdm.add_subparsers(dest="cdm_command", required=True)
+    cdm_parse_p = cdm_sub.add_parser("parse", help="print a summary of every message in the given files or directories")
+    cdm_parse_p.add_argument("paths", nargs="+", help="KVN or XML files, or directories of them")
+    cdm_match_p = cdm_sub.add_parser(
+        "match",
+        help="match messages to a stored run's events on the object pair and the time of closest approach",
+    )
+    cdm_match_p.add_argument("run", nargs="?", default="latest", help="run directory, its name, or 'latest'")
+    cdm_match_p.add_argument("--cdm", required=True, help="a message file or a directory of them")
+    cdm_match_p.add_argument("--scenario", help="which scored scenario to compare against (default quiet)")
+    cdm_match_p.add_argument(
+        "--tolerance-s",
+        type=float,
+        default=cdm_match.DEFAULT_TOLERANCE_S,
+        help=f"TCA tolerance for a match in seconds (default {cdm_match.DEFAULT_TOLERANCE_S:g})",
+    )
+    cdm_match_p.add_argument("--out", help="write the tables and the summary as JSON here")
+    cdm_match_p.add_argument("--show", type=int, default=20, help="rows to print per table (default 20)")
+    cdm_from = cdm_sub.add_parser(
+        "from-kelvins",
+        help="write ESA's anonymised Kelvins rows out as KVN messages with synthetic identities, as test input",
+    )
+    cdm_from.add_argument("--csv", help=f"the challenge CSV (default: the first CSV under {config.KELVINS_DIR})")
+    cdm_from.add_argument("--out-dir", required=True, help="directory to write the messages into")
+    cdm_from.add_argument("--limit", type=int, default=200, help="rows to convert (default 200)")
+    cdm_from.add_argument("--reference-epoch", help="the synthetic week starts here (default 2024-05-09T00:00:00Z)")
+    cdm.set_defaults(func=cmd_cdm)
     return parser
 
 

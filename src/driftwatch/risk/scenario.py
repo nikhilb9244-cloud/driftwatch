@@ -76,7 +76,7 @@ from driftwatch.risk.pc import (
 )
 from driftwatch.screening.ric import ric_basis
 from driftwatch.screening.stages import STATE_COLUMNS
-from driftwatch.storm.term import event_validities
+from driftwatch.storm.term import event_validities, is_operator_controlled
 
 log = logging.getLogger(__name__)
 
@@ -420,13 +420,18 @@ def unscoreable_events(model: CovarianceModel, primary: np.ndarray, secondary: n
     would have been.
 
     Models with no storm layer -- every Phase 2 one, and ``quiet`` -- return no reasons at all,
-    which is what keeps them unchanged.
+    which is what keeps them unchanged. An operator-controlled object never makes an event
+    unscoreable (2026-09-05): its displacement is not applied, so a displacement past the linear
+    theory is a statement about a number the scenario does not use.
     """
     shifts = getattr(model, "shifts", None)
     reasons = np.full(len(primary), "", dtype=object)
     if not shifts:
         return reasons
-    per_object = {int(k): v.unscoreable_reason() for k, v in shifts.items() if not v.scoreable}
+    controlled = getattr(model, "controlled", None) or {}
+    per_object = {
+        int(k): v.unscoreable_reason() for k, v in shifts.items() if not v.scoreable and int(k) not in controlled
+    }
     if not per_object:
         return reasons
     for index, (p, s) in enumerate(zip(primary, secondary, strict=True)):
@@ -630,17 +635,26 @@ def run_risk(
             cancellation = np.where(absolute > 0, relative / absolute, np.nan)
         interesting = np.isfinite(ratio) & (pc_variance_only > 1e-12) & ~unscoreable
         moved = (relative > 0) & ~unscoreable
+        # The relative-to-absolute ratio is 2 by construction when one side's shift is zeroed by
+        # rule, so it is quoted over the events with both objects free-flying only.
+        controlled = np.array(
+            [is_operator_controlled(a) or is_operator_controlled(b) for a, b in zip(storm_p, storm_s, strict=True)],
+            dtype=bool,
+        )
+        both_free = moved & ~controlled
     if np.any(relative > 0) and moved.any():
         log.info(
             "Storm term (%s): the in-track shift moves %d of %d scoreable events by a median %.3f km "
-            "relative against a median %.3f km absolute, a relative-to-absolute ratio of %.3f; "
-            "pc/pc_variance_only over the %d events above 1e-12 runs %.2f to %.2f",
+            "relative against a median %.3f km absolute; over the %d of them with both objects free-flying "
+            "the relative-to-absolute ratio is %.3f; pc/pc_variance_only over the %d events above 1e-12 "
+            "runs %.2f to %.2f",
             scenario,
             int(moved.sum()),
             int((~unscoreable).sum()),
             float(np.median(relative[moved])),
             float(np.median(absolute[moved])),
-            float(np.nanmedian(cancellation[moved])),
+            int(both_free.sum()),
+            float(np.nanmedian(cancellation[both_free])) if both_free.any() else float("nan"),
             int(interesting.sum()),
             float(np.nanmin(ratio[interesting])) if interesting.any() else float("nan"),
             float(np.nanmax(ratio[interesting])) if interesting.any() else float("nan"),

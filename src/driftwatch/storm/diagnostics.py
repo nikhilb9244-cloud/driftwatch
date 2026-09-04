@@ -1,8 +1,14 @@
 """What is the relative shift, really? The splits that attacked the headline result.
 
-The headline result of Phase 3 is counter-intuitive and therefore has to be attacked before it
-is published: **a storm lowers the probability on most events.** The result survived. The
-explanation first attached to it did not, and this module is what falsified it.
+The headline result of Phase 3 was counter-intuitive and therefore had to be attacked before it
+was published: **a storm lowers the probability on most events.** The explanation first attached
+to it did not survive, and this module is what falsified it. The result itself did not survive
+either, but not because of anything here: on 2026-09-05 an external review found that the storm
+term was displacing operator-controlled objects (`docs/storm-term.md`, "Corrected 2026-09-05"),
+and the lowering lived entirely in those events. This module now leaves events with an
+operator-controlled side out of the ratio, where one displacement is zero by rule, and reports how
+many it left out. The splits below could not have found that error, because they split along the
+axes a *physical* cancellation would show on and not along the one a *category* error shows on.
 
 .. note::
 
@@ -162,9 +168,22 @@ def cancellation_frame(
     joined = events.merge(risk, on="event_id", how="inner", suffixes=("", "_risk"))
     if "scoreable" in joined.columns:
         joined = joined[joined["scoreable"].astype(bool)]
-    joined = joined[joined["relative_shift_km"].notna()].reset_index(drop=True)
+    joined = joined[joined["relative_shift_km"].notna()]
+    # An event with an operator-controlled side has one displacement zeroed by rule, so its
+    # relative-to-absolute ratio is 2 by construction and says nothing about cancellation. Those
+    # events are left out here and counted, rather than allowed to pull the ratio to the ceiling.
+    n_controlled = 0
+    if {"storm_source_primary", "storm_source_secondary"} <= set(joined.columns):
+        controlled = joined["storm_source_primary"].map(term.is_operator_controlled) | joined[
+            "storm_source_secondary"
+        ].map(term.is_operator_controlled)
+        n_controlled = int(controlled.sum())
+        joined = joined[~controlled]
+    joined = joined.reset_index(drop=True)
     if not len(joined):
-        return pd.DataFrame()
+        empty = pd.DataFrame()
+        empty.attrs["n_excluded_operator_controlled"] = n_controlled
+        return empty
 
     source = coefficients.set_index("norad_id")["source"].astype(str) if len(coefficients) else pd.Series(dtype=str)
     p = joined["primary_norad_id"].to_numpy(dtype=np.int64)
@@ -225,6 +244,7 @@ def cancellation_frame(
             "pc_variance_only": joined["pc_variance_only"].to_numpy(dtype=float),
         }
     )
+    out.attrs["n_excluded_operator_controlled"] = n_controlled
     return out
 
 
@@ -264,7 +284,7 @@ def split_by_validity(frame: pd.DataFrame) -> dict[str, pd.DataFrame]:
     """
     out: dict[str, pd.DataFrame] = {}
     if "storm_validity" in frame.columns:
-        for label in (term.VALIDATED, term.INDICATIVE):
+        for label in (term.VALIDATED, term.INDICATIVE, term.OPERATOR_CONTROLLED):
             subset = frame[frame["storm_validity"].astype(str) == label]
             if len(subset):
                 out[label] = subset
@@ -278,11 +298,13 @@ def cancellation(frame: pd.DataFrame, *, min_events: int = 20) -> dict[str, Any]
     Reported **three ways**: over the events whose two objects both have a measured ballistic
     coefficient, over the rest, and over both together. See the module docstring.
     """
+    excluded = int(frame.attrs.get("n_excluded_operator_controlled", 0)) if hasattr(frame, "attrs") else 0
     if not len(frame):
-        return {"n_events": 0}
+        return {"n_events": 0, "n_excluded_operator_controlled": excluded}
     groups = split_by_validity(frame)
     return {
         "n_events": int(len(frame)),
+        "n_excluded_operator_controlled": excluded,
         "overall": {k: v for k, v in _overall(frame).items() if k != "n_events"},
         "by_storm_validity": {label: _overall(subset) for label, subset in groups.items()},
         "by_b_source_pair": _group(frame, "b_source_pair", min_events=min_events).to_dict(orient="index"),

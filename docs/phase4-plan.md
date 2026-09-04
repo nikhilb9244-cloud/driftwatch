@@ -361,6 +361,16 @@ Fifteen hours is not the far end of the horizon, where the trajectory disagreeme
 kilometres; it is the near end, where the median disagreement is about 1.6 km. That is all it
 took.
 
+> **Corrected 2026-09-05, after an external review.** This red is **in the dilution region at low
+> confidence**: its maximum probability over covariance scale factors sits at 0.85 times the
+> covariance in hand, so shrinking the uncertainty at the same miss would raise the number, and the
+> number is held up by the covariance rather than by the geometry. The paragraph above does not say
+> so and should have led with it. Every mention of this event — here, in `docs/writeup-notes.md`,
+> in the report and in the viewer — now leads with the region and the confidence. What Step 1
+> established is unchanged and narrower than "a red flag": that the choice of trajectory moves a
+> dilution-region probability across the red threshold at a fifteen-hour lead, which is more than
+> the 0.2 km term Phase 2 was carrying could do.
+
 So the answer to the prompt's question — *say plainly whether removing it does* — is that it
 does, and the honest gloss is that Phase 2's "it moves no flag" was a true measurement of a term
 that was far too small. The number that bounds how much this class of error matters is not zero.
@@ -498,7 +508,9 @@ Every one of run A's 416 red flags was one of the three ISS modules, and so were
 yellows. The corrected statement of the Step 1 result is **stronger and much cleaner** than the
 one first written: screening on CelesTrak's fits, the demo fleet had **no red flag at all**
 outside the station's own hardware; screening on SpaceX's published states it has **exactly
-one**, and that one is EOS SAT-1 against Starlink 61705. The rest of Step 1's numbers — the
+one**, and that one is EOS SAT-1 against Starlink 61705 — **a dilution-region red at low
+confidence** (maximum at 0.85 times the covariance; corrected 2026-09-05, see the Step 1 note
+above), which is to say a statement about the covariance, not an actionable warning. The rest of Step 1's numbers — the
 miss-distance movements, the gained-and-lost tables, the probability ratios, the ten matched
 flag changes — are unaffected, because the attached pairs are identical in both runs and
 contribute nothing to any difference.

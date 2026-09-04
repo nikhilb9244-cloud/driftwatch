@@ -287,6 +287,14 @@ make every prediction *different*, and different is bad news only for the minori
 pushes together — which is why the tail matters more than the count, and why the report shows
 the events that moved most rather than the totals.
 
+> **Withdrawn 2026-09-05.** The table and the paragraph above describe displacements the term
+> should never have applied. The tens of kilometres were almost all on Starlinks whose supplemental
+> B\* described a thrusting plan, and on station-kept primaries; on the population whose shifts
+> were legitimate — both objects free-flying — the median relative displacement is 2 to 7 km and
+> the probability is lowered and raised in nearly equal numbers. The section "Corrected 2026-09-05"
+> below has the measurement. The 113 unscoreable events were the same error seen from the other
+> side.
+
 Every row also carries `run_id`, `snapshot`, `model_version`, `supplemental_version`,
 `scenario`, both objects' in-track shifts and their sigmas, the **relative** shift that actually
 entered the miss, and the `source` label of the ballistic coefficient behind each — so a
@@ -438,6 +446,15 @@ independently measured pairs behave exactly like pairs sharing a stand-in, so th
 coming from shared inputs. And they falsified the mechanism the result had been attributed to,
 which the aggregate number alone would have gone on hiding.
 
+> **Corrected again 2026-09-05.** The paragraph "the result survives the loss of its explanation"
+> above is itself withdrawn. The lowering lived entirely in events with an operator-controlled side,
+> which the storm term should never have displaced; over the events with both objects free-flying
+> the probability is lowered and raised in nearly equal numbers, before and after the correction
+> alike. The independence of the two displacements stands, at 1.85 of 2 on the free-flying pairs.
+> The full account is in "Corrected 2026-09-05: operator-controlled objects are not displaced"
+> below. These splits could not have found the error: they cut along the axes a physical
+> cancellation would show on, and not along whether the objects were under control.
+
 ### A third split, added at the Step 4 review: how far the validation reaches
 
 Step 4 measured the storm term against the May 2024 record and found it predictive at r = 0.88
@@ -519,6 +536,13 @@ it is" is not.
 
 ### What the 42 objects are
 
+> **Corrected 2026-09-05.** The explanation below is wrong. These objects were Starlinks on
+> supplemental element sets whose B\* described a thrusting plan, not drag; the storm term should
+> never have been applied to them, and under the corrected rule (next section) no event is
+> unscoreable. The paragraphs are left as written because the reasoning that went wrong is worth
+> seeing: a faithful evaluation of a formula outside its domain was the right diagnosis of the
+> symptom and the wrong diagnosis of the cause.
+
 On the demo run's G5 scenario, **42 objects over 113 of the 5,704 events**. (Step 3 reported 53
 under the wider test and the coefficients it had then; the thrust ceiling removed some of them
 by taking a thrusting satellite's implausible coefficient away, and the cut is now the
@@ -544,6 +568,94 @@ integration, not a bigger number: `ROADMAP.md` carries that as the lifetime-loss
 On the May 2024 replay, run against the observed record rather than a synthetic G5, **one**
 object crosses the line: STARLINK-30105, 0.67 of a revolution. The count is a property of the
 scenario's severity, not of the code.
+
+## Corrected 2026-09-05: operator-controlled objects are not displaced
+
+> An external review found the correctness error this section records. Everything above it is
+> left as written, with this section as the correction, in the same manner as the cancellation
+> withdrawal above.
+
+**The error.** The excess density is measured against SGP4's own atmosphere through the element
+set's B\*, and the term was applied to every object with a coefficient. Two classes of object
+should never have had it. A **trajectory that is the operator's** — SpaceX's published states,
+served by Stage C since Phase 4 Step 1, or CelesTrak's supplemental fit to those same states —
+already carries the operator's drag model and planned burns, so there is no excess over SGP4's
+atmosphere to measure: the B\* of a fit to a thrusting plan is not a drag term and the "implied
+density" inverted from it is a number with no meaning. And a **station-kept or observed-manoeuvring
+satellite** on a tracking-derived element set will burn rather than drift, so the direction of its
+displacement under a storm is the operator's, not the atmosphere's.
+
+**The rule now.** For a trajectory reason nothing is added at all — no mean, no variance — and the
+label says `storm:operator-controlled/served` or `/operator-ephemeris`. For an object reason the
+mean is zero and the in-track variance is kept, because the size of the storm's push is still a
+legitimate uncertainty when the response to it is unknown: `/known`, `/observed`. `storm_validity`
+gains a fourth value, `operator-controlled`, for an event whose two objects were both given no
+shift; an event with one such side is judged on its free-flying side alone. The model version says
+`storm/<scenario>/2`. Objects on an operator's trajectory get no density track either, which on the
+3 September run is 1,681 of the 2,944 objects and more than halves the scenario step.
+
+**The 42 objects, explained.** The "extrapolated events are unscoreable" section above lists 42
+objects on the 1 September run — 40 Starlink, 2 other constellation, 36 of them on a `typical`
+coefficient — and explains them as *operated satellites in the densest shell, faithfully
+evaluated outside the linear theory*. That explanation was wrong. They were Starlinks whose
+supplemental B\* described a thrusting plan; inverting it gave an implied density that was
+negative or absurd, an excess of the same size, and a displacement of up to 31,000 km. On the
+3 September run the same error produced 36 unscoreable objects over 70 or 71 events per scenario,
+every one a Starlink on a supplemental element set. **They were this category error seen from the
+other side**: the refusal to score them was the right instinct applied to the wrong cause. Under
+the corrected rule no event on either run is unscoreable.
+
+**What the correction moved on the 3 September run**, every scenario rescored from the stored
+events (`data/conjunctions/step2-attached`, run `20260903T175632Z-9a31`, the weather tables
+rebuilt from the cached feeds):
+
+| Scenario | red, before → after | yellow, before → after | unscoreable, before → after | EOS SAT-1 vs 61705 |
+| --- | ---: | ---: | ---: | --- |
+| `quiet` | 1 → 1 | 20 → 20 | 0 → 0 | red, dilution, low confidence, 1.076 × 10⁻⁴ |
+| `forecast` | 0 → **1** | 16 → 19 | 71 → **0** | yellow 4.98 × 10⁻⁵ → **red, dilution, low**, 1.09 × 10⁻⁴ |
+| `storm-g4` | 0 → **1** | 15 → 17 | 71 → **0** | as above |
+| `storm-g5` | 0 → **1** | 13 → 17 | 70 → **0** | as above |
+
+Every red and every yellow, before and after, is on a pair with a Starlink secondary; the one red
+is the EOS SAT-1 dilution-region flag, which the uncorrected scenarios had turned yellow by
+displacing the Starlink with a stand-in coefficient. Of the 6,224 events, **5,243 have an
+operator-controlled side** (EOS SAT-1 station-keeps and its 4,222 events are mostly against
+Starlinks) and **4,088 have both sides controlled**; 1,735 are `validated` on a free-flying
+measured side and 401 `indicative`.
+
+**The headline ratio.** Over the 981 events with both objects free-flying — the only population on
+which a relative-to-absolute ratio means anything, since one displacement zeroed by rule makes it
+2 by construction — the ratio is **1.85** under `forecast`, `storm-g4` and `storm-g5` alike
+(validated 1.85, indicative 1.84), flat in the altitude difference (rank correlation 0.05 to 0.10).
+The no-cancellation finding survives on the population it can be measured on; the 1.91 quoted
+above was over every event, including the ones whose Starlink side was displaced by a nonsense
+excess, and the two figures should not be read as the same measurement.
+
+**And the result the cancellation claim was explaining does not survive.** "A storm lowers the
+probability on most events" was measured on this run as a median `pc / pc_variance_only` of 0.31 to
+0.40 over the validated events and 0.66 over the events with a controlled side. Split by whether
+both objects are free-flying, before the correction:
+
+| Population, `storm-g5` before the correction | n with `pc_variance_only` > 10⁻¹² | median `pc / pc_variance_only` | lowered | raised |
+| --- | ---: | ---: | ---: | ---: |
+| both objects free-flying | 98 | **0.98** | 55 | 43 |
+| at least one operator-controlled | 2,291 | **0.67** | 2,045 | 246 |
+
+The lowering lived entirely in the events with a controlled side — a Starlink displaced by tens of
+kilometres on a coefficient that described its thrust, or a station-kept primary displaced against
+its operator's intent — and the free-flying population, whose shifts the correction did not touch,
+was never lowered: the median relative displacement there is 2 km under `forecast`, 4 km under
+`storm-g4` and 7 km under `storm-g5`, against covariances of kilometres to tens of kilometres, and it
+lowers and raises in nearly equal numbers. After the correction the controlled-side population sits
+at 1.00 (its only storm effect is the kept variance on the known primaries: 143 lowered, 41 raised
+of 2,295 under `storm-g5`). **So the headline result of Phase 3 is withdrawn as a finding of these
+runs**: it was arithmetic on displacements the term should never have applied. What remains
+measured is narrower — on this fleet the storm term moves free-flying events' probabilities little
+either way, and the two displacements of a free-flying pair are nearly independent — and whether a
+storm lowers or raises the probability of a free-flying event is decided by the size of its
+displacement against the miss and the covariance, which on this fleet is small, because the
+free-flying primaries are the three cubesats at 540 to 815 km and the lowest, most displaced
+objects in the run are all under operator control.
 
 ## Limits, stated
 
