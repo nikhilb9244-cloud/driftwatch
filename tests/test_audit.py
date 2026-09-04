@@ -79,11 +79,18 @@ def test_the_minified_bundle_does_not_cry_wolf(tmp_path):
 
 
 def test_a_file_over_the_pages_limit_stops_the_deploy(tmp_path):
-    """Cloudflare Pages refuses a file over 25 MiB, so it is better to hear about it here."""
+    """The 25 MiB per-file ceiling came from Cloudflare Pages and is kept on Vercel as the project's own."""
     (tmp_path / "big.bin").write_bytes(b"\x00" * 4096)
     findings, summary = audit_bundle(tmp_path, environ={}, max_file_bytes=2048)
     assert summary["n_errors"] == 1
-    assert "over the Cloudflare Pages limit" in findings[0].what
+    assert "over the per-file ceiling" in findings[0].what
+
+
+def test_the_deploy_token_s_literal_value_is_searched_for(tmp_path):
+    """The token the pipeline deploys with is in the environment precisely so this can look for it."""
+    write(tmp_path, "assets/app.js", "const t = 'vcl_0123456789abcdefXYZ';")
+    findings, _ = audit_bundle(tmp_path, environ={"VERCEL_TOKEN": "vcl_0123456789abcdefXYZ"})
+    assert len(findings) == 1 and "the value of $VERCEL_TOKEN" in findings[0].what
 
 
 def test_a_missing_directory_is_an_error_not_a_pass(tmp_path):

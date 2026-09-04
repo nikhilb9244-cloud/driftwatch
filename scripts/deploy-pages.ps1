@@ -1,8 +1,16 @@
 <#
 .SYNOPSIS
-    Export a fresh viewer bundle, build it, check it, and deploy it to Cloudflare Pages.
+    RETIRED 2026-09-05. Export, build, check and deploy the viewer to Cloudflare Pages.
 
 .DESCRIPTION
+    Hosting moved to Vercel on 2026-09-05: use scripts/deploy-vercel.ps1, and see the deploy
+    section of the README and docs/pipeline.md. The Cloudflare Pages project `driftwatch` and its
+    preview URL https://driftwatch-2wg.pages.dev are retired; the last thing they served was the
+    2026-09-03 run with the uncorrected storm term. This script is kept until the first Vercel
+    production deploy has succeeded, and is then to be deleted. It still works if the Cloudflare
+    token has the Pages permission, which the pipeline's token did not (the scheduled run of
+    2026-09-04 failed at exactly this upload with `Authentication error [code: 10000]`).
+
     A direct upload: no git integration, no CI, nothing scheduled. Four steps.
 
       1. Export a fresh bundle. `driftwatch propagate` writes the catalogue side of it

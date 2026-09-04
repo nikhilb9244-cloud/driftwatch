@@ -19,8 +19,11 @@ data/weather/
 data/ballistic/
 data/validation/
 
-# wrangler caches the account id and the account name (an email address) here
+# wrangler cached the account id and the account name (an email address) here; retired 2026-09-05
 .wrangler/
+# the Vercel CLI's project link and the pulled environment files (`vercel pull`)
+.vercel/
+.env*.local
 data/external/
 web/public/data/*
 !web/public/data/.gitkeep

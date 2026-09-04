@@ -18,8 +18,10 @@ them anywhere. The strongest possible check is therefore also the simplest: take
 those variables hold right now and confirm the literal strings do not appear in any file
 about to be published, alongside the usual patterns for keys and tokens.
 
-The size limits are Cloudflare Pages': 25 MiB a file and 20,000 files an upload. A file over
-the limit is refused by the upload, so it is better to hear about it here.
+The size limits -- 25 MiB a file and 20,000 files an upload -- were Cloudflare Pages' direct-upload
+limits and are kept as this project's own ceiling now that the site is on Vercel (2026-09-05): a
+bundle file that large is a design failure whichever CDN serves it, and hearing about it here is
+better than hearing about it from an upload.
 
 :func:`audit_bundle` returns findings rather than raising, and ``driftwatch check-bundle``
 exits non-zero when any of them is an error. The deploy script runs it before it builds.
@@ -39,7 +41,8 @@ from driftwatch import config
 
 log = logging.getLogger(__name__)
 
-# Cloudflare Pages, direct upload (docs read 2026-09-02): 25 MiB a file, 20,000 files.
+# Cloudflare Pages' direct-upload limits (docs read 2026-09-02): 25 MiB a file, 20,000 files.
+# Kept as the project's own ceiling on Vercel.
 PAGES_MAX_FILE_BYTES = 25 * 1024 * 1024
 PAGES_MAX_FILES = 20_000
 
@@ -105,7 +108,13 @@ def _redactions(environ: Mapping[str, str]) -> list[tuple[str, str]]:
     alarm that cries wolf is worse than no check.
     """
     out: list[tuple[str, str]] = []
-    for name in (config.SPACETRACK_USER_ENV, config.SPACETRACK_PASS_ENV, "CLOUDFLARE_API_TOKEN", "DRIFTWATCH_CONTACT"):
+    for name in (
+        config.SPACETRACK_USER_ENV,
+        config.SPACETRACK_PASS_ENV,
+        "VERCEL_TOKEN",
+        "CLOUDFLARE_API_TOKEN",
+        "DRIFTWATCH_CONTACT",
+    ):
         value = (environ.get(name) or "").strip()
         if len(value) >= 6:
             out.append((value, f"the value of ${name}"))
@@ -156,8 +165,8 @@ def audit_bundle(
                 Finding(
                     "error",
                     rel,
-                    f"is {size / 1024 / 1024:.1f} MiB, over the Cloudflare Pages limit of "
-                    f"{max_file_bytes / 1024 / 1024:.0f} MiB a file",
+                    f"is {size / 1024 / 1024:.1f} MiB, over the per-file ceiling of "
+                    f"{max_file_bytes / 1024 / 1024:.0f} MiB (Cloudflare Pages' upload limit, kept on Vercel)",
                 )
             )
         if path.suffix.lower() in BINARY_SUFFIXES:

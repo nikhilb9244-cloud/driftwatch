@@ -6,12 +6,46 @@ where its state lives, how it fails, and what it keeps.
 
 ## Every fetch is inside Actions, and this is not a preference
 
-CelesTrak firewalls by IP, and **Cloudflare Worker egress addresses are shared between
-tenants**. A Worker's fetches can therefore start returning HTTP 522 on every source while the
-same URLs answer instantly from anywhere else, because another tenant on the same egress address
-earned the block. `docs/design-brief.md` records where this was read and how the project that hit
-it worked around it. A Worker or a Pages deployment may **serve** the bundle. It must never
-fetch. Nothing in this pipeline runs outside a GitHub-hosted runner except the upload at the end.
+CelesTrak firewalls by IP, and **shared CDN egress addresses are shared between tenants** —
+Cloudflare Workers and Vercel Functions alike. A function's fetches can therefore start returning
+HTTP 522 on every source while the same URLs answer instantly from anywhere else, because another
+tenant on the same egress address earned the block. `docs/design-brief.md` records where this was
+read and how the project that hit it worked around it. The static deployment may **serve** the
+bundle. It must never fetch. Nothing in this pipeline runs outside a GitHub-hosted runner except
+the upload at the end.
+
+## Hosting: Vercel, since 2026-09-05
+
+The site is a Vercel project — team `nikolodeon-s-projects`, project `driftwatch`, root directory
+`web`, framework Vite, **no Git connection**, so nothing builds on a push and the pipeline (or a
+hand run of `scripts/deploy-vercel.ps1`) is the only thing that ever deploys. The three Actions
+secrets it needs are `VERCEL_TOKEN`, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`; with the last two in
+the environment the CLI needs no `.vercel/` link on the runner.
+
+The deploy is four steps, in this order, and the order is the point: `vercel pull` fetches the
+project settings for the target (preview or production); `vercel build` runs the Vite build **on
+the runner** into `.vercel/output/`; `driftwatch check-bundle --dir .vercel/output` checks exactly
+the files about to be uploaded — nothing redistributed, no credential (including the literal value
+of `VERCEL_TOKEN`), nothing over the 25 MiB per-file ceiling kept from Cloudflare Pages; and
+`vercel deploy --prebuilt` uploads them, with `--prod` for production and without it for a preview
+with its own URL. Building locally and deploying prebuilt is what lets the check see the deployed
+bytes; Vercel builds nothing. A missing secret is named by a check step before any of this runs,
+rather than surfacing as an opaque CLI error after an hour of scoring.
+
+**The gate that was specified and not needed.** The move to Vercel was specified with a gate:
+until the storm-term correction of 2026-09-05 (`docs/storm-term.md`) had landed and every flag
+carried its region and confidence, the pipeline was to deploy to preview only and skip production
+with a logged reason. The correction and the region qualifiers were committed **before** the
+Vercel deploy steps were, so no pipeline run has ever been able to publish the uncorrected numbers
+to the new host, and the gate is not in the workflow.
+
+**Retired: Cloudflare Pages.** The project `driftwatch` and its URL <https://driftwatch-2wg.pages.dev>
+are retired. The last thing they served was the 2026-09-03 run, scored under the uncorrected storm
+term and with the EOS SAT-1 red as its top row without its region. The Actions token for it
+turned out to lack the Pages upload permission: the first scheduled pipeline run
+(`33867306871`, 2026-09-04, below) got through everything up to and including `check-bundle` and
+failed at the upload with `Authentication error [code: 10000]`. `scripts/deploy-pages.ps1` is kept,
+marked retired, until the first Vercel production deploy has succeeded, and is then to be deleted.
 
 ## The runtime budget
 
@@ -42,6 +76,35 @@ the CPU factor would invent half an hour of budget that does not exist.
 **The total is about 1 h 53 m locally and 2 h 18 m to 3 h 0 m on a runner, against the six-hour
 job limit** -- 38 to 50 % of it, with three to three and two-thirds hours spare. `timeout-minutes`
 is set to 330, under the ceiling, so a hung step fails rather than being killed by GitHub.
+
+### What a runner actually measured (the first scheduled run, 2026-09-04)
+
+The schedule fired on its own for the first time on 2026-09-04 — at 11:18 UTC rather than the
+06:20 asked for, which is GitHub's scheduling latency and not a fault — as run `33867306871`. It
+ran every step through `check-bundle` and failed at the Cloudflare upload (above). The step
+durations, from the Actions API, against the planning table:
+
+| Step | Planned on a runner | **Observed** |
+| --- | ---: | ---: |
+| `fetch` + `weather` | ~1 min | **50 s** |
+| Seed screen (first run only) | — | **15.0 min** |
+| `spacex latest`, 300 ephemerides | ~26 min | **5.2 min** |
+| `screen` + history/fit + `risk quiet` | 13 to 18 min | **11.7 min** |
+| `ballistic` | 6 to 9 min | **4.9 min** |
+| **four scenarios** | **88 to 122 min** | **23.4 min** |
+| `storm-check`, `propagate`, `report`, build, `check-bundle` | ~4 min | **37 s** |
+| Total to the failed upload | 2 h 18 m to 3 h 0 m | **62 min** |
+
+Two things the planning table got wrong, both in the safe direction. **The runner is faster than
+this machine, not 1.3 to 1.8 times slower**: the four scenarios took 23 minutes against 67
+locally, 0.12 s per object per scenario against the 0.34 measured here. And the ephemeris fetch is
+five times faster from a runner, as the 2026-09-03 attempt had already shown. The 0.34 s figure
+and the 1.3 to 1.8 factor in the ceiling arithmetic below therefore make the fleet ceiling
+conservative by roughly a factor of three; it is left as written until a second completed run
+confirms the first, because one run is one run. Note also that the correction of 2026-09-05
+(`docs/storm-term.md`) computes no density track for objects on an operator's trajectory — 1,681
+of the 2,944 objects on the 3 September run — which cuts the scenario step by more than half
+again, independently of the runner.
 
 **Where it goes, which is the number that matters for growth.** Of the local 113 minutes, **67 are
 the four scenarios** and **26 are the ephemeris download**. Everything else together is 20
@@ -245,7 +308,8 @@ unchanged rather than being replaced by something built on bad input.
 | Fetch failure | `driftwatch fetch` | CelesTrak or Space-Track unreachable. The job fails; nothing is published. |
 | **Frame residual** | `driftwatch spacex` | The published states' frame changing at the source. It propagates the matching supplemental element set over the first three hours of every fetched ephemeris and compares **before writing anything**; hundreds of metres is the published fit residual, tens of kilometres is a frame error, and the threshold sits at 5 km, an order of magnitude clear of both. A failure refuses to write the store and exits non-zero. |
 | **Provenance and snapshot age** | `driftwatch check-run --max-snapshot-age-hours` | A run whose recorded snapshot does not resolve, is not a snapshot, or is older than the limit. The age is read from the snapshot's own `fetched_at` column, not from its file name, so a rename cannot fake freshness. |
-| **The export** | `driftwatch check-bundle --dir web/dist` | A redistributed SpaceX file, the literal value of any credential, or a file over Cloudflare Pages' 25 MiB limit. Runs over `dist/` rather than the source bundle, because `dist/` is what is uploaded. |
+| **The export** | `driftwatch check-bundle --dir .vercel/output` | A redistributed SpaceX file, the literal value of any credential (`VERCEL_TOKEN` included), or a file over the 25 MiB per-file ceiling. Runs over the prebuilt output rather than the source bundle, because the prebuilt output is what `vercel deploy --prebuilt` uploads. |
+| **The deploy credentials** | the check step before the build | A missing `VERCEL_TOKEN`, `VERCEL_ORG_ID` or `VERCEL_PROJECT_ID`, named. The 2026-09-04 run found its token's missing permission at the upload, after an hour of scoring; this finds it in the first second. |
 
 `concurrency: {group: pipeline, cancel-in-progress: false}` allows one run at a time and **never
 cancels a run mid-deploy**, which is the case that would leave a half-uploaded bundle live.
@@ -255,3 +319,13 @@ cancels a run mid-deploy**, which is the case that would leave a half-uploaded b
 the right way round: a failure there costs an unindexed and unarchived run, and neither can be
 reconstructed later, so it must be loud. It cannot cost a bad publish, because publishing is
 already done.
+
+**The other scheduled workflow, and the day it failed.** `supplemental.yml` fetches CelesTrak's
+supplemental Starlink sets every three hours and refits their covariance. Every run on 2026-09-04
+failed inside the refit with `satellite number cannot exceed 339999`: the 2026-09-03 supplemental
+file carries nine-digit placeholder ids (`799501567` and up, 392 of them) for Starlinks the
+catalogue has not numbered yet, and the sgp4 library refuses a number past the Alpha-5 range. The
+number is identity only, so `satrec_from_elements` now initialises an out-of-range id as zero and
+the caller keeps keying results by the real id; a test pins it. The store lost a day of versions
+to it, which is exactly the loss the store exists to avoid, and the reason the failure is recorded
+here rather than only fixed.
