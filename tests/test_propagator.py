@@ -78,3 +78,32 @@ def test_invalid_elements_give_error_code_and_nan():
     state = propagate_satrecs([sat], np.array([1]), to_datetime64(["2026-09-01T01:00:00Z"]))
     assert state.error[0, 0] != 0
     assert np.isnan(state.r_teme).all()
+
+
+def test_a_placeholder_id_past_the_alpha5_range_still_propagates():
+    """CelesTrak's supplemental sets carry nine-digit placeholder ids for uncatalogued Starlinks.
+
+    The sgp4 library refuses a satellite number over 339,999 outright, and one such id stopped
+    every scheduled supplemental fit on 2026-09-04. The number is identity only, so it is
+    initialised as zero and the state is the same as for any other id.
+    """
+    from datetime import datetime
+
+    elements = dict(
+        epoch=datetime(2026, 9, 3, tzinfo=UTC),
+        mean_motion=15.05,
+        eccentricity=0.0002,
+        inclination_deg=53.0,
+        raan_deg=10.0,
+        arg_perigee_deg=20.0,
+        mean_anomaly_deg=30.0,
+        bstar=1e-4,
+    )
+    placeholder = satrec_from_elements(799_501_567, **elements)
+    ordinary = satrec_from_elements(64_712, **elements)
+    assert placeholder.satnum == 0 and ordinary.satnum == 64_712
+    at = to_datetime64(["2026-09-03T06:00:00Z"])
+    a = propagate_satrecs([placeholder], np.array([799_501_567]), at)
+    b = propagate_satrecs([ordinary], np.array([64_712]), at)
+    assert a.error[0, 0] == 0
+    np.testing.assert_allclose(a.r_teme, b.r_teme)

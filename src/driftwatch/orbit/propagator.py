@@ -34,6 +34,9 @@ WGS72_MU_KM3_S2 = 398600.8
 # Days between the SGP4 epoch origin (1949 December 31 00:00 UT) and JD 0.
 SGP4_EPOCH_ORIGIN_JD = 2433281.5
 
+# The largest satellite number the sgp4 library accepts: the top of the Alpha-5 range.
+SGP4_MAX_SATNUM = 339_999
+
 # rev/day -> rad/min, rev/day^2 -> rad/min^2, rev/day^3 -> rad/min^3
 _REV_PER_DAY_TO_RAD_PER_MIN = 2.0 * pi / 1440.0
 _REV_PER_DAY2_TO_RAD_PER_MIN2 = 2.0 * pi / (1440.0**2)
@@ -75,10 +78,17 @@ def satrec_from_elements(
     """
     jd, fr = julian_date(epoch)
     sat = Satrec()
+    # The library refuses a satellite number past the Alpha-5 range (339,999): "cannot exceed
+    # 339999, whose Alpha 5 encoding is 'Z9999'". CelesTrak's supplemental Starlink sets carry
+    # nine-digit placeholder ids for satellites the catalogue has not numbered yet (799501567 and
+    # up on 2026-09-03), and one of them stopped every supplemental fit for a day. The number is
+    # identity only -- nothing in the theory reads it -- so an out-of-range id is initialised as
+    # zero and the caller goes on keying results by the real id it passed in.
+    satnum = int(norad_id) if 0 <= int(norad_id) <= SGP4_MAX_SATNUM else 0
     sat.sgp4init(
         whichconst,
         opsmode,
-        int(norad_id),
+        satnum,
         (jd - SGP4_EPOCH_ORIGIN_JD) + fr,
         float(bstar),
         float(mean_motion_dot) * _REV_PER_DAY2_TO_RAD_PER_MIN2,
