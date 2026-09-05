@@ -170,13 +170,83 @@ free-flying event's probability, or the covariance driftwatch puts around any ev
 Kelvins reproduction does not calibrate either. The sample is drawn from today's catalogue, so the
 3,891 objects that decayed since May 2024 are absent from it.
 
+### 6. Against an independent truth, the public element set is worse than its own consistency says in a storm, and the storm term helps only beyond three days (2026-09-05)
+
+The first comparison in this project of a public element set with something that is not another
+fit by the same network. ESA's Swarm A, B and C carry GPS receivers and ESA publishes a
+reduced-dynamic precise science orbit for each (`SW_OPER_SP3xCOM_2_`, ten-second states, centimetres),
+so every public element set issued in a window can be propagated with SGP4 to leads from six hours
+to seven days and measured against where the satellite actually was, in its own radial, in-track,
+cross-track frame. Three windows: a quiet control (20 to 27 April 2024, Kp at or under 4), the May
+2024 storm (sets issued 6 to 13 May), and the 10 to 11 October 2024 storm, **held out from every
+tuning** — the covariance and the ballistic coefficient used on each window are fitted from the 45
+and 36 days of history before it, and no threshold was chosen by looking at October. **One element
+set is one trial**, one residual per lead, never one per timestamp. Swarm A and C fly at 460 to
+470 km, B at 500 to 506 km; 57, 54 and 61 sets in the three windows. Manoeuvres are excluded from
+ESA's own thruster record (`SW_OPER_SC_xDYN_1B`): two orbit manoeuvres in 150 satellite-days, Swarm A
+on 15 October and Swarm B on 17 October, both of which the project's step detector on the precise
+orbit found independently and nothing else; the element-set jump detector, left to itself, would
+have read the 11 October storm as a burn on A and C and thrown away the storm-time trials
+themselves. `docs/calibration-benchmark.md` has every number; `driftwatch validate swarm` rewrites it.
+
+**The residual.** In-track, median absolute, at 6 h / 24 h / 72 h / 7 days: quiet **0.3 / 0.5 / 3.2 /
+24 km**; May storm **0.5 / 0.8 / 7.2 / 75 km**; October storm **0.9 / 1.8 / 15 / 49 km**. The 95th
+percentiles at 7 days are 62, 197 and 652 km. Radial and cross-track stay under a kilometre at every
+lead in every window.
+
+**The covariance's coverage.** The empirical covariance is fitted from the consistency of each
+satellite's own element sets, and item 5 said that bounds the accuracy in neither direction. Now
+measured: in the quiet week it **over-covers** from one to five days (82 to 96 per cent of residuals
+inside one sigma against the 68 claimed; 98 to 100 inside two) and **under-covers** inside twelve
+hours (37 to 49 inside one sigma, 60 to 75 inside two), where it sits on its half-day floor. In both
+storms it under-covers at every lead: two sigma contains **65 to 80 per cent** of the May residuals
+and **62 to 75 per cent** of the October ones against the 95 it claims, one sigma 33 to 76 and 31 to
+63. A covariance fitted from quiet history does not grow with a storm, and nothing in the
+consistency of pre-storm fits could have told it to.
+
+**The storm term with the observed ap.** Applied to the untreated SGP4 residual, the term (the
+in-track shift from the density excess over what the set's own drag term implies, driven by the
+observed ap and a coefficient measured from the satellite's own decay) **reduces the May residual
+only from four days of lead**: +20, +42, +48 and +41 per cent on the median at 4, 5, 6 and 7 days,
+with 54 to 76 per cent of trials improved, and **increases it from 12 hours to three days** (−64,
+−68, −287, −93 and −22 per cent at 12, 24, 36, 48 and 72 h). On the sets issued before the onset and
+propagated across it, the 7-day median falls from 75 to 44 km and the 95th percentile from 197 to
+57 km. Its magnitude is too large: at 7 days the median predicted shift is 100 km against an
+actual 64. In the held-out October storm the term helps from six hours to five days (+5 to +43 per
+cent) and hurts at six and seven days (−3, −12): the sets issued after the 7 to 8 October storm
+over-predict the decay for the quiet days that followed (the satellite is *behind* the prediction
+by 4 to 23 km at two to three days, consistent with a `B*` fitted across that storm), and the term
+with the observed ap has the sign of that too. **In the quiet control it makes the residual worse
+from one to six days** (−10 to −96 per cent): the excess it integrates is not zero without a
+storm, because the density the set's `B*` implies is not the model's quiet density, and by seven
+days its shift is twice the actual drift with the same sign. This is the lead-time split of item 4
+measured against a truth: skill at three to four days and beyond, none inside two, and a bias in
+quiet conditions that the element-set comparison could not see.
+
+**The horizon, for a named task.** Keeping the satellite inside the in-track half-width of the
+screening box driftwatch searches, 25 km, at the 95th percentile of trials: **five days** in the
+quiet week (39.7 km at six), **two days** in the May storm (35.7 km at three), **one day** in the
+October storm (37.5 km at 36 hours). An engineer screening on public element sets through a
+storm has a day to two days of lead in which the coarse stage can be trusted to keep the object
+inside its box, and the covariance carried beside it is too small by the numbers above.
+
+**What this does not show.** Three well-tracked satellites at two altitudes in one orbit class, one
+week of sets per window; whether the ratio of actual error to consistency generalises to debris, to
+higher orbits, or to objects the network tracks less often is not measured. Swarm's TU Delft density
+products (`SW_OPER_DNSxPOD_2_`) could later separate the atmosphere's error from the object's
+response in the storm-term result; they are not part of this week. And one construction lesson,
+recorded because an independent truth is what made it visible: the benchmark's first run showed a
+constant 137 km in-track offset at every lead, which was the precise-orbit files' GPS time read as
+UTC, 18 s at 7.6 km/s; the reader now converts through the leap-second table and a test pins it.
+
 Everything above is indicative, not operational: the covariances come from the consistency of
 public element sets, which measures how much successive fits by one network disagree and bounds
-their accuracy in neither direction, because successive sets share observations and assumptions and
-nothing here has been calibrated against an independent truth (`docs/methods.md`, "Uncertainty and
-probability", says what such a calibration would need); the Kelvins reproduction validates the
-probability arithmetic on ESA's inputs and calibrates none of this; and the probabilities are
-computed by the two-dimensional method, which is a known underestimate for slow encounters.
+their accuracy in neither direction, because successive sets share observations and assumptions;
+the one calibration against an independent truth (item 6) covers three satellites in one orbit
+class and finds that consistency under-covers the error in a storm; the Kelvins reproduction
+validates the probability arithmetic on ESA's inputs and calibrates none of this; and the
+probabilities are computed by the two-dimensional method, which is a known underestimate for slow
+encounters.
 `docs/methods.md` lists every approximation, with the precedent this rests on (Flohrer, Krag and
 Klinkrad, 2008; Parker and Linares, 2024) and what is done differently.
 
@@ -314,6 +384,18 @@ What works today:
   and at what miss and probability, which it missed, and which public-data flags the operator
   never received. Built against the Kelvins rows as test input, which `driftwatch cdm
   from-kelvins` writes out as messages with synthetic identities (`docs/cdm-matching.md`).
+- `driftwatch validate swarm` is the calibration benchmark against precise orbits: every public
+  element set issued for Swarm A, B and C in three windows (a quiet control, the May 2024 storm,
+  and an October 2024 storm held out from every tuning) propagated with SGP4 to leads from six
+  hours to seven days and measured against ESA's precise science orbit in the satellite's own RIC
+  frame, one trial per element set. It reports the residual distribution, the coverage of the
+  empirical covariance against the 68 and 95 per cent it claims, the storm term's effect with
+  the observed ap, and the horizon for the screening box, and reads ESA's thruster record for the
+  manoeuvre exclusion (`docs/calibration-benchmark.md`, item 6 above).
+- `driftwatch local` runs an operator's own files through the provenance check, the CDM matcher
+  and the same benchmark with the operator's ephemeris as the truth, with every outbound request
+  refused for the duration, so nothing leaves their machine and the public demonstration stays
+  reproducible from public sources alone (`docs/local-analysis.md`).
 - Tests cover the official SGP4 verification cases, frame conversions against skyfield,
   a real ISS pass over Durban, the cache rules, the snapshot schema, the export, the
   Space-Track client, the fleet files, the screening (synthetic conjunctions with a
@@ -497,6 +579,11 @@ data/                   cache, snapshots, history, supplemental and SpaceX ephem
   with `docs/kelvins-reproduction.svg`, the residual against ESA's risk.
 - `docs/cdm-matching.md`: the Conjunction Data Message parser and matcher, what the three
   outputs mean, and why the Kelvins rows are its test input and not a validation.
+- `docs/calibration-benchmark.md`: the calibration against ESA's precise orbits for Swarm A, B
+  and C, as the command writes it: three windows, four things by lead bin, every source with its
+  origin and derivation.
+- `docs/local-analysis.md`: the optional local path, for an operator's own ephemerides, messages
+  and records, and the guard that keeps them on the operator's machine.
 - `docs/data-sources.md`: each data provider's terms, the Space-Track redistribution
   clause as checked, and the citation format.
 - `docs/spacex-ephemerides.md`: whether SpaceX's published Starlink ephemerides may be

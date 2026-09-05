@@ -207,9 +207,17 @@ and provenance rather than about new physics, and it is meant to be read as one.
   with the propagated public set over the same lead times and the same orbit classes, in enough
   objects to give the ratio of actual error to consistency per class and its dependence on
   geomagnetic conditions, with a storm inside the calibration period, since the shared error this
-  project cares about is the one a storm creates. Nothing here has made that comparison; the
-  precedent cited above is cited for the consistency method, not as a calibration of it; and the
-  Kelvins reproduction validates the probability arithmetic on ESA's inputs, not this covariance.
+  project cares about is the one a storm creates. **One such comparison has now been made**
+  (2026-09-05; `docs/calibration-benchmark.md`, findings page item 6): Swarm A, B and C against
+  ESA's precise science orbits, one trial per public element set, over a quiet week, the May 2024
+  storm and the October 2024 storm held out from every tuning. What it found about this covariance:
+  in the quiet week it over-covers from one to five days (82 to 96 per cent of in-track residuals
+  inside one sigma against the 68 claimed) and under-covers inside twelve hours, where it sits on
+  its half-day floor; in both storms it under-covers at every lead (two sigma holds 65 to 80 and 62
+  to 75 per cent against 95). Three satellites, two altitudes near 460 and 500 km, one orbit class;
+  the ratio of actual error to consistency elsewhere is not measured. The precedent cited above is
+  cited for the consistency method, not as a calibration of it; and the Kelvins reproduction
+  validates the probability arithmetic on ESA's inputs, not this covariance.
 - **SGP4 is not invariant under re-initialisation with drag.** A set fitted at a later
   epoch with the same `B*` drifts in-track by about 0.07 km per day at `B* = 1e-4`
   (measured on a 500 km orbit; zero with `B* = 0`). That drift sits inside the

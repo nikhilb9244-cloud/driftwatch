@@ -219,7 +219,15 @@ metres to kilometres. What is measured is the disagreement between two fits by t
 which bounds the propagation error in neither direction (reworded 2026-09-05; the earlier text
 called it a floor): the two share observations and assumptions, so an error common to them is
 invisible here, and a shared assumption can equally make them disagree by more than either is
-wrong. Only a comparison against an independent truth would calibrate it, and none has been made.
+wrong. Only a comparison against an independent truth would calibrate it. One has since been made,
+on three satellites (`docs/calibration-benchmark.md`, 2026-09-05): against ESA's precise orbits for
+Swarm A, B and C the storm term with the observed ap reduces the in-track residual in the May 2024
+storm only from four days of lead (+20 to +48 per cent on the median at four to seven days) and
+increases it from twelve hours to three days; in the October 2024 storm, held out from every tuning,
+it helps from six hours to five days and hurts at six and seven; and in a quiet week it makes the
+residual worse from one to six days, because the excess it integrates is not zero without a storm.
+Its magnitude runs about 1.5 times the actual shift at seven days in May. That is the lead-time
+structure below, seen against a truth, plus a quiet-time bias this comparison could not see.
 
 ### The control, first, because it sets the scale
 

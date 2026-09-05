@@ -443,3 +443,61 @@ Space-Track in two-day chunks) and is theirs to explain; nothing of ours bears o
 wire the snapshot builder into TABASCAL. The overlap is one idea — say how complete the catalogue
 you are returning is, and say how old the record is — and it is worth a pull request of a few
 lines, not a platform.
+
+---
+
+## The calibration against precise orbits: what an independent truth showed (2026-09-05)
+
+**Name this as the first comparison of a public element set with something that is not another
+fit by the same network.** Every earlier statement about accuracy in this project rested on the
+consistency of successive fits, and the second review's first correction was that consistency
+bounds accuracy in neither direction. ESA's Swarm A, B and C carry GPS receivers and ESA publishes a
+reduced-dynamic precise science orbit for each, so the comparison could be made from public sources
+in a week: every public element set issued in three windows (a quiet control, the May 2024 storm,
+the October 2024 storm held out from every tuning) propagated with SGP4 to leads from six hours to
+seven days and measured against the precise orbit in the satellite's own RIC frame, **one trial per
+element set**. `docs/calibration-benchmark.md` is the page the command writes; findings page item 6
+is the statement.
+
+**What it showed, in the order it matters for the paper.**
+
+1. **The covariance under-covers in a storm and over-covers in quiet.** Two sigma held 65 to 80 per
+   cent of the May residuals and 62 to 75 per cent of the October ones against the 95 it claims; in
+   the quiet week one sigma held 82 to 96 per cent from one to five days against the 68 claimed, and
+   37 to 49 inside twelve hours where the model sits on its half-day floor. A covariance fitted from
+   quiet history cannot grow with a storm, and this is the number that says by how much it fails to.
+2. **The horizon.** Inside 25 km in-track at the 95th percentile: five days quiet, two days in May,
+   one day in October. This is the sentence an engineer can use.
+3. **The storm term's lead-time split, against a truth.** In May it helps only from four days
+   (+20 to +48 per cent on the median) and hurts from twelve hours to three days; in October it
+   helps from six hours to five days and hurts at six and seven; in the quiet week it hurts from one
+   to six days, because the density the set's `B*` implies is not the model's quiet density and the
+   excess it integrates is not zero without a storm. Its magnitude at seven days in May is about 1.5
+   times the actual shift, which is the direction the 22 per cent density over-prediction predicts
+   and larger than it. So the bounded statement of the second review stands and gains a caveat: the
+   term is a correction at three to four days and beyond in a storm, an uncertainty inside two, and
+   a bias in quiet conditions that must not be applied as a mean shift when there is no storm.
+4. **Manoeuvres from the published record, not from detection.** ESA's `SC_xDYN_1B` product carries
+   per-second thruster on-times and the combined force of the orbit-control thrusters; two orbit
+   manoeuvres in 150 satellite-days (Swarm A on 15 October, Swarm B on 17 October), which the step
+   detector on the precise orbit found independently and nothing else. The element-set jump
+   detector, left to decide, would have read the 11 October storm as a burn on A and C and excluded
+   175 set-lead pairs — the storm-time trials themselves. A detector that reads storm drag as a burn
+   is a detector that removes the storm from a storm benchmark; the published record decides.
+5. **The construction error only a truth reveals.** The first run showed a constant 137 km in-track
+   offset at every lead: the SP3 files' GPS time read as UTC, 18 s at 7.6 km/s. Nothing in the
+   element-set comparisons could have shown it, because they never touch an absolute clock. The
+   reader converts through astropy's leap-second table and a test pins the 18 s.
+
+**What it does not show.** Three well-tracked satellites at two altitudes in one orbit class, 54
+to 61 sets a window; whether the ratio of actual error to consistency generalises to debris, to
+higher orbits, or to objects tracked less often is not measured. The October window contains two
+storms (7 to 8 October, then 10 to 11), and the sets issued between them over-predict the decay for
+the quiet days that followed — the satellite is behind the prediction by 4 to 23 km at two to three
+days — consistent with a `B*` fitted across the first storm; that is an inference, not a
+measurement. Swarm's TU Delft density products could later separate the atmosphere's error from the
+object's response and are not part of this week.
+
+**For the paper.** Report the coverage table and the horizon before the residual distribution: the
+distribution says how wrong the catalogue is, the coverage says how wrong the tool is about how
+wrong the catalogue is, and the second is the finding.

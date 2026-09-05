@@ -133,6 +133,20 @@ the one reader who can change what it does, an operator with real warnings:
 
 Phase 5 is unchanged, and this is what it now begins with: a CDM from someone.
 
+**Added 2026-09-05, after the second review: one bounded experiment and one optional path.** The
+experiment is the calibration benchmark against precise orbits (`docs/calibration-benchmark.md`,
+`driftwatch validate swarm`), capped at one working week: Swarm A, B and C against ESA's precise
+science orbits, over the May 2024 storm with a quiet control before it and an October 2024 storm
+held out from every tuning, one trial per public element set, four things reported by lead bin, and
+the result published on the findings page whatever it showed (item 6 there). It is the first
+comparison of a public element set with an independent truth in this project, which is the thing
+the methods page had said nothing here had made. The optional path is `driftwatch local`
+(`docs/local-analysis.md`): an operator's own ephemerides, messages and records through the CDM
+matcher, the provenance check and the same benchmark, with the network refused for the duration, so
+the public demonstration stays reproducible from public sources and the operator's data stays on
+the operator's machine. The parked items below have their premises rewritten rather than deleted,
+dated the same day.
+
 Parked for this phase (added 2026-09-02 at the Phase 2 Step 1 review; not to be built before Phase 4):
 
 - ~~**Stage C should interpolate the SpaceX ephemeris states directly for served events, so the trajectory and the covariance share a source.**~~ **Built, Phase 4 Step 1, 2026-09-03** — and it was a bigger item than this entry supposed. The 0.2 km figure is CelesTrak's fit residual over the arc the fit was made on, not over the file: measured on nineteen matched files, the propagated element set sits a median 0.30 km from the published ephemeris inside 12 hours but **2.8 km at 12 to 24, 28 km at 36 to 48 and 83 km at 60 to 72**, almost all in-track (one fetch, one date, against the published prediction rather than the realised orbit; the lineage of each pair was verified on 2026-09-05 and the drift is the same on the pairs that share a file as on those that do not, `docs/spacex-ephemerides.md`, "Lineage, checked"). Three consequences. The Phase 2 patch was the right shape at a hundredth of the right size at the far end of the horizon. Serving SpaceX's 3.8 km control box on a trajectory 83 km out **understated** the uncertainty on the events furthest ahead. And "a decision about what Stage B screens on" had only one defensible answer: Stage B screens on the published states too, because no pad covers 83 km. The states are stored on a 120-second grid (measured interpolation error: median 5.7 m, maximum 6.8 m), rotated out of the files' MEME/J2000 frame into TEME (44 km if you get that wrong), and split at every discontinuity — every file carries one at exactly 48 hours. The fit residual now applies per event rather than globally. See `docs/phase4-plan.md` and `docs/spacex-ephemerides.md`.
