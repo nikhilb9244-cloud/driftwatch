@@ -88,6 +88,42 @@ def teme_to_itrs(r_teme: np.ndarray, v_teme: np.ndarray, t: datetime) -> tuple[n
     return r_out, v_out
 
 
+def itrs_to_teme(r_itrs: np.ndarray, v_itrs: np.ndarray, times) -> tuple[np.ndarray, np.ndarray]:
+    """Rotate ITRS positions and velocities into TEME, one UTC time per row.
+
+    The inverse of :func:`teme_to_itrs` for a batch of times: ``r_itrs`` and ``v_itrs`` are
+    ``(n, 3)`` in km and km/s and ``times`` has one entry per row. Rows containing NaN are
+    passed through as NaN. Added for the calibration against precise orbits
+    (``driftwatch.storm.precise``), whose truth is published in the ITRF; that module takes
+    the inertial velocity it needs from the rotated positions rather than from the rotated
+    velocity, so nothing there depends on how astropy treats the frame's rotation rate.
+    """
+    r_itrs = np.asarray(r_itrs, dtype=float)
+    v_itrs = np.asarray(v_itrs, dtype=float)
+    t64 = to_datetime64(times).astype("datetime64[us]")
+    ok = np.isfinite(r_itrs).all(axis=1) & np.isfinite(v_itrs).all(axis=1)
+    r_out = np.full_like(r_itrs, np.nan)
+    v_out = np.full_like(v_itrs, np.nan)
+    if not ok.any():
+        return r_out, v_out
+    time = Time(t64[ok], scale="utc")
+    with iers.conf.set_temp("iers_degraded_accuracy", "warn"), warnings.catch_warnings(record=True) as caught:
+        warnings.simplefilter("always")
+        itrs = ITRS(
+            CartesianRepresentation(
+                r_itrs[ok].T * u.km,
+                differentials=CartesianDifferential(v_itrs[ok].T * u.km / u.s),
+            ),
+            obstime=time,
+        )
+        teme = itrs.transform_to(TEME(obstime=time))
+    for w in caught:
+        log.warning("astropy: %s", str(w.message).splitlines()[0])
+    r_out[ok] = teme.cartesian.xyz.to_value(u.km).T
+    v_out[ok] = teme.velocity.d_xyz.to_value(u.km / u.s).T
+    return r_out, v_out
+
+
 _TIMESCALE = None
 
 
