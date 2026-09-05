@@ -2930,6 +2930,9 @@ def cmd_spacex(args: argparse.Namespace) -> int:
             f"interpolation error median {s['interp_err_median_m']:.2f} m, worst {s['interp_err_worst_m']:.2f} m; "
             f"{s['objects_with_a_break']} objects carry a break, at {s['break_hours']} h"
         )
+    # The state store lives in the Actions cache and is restored and saved whole on every run, so
+    # a file whose ephemerides have been invalid for a week goes, leaving its summary behind.
+    summary["pruned"] = spacex.prune_state_store(now=now)
 
     # The cross-check: their covariance against ours, at matched leads. Two different
     # quantities, kept side by side rather than merged (see ephemeris/spacex.py).

@@ -81,7 +81,10 @@ assumed:
   the newest-version rule kept both copies, every epoch of every segment appeared twice, and
   the interpolant refused the grid. The loader also sorts and de-duplicates each segment's
   grid on the way in and splits it where one epoch carries two different states, with the
-  reason in the log (:func:`_monotonic_pieces`).
+  reason in the log (:func:`_monotonic_pieces`). A state file goes once its last ephemeris
+  has been invalid for :data:`driftwatch.config.SPACEX_STATE_PRUNE_AFTER`, leaving a summary
+  of which satellite had which version (:func:`prune_state_store`): the store lives in a cache
+  that is restored and saved whole on every run, and nothing looks back at expired states.
 
 The fit residual therefore applies **per event, not per object**:
 
@@ -109,6 +112,7 @@ hundred of states.
 
 from __future__ import annotations
 
+import json
 import logging
 import os
 import re
@@ -707,6 +711,157 @@ def load_state_store(
     The rule, and the 2026-09-05 failure that sharpened it, are in :func:`_load_versions`.
     """
     return _load_versions(list_state_store(out_dir), norad_ids, STATE_COLUMNS, latest_only=latest_only)
+
+
+def state_summary_path(path: Path) -> Path:
+    """What a pruned state file leaves behind: ``states_<stamp>.parquet`` gives ``states_<stamp>.summary.json``."""
+    return path.with_name(path.stem + ".summary.json")
+
+
+def _iso(value: Any) -> str | None:
+    """An ISO 8601 UTC string, or None for a missing time."""
+    ts = pd.to_datetime(value, utc=True)
+    return None if pd.isna(ts) else ts.isoformat()
+
+
+def _validity_end(table: pd.DataFrame) -> pd.Timestamp:
+    """When the last of a fetch's ephemerides stops being valid.
+
+    The latest ``ephemeris_stop`` the headers declared, or the last stored epoch when no header
+    carried one: the stored states cannot be valid past the last of them either way.
+    """
+    stop = pd.to_datetime(table["ephemeris_stop"], utc=True).max()
+    if pd.isna(stop):
+        stop = pd.to_datetime(table["t"], utc=True).max()
+    return stop
+
+
+def summarise_state_file(path: Path) -> dict[str, Any]:
+    """What one stored fetch held, small enough to keep after the states themselves have gone.
+
+    Which satellite had which version -- created when, valid from when until when, how many
+    rows and segments, how well the grid interpolated -- plus the fetch's totals. About 300
+    bytes a satellite, against 110 KB of states.
+    """
+    columns = [
+        "norad_id",
+        "name",
+        "created",
+        "ephemeris_start",
+        "ephemeris_stop",
+        "segment",
+        "t",
+        "interp_err_median_m",
+        "interp_err_max_m",
+        "n_breaks",
+    ]
+    table = pd.read_parquet(path, columns=columns)
+    by_sat = table.groupby("norad_id")
+    first = by_sat.first()
+    rows = by_sat.size()
+    segments = by_sat["segment"].nunique()
+    versions = [
+        {
+            "norad_id": int(norad_id),
+            "name": str(row["name"]),
+            "created": _iso(row["created"]),
+            "ephemeris_start": _iso(row["ephemeris_start"]),
+            "ephemeris_stop": _iso(row["ephemeris_stop"]),
+            "rows": int(rows[norad_id]),
+            "segments": int(segments[norad_id]),
+            "interp_err_median_m": round(float(row["interp_err_median_m"]), 3),
+            "interp_err_max_m": round(float(row["interp_err_max_m"]), 3),
+            "n_breaks": int(row["n_breaks"]),
+        }
+        for norad_id, row in first.iterrows()
+    ]
+    return {
+        "file": path.name,
+        "fetched_at": _fetch_stamp(path),
+        "rows": int(len(table)),
+        "satellites": int(len(first)),
+        "segments": int(sum(v["segments"] for v in versions)),
+        "created": {"min": _iso(table["created"].min()), "max": _iso(table["created"].max())},
+        "valid_from": _iso(pd.to_datetime(table["ephemeris_start"], utc=True).min()),
+        "valid_until": _iso(_validity_end(table)),
+        "interp_err_median_m": round(float(first["interp_err_median_m"].median()), 3),
+        "interp_err_max_m": round(float(first["interp_err_max_m"].max()), 3),
+        "n_breaks_total": int(first["n_breaks"].sum()),
+        "versions": versions,
+    }
+
+
+def prune_state_store(
+    out_dir: Path = config.SPACEX_DIR,
+    *,
+    now: datetime | None = None,
+    after: timedelta = config.SPACEX_STATE_PRUNE_AFTER,
+) -> dict[str, Any]:
+    """Delete state files whose last ephemeris has been invalid for longer than ``after``, keeping each one's summary.
+
+    Why. The state store lives in the Actions cache, which is restored and saved whole on every
+    run, and a fetch adds about 34 MB of states for 300 satellites. Nothing in a state file is
+    useful once its ephemerides have expired: the screening never looks back, and a rescore of an
+    archived run reads the covariance store, not the states. Seven days of grace keeps a file
+    long enough to be looked at after a failed run. What stays is the fetch's summary
+    (:func:`summarise_state_file`), so the version history -- which satellite had which version,
+    created when, valid until when -- is still readable with :func:`load_state_summaries`.
+
+    A file that cannot be read is left in place and reported rather than deleted: a prune must
+    never be the thing that loses data it could not look at. Returns what was removed and kept.
+    """
+    now = now or datetime.now(UTC)
+    cutoff = pd.Timestamp(now).tz_convert("UTC") if pd.Timestamp(now).tzinfo else pd.Timestamp(now).tz_localize("UTC")
+    cutoff = cutoff - after
+    removed: list[str] = []
+    kept = 0
+    bytes_freed = 0
+    for path in list_state_store(out_dir):
+        try:
+            valid_until = _validity_end(pd.read_parquet(path, columns=["ephemeris_stop", "t"]))
+        except (OSError, ValueError, KeyError) as exc:
+            log.warning("Cannot read %s to decide whether to prune it (%s); left in place", path.name, exc)
+            kept += 1
+            continue
+        if pd.isna(valid_until) or valid_until >= cutoff:
+            kept += 1
+            continue
+        summary = summarise_state_file(path)
+        summary["pruned_at"] = _iso(now)
+        summary_path = state_summary_path(path)
+        if not summary_path.exists():
+            summary_path.write_text(json.dumps(summary, indent=1), encoding="utf-8")
+        size = path.stat().st_size
+        path.unlink()
+        bytes_freed += size
+        removed.append(path.name)
+        log.info(
+            "Pruned %s: %d rows for %d satellites, valid until %s, %.1f days past validity; %.1f MB freed, "
+            "summary kept in %s",
+            path.name,
+            summary["rows"],
+            summary["satellites"],
+            summary["valid_until"],
+            (cutoff + after - valid_until).total_seconds() / 86400.0,
+            size / 1e6,
+            summary_path.name,
+        )
+    result = {
+        "removed": removed,
+        "kept": kept,
+        "bytes_freed": int(bytes_freed),
+        "after_days": after.total_seconds() / 86400.0,
+    }
+    if removed:
+        log.info(
+            "SpaceX state store pruned: %d files removed, %d kept, %.1f MB freed", len(removed), kept, bytes_freed / 1e6
+        )
+    return result
+
+
+def load_state_summaries(out_dir: Path = config.SPACEX_DIR) -> list[dict[str, Any]]:
+    """The summaries pruned state files left behind, oldest fetch first: the version history without the states."""
+    return [json.loads(p.read_text(encoding="utf-8")) for p in sorted(Path(out_dir).glob("states_*.summary.json"))]
 
 
 # --------------------------------------------------------------------------------------

@@ -221,7 +221,7 @@ these are three different kinds of thing.
 | `data/stability/` | **0.33 MB a run** | Accumulating and derived, but derived from something that will not be re-read: the point of it is to answer a question about a year of runs without opening a year of runs. | Orphan branch `pipeline-store` |
 | Run directories | **4.8 MB a run** | Accumulating and irreplaceable, and required in full by the retention rule below. | **GitHub release assets** |
 | `data/cache/` | 1.5 GB | Ephemeral and rebuildable. It exists to honour CelesTrak's two-hour floor, so it only has to remember two hours. | Actions cache |
-| `data/spacex/` | 39 MB a fetch | Ephemeral by construction: the files are valid for 72 hours and are refetched. Two runs inside one eight-hour refresh window store the same version twice, and the loader reads one copy (run 6, 2026-09-05; `docs/spacex-ephemerides.md`). | Actions cache |
+| `data/spacex/` | 39 MB a fetch, states pruned | Ephemeral by construction: the files are valid for 72 hours and are refetched. Two runs inside one eight-hour refresh window store the same version twice, and the loader reads one copy (run 6, 2026-09-05; `docs/spacex-ephemerides.md`). `driftwatch spacex` deletes a state file once its ephemerides have been invalid for seven days, leaving a summary of what it held; the growth note below has the arithmetic. | Actions cache |
 | `data/history/` | 191 MB | Rebuildable from Space-Track, but slowly and under a rate limit. Losing it costs a backfill, not data. | Actions cache |
 
 **Why an orphan branch and not the Actions cache, for the five above the line.** The Actions cache
@@ -229,6 +229,27 @@ evicts after seven days without a hit and has no durability guarantee. The suppl
 entire purpose is to accumulate for months; the ballistic store is the biggest lever on the run
 time; the stability index is a series that a gap ruins. None can be allowed to evaporate. `docs/phase4-plan.md` has the isolation test that proved the
 branch pattern, including the two ways it went wrong first.
+
+**The Actions cache is not durable, and `data/spacex/` is built for that.** An entry is evicted
+after seven days without a hit, the repository's cache total is capped at 10 GB with the least
+recently used entries going first, and an entry can be dropped for reasons GitHub does not
+explain. A run that finds no cache starts with an empty `data/spacex/`, and the `driftwatch spacex
+latest` step regenerates it from a fresh fetch before the screen, at the cost of the fetch (about
+four minutes for 300 satellites) and never of data: the states are the operator's published
+files, valid for 72 hours, and nothing in an archived run refers back to them (the events table
+records which trajectory served each event; `docs/spacex-ephemerides.md`).
+
+**What it grows by, before and after pruning.** Unpruned, a fetch adds about 35 MiB to the
+compressed cache (measured between runs 4 and 5 on 2026-09-05: 259 to 295 MiB), of which the
+states are 34 MB and the covariance 6.5 MB for 300 satellites. `driftwatch spacex` now deletes a
+state file once its last ephemeris has been invalid for seven days (`SPACEX_STATE_PRUNE_AFTER`),
+so with one fetch a day the states settle at about ten files, some 340 MB, and stop growing. Each
+pruned file leaves a `states_<stamp>.summary.json` of about 100 KB naming which satellite had
+which version, created when and valid until when, so the version history stays readable
+(`load_state_summaries`) and the run log says what was removed. What still accumulates is the
+covariance store, 6.5 MB a fetch or about 200 MB a month: it is not pruned because a rescore of an
+archived run reads it, and it is the next thing to bound if the cache's save and restore times
+start to matter.
 
 **Why the branch cannot hold the run archive, which is the finding that decided it.** A run
 directory is 4.8 MB and a snapshot is 3.8 MB, so retaining every daily run is **8.6 MB a day,

@@ -158,6 +158,14 @@ SPACEX_FRAME_CHECK_MAX_KM = 5.0
 # How far into a file to compare. Early, where the SGP4 fit is at its tightest and any
 # disagreement that is not a frame error is at its smallest.
 SPACEX_FRAME_CHECK_LEAD_HOURS = 3.0
+# The state store lives in the Actions cache, which is restored and saved whole on every run,
+# and a fetch adds about 34 MB of states for 300 satellites. Nothing in a state file is useful
+# once its ephemerides have expired -- the screening never looks back, and a rescore reads the
+# covariance store, not the states -- so `driftwatch spacex` deletes a state file once its last
+# ephemeris has been invalid for this long, leaving the fetch's summary behind. Seven days keeps
+# a file long enough to be looked at after a failed run, and with one fetch a day the states
+# settle at about ten files. docs/pipeline.md has the growth arithmetic.
+SPACEX_STATE_PRUNE_AFTER = timedelta(days=7)
 
 # ---------------------------------------------------------------------------------------
 # Space weather (Phase 3 Step 1). See docs/space-weather.md and driftwatch/weather/.

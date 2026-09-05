@@ -522,6 +522,61 @@ def test_the_loader_drops_a_repeated_epoch_and_splits_where_one_epoch_carries_tw
     assert covered.all()
 
 
+def test_the_state_store_is_pruned_a_week_after_validity_and_each_fetch_leaves_its_summary(tmp_path, caplog):
+    """The store lives in the Actions cache and is restored and saved whole on every run, so a
+    fetch's states go once its ephemerides have been invalid for seven days. What stays is a
+    summary of which satellite had which version, so the history is still readable without them.
+    """
+    old = stored_states(hours=4.0)  # created at T0, its header says valid until T0 + 72 h
+    old_path = spacex.write_state_store(old, spacex.state_store_path(T0, tmp_path))
+    fresh = stored_states(hours=4.0, start=T0 + timedelta(days=9))
+    fresh_path = spacex.write_state_store(fresh, spacex.state_store_path(T0 + timedelta(days=9), tmp_path))
+    validity_end = T0 + timedelta(hours=72)
+
+    # A day short of the grace: nothing goes.
+    result = spacex.prune_state_store(tmp_path, now=validity_end + timedelta(days=6))
+    assert (result["removed"], result["kept"]) == ([], 2)
+    assert [p.name for p in spacex.list_state_store(tmp_path)] == [old_path.name, fresh_path.name]
+    assert spacex.load_state_summaries(tmp_path) == []
+
+    # An hour past it: the old file goes, its summary stays, the fresh file is untouched, and the
+    # log says what went.
+    now = validity_end + timedelta(days=7, hours=1)
+    with caplog.at_level(logging.INFO, logger="driftwatch.ephemeris.spacex"):
+        result = spacex.prune_state_store(tmp_path, now=now)
+    assert (result["removed"], result["kept"]) == ([old_path.name], 1)
+    assert result["bytes_freed"] > 0 and result["after_days"] == 7.0
+    assert [p.name for p in spacex.list_state_store(tmp_path)] == [fresh_path.name]
+    assert f"Pruned {old_path.name}" in caplog.text
+    (summary,) = spacex.load_state_summaries(tmp_path)
+    assert summary["file"] == old_path.name
+    assert summary["fetched_at"] == "20260902T092342Z"
+    assert (summary["rows"], summary["satellites"], summary["segments"]) == (len(old), 1, 1)
+    assert summary["valid_from"] == pd.Timestamp(T0).isoformat()
+    assert summary["valid_until"] == pd.Timestamp(validity_end).isoformat()
+    assert summary["pruned_at"] == pd.Timestamp(now).isoformat()
+    (version,) = summary["versions"]
+    assert (version["norad_id"], version["name"]) == (NORAD_ID, "STARLINK-37618")
+    assert version["created"] == pd.Timestamp(T0).isoformat()
+    assert version["ephemeris_stop"] == pd.Timestamp(validity_end).isoformat()
+    assert (version["rows"], version["segments"], version["n_breaks"]) == (len(old), 1, 0)
+
+    # Pruning again removes nothing and writes no second summary; the loader still serves what is left.
+    assert spacex.prune_state_store(tmp_path, now=now)["removed"] == []
+    assert len(spacex.load_state_summaries(tmp_path)) == 1
+    assert spacex.load_trajectory(out_dir=tmp_path).norad_ids == [NORAD_ID]
+
+    # A file whose header carried no `ephemeris_stop` is judged by its last stored epoch instead:
+    # this one's header would have kept it for three more days, its last state is an hour past the grace.
+    headless_start = now - timedelta(days=7, hours=5)
+    headless = stored_states(hours=4.0, start=headless_start)
+    headless["ephemeris_stop"] = pd.NaT
+    headless_path = spacex.write_state_store(headless, spacex.state_store_path(headless_start, tmp_path))
+    assert spacex.prune_state_store(tmp_path, now=now)["removed"] == [headless_path.name]
+    last_epoch = pd.Timestamp(headless_start + timedelta(hours=4)).isoformat()
+    assert spacex.load_state_summaries(tmp_path)[-1]["valid_until"] == last_epoch
+
+
 def test_the_frame_check_passes_on_matching_states_and_fails_on_a_rotation_error():
     """The guard that runs on every fetch, in both directions.
 
