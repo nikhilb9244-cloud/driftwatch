@@ -29,6 +29,7 @@
 import type { Bundle } from "./data";
 import {
   SCENARIO_HELP,
+  STORM_CALIBRATION_NOTE,
   isReplayScenario,
   labelOf,
   type ScenarioFigures,
@@ -123,8 +124,12 @@ export function buildStormControl(
         `still that scenario's own.</span>`;
       return;
     }
-    note.textContent =
-      SCENARIO_HELP[state.current] ?? (isReplayScenario(state.current) ? REPLAY_HELP : "");
+    const help = SCENARIO_HELP[state.current] ?? (isReplayScenario(state.current) ? REPLAY_HELP : "");
+    // Every storm number carries the benchmark's calibration beside it (2026-09-05); quiet has none.
+    note.innerHTML =
+      state.current === "quiet"
+        ? escapeHtml(help)
+        : `${escapeHtml(help)}<p class="caveat">${escapeHtml(STORM_CALIBRATION_NOTE)}</p>`;
   };
 
   const renderSummary = () => {
@@ -149,6 +154,7 @@ export function buildStormControl(
     const row = (label: string, get: (f: ScenarioFigures) => string) =>
       `<tr><th scope="row">${escapeHtml(label)}</th>${populations.map((p) => `<td>${get(figures[p])}</td>`).join("")}</tr>`;
     summary.innerHTML =
+      `<p class="caveat"><b>Calibration.</b> ${escapeHtml(STORM_CALIBRATION_NOTE)}</p>` +
       `<table class="storm-table"><thead><tr><th></th>${head.join("")}</tr></thead><tbody>` +
       row("Events moved", (f) => f.n_moved.toLocaleString()) +
       row("Median relative shift", (f) => `${fmtKm(f.median_relative_shift_km)} km`) +

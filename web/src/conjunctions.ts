@@ -33,7 +33,7 @@ import * as THREE from "three";
 import { gstime } from "satellite.js";
 import type { Bundle, ConjunctionEvent, ConjunctionPair } from "./data";
 import { formatUtc } from "./geodesy";
-import { eventUnder, labelOf, pairUnder, type ScenarioState } from "./scenarios";
+import { STORM_CALIBRATION_NOTE, eventUnder, labelOf, pairUnder, type ScenarioState } from "./scenarios";
 import { SCENE_PER_KM } from "./points";
 import { escapeHtml } from "./ui";
 
@@ -621,8 +621,9 @@ function eventDetailHtml(
         : `<p class="caveat">The probability is limited by the geometry rather than by the uncertainty. It still
            rests on a covariance estimated from how much each object's own element sets disagree, which measures
            their consistency and not their accuracy: successive sets share observations and assumptions, so it
-           bounds the true error in neither direction without an independent calibration, and none has been
-           made.</p>`;
+           bounds the true error in neither direction. The one calibration against an independent truth, Swarm A,
+           B and C against ESA's precise orbits (2026-09-05), found it over-covering from one to five days in a
+           quiet week and under-covering at every lead in a storm, and nothing here is scaled by it.</p>`;
 
   const stormNote = stormy
     ? `<p class="caveat">The dashed arrow is the storm's whole effect on the geometry: it runs from the quiet
@@ -630,7 +631,8 @@ function eventDetailHtml(
        uncertainty looks lost. The two objects are displaced <i>nearly independently</i> &mdash; a conjunction
        is a crossing, at a median 120° between their two in-track directions &mdash; and it is the relative
        displacement above, not either object's own, that moves the miss. An operator-controlled object is
-       not displaced at all; its side of the displacement is zero by rule.</p>`
+       not displaced at all; its side of the displacement is zero by rule.</p>
+       <p class="caveat">${escapeHtml(STORM_CALIBRATION_NOTE)}</p>`
     : "";
 
   return (

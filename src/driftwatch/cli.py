@@ -37,7 +37,7 @@ from driftwatch.ephemeris import spacex
 from driftwatch.export import storm as storm_export
 from driftwatch.export.audit import audit_bundle
 from driftwatch.export.conjunctions import RunDirectory
-from driftwatch.export.report import build_bundle, write_bundle, write_report
+from driftwatch.export.report import build_bundle, default_scenario, write_bundle, write_report
 from driftwatch.export.viewer import export_viewer_bundle
 from driftwatch.fleet import Fleet, FleetError, load_fleet, resolve_fleet
 from driftwatch.orbit import frames, propagator
@@ -1628,7 +1628,7 @@ def cmd_report(args: argparse.Namespace) -> int:
         return 2
     info = run_dir.read_run()
     scenarios = run_dir.scenarios()
-    scenario = args.scenario or (scenarios[0] if scenarios else "quiet")
+    scenario = args.scenario or default_scenario(scenarios)
     if scenarios and scenario not in scenarios:
         log.error("Run %s has no scenario %r; it has %s", run_dir.name, scenario, scenarios)
         return 2
@@ -3303,7 +3303,9 @@ def build_parser() -> argparse.ArgumentParser:
 
     report = sub.add_parser("report", help="rewrite a stored run's markdown report and the viewer's conjunction bundle")
     report.add_argument("run", help="run directory, its name under data/conjunctions, or 'latest'")
-    report.add_argument("--scenario", help="scenario to report (default: the first stored)")
+    report.add_argument(
+        "--scenario", help="scenario to report (default: quiet where it was scored, else the first stored)"
+    )
     report.add_argument("--no-viewer", action="store_true", help="write the report only")
     report.add_argument(
         "--out-dir",

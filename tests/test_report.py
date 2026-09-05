@@ -436,3 +436,12 @@ def test_the_report_command_rebuilds_a_stored_run_from_what_it_recorded(run, tmp
     # "latest" resolves under the configured output directory, and an unknown scenario is refused.
     assert main(["report", "latest"]) == 0
     assert main(["report", str(run_dir.path), "--scenario", "storm"]) == 2
+
+
+def test_the_default_scenario_is_quiet_wherever_it_was_scored():
+    """A storm scenario is chosen explicitly (2026-09-05); a reader never meets a storm number first."""
+    from driftwatch.export.report import default_scenario
+
+    assert default_scenario(["forecast", "quiet", "storm-g4", "storm-g5"]) == "quiet"
+    assert default_scenario([]) == "quiet"
+    assert default_scenario(["storm-g5", "replay:2024-05-09"]) == "replay:2024-05-09"

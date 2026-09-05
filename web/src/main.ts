@@ -274,7 +274,10 @@ async function main(): Promise<void> {
     // before storm mode existed, and a reader who never touches the control never pays for it.
     // A carried scenario is applied when the overlays land, because until then only the one in
     // the bundle can be rendered.
-    const wantedScenario = carried?.scenario ?? null;
+    // Quiet is the default (2026-09-05): a storm scenario is chosen explicitly, never met first. A
+    // bundle written under another scenario is switched to quiet once the overlays carry it. A
+    // replay keeps the bundle's own, because entering replay is itself the explicit choice.
+    const wantedScenario = carried?.scenario ?? (replay ? null : "quiet");
     const applyCarriedScenario = () => {
       if (wantedScenario && wantedScenario !== scenarios.current) scenarios.select(wantedScenario);
     };

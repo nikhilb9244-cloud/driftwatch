@@ -15,6 +15,18 @@ the linked page, and every correction carries its date. Written 2026-09-05, afte
 review found two correctness errors and a set of framing problems; the plan changed as a result
 (`ROADMAP.md`, "Plan change").
 
+**The horizon comes first (2026-09-05).** Against ESA's precise orbits for Swarm A, B and C, a public
+element set keeps the satellite inside the 25 km in-track half-width of the screening box, at the
+95th percentile of trials, for **five days** in a quiet week, **two days** in the May 2024 storm and
+**one day** in the October 2024 storm (item 6; `docs/calibration-benchmark.md`). Every probability
+on this page, in the report and in the viewer is read after that number, not before it: a
+probability computed from a set propagated past its horizon is arithmetic on a position the set no
+longer predicts. The quiet scenario is the default everywhere. A storm scenario is chosen
+explicitly, and every storm number carries the benchmark's calibration beside it: the covariance
+under-covers in a storm, the storm term hurts inside three days and in a quiet week (its excess is
+not zero without a storm), and at seven days of lead its shift over-corrects, about 1.5 times the
+actual in May.
+
 ### 1. The public catalogue's fit to an operator's ephemeris drifts from it by kilometres inside a day
 
 CelesTrak publishes SGP4 element sets fitted to SpaceX's own Starlink ephemerides, with a fit
@@ -57,6 +69,18 @@ TEME the states sit 36.2 km from CelesTrak's fit to the same file, rotated into 
 0.356 km away, which is the published residual. Getting this wrong would have introduced a 44 km
 error in the course of removing a 0.2 km one, silently. Every fetch re-runs the comparison and
 refuses to write the store if it fails (`docs/ephemeris-frame.md`).
+
+**Corrected 2026-09-05: the same class of error, in the time system.** ESA's Swarm precise orbits
+are written in GPS time, which the SP3 header declares and the benchmark's first reader did not
+honour. Read as UTC, every truth state was the satellite 18 s further along its orbit, and the
+benchmark's first run showed a constant **137 km** in-track offset at every lead (18 s at 7.6 km/s).
+Nothing internal could have caught it: the element sets agreed with each other as well as ever,
+the covariance fit was unchanged, every test passed, and the offset was the same size at six hours
+as at seven days. Only the comparison with an independent truth made it visible, as a residual that
+refused to grow with lead. The reader now converts GPS and TAI epochs through the leap-second table
+and a test pins the 18 s (`docs/calibration-benchmark.md`, sources). The lesson is the frame's: a
+constant offset between two conventions is invisible to every check that compares a source with
+itself, and this project had no other kind of check until item 6.
 
 ### 3. Every published file has a seam at exactly 48 hours
 
@@ -230,6 +254,26 @@ October storm (37.5 km at 36 hours). An engineer screening on public element set
 storm has a day to two days of lead in which the coarse stage can be trusted to keep the object
 inside its box, and the covariance carried beside it is too small by the numbers above.
 
+**An open hypothesis about the under-coverage (2026-09-05; recorded, not acted on).** The covariance
+is fitted from pairs of element sets that span no detected manoeuvre, and the manoeuvre detector
+reads an unexplained change in semi-major axis as a burn. A storm changes the semi-major axis
+through drag faster than the set's own `B*` predicts, and the benchmark watched the detector do
+exactly that: left to itself it read the 11 October storm as a burn on Swarm A and C. If the same
+happens in the production fit, the intervals a storm disturbs are the ones the fit throws away, the
+covariance is calibrated on quiet-biased history, and part of the under-coverage in a storm is the
+fit's own selection. Checked cheaply on the 3 September run's 2,944 objects in events, by the
+maximum observed Kp inside each interval the detector excluded. The fit's 45-day window (21 July to
+3 September 2026) held no three-hour interval at Kp 6 or above, its maximum being 5.7, so **0 of the
+17,033** excluded intervals inside the window coincide with one, and 1,148 coincide with Kp 5 or
+above. The fit also read the May 2024 element sets that the storm validation had left in the history
+store for 1,794 of those objects (`docs/state-of-play.md`, open items), and there **155 of 4,617**
+excluded intervals coincide with Kp 6 or above, on 127 objects: 145 on Starlinks, which manoeuvre;
+7 on payloads flagged `observed`; and **3 on debris, which does not manoeuvre**, two of them on 10 to
+11 May at Kp 9. Only 40 of the 2,944 have stored history that spans that storm, 17 of them
+free-flying, and **2 of those 17, both debris, had the storm interval excluded as a burn**. That
+is consistent with the hypothesis and is not a test of it. The test is the coverage
+of a fit made with and without the storm intervals, against a truth, and nothing was changed.
+
 **What this does not show.** Three well-tracked satellites at two altitudes in one orbit class, one
 week of sets per window; whether the ratio of actual error to consistency generalises to debris, to
 higher orbits, or to objects the network tracks less often is not measured. Swarm's TU Delft density
@@ -238,6 +282,17 @@ response in the storm-term result; they are not part of this week. And one const
 recorded because an independent truth is what made it visible: the benchmark's first run showed a
 constant 137 km in-track offset at every lead, which was the precise-orbit files' GPS time read as
 UTC, 18 s at 7.6 km/s; the reader now converts through the leap-second table and a test pins it.
+
+**Two decisions the benchmark leaves open (2026-09-05).** Neither is made here. First, the
+**quiet-condition baseline**: the storm term's excess is not zero without a storm, and it hurts from
+one to six days in a quiet week. That wants a diagnosis before it is zeroed or subtracted, because
+the excess is the difference between the model's quiet density and the density the set's `B*`
+implies, and the same difference is inside the four-day-and-beyond result that helps; zeroing the
+shift below some ap would remove a symptom whose cause is still in the term. Second, a
+**storm-conditional covariance scale**: the under-coverage in a storm is by known factors on one
+orbit class and two storms, and any scale must be fitted on May 2024 and validated on October 2024,
+held out as the benchmark held it, or it is a tuning on the number it is meant to predict. Both are
+in `docs/state-of-play.md`, open items.
 
 Everything above is indicative, not operational: the covariances come from the consistency of
 public element sets, which measures how much successive fits by one network disagree and bounds

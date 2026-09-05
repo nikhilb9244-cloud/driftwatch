@@ -151,13 +151,27 @@ export const SCENARIO_LABELS: Record<string, string> = {
 
 export const SCENARIO_HELP: Record<string, string> = {
   quiet:
-    "The Phase 2 model untouched: no storm layer, no displacement. The baseline every other scenario is read against.",
+    "The default. The Phase 2 model untouched: no storm layer, no displacement. The baseline every other " +
+    "scenario is read against; a storm scenario is chosen explicitly and carries the benchmark's calibration beside it.",
   forecast:
     "NOAA SWPC's three-day Kp forecast, the 27-day outlook beyond it, and the observed record where it reaches.",
   "storm-g3": "The May 2024 sequence scaled to a peak Kp of 7, starting one day into the window.",
   "storm-g4": "The May 2024 sequence scaled to a peak Kp of 8, starting one day into the window.",
   "storm-g5": "The May 2024 sequence very nearly unscaled — a peak Kp of 9, as May 2024 itself reached.",
 };
+
+/**
+ * The benchmark's calibration (2026-09-05; docs/calibration-benchmark.md, README item 6), shown beside
+ * every storm number. Quoted, not computed: it is a stored measurement on Swarm A, B and C against
+ * ESA's precise orbits, and the report carries the same text.
+ */
+export const STORM_CALIBRATION_NOTE =
+  "Read every storm number against the benchmark: against ESA's precise orbits for Swarm A, B and C, the " +
+  "covariance under-covers in a storm (two sigma held 65 to 80 per cent of the May 2024 residuals and 62 to " +
+  "75 per cent of the October 2024 ones, against the 95 it claims) and nothing here scales it. The storm term " +
+  "helps only from about four days of lead, hurts from twelve hours to three days, hurts from one to six days " +
+  "in a quiet week because its excess is not zero without a storm, and over-corrects at seven days, about 1.5 " +
+  "times the actual in May. The horizon at 25 km is five days quiet, two in May, one in October.";
 
 export function decode(column: Encoded | undefined, i: number): string {
   if (!column || !column.i) return "";

@@ -27,6 +27,7 @@ from __future__ import annotations
 
 import json
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime
 from pathlib import Path
@@ -56,6 +57,43 @@ MAX_TRACKED_EVENTS = 300
 # the highest-probability pairs up to this many. The parquet keeps all of them.
 MAX_DETAIL_PAIRS = 250
 TOP_N = 20
+
+# The benchmark's horizon and calibration (2026-09-05; `docs/calibration-benchmark.md`, README item 6).
+# Quoted, not computed: the benchmark is a stored measurement on Swarm A, B and C against ESA's precise
+# orbits, and the report and the viewer carry it beside every storm number so that none is read
+# without it. Plain text, so the same strings go into the bundle's caveats.
+HORIZON_HEADLINE = (
+    "Against ESA's precise orbits for Swarm A, B and C, a public element set keeps the satellite inside "
+    "the 25 km in-track half-width of the screening box, at the 95th percentile of trials, for five days "
+    "in a quiet week, two days in the May 2024 storm and one day in the October 2024 storm. Read every "
+    "probability after that number: a set propagated past its horizon no longer predicts the position "
+    "the probability is computed from (docs/calibration-benchmark.md)."
+)
+STORM_CALIBRATION_NOTE = (
+    "Read every storm number here against the benchmark's calibration (2026-09-05; Swarm A, B and C "
+    "against ESA's precise orbits, one orbit class, two storms). The covariance under-covers in a storm: "
+    "two sigma held 65 to 80 per cent of the May 2024 residuals and 62 to 75 per cent of the October 2024 "
+    "ones against the 95 it claims, and nothing here scales it. The storm term with the observed ap helps "
+    "only from about four days of lead (+20 to +48 per cent on the May median from four to seven days) and "
+    "hurts from twelve hours to three days; in a quiet week it hurts from one to six days, because its "
+    "excess is not zero without a storm; and at seven days its shift over-corrects, about 1.5 times the "
+    "actual in May and twice the actual drift in the quiet week. The horizon at 25 km is five, two and "
+    "one days: quiet, May, October."
+)
+
+
+def default_scenario(scenarios: Sequence[str]) -> str:
+    """The scenario a report or bundle shows when none is named: ``quiet`` wherever it was scored.
+
+    A storm scenario is chosen explicitly (2026-09-05). The benchmark against precise orbits found
+    the covariance under-covering in a storm and the storm term hurting inside three days, so a storm
+    number is never the one a reader meets first. A run scored without ``quiet`` (a replay scored
+    under its observed record alone) falls back to its first scenario by name.
+    """
+    if not scenarios or config.SCENARIO_QUIET in scenarios:
+        return config.SCENARIO_QUIET
+    return sorted(scenarios)[0]
+
 
 PAIR_COLUMNS: tuple[str, ...] = (
     "scenario",
@@ -406,7 +444,7 @@ def build_bundle(
     info = run.read_run()
     joined = run.read_conjunctions()
     scenarios = sorted(str(s) for s in joined["scenario"].dropna().unique())
-    scenario = scenario or (scenarios[0] if scenarios else "quiet")
+    scenario = scenario or default_scenario(scenarios)
     # The bundle is the public page. Fleet members other than stations are shown by category and
     # NORAD id until their operator has agreed to appear (2026-09-05); the run directory keeps
     # the names, because it is the operator's own report.
@@ -490,6 +528,8 @@ def build_bundle(
         },
         "caveats": [
             "Every number here comes from Python: the browser draws them and computes no screening result.",
+            HORIZON_HEADLINE,
+            STORM_CALIBRATION_NOTE,
             "Under a storm scenario the miss shown is the shifted miss, which is what that scenario's "
             "probability was computed from; the geometry's own miss is what the two element sets predicted "
             "before the storm term moved them, and the two answer different questions.",
@@ -834,6 +874,8 @@ def storm_section(rows: pd.DataFrame, scenario: str) -> list[str]:
     lines = [
         f"## What the `{scenario}` storm term did",
         "",
+        f"**Calibration.** {STORM_CALIBRATION_NOTE}",
+        "",
         "**Every figure here is given both ways.** `validated` means **both** objects of the event "
         "have a ballistic coefficient fitted from their own decay history; `indicative` means at "
         "least one rests on a B\\* inversion, a population stand-in, or no coefficient at all. Step 4 "
@@ -899,7 +941,7 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
     info = run.read_run()
     joined = run.read_conjunctions()
     scenarios = sorted(str(s) for s in joined["scenario"].dropna().unique())
-    scenario = scenario or (scenarios[0] if scenarios else "quiet")
+    scenario = scenario or default_scenario(scenarios)
     rows = normalise(joined[joined["scenario"] == scenario])
     rows["tca"] = pd.to_datetime(rows["tca"], utc=True)
     pairs = collapse_pairs(rows)
@@ -917,6 +959,10 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         "",
         f"Run `{info.get('run_id')}` over snapshot `{info.get('snapshot')}`, scenario `{scenario}`, "
         f"covariance `{cov.get('model_version', '')}`.",
+        "",
+        "## The horizon",
+        "",
+        f"**Five days, two days, one day.** {HORIZON_HEADLINE}",
         "",
         "## What this is",
         "",
@@ -1024,8 +1070,10 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         "- **The probability is not a forecast.** The covariance comes from how much each object's own "
         "element sets disagree after propagation. That is a measure of consistency, not of accuracy, and "
         "it bounds the accuracy in neither direction: successive sets share observations and assumptions, "
-        "so an error common to them is invisible here, and nothing here has been calibrated against an "
-        f"independent truth (`docs/screening.md`). Secondaries here: {sources}.",
+        "so an error common to them is invisible here. The one calibration against an independent truth, "
+        "Swarm A, B and C against ESA's precise orbits (2026-09-05), found it over-covering from one to five "
+        "days in a quiet week and under-covering at every lead in a storm, and nothing here is scaled by it "
+        f"(`docs/screening.md`, `docs/calibration-benchmark.md`). Secondaries here: {sources}.",
         "- **Maximum probability and its scale.** `Max Pc` is the largest probability over covariance scale "
         "factors from 0.1 to 10, with the miss held fixed. Where its scale is above one the covariance is "
         "smaller than the miss and a larger uncertainty would raise the probability; where it is below one "
