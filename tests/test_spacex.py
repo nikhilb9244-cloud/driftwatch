@@ -13,6 +13,7 @@ detector have something to be right or wrong about.
 
 from __future__ import annotations
 
+import logging
 from datetime import UTC, datetime, timedelta
 
 import numpy as np
@@ -259,6 +260,10 @@ def test_the_store_keeps_only_the_newest_version_of_each_satellite(tmp_path):
     np.testing.assert_allclose(latest["cov_ii_km2"], 1.0)
     assert spacex.load_store([12345], out_dir=tmp_path).empty
 
+    # The same version fetched again is one copy, not two: the tie on `created` goes to the later fetch.
+    spacex.write_store(new, spacex.store_path(datetime(2026, 9, 2, 10, tzinfo=UTC), tmp_path))
+    assert len(spacex.load_store(out_dir=tmp_path)) == len(new)
+
 
 def test_only_the_starlink_secondaries_of_a_run_are_selected_closest_approach_first():
     objects = pd.DataFrame({"norad_id": [10, 11, 12, 13], "category": ["starlink", "starlink", "starlink", "debris"]})
@@ -372,13 +377,14 @@ def test_the_trajectory_interpolates_inside_a_segment_and_refuses_outside_it():
     assert not trajectory.covers(NORAD_ID, gap).any()
 
 
-def stored_states(**kwargs) -> pd.DataFrame:
-    states = parsed_states(**kwargs)
+def stored_states(*, start: datetime = T0, **kwargs) -> pd.DataFrame:
+    """One satellite's stored state history, as a fetch of the version created at ``start`` writes it."""
+    states = parsed_states(start=start, **kwargs)
     states.insert(0, "norad_id", NORAD_ID)
     states.insert(1, "name", "STARLINK-37618")
-    states.insert(2, "created", pd.Timestamp(T0))
-    states.insert(3, "ephemeris_start", pd.Timestamp(T0))
-    states.insert(4, "ephemeris_stop", pd.Timestamp(T0 + timedelta(hours=72)))
+    states.insert(2, "created", pd.Timestamp(start))
+    states.insert(3, "ephemeris_start", pd.Timestamp(start))
+    states.insert(4, "ephemeris_stop", pd.Timestamp(start + timedelta(hours=72)))
     return states[list(spacex.STATE_COLUMNS)]
 
 
@@ -438,6 +444,82 @@ def test_the_state_store_keeps_only_the_newest_version_of_each_satellite(tmp_pat
     assert len(latest) == len(new)
     assert set(latest["created"]) == {pd.Timestamp(T0 + timedelta(hours=8))}
     assert spacex.load_state_store([12345], out_dir=tmp_path).empty
+
+
+def test_the_same_version_fetched_twice_is_one_copy_and_a_newer_version_replaces_the_overlap(tmp_path):
+    """Pipeline run 6, 2026-09-05. Run 5 fetched at 09:33 UTC and run 6 at 10:48 UTC, inside one
+    refresh window, so both held the files created at 01:25; the store the Actions cache carried
+    between them had both copies, the newest-version rule kept both because they tie on
+    ``created``, every epoch of every segment appeared twice, and the Hermite interpolant refused
+    the grid. The tie goes to the later fetch, and a newer version replaces the older one where
+    they overlap rather than joining it.
+    """
+    first = stored_states(hours=4.0)
+    spacex.write_state_store(first, spacex.state_store_path(datetime(2026, 9, 5, 9, 33, tzinfo=UTC), tmp_path))
+    spacex.write_state_store(first, spacex.state_store_path(datetime(2026, 9, 5, 10, 48, tzinfo=UTC), tmp_path))
+
+    once = spacex.load_state_store(out_dir=tmp_path)
+    assert len(once) == len(first)
+    assert not once.duplicated(["norad_id", "segment", "t"]).any()
+    trajectory = spacex.load_trajectory(out_dir=tmp_path)
+    assert len(trajectory.segments[NORAD_ID]) == 1
+    # The store did the work; the loader had nothing to repair and says nothing.
+    assert trajectory.repairs["objects"] == 0
+    assert "repairs" not in trajectory.summary()
+    early = np.array([np.datetime64((T0 + timedelta(hours=1)).replace(tzinfo=None), "us")])
+    assert trajectory.covers(NORAD_ID, early).all()
+
+    # A newer version starting two hours in overlaps the first for two hours. It replaces it,
+    # overlap and all: the rows left are exactly its own, and in the overlap it is the one that serves.
+    newer = stored_states(hours=4.0, start=T0 + timedelta(hours=2))
+    spacex.write_state_store(newer, spacex.state_store_path(datetime(2026, 9, 5, 12, 0, tzinfo=UTC), tmp_path))
+    latest = spacex.load_state_store(out_dir=tmp_path)
+    assert len(latest) == len(newer)
+    assert set(latest["created"]) == {pd.Timestamp(T0 + timedelta(hours=2))}
+    assert not latest.duplicated(["norad_id", "segment", "t"]).any()
+    replaced = spacex.load_trajectory(out_dir=tmp_path)
+    overlap = np.array([np.datetime64((T0 + timedelta(hours=3)).replace(tzinfo=None), "us")])
+    r_store, _v, covered = replaced.states(NORAD_ID, overlap)
+    r_newer, _v, _c = spacex.EphemerisTrajectory(newer).states(NORAD_ID, overlap)
+    r_first, _v, _c = spacex.EphemerisTrajectory(first).states(NORAD_ID, overlap)
+    assert covered.all()
+    np.testing.assert_allclose(r_store, r_newer)
+    assert np.linalg.norm(r_store - r_first) > 1.0
+    # The older version's hours the newer does not reach went with it: a revised plan is replaced, not spliced.
+    assert not replaced.covers(NORAD_ID, early).any()
+
+
+def test_the_loader_drops_a_repeated_epoch_and_splits_where_one_epoch_carries_two_states(caplog):
+    """The store should make this a no-op; the loader refuses to fall over if it does not."""
+    states = stored_states(hours=4.0)
+    epochs = states["t"].to_numpy(dtype="datetime64[us]")
+
+    # The same row twice, and the table shuffled so the sort is exercised too: one copy is kept.
+    doubled = pd.concat([states, states.iloc[[10]]], ignore_index=True).sample(frac=1.0, random_state=1)
+    trajectory = spacex.EphemerisTrajectory(doubled)
+    assert len(trajectory.segments[NORAD_ID]) == 1
+    lo, hi, spline = trajectory.segments[NORAD_ID][0]
+    assert (lo, hi) == (epochs[0], epochs[-1])
+    assert spline.t_s.size == len(states)
+    assert trajectory.repairs == {"objects": 1, "repeated_epochs_dropped": 1, "segments_split": 0}
+    assert trajectory.summary()["repairs"] == trajectory.repairs
+
+    # The same epoch with a different state is a disagreement between two trajectories, and no
+    # interpolant spans it: the segment is split there, and the log says where and why.
+    conflict = states.iloc[[20]].copy()
+    conflict["x_km"] += 1.0
+    with caplog.at_level(logging.WARNING, logger="driftwatch.ephemeris.spacex"):
+        trajectory = spacex.EphemerisTrajectory(pd.concat([states, conflict], ignore_index=True))
+    assert len(trajectory.segments[NORAD_ID]) == 2
+    (lo1, hi1, _s1), (lo2, hi2, _s2) = trajectory.segments[NORAD_ID]
+    assert (lo1, hi1) == (epochs[0], epochs[20])
+    assert (lo2, hi2) == (epochs[20], epochs[-1])
+    assert trajectory.repairs == {"objects": 1, "repeated_epochs_dropped": 0, "segments_split": 1}
+    assert f"SpaceX states for {NORAD_ID}, segment 0: two different states share the epoch" in caplog.text
+    assert str(epochs[20]) in caplog.text
+    either_side = epochs[20] + np.array([-30, 30]).astype("timedelta64[s]")
+    _r, _v, covered = trajectory.states(NORAD_ID, either_side)
+    assert covered.all()
 
 
 def test_the_frame_check_passes_on_matching_states_and_fails_on_a_rotation_error():

@@ -73,6 +73,15 @@ assumed:
   manoeuvre would look the same. :func:`detect_breaks` finds them and the history is stored
   in segments, so no interpolant spans one; in the 60-second gap between segments the base
   propagator serves, exactly as it does past the 72-hour horizon.
+* **The versions.** A fetch writes one file, the store is the set of them, and a satellite is
+  read from its newest version only: newest by the file's own ``created`` header, a tie broken
+  by the fetch that stored it, so the same version fetched twice inside one eight-hour refresh
+  window is one copy and not two. Pipeline run 6 on 2026-09-05 fetched at 10:48 UTC exactly
+  what run 5 had fetched at 09:33 into a store the Actions cache had carried between the runs;
+  the newest-version rule kept both copies, every epoch of every segment appeared twice, and
+  the interpolant refused the grid. The loader also sorts and de-duplicates each segment's
+  grid on the way in and splits it where one epoch carries two different states, with the
+  reason in the log (:func:`_monotonic_pieces`).
 
 The fit residual therefore applies **per event, not per object**:
 
@@ -162,6 +171,10 @@ STATE_COLUMNS: tuple[str, ...] = (
     "interp_err_max_m",
     "n_breaks",
 )
+# Two rows at one epoch are the same state if they agree to a millimetre and a micrometre per
+# second: a float round trip, not a revised plan.
+STATE_DUPLICATE_TOLERANCE_KM = 1e-6
+STATE_DUPLICATE_TOLERANCE_KMS = 1e-9
 
 
 # --------------------------------------------------------------------------------------
@@ -619,27 +632,51 @@ def list_store(out_dir: Path = config.SPACEX_DIR) -> list[Path]:
     return sorted(Path(out_dir).glob("ephemerides_*.parquet"))
 
 
-def load_store(
-    norad_ids: Sequence[int] | None = None, out_dir: Path = config.SPACEX_DIR, *, latest_only: bool = True
+def _fetch_stamp(path: Path) -> str:
+    """The fetch stamp in a store file's name: ``states_20260905T093313Z.parquet`` gives ``20260905T093313Z``."""
+    return path.stem.split("_", 1)[-1]
+
+
+def _load_versions(
+    paths: Sequence[Path], norad_ids: Sequence[int] | None, columns: Sequence[str], *, latest_only: bool
 ) -> pd.DataFrame:
-    """Every stored covariance series, or only the newest version of each satellite."""
-    paths = list_store(out_dir)
-    if not paths:
-        return pd.DataFrame(columns=list(EPHEMERIS_COLUMNS))
+    """The rows of every stored fetch, or of each satellite's newest version only.
+
+    A version is the file's own ``created`` header, and the newest one replaces every older one
+    of the same satellite outright rather than being appended to it -- the older version's hours
+    the newer does not reach included, because the screening looks forward from now and a plan
+    that has been revised is not the trajectory the satellite is flying.
+
+    The tie. Two fetches inside one refresh window store the same version twice, under two fetch
+    stamps, and the two copies share ``created``. Pipeline run 6 on 2026-09-05 did exactly that:
+    fetches at 09:33 and 10:48 UTC both held the 300 files created at about 01:25, the
+    newest-version rule kept both copies, and every epoch of every segment appeared twice, which
+    the interpolant refuses. A tie on ``created`` therefore goes to the later fetch stamp, so a
+    re-fetch replaces the copy it duplicates and each satellite's rows come from exactly one file.
+    """
     frames = []
     for path in paths:
         frame = pd.read_parquet(path)
         if norad_ids is not None:
             frame = frame[frame["norad_id"].isin([int(i) for i in norad_ids])]
         if len(frame):
-            frames.append(frame)
+            frames.append(frame.assign(_fetched=_fetch_stamp(path)))
     if not frames:
-        return pd.DataFrame(columns=list(EPHEMERIS_COLUMNS))
+        return pd.DataFrame(columns=list(columns))
     table = pd.concat(frames, ignore_index=True)
-    if latest_only and len(table):
+    if latest_only:
         newest = table.groupby("norad_id")["created"].transform("max")
         table = table[table["created"] == newest]
-    return table.sort_values(["norad_id", "t"]).reset_index(drop=True)
+        latest_fetch = table.groupby("norad_id")["_fetched"].transform("max")
+        table = table[table["_fetched"] == latest_fetch]
+    return table.drop(columns="_fetched").sort_values(["norad_id", "t"]).reset_index(drop=True)
+
+
+def load_store(
+    norad_ids: Sequence[int] | None = None, out_dir: Path = config.SPACEX_DIR, *, latest_only: bool = True
+) -> pd.DataFrame:
+    """Every stored covariance series, or one copy of the newest version of each satellite."""
+    return _load_versions(list_store(out_dir), norad_ids, EPHEMERIS_COLUMNS, latest_only=latest_only)
 
 
 def state_store_path(fetched_at: datetime, out_dir: Path = config.SPACEX_DIR) -> Path:
@@ -665,28 +702,47 @@ def list_state_store(out_dir: Path = config.SPACEX_DIR) -> list[Path]:
 def load_state_store(
     norad_ids: Sequence[int] | None = None, out_dir: Path = config.SPACEX_DIR, *, latest_only: bool = True
 ) -> pd.DataFrame:
-    """Every stored state history, or only the newest version of each satellite."""
-    paths = list_state_store(out_dir)
-    if not paths:
-        return pd.DataFrame(columns=list(STATE_COLUMNS))
-    frames = []
-    for path in paths:
-        frame = pd.read_parquet(path)
-        if norad_ids is not None:
-            frame = frame[frame["norad_id"].isin([int(i) for i in norad_ids])]
-        if len(frame):
-            frames.append(frame)
-    if not frames:
-        return pd.DataFrame(columns=list(STATE_COLUMNS))
-    table = pd.concat(frames, ignore_index=True)
-    if latest_only and len(table):
-        newest = table.groupby("norad_id")["created"].transform("max")
-        table = table[table["created"] == newest]
-    return table.sort_values(["norad_id", "t"]).reset_index(drop=True)
+    """Every stored state history, or one copy of the newest version of each satellite.
+
+    The rule, and the 2026-09-05 failure that sharpened it, are in :func:`_load_versions`.
+    """
+    return _load_versions(list_state_store(out_dir), norad_ids, STATE_COLUMNS, latest_only=latest_only)
 
 
 # --------------------------------------------------------------------------------------
 # The trajectory
+
+
+def _monotonic_pieces(
+    times: np.ndarray, r_km: np.ndarray, v_kms: np.ndarray
+) -> tuple[list[tuple[np.ndarray, np.ndarray, np.ndarray]], int, list[np.datetime64]]:
+    """One segment's stored grid made fit for an interpolant: sorted, repeats dropped, split where it must be.
+
+    The store hands over one copy of one version per satellite (:func:`load_state_store`), so a
+    segment's grid should already be strictly increasing; this is the loader refusing to fall
+    over when it is not. A row that repeats its neighbour's epoch *and* state, to a millimetre,
+    is the same version stored twice and is dropped. A row that repeats the epoch with a
+    different state is two versions claiming the same instant; no interpolant should span the
+    disagreement, so the grid is split there and the earlier row closes the piece before it.
+
+    Returns the pieces of at least two nodes, the number of rows dropped, and the epochs split at.
+    """
+    order = np.argsort(times, kind="stable")
+    times, r, v = times[order], r_km[order], v_kms[order]
+    zero = np.timedelta64(0, "us")
+    repeated = np.nonzero(np.diff(times) <= zero)[0] + 1
+    dropped = 0
+    if len(repeated):
+        same_state = np.all(np.abs(r[repeated] - r[repeated - 1]) <= STATE_DUPLICATE_TOLERANCE_KM, axis=1) & np.all(
+            np.abs(v[repeated] - v[repeated - 1]) <= STATE_DUPLICATE_TOLERANCE_KMS, axis=1
+        )
+        keep = np.ones(len(times), dtype=bool)
+        keep[repeated[same_state]] = False
+        dropped = int(np.count_nonzero(~keep))
+        times, r, v = times[keep], r[keep], v[keep]
+    stuck = np.nonzero(np.diff(times) <= zero)[0]
+    pieces = [(times[idx], r[idx], v[idx]) for idx in np.split(np.arange(len(times)), stuck + 1) if len(idx) >= 2]
+    return pieces, dropped, [times[k] for k in stuck]
 
 
 class EphemerisTrajectory:
@@ -708,28 +764,67 @@ class EphemerisTrajectory:
     every one measured has a seam at exactly 48 hours -- and no interpolant spans a break, so
     a query in the 60-second gap between two segments is uncovered and the base propagator
     serves it, exactly as one past the 72-hour horizon is.
+
+    The grid each segment hands over is sorted and de-duplicated before an interpolant is built,
+    and split where one epoch carries two different states (:func:`_monotonic_pieces`). The
+    store is meant to make that a no-op, and ``repairs`` and the log say when it was not.
     """
 
     def __init__(self, table: pd.DataFrame | None = None) -> None:
         self.table = table if table is not None else pd.DataFrame(columns=list(STATE_COLUMNS))
         self.segments: dict[int, list[tuple[np.datetime64, np.datetime64, HermiteSpline]]] = {}
         self.created: dict[int, pd.Timestamp] = {}
+        # What the loader had to do to the stored grid that the store should have made unnecessary.
+        self.repairs: dict[str, int] = {"objects": 0, "repeated_epochs_dropped": 0, "segments_split": 0}
         if not len(self.table):
             return
         for norad_id, group in self.table.groupby("norad_id"):
+            sat = int(norad_id)
             spans: list[tuple[np.datetime64, np.datetime64, HermiteSpline]] = []
-            for _, part in group.groupby("segment"):
-                part = part.sort_values("t")
+            dropped = 0
+            split = 0
+            for segment, part in group.groupby("segment"):
                 if len(part) < 2:
                     continue
                 times = pd.to_datetime(part["t"], utc=True).dt.tz_localize(None).to_numpy(dtype="datetime64[us]")
-                t_s = (times - times[0]) / np.timedelta64(1, "s")
                 r = part[list(POSITION_VELOCITY_COLUMNS[:3])].to_numpy(dtype=float)
                 v = part[list(POSITION_VELOCITY_COLUMNS[3:])].to_numpy(dtype=float)
-                spans.append((times[0], times[-1], HermiteSpline(t_s, r, v)))
+                pieces, n_dropped, split_at = _monotonic_pieces(times, r, v)
+                dropped += n_dropped
+                split += len(split_at)
+                for epoch in split_at:
+                    log.warning(
+                        "SpaceX states for %d, segment %d: two different states share the epoch %s; "
+                        "the segment is split there so that no interpolant spans the disagreement",
+                        sat,
+                        int(segment),
+                        epoch,
+                    )
+                for piece_times, piece_r, piece_v in pieces:
+                    t_s = (piece_times - piece_times[0]) / np.timedelta64(1, "s")
+                    spans.append((piece_times[0], piece_times[-1], HermiteSpline(t_s, piece_r, piece_v)))
+            if dropped or split:
+                log.debug(
+                    "SpaceX states for %d: dropped %d rows repeating an epoch and its state, split %d segments",
+                    sat,
+                    dropped,
+                    split,
+                )
+                self.repairs["objects"] += 1
+                self.repairs["repeated_epochs_dropped"] += dropped
+                self.repairs["segments_split"] += split
             if spans:
-                self.segments[int(norad_id)] = spans
-                self.created[int(norad_id)] = pd.Timestamp(group["created"].iloc[0])
+                self.segments[sat] = spans
+                self.created[sat] = pd.Timestamp(group["created"].iloc[0])
+        if self.repairs["objects"]:
+            log.warning(
+                "SpaceX states needed repair on %d objects: %d rows repeating an epoch and its state were dropped "
+                "and %d segments were split where one epoch carries two states. The store is meant to hand over "
+                "one copy of one version per satellite (load_state_store); check which files it holds.",
+                self.repairs["objects"],
+                self.repairs["repeated_epochs_dropped"],
+                self.repairs["segments_split"],
+            )
 
     def __contains__(self, norad_id: int) -> bool:
         return int(norad_id) in self.segments
@@ -800,7 +895,7 @@ class EphemerisTrajectory:
         if not len(self.table):
             return {"satellites": 0}
         by_object = self.table.groupby("norad_id").first()
-        return {
+        out: dict[str, Any] = {
             "satellites": int(len(self.segments)),
             "rows": int(len(self.table)),
             "segments": int(sum(len(s) for s in self.segments.values())),
@@ -809,6 +904,9 @@ class EphemerisTrajectory:
             "interp_err_max_m": round(float(by_object["interp_err_max_m"].max()), 3),
             "n_breaks_total": int(by_object["n_breaks"].sum()),
         }
+        if self.repairs["objects"]:
+            out["repairs"] = dict(self.repairs)
+        return out
 
 
 class FrameCheckError(RuntimeError):

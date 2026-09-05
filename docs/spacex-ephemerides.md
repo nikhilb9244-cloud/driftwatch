@@ -354,6 +354,25 @@ A planned manoeuvre would look the same to this detector and is handled the same
 the right answer: an interpolant should not span a burn either. A break in the very first or
 very last interval of a file cannot be detected, because the test needs a node on both sides.
 
+### The store holds one copy of one version per satellite
+
+A fetch writes one file, the store is the set of them, and a satellite is read from its newest
+version only: newest by the file's own `created` header, and a tie on `created` goes to the fetch
+that stored it later. The tie is not hypothetical. SpaceX refreshes a satellite's file roughly
+every eight hours and the pipeline fetches whenever it runs, so two runs inside one window hold the
+same version. Pipeline run 6 on 2026-09-05 fetched at 10:48 UTC exactly what run 5 had fetched at
+09:33, the same 300 files all created at about 01:25, into a state store the Actions cache had
+carried between the two runs. The newest-version rule kept both copies, every epoch of every
+segment appeared twice, and the Hermite interpolant refused the grid with `the time grid must be
+strictly increasing`. It had never happened locally because the local store holds one fetch.
+
+The loader is also made to refuse to fall over. Each segment's grid is sorted and de-duplicated
+before an interpolant is built; a row repeating its neighbour's epoch and state, to a millimetre,
+is dropped; and an epoch that carries two *different* states splits the segment there, with the
+object, segment and epoch in the log, so that no interpolant spans the disagreement. The store fix
+is meant to make that a no-op, and when it was not the screening log says how many objects were
+repaired (`repairs` in the trajectory summary).
+
 ### What the fit residual now is
 
 It applies **per event, not per object**. An event whose geometry came from the interpolated

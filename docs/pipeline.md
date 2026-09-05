@@ -221,7 +221,7 @@ these are three different kinds of thing.
 | `data/stability/` | **0.33 MB a run** | Accumulating and derived, but derived from something that will not be re-read: the point of it is to answer a question about a year of runs without opening a year of runs. | Orphan branch `pipeline-store` |
 | Run directories | **4.8 MB a run** | Accumulating and irreplaceable, and required in full by the retention rule below. | **GitHub release assets** |
 | `data/cache/` | 1.5 GB | Ephemeral and rebuildable. It exists to honour CelesTrak's two-hour floor, so it only has to remember two hours. | Actions cache |
-| `data/spacex/` | 39 MB | Ephemeral by construction: the files are valid for 72 hours and are refetched. | Actions cache |
+| `data/spacex/` | 39 MB a fetch | Ephemeral by construction: the files are valid for 72 hours and are refetched. Two runs inside one eight-hour refresh window store the same version twice, and the loader reads one copy (run 6, 2026-09-05; `docs/spacex-ephemerides.md`). | Actions cache |
 | `data/history/` | 191 MB | Rebuildable from Space-Track, but slowly and under a rate limit. Losing it costs a backfill, not data. | Actions cache |
 
 **Why an orphan branch and not the Actions cache, for the five above the line.** The Actions cache

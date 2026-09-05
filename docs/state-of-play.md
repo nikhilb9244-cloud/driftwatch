@@ -127,6 +127,19 @@ a million rows that the unbounded fit read and the bounded one refuses), the bou
 - **No second object class has been calibrated.** The benchmark covers three well-tracked
   satellites at 460 to 506 km.
 
+## The first scheduled run, and why it failed (2026-09-05)
+
+Run 6, the first run the schedule started rather than a dispatch, failed in `driftwatch screen` at
+`spacex.load_trajectory` with `the time grid must be strictly increasing`. Diagnosed from the
+runner's logs rather than guessed: run 5 (dispatched 09:25 UTC) and run 6 (10:35 UTC) fetched the
+same 300 SpaceX files, all created at about 01:25, into the state store the Actions cache carries
+between runs; the newest-version rule kept both copies because they tie on `created`, and every
+epoch appeared twice. Run 4 had run with SpaceX off, so run 5 saw one copy and passed. Fixed the
+same day: a tie on `created` goes to the later fetch, the loader sorts and de-duplicates each
+segment's grid and splits it with a logged reason where one epoch carries two states, and
+`tests/test_spacex.py` feeds it two overlapping versions and a duplicated timestamp
+(`docs/spacex-ephemerides.md`, "The store holds one copy of one version per satellite").
+
 ## Open items
 
 1. **The quiet-condition baseline** (decision open; nothing changed). The storm term's excess is not
