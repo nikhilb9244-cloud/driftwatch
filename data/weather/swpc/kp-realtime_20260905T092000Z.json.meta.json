@@ -1,0 +1,8 @@
+{
+  "product": "kp-realtime",
+  "url": "https://services.swpc.noaa.gov/json/planetary_k_index_1m.json",
+  "issued_at": "2026-09-05T09:20:00+00:00",
+  "issued_from": "last-observation",
+  "fetched_at": "2026-09-05T09:25:27.730449+00:00",
+  "bytes": 27925
+}
