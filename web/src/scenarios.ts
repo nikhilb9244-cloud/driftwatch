@@ -22,8 +22,9 @@
  *
  * **`storm_validity` is not a confidence score.** It says whether Step 4's May 2024 validation
  * reaches the event: `validated` when both objects have a ballistic coefficient fitted from
- * their own decay, `indicative` otherwise. The storm term is predictive at r = 0.88 for the
- * first group and has no demonstrated skill for the second. Nothing here weights, dims or
+ * their own decay, `indicative` otherwise. For the first group the storm term's predicted sign is
+ * right on about nine comparisons in ten at three to four days of lead and it has no skill inside
+ * two; for the second it has no demonstrated skill. Nothing here weights, dims or
  * withholds a number because of it — the numbers are identical either way — but every aggregate
  * is shown both ways, because on the demo run the two populations disagree by a factor of five
  * on the one quantity this phase is about.

@@ -2,9 +2,9 @@ Dataset: `train_data.csv`, 10183 rows in the high-risk tail (risk >= -6).
 
 ## The hard-body radius ESA used
 
-It is in the data. The combined radius is half of each object's `span`, added: `(t_span + c_span) / 2`, and with it the reconstruction stops being an approximation: over the tail the median residual is **-0.0003** in log10, which is 0.07% in the probability, with quartiles -0.012 to +0.008. 87% of rows agree within a factor of two and 96% within a factor of ten. Nothing was fitted to get this: the multiplier on the span is one.
+It is in the data. The combined radius is half of each object's `span`, added: `(t_span + c_span) / 2`, and with it the reconstruction stops being an approximation: over the tail the median residual is **-0.0003** in log10, which is 0.07% in the probability, with quartiles -0.012 to +0.008. 87% of rows agree within a factor of two and 96% within a factor of ten. The multiplier on the span is one, and no parameter is fitted on the rows this is scored on -- but the convention was recovered from these same rows, so it is confirmed on rows it never saw below, and only on that basis is it described as unfitted.
 
-That settles the question the Phase 2 review left open. The probability code agrees with ESA's to a fraction of a percent for most conjunctions; what disagreement remains is not in the integration but in the rows described below.
+That settles the question the Phase 2 review left open. The probability code agrees with ESA's to a fraction of a percent for most conjunctions; what disagreement remains is not in the integration but in the rows described below. **What that validates is the arithmetic on ESA's inputs** -- their geometry and their covariances, through our integral -- and nothing about driftwatch's own covariance, which is fitted from element-set consistency and is not measured here at all. Agreement with ESA's column says the integral is right; it says nothing about whether the uncertainty driftwatch puts into it is.
 
 **Restricted to the tail that matters** (risk above 1e-5, the yellow-flag threshold): 3382 rows, median residual **+0.0005**, 92% within a factor of two and 98% within a factor of ten, quartiles -0.003 to +0.005.
 
@@ -37,6 +37,18 @@ The obvious suspect for a one-sided disagreement is the two-dimensional method i
 The null result is worth reading carefully, because it does **not** clear the method. This comparison is against ESA's own operational risk column, and the reconstruction reproduces it to a fraction of a percent overall -- including on the slow rows. That agreement is itself the evidence: if ESA had integrated the slow encounters in three dimensions and driftwatch had not, the slow bin would stand out, and it does not. Both are computing the same two-dimensional integral, so a bias they share is invisible here whatever its size.
 
 So the slow-encounter underestimate remains a known property of the method rather than a measured disagreement, and driftwatch flags it directly instead of inferring it from these rows: `slow_encounter` in every risk table marks the events whose transit takes more than a hundredth of an orbital period, and their probability is reported as a known underestimate. See `driftwatch.risk.pc.encounter_duration_ratio`.
+
+### Confirmed on a held-out split
+
+The span convention was recovered from the evaluation data itself, which makes it a fitted choice however few parameters it has, so it is checked the way a fitted parameter is: the multiplier is chosen on one set of events (smallest median absolute residual over their tail) and then scored, held fixed, on events it never saw. Halves are split by event, so no conjunction has messages on both sides. The last column is the multiplier the held-out rows would have chosen on their own (added 2026-09-05, after a second external review).
+
+| Split | Fitted on | Multiplier chosen | Scored on | Median residual | Within x2 | Within x10 | Held-out rows' own choice |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| training rows, first half of events to second | 4861 rows (6577 events) | 1.00x | 5322 rows (6577 events) | -0.0002 | 89% | 96% | 1.00x |
+| training rows, second half of events to first | 5322 rows (6577 events) | 1.00x | 4861 rows (6577 events) | -0.0004 | 85% | 95% | 1.00x |
+| training file to the challenge's test file | 10183 rows (13154 events) | 1.00x | 3263 rows (2167 events) | -0.0005 | 93% | 99% | 1.00x |
+
+Every split chooses a multiplier of one and reproduces the rows it never saw to a median residual within 0.0005 in log10, so the convention holds out of sample and the statement above -- no parameter fitted on the rows it is scored on -- stands.
 
 ## The residual against the risk
 
@@ -75,7 +87,7 @@ The dataset carries two size columns per object: `*_span`, the largest dimension
 
 ## The radius lookup driftwatch screens with
 
-`sqrt(RCS / pi)` is gone from `risk/scenario.py`, replaced by the median chaser radius of each object type and radar cross-section class in these rows -- half the median `c_span`, since ESA's own risk column is reproduced by `(t_span + c_span) / 2` with nothing fitted. The cross-section survives as a *class* (small below 0.1 m2, medium to 1 m2, large above), which is the part of it that carries size information; its use as a length does not.
+`sqrt(RCS / pi)` is gone from `risk/scenario.py`, replaced by the median chaser radius of each object type and radar cross-section class in these rows -- half the median `c_span`, since ESA's own risk column is reproduced by `(t_span + c_span) / 2` with no parameter fitted on the rows it is scored on (confirmed on the held-out splits above). The cross-section survives as a *class* (small below 0.1 m2, medium to 1 m2, large above), which is the part of it that carries size information; its use as a length does not.
 
 | Object type | RCS class | Rows | Median radius | Used |
 | --- | --- | ---: | ---: | --- |

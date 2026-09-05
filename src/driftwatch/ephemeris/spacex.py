@@ -42,8 +42,15 @@ ephemeris it was fitted to:
     lead      0-12 h   12-24 h   24-36 h   36-48 h   48-60 h   60-72 h
     median   0.30 km   2.77 km  11.50 km  28.31 km  51.79 km  82.94 km
 
-almost all of it in-track, because an SGP4 element set cannot represent three days of a
-trajectory that contains planned manoeuvres. The patch was a hundredth of the error at the
+almost all of it in-track. Qualified 2026-09-05: that is one fetch on one date, against the
+operator's *published prediction* rather than the realised orbit, and the lineage of each pair
+was then checked -- a set's epoch is the start of the file it was fitted to, and on the 300
+stored pairs of the same day 17 share a file with the states they are compared with, 105 were
+fitted to an earlier file and 178 to a later one, with the same drift in all three (the 17 give
+0.29, 2.8, 11.8, 27.6, 51.8 and 82.2 km). So the disagreement is not the plan's revision between
+files; whether it is the fit's extrapolation or the file's own plan being wrong about the
+satellite cannot be told without the next file's first states (``docs/spacex-ephemerides.md``).
+The patch was a hundredth of the error at the
 end of the horizon, and worse, layering SpaceX's own covariance on top of that trajectory
 replaced a roughly honest 22.8 km in-track sigma from the supplemental-consistency fit with
 a 3.8 km control box that describes a trajectory we were not propagating.
@@ -691,10 +698,11 @@ class EphemerisTrajectory:
     and added it in quadrature. That was right about the first several hours and badly wrong
     afterwards: measured against nineteen matched files on 2026-09-03, the fit sits a median
     0.30 km from the ephemeris inside 12 hours, **2.8 km at 12 to 24 hours, 28 km at 36 to 48
-    and 83 km at 60 to 72**, almost all of it in-track, because an SGP4 element set cannot
-    represent three days of a trajectory containing planned manoeuvres. The patch was a
-    hundredth of the error at the end of the horizon. Interpolating the published states
-    removes it instead of sizing it.
+    and 83 km at 60 to 72**, almost all of it in-track -- one fetch, one date, against the
+    published prediction rather than the realised orbit, and the same on the 17 of 300 pairs
+    whose lineage is verified as on the rest (``docs/spacex-ephemerides.md``, 2026-09-05). The
+    patch was a hundredth of the error at the end of the horizon. Interpolating the published
+    states removes it instead of sizing it.
 
     Coverage is per segment, not per file. A file is split wherever it is not smooth --
     every one measured has a seam at exactly 48 hours -- and no interpolant spans a break, so

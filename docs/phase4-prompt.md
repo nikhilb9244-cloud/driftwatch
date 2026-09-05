@@ -159,7 +159,9 @@ silently break every one of those references. It runs after the pipeline and bef
 write-up.
 
 **What it is.** The Office of Space Commerce has published a **Dataset for Conjunction Assessment
-Verification**, developed for TraCSS — the US civil space traffic coordination system — and
+Verification**, developed for TraCSS — the US civil space traffic coordination system, in pilot
+evaluation with 52 users in 21 countries as of June 2026 and not in production (corrected
+2026-09-05) — and
 issued expressly so that SSA providers can test their conjunction assessment algorithms against a
 common reference. It is an ephemeris dataset with an **answer key**: the conjunctions that are in
 it. Read at 2026-09-03, it is five files — a 20.73 GB ephemeris tarball, a spherical screening

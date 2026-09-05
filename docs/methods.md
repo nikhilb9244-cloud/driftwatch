@@ -20,9 +20,10 @@ of its contribution is what it does differently from each (added 2026-09-05).
   the class table; the label on every row says which of the three served; the same consistency
   measure is applied to **operator-ephemeris fits** (successive CelesTrak supplemental versions)
   with a measured validity horizon; and the fit is re-run every day on the live catalogue rather
-  than published once. None of that changes the character of the number — it is still a floor from
-  the consistency of fits by one network, blind to any error they share (see "Uncertainty and
-  probability" below) — and the class-level result they published is what the fallback still
+  than published once. None of that changes the character of the number — it is still the
+  consistency of fits by one network, blind to any error they share and a bound on the accuracy in
+  neither direction (see "Uncertainty and probability" below) — and the class-level result they
+  published is what the fallback still
   quotes when an object's own history is too thin.
 - **Parker, W. E. and Linares, R. (2024), *Satellite Drag Analysis During the May 2024 Gannon
   Geomagnetic Storm*, J. Spacecraft and Rockets 61(6).** The template for §1 of
@@ -32,8 +33,9 @@ of its contribution is what it does differently from each (added 2026-09-05).
   enhancement causes — the quantity a screening actually needs — run the way an operator would
   have run it, from each object's last pre-storm element set and its own pre-storm ballistic
   coefficient, against a quiet control at the same lead times, and reported by coefficient
-  source and by lead. That test is what produced the validity split (skill at r = 0.88 for a
-  measured coefficient, none demonstrated otherwise) and its lead-time structure (skill
+  source and by lead. That test is what produced the validity split (skill for a measured
+  coefficient — the right sign on about nine comparisons in ten at three to four days of lead —
+  and none demonstrated otherwise) and its lead-time structure (skill
   concentrated at three to four days, near zero inside two), neither of which a density
   enhancement measurement can see. Their density enhancement and this project's §1 are measured
   against different baselines and are not directly comparable; `docs/storm-validation.md` says
@@ -161,8 +163,10 @@ and provenance rather than about new physics, and it is meant to be read as one.
   at all, because the test needs a node on both sides. `docs/spacex-ephemerides.md`.
 - **Supplemental Starlink sets are fits to predictions.** CelesTrak fits SGP4 to SpaceX's
   published ephemerides, which include planned manoeuvres. The fit residuals CelesTrak
-  publishes with every set (a median of 0.20 km, a 90th percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02) are the floor on how well the set represents
-  that ephemeris, and the ephemeris itself is a prediction revised as plans change. Used for 10,728 of the 11,094 Starlink objects on the first run;
+  publishes with every set (a median of 0.20 km, a 90th percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02) are the residual over the arc the fit was made on — how
+  well the set represents that ephemeris there, and no bound on it elsewhere: propagated, a set is
+  kilometres from its file within a day ("How big that residual actually is", below) — and the
+  ephemeris itself is a prediction revised as plans change. Used for 10,728 of the 11,094 Starlink objects on the first run;
   `secondary_ephemeris` says which set an event used.
 - **Attached and co-orbiting objects are excluded structurally, not by name (Phase 4 Step 2
   review).** A docked visiting vehicle, a station module and a payload still mated to its
@@ -186,16 +190,30 @@ and provenance rather than about new physics, and it is meant to be read as one.
 
 ## Uncertainty and probability (Phase 2, Step 3)
 
-- **The covariance is a consistency floor, not an accuracy.** It is fitted from the
-  disagreement between an object's own element sets after propagation (`docs/screening.md`,
-  "Uncertainty"). Two fits by the same network with the same force model share whatever
-  error they have in common, a storm-biased drag model above all, and the difference
-  between them cannot see it. The true error is at least the fitted one; `pc_max` and
-  its scale are the honest reading.
+- **The covariance is a consistency measure, not an accuracy, and it bounds the accuracy in
+  neither direction** (reworded 2026-09-05 after a second external review; the earlier text called
+  it a floor on the error). It is fitted from the disagreement between an object's own element
+  sets after propagation (`docs/screening.md`, "Uncertainty"). Successive sets are fits by the same
+  network to overlapping observations with the same force model, so they share whatever error is
+  common to them — a storm-biased drag model above all — and the disagreement cannot see it: the
+  true error can be far larger than the consistency. But a shared assumption can also make
+  successive fits *less* consistent than either is accurate (a set fitted across a manoeuvre, a
+  change of tracking geometry between two fits, SGP4's own re-initialisation drift in the next
+  bullet), so the consistency is not a lower bound either. Without independent calibration it is
+  a scale, and the honest reading is `pc_max` and its scale factor beside the number. **What
+  independent calibration would require:** a truth that does not come from the same fits — laser
+  ranging normal points on retroreflector-carrying objects, GNSS precise orbits from operators that
+  publish them, or a special-perturbations orbit determination from raw observations — compared
+  with the propagated public set over the same lead times and the same orbit classes, in enough
+  objects to give the ratio of actual error to consistency per class and its dependence on
+  geomagnetic conditions, with a storm inside the calibration period, since the shared error this
+  project cares about is the one a storm creates. Nothing here has made that comparison; the
+  precedent cited above is cited for the consistency method, not as a calibration of it; and the
+  Kelvins reproduction validates the probability arithmetic on ESA's inputs, not this covariance.
 - **SGP4 is not invariant under re-initialisation with drag.** A set fitted at a later
   epoch with the same `B*` drifts in-track by about 0.07 km per day at `B* = 1e-4`
   (measured on a 500 km orbit; zero with `B* = 0`). That drift sits inside the
-  consistency residuals as part of the floor. Small against real element-set errors.
+  consistency residuals. Small against real element-set errors.
 - **A power law per RIC component, diagonal, floored at half a day.**
   `sigma(dt) = s dt^p` from pairs between 0.5 and 7 days apart, no cross-terms, no
   velocity covariance; below half a day the half-day value is used, beyond seven days
@@ -222,8 +240,9 @@ and provenance rather than about new physics, and it is meant to be read as one.
   growth. It measures the element set against the ephemeris it was fitted to, not the
   ephemeris against reality: an operator's published plan can be revised or abandoned,
   and nothing here sees that until the next version is published. With only one stored
-  version the floor is the whole covariance, which is a lower bound and is labelled
-  `supplemental:rms` so it can be recognised.
+  version the published residual is the whole covariance — the fit's own residual over its arc,
+  not a bound on anything beyond it — and it is labelled `supplemental:rms` so it can be
+  recognised.
 - **Secondary hard-body radii are category defaults or radar-derived spheres.** 30 m
   station, 10 m Starlink, 3 m OneWeb / constellation / payload, 5 m rocket body, 0.5 m
   debris, 1 m untyped; for payloads, rocket bodies, debris and untyped objects a
@@ -286,13 +305,17 @@ and provenance rather than about new physics, and it is meant to be read as one.
   built from the target's with the target's velocity taken as circular, and the
   covariances are used as position-only matrices. With those two, and with the combined
   hard-body radius taken as `(t_span + c_span) / 2` — the dataset's own size columns, no
-  parameter fitted — the reconstruction reproduces ESA's risk column to a median residual
+  parameter fitted on the rows it is scored on; the convention was recovered from those rows,
+  so it was confirmed on held-out splits before being called unfitted (2026-09-05) — the
+  reconstruction reproduces ESA's risk column to a median residual
   of -0.0003 in log10 (0.07 % in the probability), 87 % of the tail within a factor of
   two. What disagreement remains is one-sided: the 5th percentile of the residual is
   -0.66 against a 95th of +0.13, so where it disagrees it reads the encounter as *safer*
   than ESA did, and payloads are over-represented in that tail. Our covariance-scale sweep
   matches ESA's `max_risk_scaling` exactly as a factor on the covariance (median ratio
-  0.9999). See `docs/screening.md` and `docs/kelvins-reproduction.md`.
+  0.9999). What the reproduction validates is the probability arithmetic on ESA's inputs — their
+  geometry and their covariances through our integral; it does not calibrate driftwatch's own
+  covariance, which never enters it. See `docs/screening.md` and `docs/kelvins-reproduction.md`.
 - **A secondary's hard-body radius is a population median, not a measurement.** Nobody
   publishes the size of most catalogue objects. `sqrt(RCS / pi)`, which driftwatch used to
   fall back on, is the radius of the disc that returns the same echo rather than the size of
@@ -365,7 +388,12 @@ and provenance rather than about new physics, and it is meant to be read as one.
   **2.8 km at 12 to 24, 11.5 km at 24 to 36, 28.3 km at 36 to 48, 51.8 km at 48 to 60 and
   82.9 km at 60 to 72**, almost all in-track, with a worst case in the thousands of kilometres
   for satellites under orbit-raising thrust. CelesTrak's number is the residual over the arc
-  the fit was made on, not over the file. Two consequences are recorded rather than tidied
+  the fit was made on, not over the file. Qualified 2026-09-05: one fetch, one date, against the
+  operator's published prediction rather than the realised orbit; the lineage of each pair has
+  since been checked and the drift is the same on the 17 of 300 pairs that verifiably share a file
+  as on the rest, so it is not the plan's revision between files, and whether the fit or the file
+  is nearer the truth stays open (`docs/spacex-ephemerides.md`, "Lineage, checked"). Two
+  consequences are recorded rather than tidied
   away: the Phase 2 patch was the right shape at a hundredth of the right size at the far end
   of the horizon, and serving SpaceX's 3.80 km control box on top of a trajectory that is 83 km
   out **understated** the uncertainty on the events furthest ahead in the window, where the
@@ -570,15 +598,17 @@ and provenance rather than about new physics, and it is meant to be read as one.
 
 ### Storm-term validity
 
-- **The storm term is predictive at r = 0.88 for an object whose ballistic coefficient was
-  measured from its own decay, and has no demonstrated skill otherwise.** Over the free-flying
-  May 2024 population as a whole the predicted and observed in-track shifts correlate at
-  **−0.10**, which is nothing; restricted to objects with a `history` coefficient it is **0.88**,
-  with a magnitude between 0.65 and 1.3 times observed depending on the estimator. A `bstar`
+- **The storm term has skill for an object whose ballistic coefficient was measured from its own
+  decay, and no demonstrated skill otherwise.** On the May 2024 record the predicted sign is right
+  on about nine comparisons in ten at three to four days of lead for the measured population, with
+  a robust slope of 0.63 to 0.75, and there is no skill inside two days (the lead-time bullet
+  below); over the free-flying population as a whole the shifts are uncorrelated. A `bstar`
   inversion has no predictive power for the shift at all — regression slope −1.39 — and a
   `typical` stand-in is a population median that was never a measurement of the object. So the
   coefficient's source is not a provenance note; it is the difference between a measured quantity
-  and an extrapolation.
+  and an extrapolation. The correlation this bullet used to quote for the measured population,
+  0.88, is withdrawn (2026-09-05): it was 0.64 on a redrawn sample, the statistic is carried by the
+  largest events, and no correlation is quoted (`docs/storm-validation.md`, "Redrawn").
 - **Every event therefore carries `storm_validity`, taken from the weaker of its two objects'
   coefficient sources.** `validated` when **both** objects have a `history` coefficient;
   `indicative` when either rests on a B\* inversion, a `typical` stand-in, or no coefficient at
@@ -601,9 +631,12 @@ and provenance rather than about new physics, and it is meant to be read as one.
   2026-09-05). On the validated population the observed sign agrees with the predicted one on 39
   and 41 per cent of comparisons at one and two days — chance is 50 — and on 91 and 96 per cent
   at three and four; the robust slope is −0.15 and −0.04 inside two days against 0.63 and 0.71
-  beyond. The r = 0.88 is a population figure that stands; where it comes from is the far half
-  of the window. A `forecast` shift at one or two days of lead is therefore an uncertainty, not a
-  correction, and the page says so. `docs/storm-validation.md` carries the table.
+  beyond; a second draw of the sample the same day gave 38 and 33 per cent against 88 and 97,
+  and −0.12 and −0.09 against 0.63 and 0.75. The correlation once quoted for the population
+  (0.88) does not stand — it was 0.64 on the second draw and is not quoted — and the sign
+  agreement and the robust slope by lead are what reproduced. A `forecast` shift at one or two
+  days of lead is therefore an uncertainty, not a correction, and the page says so.
+  `docs/storm-validation.md` carries both tables.
 - **`operator-controlled`** is a fourth value of `storm_validity`, for an event whose two objects
   were both given no mean shift (the storm term bullet above): no displacement was applied and the
   validation has nothing to reach. Every aggregate is reported over it as a third population.
@@ -613,10 +646,11 @@ and provenance rather than about new physics, and it is meant to be read as one.
 Full account in `docs/storm-validation.md`. What is approximate about the *measurements*:
 
 - **The later element set is not truth.** The in-track error measured is the disagreement
-  between two fits, each with its own error of hundreds of metres to kilometres. It is a floor
-  on the propagation error, not a measurement of it. Over the storm the disagreement runs to
-  tens of kilometres and the floor is far below it; in the quiet control it is not, and the
-  control's numbers are an upper bound on what SGP4 alone contributes.
+  between two fits by the same network, each with its own error of hundreds of metres to
+  kilometres, and it bounds the propagation error in neither direction (reworded 2026-09-05; the
+  earlier text called it a floor). Over the storm the disagreement runs to tens of kilometres,
+  far above the fit-to-fit scatter; in the quiet control it does not, and the control's numbers
+  are what SGP4 and the fits' own scatter contribute together.
 - **The observed density ratio assumes `B` is constant between the two windows.** Over three
   weeks with the manoeuvre intervals excluded that is good. For an object whose attitude mode
   changed it is not, and nothing in public element sets can see an attitude change.
@@ -638,7 +672,8 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   by the angle the disagreement subtends, under a milliradian for a shift of tens of kilometres.
 - **NRLMSIS 2.1's storm-response bias is now recorded, and is not applied.** Over 10 to 13 May
   2024 it **over-predicts** the storm/quiet density ratio by about **22 per cent** (observed
-  median 1.68 against a modelled 2.21), with **no resolvable altitude dependence** — 0.83, 0.74,
+  median 1.68 against a modelled 2.21; 23 per cent, 1.73 against 2.32, on the sample redrawn on
+  2026-09-05), with **no resolvable altitude dependence** — 0.83, 0.74,
   0.76 and 0.73 across 450–550, 550–650, 650–800 and 800–2000 km. The published assessments of
   MSIS-class models at storm time mostly find the opposite **sign**, and the two are **not
   measuring the same quantity**: they compare model density at a point against a spacecraft

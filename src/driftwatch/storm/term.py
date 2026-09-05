@@ -165,10 +165,11 @@ def event_validity(primary: Any, secondary: Any) -> str:
 
     **The weaker of the two decides**, because a relative shift is the difference of two
     displacements and the worse-known one bounds what can be said about it. Step 4 measured the
-    term against the May 2024 record and found it predictive at r = 0.88 for objects with a
-    coefficient fitted from their own decay, and of **no demonstrated skill** for objects
-    carrying a B\\* inversion (regression slope -1.39) or a population stand-in. So two measured
-    sides is ``validated`` and everything else is ``indicative``.
+    term against the May 2024 record and found skill (the right sign on about nine comparisons in
+    ten at three to four days of lead, none inside two) for objects with a coefficient fitted from
+    their own decay, and **no demonstrated skill** for objects carrying a B\\* inversion
+    (regression slope -1.39) or a population stand-in. So two measured sides is ``validated`` and
+    everything else is ``indicative``.
 
     **An operator-controlled side is neutral** (corrected 2026-09-05). Its mean shift was zeroed
     because the storm excess is undefined for a trajectory that carries the operator's own drag

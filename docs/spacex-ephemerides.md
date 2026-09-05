@@ -235,6 +235,50 @@ file, states compared every 30 minutes across the whole 72 hours.
 Almost all of it in-track, which is what a timing error looks like. The worst cases are
 satellites under orbit-raising thrust, which an SGP4 element set cannot represent at all.
 
+### Lineage, checked (2026-09-05)
+
+A second external review asked for the table above to be qualified, and for the lineage of each
+pair to be verified before the difference is attributed to the fit's extrapolation. The
+qualification first: it is **one fetch on one date**, nineteen satellites, and the comparison is
+against SpaceX's *published prediction* — a 72-hour file that carries planned burns and the
+operator's drag model — not against the realised orbit. Whether the fit or the file is nearer to
+where the satellite actually went cannot be told from this measurement.
+
+The lineage next. A supplemental set fitted to one file and compared with another would measure
+the revision of the plan between the two files as well as the fit's own drift. CelesTrak places
+the epoch of each fit at the `ephemeris_start` of the file it fitted, to the second — every
+epoch in the store ends in :42 (or :41.99999, the same number rounded), as does every file start
+— so a set whose epoch equals the stored file's start was fitted to that file and no other. On the
+300 pairs of the 2026-09-03 16:19 fetch (the states store and the 15:23 supplemental version),
+classified that way and measured every 30 minutes, in TEME:
+
+| Lineage | objects | under 12 h | 12 to 24 h | 24 to 36 h | 36 to 48 h | 48 to 60 h | 60 to 72 h |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| Set fitted to **this** file (epoch = start) | **17** | 0.293 km | 2.841 km | 11.789 km | 27.556 km | 51.832 km | 82.214 km |
+| Set fitted to an **earlier** file (0.2 to 3.4 h before) | 105 | 0.296 km | 3.106 km | 12.799 km | 28.752 km | 52.046 km | 80.359 km |
+| Set fitted to a **later** file (0.2 to 3.3 h after) | 178 | 0.318 km | 1.806 km | 9.506 km | 24.291 km | 45.456 km | 72.687 km |
+| All 300 | 300 | 0.310 km | 2.305 km | 10.828 km | 26.038 km | 48.179 km | 75.654 km |
+
+Medians of the distance, almost all of it in-track in every row. **What this establishes:** the
+drift is the same on the seventeen pairs whose lineage is verified as on the 283 that were fitted
+to a neighbouring file, so it is not the plan's revision between files, and the nineteen-file table
+above stands as a description of a fit against the file it was fitted to — on one date. **What it
+does not establish:** why. Past 24 hours the fit runs ahead of the file on nine of the seventeen
+verified objects and behind on eight. Planned manoeuvres inside the file, which SGP4 cannot carry,
+would do that; so would fit noise in the mean motion. Separating the two needs the *next* file's
+first states, which are the nearest thing to a realised trajectory SpaceX publishes, and that
+comparison has not been made. That a set fitted to a *later* file sits marginally closer to the
+stored file than one fitted to the same file is consistent with the later fit having seen a
+revised plan, and is within the scatter.
+
+So the finding, stated to its evidence: a propagated supplemental set and the published file it
+was fitted to disagree by kilometres within a day and tens of kilometres by three, on one date,
+for the Starlink shell driftwatch screens against; the disagreement is not the revision of the
+plan; and whether it is the fit's extrapolation or the file's own plan being wrong about the
+satellite is open. The script that made the table is not in the repository; it propagates each
+stored set with `satrec_from_elements` at the stored state times and bins the distance by lead
+from `ephemeris_start`.
+
 **Two corrections to what this file said before.**
 
 1. The 0.2 km term was the right shape and the wrong size. The measurement recorded above —

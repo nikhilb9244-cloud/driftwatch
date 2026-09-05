@@ -13,8 +13,18 @@ The hard-body radius ESA used is not documented, and Phase 2 treated it as a sin
 parameter (9.0 m, agreement within a factor of two on 43 % of the tail). It turned out to be
 in the data. Each object carries a ``span`` in metres, and the combined radius
 ``(t_span + c_span) / 2`` reproduces ESA's risk column with a median residual of 0.0003 in
-log10 and no fitted parameter at all: :func:`reproduce_tail` is the primary reconstruction and
-:func:`fit_hbr` is kept as the fallback for a catalogue with no size column.
+log10: :func:`reproduce_tail` is the primary reconstruction and :func:`fit_hbr` is kept as the
+fallback for a catalogue with no size column.
+
+That convention was recovered from the same rows it is scored on, which makes it a fitted
+choice however few parameters it has, so :func:`held_out_check` confirms it the way a fitted
+parameter is confirmed: the multiplier on the span is chosen on one set of events and scored
+on events it never saw -- the training rows split in half by event, and the training rows
+against the challenge's separate test file (added 2026-09-05, after a second external review).
+Only with that check passed is the reconstruction described as having nothing fitted on the
+rows it is scored on. And what the reproduction validates is the probability *arithmetic* on
+ESA's inputs -- their geometry and their covariances through our integral -- not driftwatch's
+own covariance, which is fitted from element-set consistency and is not measured here at all.
 
 Approximations in the reconstruction, each stated so the residuals can be read
 honestly:
@@ -103,6 +113,21 @@ def find_dataset(kelvins_dir: Path = config.KELVINS_DIR) -> Path | None:
                 return candidate
     csvs = sorted(kelvins_dir.glob("*.csv")) or sorted(kelvins_dir.glob("*/*.csv"))
     return csvs[0] if csvs else None
+
+
+def find_test_dataset(train_path: Path) -> Path | None:
+    """The challenge's ``test_data.csv`` beside (or one directory up from) the training file, or None.
+
+    It is the natural held-out split: rows the convention was never recovered from, published
+    separately by the organisers.
+    """
+    if train_path.name == "test_data.csv":
+        return None
+    for directory in (train_path.parent, train_path.parent.parent):
+        for candidate in (directory / "test_data.csv", *sorted(directory.glob("*/test_data.csv"))):
+            if candidate.exists() and candidate.resolve() != train_path.resolve():
+                return candidate
+    return None
 
 
 def load_kelvins(path: Path) -> pd.DataFrame:
@@ -221,7 +246,8 @@ def chaser_radius_table(df: pd.DataFrame, *, min_rows: int = MIN_ROWS_PER_CELL) 
     This is where :data:`driftwatch.risk.scenario.SPAN_RADIUS_M` comes from. ESA publishes
     each object's largest dimension as ``span`` in metres and computes its risk column with
     the combined radius ``(t_span + c_span) / 2``, so half a span is one object's radius —
-    the reconstruction in :func:`reproduce_tail` confirms that with no fitted parameter.
+    the reconstruction in :func:`reproduce_tail` confirms that, and :func:`held_out_check`
+    confirms it on rows the convention was not recovered from.
     The chaser column is the one worth mining: it covers the debris, rocket bodies and
     uncorrelated objects a screening tool meets as secondaries, whereas the target column is
     a few dozen ESA missions.
@@ -363,6 +389,102 @@ def test_size_proxy(
         "constant_median_abs_residual": float(np.median(np.abs(constant.residuals))),
         "constant_within_factor_two": constant.report["overall"]["within_factor_two"],
     }
+
+
+HELD_OUT_SCALES: np.ndarray = np.round(np.arange(0.5, 2.0001, 0.05), 2)
+
+
+def _best_span_scale(tail: pd.DataFrame, scales: np.ndarray) -> tuple[float, float]:
+    """The span multiplier with the smallest median absolute residual on ``tail``, and that residual."""
+    radius = combined_radius_m(tail, "span")
+    plane = encounter(tail)
+    risk = tail["risk"].to_numpy(dtype=float)
+    best: tuple[float, float] | None = None
+    for scale in scales:
+        med = float(np.median(np.abs(reproduce(tail, radius * float(scale), plane=plane) - risk)))
+        if best is None or med < best[1]:
+            best = (float(scale), med)
+    assert best is not None
+    return best
+
+
+def _span_tail(df: pd.DataFrame, tail_risk: float) -> pd.DataFrame:
+    tail = df[(df["risk"] >= tail_risk) & (df["risk"] > RISK_FLOOR)].reset_index(drop=True)
+    radius = combined_radius_m(tail, "span")
+    return tail.loc[np.isfinite(radius) & (radius > 0)].reset_index(drop=True)
+
+
+def held_out_check(
+    fit_rows: pd.DataFrame,
+    held_rows: pd.DataFrame,
+    *,
+    label: str,
+    scales: np.ndarray = HELD_OUT_SCALES,
+    tail_risk: float = TAIL_RISK,
+) -> dict[str, Any]:
+    """Choose the span multiplier on ``fit_rows`` and score it on ``held_rows``, which it never saw.
+
+    The ``(t_span + c_span) / 2`` convention was recovered from the evaluation data itself, so
+    it is a fitted choice however few parameters it carries and is checked like one. The
+    multiplier is chosen on the fitting rows (smallest median absolute residual over their
+    tail), then held fixed and scored on the held-out rows; the multiplier the held-out rows
+    would have chosen on their own is reported beside it, so a reader can see whether the two
+    halves agree on the convention or merely tolerate each other's choice.
+    """
+    fit_tail = _span_tail(fit_rows, tail_risk)
+    held_tail = _span_tail(held_rows, tail_risk)
+    if fit_tail.empty or held_tail.empty:
+        raise ValueError("both halves need rows in the high-risk tail")
+    fit_scale, fit_median_abs = _best_span_scale(fit_tail, scales)
+    held_scale, held_median_abs_at_own = _best_span_scale(held_tail, scales)
+    held_radius = combined_radius_m(held_tail, "span")
+    residuals = reproduce(held_tail, held_radius * fit_scale) - held_tail["risk"].to_numpy(dtype=float)
+    return {
+        "label": label,
+        "n_fit_events": int(fit_rows["event_id"].nunique()) if "event_id" in fit_rows.columns else None,
+        "n_fit": int(len(fit_tail)),
+        "n_held_events": int(held_rows["event_id"].nunique()) if "event_id" in held_rows.columns else None,
+        "n_held": int(len(held_tail)),
+        "fit_scale": fit_scale,
+        "fit_median_abs_residual": fit_median_abs,
+        "held_median_residual": float(np.median(residuals)),
+        "held_median_abs_residual": float(np.median(np.abs(residuals))),
+        "held_within_factor_two": float(np.mean(np.abs(residuals) <= np.log10(2.0))),
+        "held_within_factor_ten": float(np.mean(np.abs(residuals) <= 1.0)),
+        "held_own_scale": held_scale,
+        "held_median_abs_residual_at_own_scale": held_median_abs_at_own,
+    }
+
+
+def split_by_event(df: pd.DataFrame, *, seed: int = 0) -> tuple[pd.DataFrame, pd.DataFrame]:
+    """Halve the rows by ``event_id`` so no conjunction has rows on both sides of the split.
+
+    The rows of one event are successive messages about the same pair with nearly the same
+    geometry and covariances, so a split by row would leak each event's answer across the
+    boundary; a split by event does not.
+    """
+    if "event_id" not in df.columns:
+        raise ValueError("the dataset lacks event_id")
+    events = np.sort(df["event_id"].unique())
+    rng = np.random.default_rng(seed)
+    rng.shuffle(events)
+    first = set(events[: len(events) // 2].tolist())
+    mask = df["event_id"].isin(first)
+    return df[mask].reset_index(drop=True), df[~mask].reset_index(drop=True)
+
+
+def held_out_checks(
+    train: pd.DataFrame, test: pd.DataFrame | None, *, seed: int = 0, tail_risk: float = TAIL_RISK
+) -> list[dict[str, Any]]:
+    """The checks the report prints: each training half against the other, and training against the test file."""
+    a, b = split_by_event(train, seed=seed)
+    out = [
+        held_out_check(a, b, label="training rows, first half of events to second", tail_risk=tail_risk),
+        held_out_check(b, a, label="training rows, second half of events to first", tail_risk=tail_risk),
+    ]
+    if test is not None and len(test):
+        out.append(held_out_check(train, test, label="training file to the challenge's test file", tail_risk=tail_risk))
+    return out
 
 
 @dataclass
@@ -631,6 +753,7 @@ def to_markdown(
     proxies: list[dict[str, Any]] | None = None,
     radii: pd.DataFrame | None = None,
     plot_path: str | None = None,
+    held_out: list[dict[str, Any]] | None = None,
 ) -> str:
     """The reproduction as a markdown page for the docs.
 
@@ -653,12 +776,18 @@ def to_markdown(
             f"**{overall['median']:+.4f}** in log10, which is {abs(10 ** overall['median'] - 1):.2%} in the "
             f"probability, with quartiles {overall['p25']:+.3f} to {overall['p75']:+.3f}. "
             f"{overall['within_factor_two']:.0%} of rows agree within a factor of two and "
-            f"{overall['within_factor_ten']:.0%} within a factor of ten. Nothing was fitted to get this: "
-            "the multiplier on the span is one.",
+            f"{overall['within_factor_ten']:.0%} within a factor of ten. The multiplier on the span is one, "
+            "and no parameter is fitted on the rows this is scored on -- but the convention was recovered "
+            "from these same rows, so it is confirmed on rows it never saw below, and only on that basis is "
+            "it described as unfitted.",
             "",
             "That settles the question the Phase 2 review left open. The probability code agrees with ESA's "
             "to a fraction of a percent for most conjunctions; what disagreement remains is not in the "
-            "integration but in the rows described below.",
+            "integration but in the rows described below. **What that validates is the arithmetic on ESA's "
+            "inputs** -- their geometry and their covariances, through our integral -- and nothing about "
+            "driftwatch's own covariance, which is fitted from element-set consistency and is not measured "
+            "here at all. Agreement with ESA's column says the integral is right; it says nothing about "
+            "whether the uncertainty driftwatch puts into it is.",
             "",
             "**Restricted to the tail that matters** (risk above 1e-5, the yellow-flag threshold): "
             f"{tight['n']} rows, median residual **{tight['median']:+.4f}**, "
@@ -739,6 +868,44 @@ def to_markdown(
                 "underestimate. See `driftwatch.risk.pc.encounter_duration_ratio`.",
                 "",
             ]
+
+    if held_out:
+        lines += [
+            "### Confirmed on a held-out split",
+            "",
+            "The span convention was recovered from the evaluation data itself, which makes it a fitted "
+            "choice however few parameters it has, so it is checked the way a fitted parameter is: the "
+            "multiplier is chosen on one set of events (smallest median absolute residual over their tail) "
+            "and then scored, held fixed, on events it never saw. Halves are split by event, so no "
+            "conjunction has messages on both sides. The last column is the multiplier the held-out rows "
+            "would have chosen on their own (added 2026-09-05, after a second external review).",
+            "",
+            "| Split | Fitted on | Multiplier chosen | Scored on | Median residual | Within x2 | Within x10 "
+            "| Held-out rows' own choice |",
+            "| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: |",
+        ]
+        for h in held_out:
+            fitted = f"{h['n_fit']} rows" + (f" ({h['n_fit_events']} events)" if h.get("n_fit_events") else "")
+            scored = f"{h['n_held']} rows" + (f" ({h['n_held_events']} events)" if h.get("n_held_events") else "")
+            lines.append(
+                f"| {h['label']} | {fitted} | {h['fit_scale']:.2f}x | {scored} | "
+                f"{h['held_median_residual']:+.4f} | {h['held_within_factor_two']:.0%} | "
+                f"{h['held_within_factor_ten']:.0%} | {h['held_own_scale']:.2f}x |"
+            )
+        agree = all(abs(h["fit_scale"] - 1.0) < 0.026 and abs(h["held_own_scale"] - 1.0) < 0.026 for h in held_out)
+        worst = max(abs(h["held_median_residual"]) for h in held_out)
+        lines += [
+            "",
+            (
+                "Every split chooses a multiplier of one and reproduces the rows it never saw to a median "
+                f"residual within {worst:.4f} in log10, so the convention holds out of sample and the "
+                "statement above -- no parameter fitted on the rows it is scored on -- stands."
+                if agree
+                else "**The splits do not agree on the multiplier**, so the convention is a fit to these "
+                "rows and must not be described as unfitted until that is understood."
+            ),
+            "",
+        ]
 
     if plot_path:
         lines += [
@@ -834,9 +1001,10 @@ def to_markdown(
             "",
             "`sqrt(RCS / pi)` is gone from `risk/scenario.py`, replaced by the median chaser radius of "
             "each object type and radar cross-section class in these rows -- half the median `c_span`, "
-            "since ESA's own risk column is reproduced by `(t_span + c_span) / 2` with nothing fitted. The "
-            "cross-section survives as a *class* (small below 0.1 m2, medium to 1 m2, large above), which "
-            "is the part of it that carries size information; its use as a length does not.",
+            "since ESA's own risk column is reproduced by `(t_span + c_span) / 2` with no parameter fitted "
+            "on the rows it is scored on (confirmed on the held-out splits above). The cross-section "
+            "survives as a *class* (small below 0.1 m2, medium to 1 m2, large above), which is the part of "
+            "it that carries size information; its use as a length does not.",
             "",
             "| Object type | RCS class | Rows | Median radius | Used |",
             "| --- | --- | ---: | ---: | --- |",

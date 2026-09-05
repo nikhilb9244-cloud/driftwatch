@@ -457,9 +457,11 @@ which the aggregate number alone would have gone on hiding.
 
 ### A third split, added at the Step 4 review: how far the validation reaches
 
-Step 4 measured the storm term against the May 2024 record and found it predictive at r = 0.88
-for objects whose ballistic coefficient was fitted from their own decay, and of no demonstrated
-skill for objects carrying a B\* inversion or a population stand-in. An event needs **both** its
+Step 4 measured the storm term against the May 2024 record and found it skilful — the right sign
+on about nine comparisons in ten at three to four days of lead, none inside two — for objects
+whose ballistic coefficient was fitted from their own decay, and of no demonstrated skill for
+objects carrying a B\* inversion or a population stand-in (the r = 0.88 once quoted here moved to
+0.64 on a redrawn sample and is withdrawn, 2026-09-05; `docs/storm-validation.md`). An event needs **both** its
 objects measured before that measurement reaches it, so every row now carries `storm_validity`
 and every aggregate here is reported over the validated events, over the indicative ones, and
 over both — never over both alone.

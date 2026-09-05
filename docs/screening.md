@@ -307,8 +307,10 @@ than the GP set is treated as abandoned and the GP set is kept. Every event reco
 which set the secondary carried (`secondary_ephemeris`).
 
 The supplemental sets are better, not true. CelesTrak's published fit residuals
-(the ``RMS`` field of every supplemental record: a median of 0.20 km, a 90th percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02) are the floor on their
-error, and the ephemerides are predictions that SpaceX revises. Manoeuvres by anything
+(the ``RMS`` field of every supplemental record: a median of 0.20 km, a 90th percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02) are the residual over
+the arc each fit was made on — not a bound on the set's error elsewhere: propagated, a set is
+kilometres from its file within a day (`docs/spacex-ephemerides.md`) — and the ephemerides are
+predictions that SpaceX revises. Manoeuvres by anything
 else are not modelled at all; the `manoeuvre_*` columns say, for each side of a pair,
 whether the object is known to manoeuvre, might, or has been seen to (the three-valued
 flag described under "Manoeuvres" below), so a reader knows which predictions can be
@@ -335,16 +337,27 @@ two fits of the same orbit disagree after a given propagation time. Do that for 
 pair of sets between half a day and seven days apart and the scatter, as a function of
 the propagation time, is a model of how fast the position error grows.
 
-**Why that is a floor, not a measure.** Both sets are fits by the same tracking
-network with the same force model, so they share whatever error the network and the
-model have in common: a biased drag model during a geomagnetic storm, a sparse tracking
-geometry, a systematic in the sensors. The difference between two such fits cannot see
-any of it. Consistency measures the part of the error that changes from fit to fit;
-the true error is at least that large and, in a storm, much larger. Every probability
-on this page is therefore indicative, not operational, and the maximum-probability
-sweep below is the honest way to read it.
+**Why that is a consistency measure, not an accuracy, and bounds the accuracy in neither
+direction** (reworded 2026-09-05 after a second external review; the earlier text called it a
+floor on the error). Both sets are fits by the same tracking network with the same force model
+to overlapping observations, so they share whatever error the network and the model have in
+common: a biased drag model during a geomagnetic storm, a sparse tracking geometry, a
+systematic in the sensors. The difference between two such fits cannot see any of it, so the
+true error can be far larger than the consistency, and in a storm it is. But the consistency is
+not a lower bound on the error either: a shared assumption can make two fits disagree by more
+than either is wrong — a set fitted across a manoeuvre, a change of tracking geometry between
+the two, SGP4's own re-initialisation drift (below) — so the number is a scale and not a bound
+until it has been calibrated against something independent. What that would take: a truth that
+does not come from the same fits (laser ranging normal points on retroreflector-carrying
+objects, GNSS precise orbits from operators that publish them, or a special-perturbations
+orbit determination from raw observations), compared with the propagated public set over the
+same lead times and orbit classes, in enough objects to give the ratio of actual error to
+consistency per class and its dependence on geomagnetic conditions, with a storm inside the
+calibration period. Nothing here has made that comparison. Every probability on this page is
+therefore indicative, not operational, and the maximum-probability sweep below is the honest
+way to read it.
 
-**One contribution to the floor is SGP4 itself.** A set fitted at a later epoch with the
+**One contribution to the consistency is SGP4 itself.** A set fitted at a later epoch with the
 same `B*` does not propagate drag exactly as the original set did: the theory's drag
 terms are polynomials in time from the epoch, so re-basing the epoch changes them.
 Measured on a 500 km orbit with `B* = 1e-4`, the re-initialised set drifts in-track by
@@ -474,9 +487,9 @@ The sources are labelled `supplemental:consistency` when the exponent was fitted
 is only one stored version and the floor is all there is, and `supplemental:beyond-horizon`
 past the fit's validity.
 
-The floor alone is a lower bound and is treated as one: an event scored on it lands in
-the robust region below, where the maximum-probability sweep shows what a larger
-uncertainty would give.
+The floor alone is the smallest uncertainty the model can report, not a bound on the error,
+and an event scored on it is read accordingly: it lands in the robust region below, where the
+maximum-probability sweep shows what a larger uncertainty would give.
 
 ### The operator's own covariance, where it reaches
 
@@ -743,9 +756,9 @@ its maximum at `k* = d^2 / (2 sigma_0^2)`, and a test recovers that.
 `pc_max` is the largest probability over scale factors from 0.1 to 10 on the combined
 covariance (61 log-spaced steps, the maximum refined by a parabola through its
 neighbours), and `pc_max_scale` the factor at which it occurs. Because the empirical
-covariance is a floor on the true error, `pc_max` is the honest upper bound: a
-`pc_max_scale` above one says the real risk could be higher than `pc` if the fits are
-more consistent than they are accurate, which is the usual case; a scale below one says
+covariance measures consistency and not accuracy, `pc_max` is the honest companion to `pc`: a
+`pc_max_scale` above one says the risk could be higher than `pc` if the fits are more
+consistent than they are accurate, which is the common case though not a bound; a scale below one says
 the uncertainty already dilutes the probability, so that shrinking the covariance at the
 same miss would raise it. This is Alfano's dilution, and it is what the Phase 3 storm
 term will move.
@@ -861,7 +874,11 @@ Run on `train_data.csv` (162,634 conjunction messages, 10,183 of them in the tai
 and agreement within a factor of two on 43 % of the tail, and put the spread down to ESA
 having used a radius per object that the dataset did not publish. It does publish it. Each
 object carries a `span` in metres, and the combined radius `(t_span + c_span) / 2`
-reproduces the risk column with **no fitted parameter at all**:
+reproduces the risk column with **no parameter fitted on the rows it is scored on** — the
+convention was recovered from these rows, so it was confirmed on held-out splits (each half of
+the events against the other, and the training file against the challenge's test file) before
+being called unfitted (`docs/kelvins-reproduction.md`, "Confirmed on a held-out split",
+2026-09-05):
 
 | | Per-object span | One fitted radius |
 | --- | --- | --- |
@@ -872,7 +889,9 @@ reproduces the risk column with **no fitted parameter at all**:
 | Within a factor of ten | **96 %** | 80 % |
 
 Which settles the Phase 2 question: the probability integration agrees with ESA's to a
-fraction of a percent, and the earlier spread was entirely the radius.
+fraction of a percent, and the earlier spread was entirely the radius. That validates the
+arithmetic on ESA's inputs — their geometry and their covariances through our integral — and
+calibrates nothing about driftwatch's own covariance, which never enters it.
 
 **The direction of the residual still matters.** The median is zero but the distribution
 is not symmetric. Over the tail that matters the 5th percentile is -0.66 and the 95th is
@@ -898,7 +917,8 @@ on.** `risk/scenario.py` used to take a secondary's hard-body radius from `sqrt(
 for payloads, rocket bodies and debris, exactly the proxy that fails here, so those
 probabilities were biased low. The formula is gone, replaced by the median chaser radius of
 each object type and cross-section class in these same rows — half the median `c_span`,
-since `(t_span + c_span) / 2` is what reproduces ESA's column with nothing fitted. The
+since `(t_span + c_span) / 2` is what reproduces ESA's column with no parameter fitted on the
+rows it is scored on (confirmed held out). The
 cross-section survives as a *class* (small below 0.1 m2, medium to 1 m2, large above),
 which is the part of it that carries size information.
 

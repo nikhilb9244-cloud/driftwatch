@@ -315,7 +315,7 @@ function flagChip(flag: string, confidence: string, region: string): string {
 /** `indicative` and `operator-controlled` get a marker; `validated` and `none` do not need one on every row. */
 function validityChip(validity: string | undefined): string {
   if (validity === "indicative") {
-    return `<span class="chip-validity" title="At least one of the two objects has no ballistic coefficient measured from its own decay. Step 4 found the storm term predictive at r = 0.88 with a measured coefficient and of no demonstrated skill without one. The number is not adjusted for this; the label says the validation does not reach it.">indicative</span>`;
+    return `<span class="chip-validity" title="At least one of the two objects has no ballistic coefficient measured from its own decay. Step 4 found the storm term's sign right on about nine comparisons in ten at three to four days of lead with a measured coefficient, and of no demonstrated skill without one. The number is not adjusted for this; the label says the validation does not reach it.">indicative</span>`;
   }
   if (validity === "operator-controlled") {
     return `<span class="chip-validity" title="Both objects are under operator control: on an operator's published trajectory, or station-kept or observed manoeuvring. The storm term applies no displacement to either, because the excess over SGP4's atmosphere is undefined for a trajectory that already carries the operator's drag model and burns. The storm's whole effect on this pair is the widened covariance.">operator-controlled</span>`;
@@ -538,8 +538,8 @@ export function buildConjunctionPanel(
 const VALIDITY_TEXT: Record<string, string> = {
   validated:
     "validated — both objects have a ballistic coefficient fitted from their own decay, which is the " +
-    "population Step 4 measured the storm term against (r = 0.88). Skill is concentrated at three to " +
-    "four days of lead and near zero inside two.",
+    "population Step 4 measured the storm term against: the predicted sign right on about nine " +
+    "comparisons in ten at three to four days of lead, and no skill inside two. One storm.",
   indicative:
     "indicative — at least one object's coefficient is a B* inversion, a population stand-in, or absent. " +
     "The storm term has no demonstrated skill there. The number is not adjusted for this.",
@@ -619,8 +619,10 @@ function eventDetailHtml(
            that one is unlikely. The data cannot support a judgement either way. Better tracking would shrink the
            covariance and move the nominal miss together, so nothing here predicts which way this would go.</p>`
         : `<p class="caveat">The probability is limited by the geometry rather than by the uncertainty. It still
-           rests on a covariance estimated from how much each object's own element sets disagree, which is a floor
-           on the error and not a measurement of it.</p>`;
+           rests on a covariance estimated from how much each object's own element sets disagree, which measures
+           their consistency and not their accuracy: successive sets share observations and assumptions, so it
+           bounds the true error in neither direction without an independent calibration, and none has been
+           made.</p>`;
 
   const stormNote = stormy
     ? `<p class="caveat">The dashed arrow is the storm's whole effect on the geometry: it runs from the quiet

@@ -932,6 +932,75 @@ def test_a_docked_object_is_excluded_structurally_and_a_real_conjunction_is_not(
     assert summary["attached_candidates_dropped"] == result.stage_b.n_attached_candidates
 
 
+def test_a_twin_on_the_same_element_set_is_reported_attached_though_it_produces_no_candidate():
+    """What the runner saw on 2026-09-03 and 2026-09-04: ten pairs excluded, no candidate dropped.
+
+    The catalogue carries the ISS and its attached objects on one element set, and how many
+    digits of it depends on the object: on the afternoon of 2026-09-03 both Space-Track and
+    CelesTrak published the station's own record at TLE precision (eccentricity 0.0005015,
+    seven decimals) and its modules' at eight (0.00050146), same epoch. Two copies of one set that
+    differ in the eighth decimal separate by a few tenths of a metre, once an orbit, and Stage B
+    finds a candidate at every closest approach -- 2,170 of them on the local run. Two copies that
+    agree to the last digit never separate at all, the range rate never changes sign, and Stage B
+    finds nothing to drop -- which is what both runner runs reported, on a catalogue that by then
+    carried the whole cluster on one copy. Both are the filter working: the pair is reported
+    attached either way, and the number of candidates dropped is a property of the input, not
+    of the machine. This pins that reading so the two reports are never again read as a
+    disagreement between environments.
+    """
+    primary = primary_satrec()
+    twin = satrec_from_elements(
+        90005,
+        PRIMARY_EPOCH,
+        primary.no_kozai * 1440.0 / (2.0 * np.pi),
+        primary.ecco,
+        np.degrees(primary.inclo),
+        np.degrees(primary.nodeo),
+        np.degrees(primary.argpo),
+        np.degrees(primary.mo),
+        primary.bstar,
+    )
+    # The modules' record beside the station's on 2026-09-03: the same set, four units in the eighth
+    # decimal of the eccentricity apart, which is what one copy rounded to seven decimals looks like.
+    rounded = satrec_from_elements(
+        90006,
+        PRIMARY_EPOCH,
+        primary.no_kozai * 1440.0 / (2.0 * np.pi),
+        primary.ecco + 4e-8,
+        np.degrees(primary.inclo),
+        np.degrees(primary.nodeo),
+        np.degrees(primary.argpo),
+        np.degrees(primary.mo),
+        primary.bstar,
+    )
+    fleet = fleet_of((PRIMARY_ID, "PRIMARY", True))
+    config = ScreeningConfig(days=2.0, step_s=60.0)
+
+    exact = screen_fleet(
+        snapshot_from({PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH), 90005: (twin, "TWIN", PRIMARY_EPOCH)}),
+        fleet,
+        config=config,
+        start=START,
+    )
+    row = exact.stage_b.attached.set_index("secondary_norad_id").loc[90005]
+    assert row["fraction_below"] == 1.0 and row["d_max_km"] == 0.0 and row["d_min_km"] == 0.0
+    assert exact.stage_b.n_attached_candidates == 0  # nothing to drop: the range rate never changed sign
+    assert exact.summary()["attached_pairs_excluded"] == 1 and exact.summary()["attached_candidates_dropped"] == 0
+    assert exact.events.empty
+
+    close = screen_fleet(
+        snapshot_from({PRIMARY_ID: (primary, "PRIMARY", PRIMARY_EPOCH), 90006: (rounded, "ROUNDED", PRIMARY_EPOCH)}),
+        fleet,
+        config=config,
+        start=START,
+    )
+    row = close.stage_b.attached.set_index("secondary_norad_id").loc[90006]
+    assert row["fraction_below"] == 1.0 and 0.0 < row["d_max_km"] < 0.002  # a metre or so, once an orbit
+    assert close.stage_b.n_attached_candidates > 10  # one closest approach an orbit over two days
+    assert close.summary()["attached_candidates_dropped"] == close.stage_b.n_attached_candidates
+    assert close.events.empty
+
+
 def test_keep_attached_restores_the_docked_events_unchanged():
     """The exclusion is reversible by a flag, and reversing it changes nothing else.
 

@@ -109,6 +109,12 @@ shorter bins. The covariance is meant to be a floor on the error, so the measure
 consistency in the shortest bin joins CelesTrak's published fit RMS as the floor, and no
 growth law can undercut a disagreement that was actually measured.
 
+> Corrected 2026-09-05: "a floor on the error" overstates it. The consistency of successive fits
+> bounds their accuracy in neither direction, because the fits share observations and assumptions
+> (`docs/methods.md`, "Uncertainty and probability"). The rule above stands as a rule about the
+> *model* — no growth law may undercut a measured disagreement — and not as a claim about the
+> truth.
+
 **The horizon moves out on its own.** `driftwatch supplemental` fetches a version, stores
 it, thins versions older than a fortnight to one a day, and with `--fit` refits across the
 whole store and prints the bins. It runs every three hours from
@@ -1234,7 +1240,9 @@ An element set issued on 12 May already contains the storm. **A quiet control at
 times**, because SGP4 drifts along track quadratically with no storm at all; the control turns
 out to be a median 10.2 km over 2.9 days, which is comparable with the storm signal at short
 leads and is the difference between a measurement and an artefact. **The later element set is
-not truth** — it is another fit, so what is measured is a floor on the propagation error.
+not truth** — it is another fit, so what is measured is the disagreement between two fits by the
+same network, which bounds the propagation error in neither direction (corrected 2026-09-05; this
+sentence called it a floor).
 
 ### The population is narrowed twice, and both narrowings are stated
 

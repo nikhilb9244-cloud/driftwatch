@@ -4,6 +4,8 @@ target. The second test is skipped with a clear message when the download has no
 
 from __future__ import annotations
 
+from pathlib import Path
+
 import numpy as np
 import pandas as pd
 import pytest
@@ -124,6 +126,51 @@ def test_a_per_object_radius_is_recovered_from_the_span_columns():
         kelvins.combined_radius_m(df, "mass")
 
 
+def test_the_span_convention_is_chosen_on_one_half_and_holds_on_the_other():
+    """The held-out check recovers the multiplier on rows it fits and scores it on rows it never saw.
+
+    Twelve designed events with twelve radii, split by event: the half the multiplier is chosen on
+    picks 1.0, the held-out half reproduces to the integrator's precision, and the held-out half's
+    own choice is 1.0 too. Then the same rows with every span halved: the fitting half chooses a
+    multiplier of two and the report says the convention is a fit.
+    """
+    radii = np.linspace(2.0, 30.0, 12)
+    df = synthetic_frame(hbr_m=radii)
+    a, b = kelvins.split_by_event(df, seed=3)
+    assert len(a) + len(b) == len(df) and not set(a["event_id"]) & set(b["event_id"])
+    check = kelvins.held_out_check(a, b, label="designed", tail_risk=-30.0 + 1e-9)
+    assert check["fit_scale"] == pytest.approx(1.0) and check["held_own_scale"] == pytest.approx(1.0)
+    assert abs(check["held_median_residual"]) < 1e-4 and check["held_within_factor_two"] == 1.0
+    assert check["n_fit"] == len(a) and check["n_held"] == len(b)
+
+    halved = df.assign(t_span=df["t_span"] / 2.0, c_span=df["c_span"] / 2.0)
+    checks = kelvins.held_out_checks(halved, None, seed=3, tail_risk=-30.0 + 1e-9)
+    assert len(checks) == 2 and all(c["fit_scale"] == pytest.approx(2.0) for c in checks)
+    text = kelvins.to_markdown(
+        kelvins.fit_hbr(halved, tail_risk=-30.0 + 1e-9),
+        kelvins.config.KELVINS_DIR / "s.csv",
+        held_out=checks,
+    )
+    assert "### Confirmed on a held-out split" in text and "do not agree on the multiplier" in text
+    good = kelvins.to_markdown(kelvins.fit_hbr(df, tail_risk=-30.0 + 1e-9), Path("s.csv"), held_out=[check])
+    assert "holds out of sample" in good
+
+    # A test file beside the training file is found; the training file is never its own test set.
+    with pytest.raises(ValueError, match="event_id"):
+        kelvins.split_by_event(df.drop(columns=["event_id"]))
+
+
+def test_find_test_dataset_looks_beside_and_one_level_up(tmp_path):
+    (tmp_path / "train_data").mkdir()
+    train = tmp_path / "train_data" / "train_data.csv"
+    train.write_text("a\n1\n", encoding="utf-8")
+    assert kelvins.find_test_dataset(train) is None
+    test = tmp_path / "test_data.csv"
+    test.write_text("a\n1\n", encoding="utf-8")
+    assert kelvins.find_test_dataset(train) == test
+    assert kelvins.find_test_dataset(test) is None
+
+
 def test_the_residual_plot_is_valid_svg_with_both_medians():
     import xml.etree.ElementTree as ET
 
@@ -191,6 +238,30 @@ def test_kelvins_risk_column_is_reproduced_within_a_factor_of_two_across_the_tai
     operational = fit.report["by_risk_bin"]["[-4, -3)"]
     assert abs(operational["median"]) <= np.log10(2.0), operational
     assert operational["within_factor_two"] >= overall["within_factor_two"], operational
+
+
+@pytest.mark.skipif(kelvins.find_dataset() is None, reason=SKIP_MESSAGE)
+def test_the_span_convention_holds_on_rows_it_was_not_recovered_from():
+    """The convention came out of the evaluation data, so it is confirmed like a fitted parameter would be.
+
+    Each half of the training events, split by event, chooses a multiplier of one on its own and
+    reproduces the other half; and the multiplier chosen on the whole training file reproduces the
+    challenge's separate test file. Only on this basis does any page say nothing was fitted.
+    """
+    path = kelvins.find_dataset()
+    assert path is not None
+    train = kelvins.load_kelvins(path)
+    test_path = kelvins.find_test_dataset(path)
+    test = kelvins.load_kelvins(test_path) if test_path is not None else None
+    checks = kelvins.held_out_checks(train, test)
+    assert len(checks) == 3 if test is not None else 2
+    for check in checks:
+        assert check["fit_scale"] == pytest.approx(1.0), check
+        assert check["held_own_scale"] == pytest.approx(1.0), check
+        assert abs(check["held_median_residual"]) <= 0.01, check  # within a couple of percent in probability
+        # The whole tail sits at 87 % within a factor of two; a half of it drawn by event lands within a
+        # few points of that (84.5 % on one draw), so the bar is the target the fit was set, not the tail.
+        assert check["held_within_factor_two"] >= 0.80, check
 
 
 @pytest.mark.skipif(kelvins.find_dataset() is None, reason=SKIP_MESSAGE)

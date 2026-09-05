@@ -69,9 +69,11 @@ ratio can be read against the sizes it came from.
 
 ## Every aggregate twice: validated and indicative
 
-Step 4 measured the storm term against May 2024 and found it predictive at r = 0.88 for an
-object whose ballistic coefficient was fitted from its own decay, and of no demonstrated skill
-for one carrying a B\\* inversion or a population stand-in. An event needs **both** its objects
+Step 4 measured the storm term against May 2024 and found skill -- the right sign on about nine
+comparisons in ten at three to four days of lead, none inside two -- for an object whose ballistic
+coefficient was fitted from its own decay, and no demonstrated skill for one carrying a B\\*
+inversion or a population stand-in. (The r = 0.88 once quoted here moved to 0.64 on a redrawn
+sample and is not a stable figure; ``docs/storm-validation.md``.) An event needs **both** its objects
 measured before the validation reaches it, so every event carries ``storm_validity``
 (:func:`driftwatch.storm.term.event_validity`) and every table below is reported over the
 ``validated`` events, over the ``indicative`` ones, and over both together -- never over both

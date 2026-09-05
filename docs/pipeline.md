@@ -319,6 +319,37 @@ binding limit. The runtime budget above stops fitting a six-hour job at about tw
 three and a half times the demo fleet, so the runtime gives out first by a factor of three. The
 two are worth keeping apart: they are fixed by different things and relieved by different levers.
 
+## Reproducibility (2026-09-05)
+
+**The rule.** Nothing goes to production until the same inputs have been shown to give the same
+events on the runner and on another machine. The workflow enforces it: a production deploy is
+downgraded to a preview, with a warning in the log, until `REPRODUCED_RUN` in
+`.github/workflows/pipeline.yml` names an archived run whose events were reproduced elsewhere
+from the same stored inputs. The name is set by hand, after the comparison below has been made
+and recorded here; it is not set by the pipeline.
+
+**The mode.** A dispatch with `spacex: no` skips the ephemeris fetch and screens and scores with
+`--no-spacex`, so that every input of that run — the catalogue snapshot, the supplemental
+version, the weather tables, the ballistic coefficients — is on the store branch afterwards and
+the run can be repeated from the archive and the branch alone. The operator's ephemeris files
+are the one input that is never stored (`docs/spacex-ephemerides.md`, terms), so a run that used
+them can only be reproduced over the events that did not involve a served object; the
+comparison is therefore made on a `spacex: no` run, and a served run's reproducibility is
+bounded by that partition.
+
+**The discrepancy this was built to settle, and what it was.** The attached-object filter
+dropped 2,170 candidates on the local 3 September run and none on two runner runs, all three
+reporting the same ten ISS pairs excluded. It was the input, not the machine. On the afternoon
+of 2026-09-03 both Space-Track and CelesTrak carried the station's own record at TLE precision
+(eccentricity 0.0005015, seven decimals) and its ten attached objects' records at eight
+(0.00050146), same epoch: one element set, two copies four units apart in the eighth decimal,
+which propagate 0.27 to 0.58 m apart once an orbit, so Stage B finds a closest approach every
+orbit and the filter has 217 candidates a pair to drop. By the time the runner fetched, the
+whole cluster was on one copy to the last digit: zero separation, a range rate that never
+changes sign, no candidate, nothing to drop — and the filter still reporting the pair attached,
+which is what made the two reports comparable at all. `tests/test_screening.py` pins both
+readings, and `docs/phase4-plan.md` (Step 2, the attached-object filter) carries the note.
+
 ## How it fails
 
 The rule is that **a failure never publishes**. Every check is a step that exits non-zero, and a

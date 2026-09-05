@@ -88,9 +88,10 @@ def shift_series(norad_id: int, source: str) -> term.ShiftSeries:
 def test_the_weaker_of_the_two_coefficient_sources_decides(primary, secondary, expected):
     """A relative shift is the difference of two displacements, so the worse-known one bounds it.
 
-    Step 4 found the term predictive at r = 0.88 for an object whose coefficient was fitted from
-    its own decay and of no demonstrated skill for one carrying a B* inversion, so an event is
-    only validated when *both* sides were measured.
+    Step 4 found the term's sign right on about nine comparisons in ten at three to four days of
+    lead for an object whose coefficient was fitted from its own decay, and of no demonstrated
+    skill for one carrying a B* inversion, so an event is only validated when *both* sides were
+    measured.
     """
     assert term.event_validity(primary, secondary) == expected
     assert term.event_validity(secondary, primary) == expected, "the rule is symmetric in the pair"

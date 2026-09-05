@@ -34,6 +34,21 @@ furthest ahead. So Stage C now screens on the published states themselves where 
 (`docs/methods.md`, "Where an operator publishes states, those are the trajectory";
 `docs/spacex-ephemerides.md`).
 
+**Qualified 2026-09-05, after a second external review.** The headline is one lead bin of a six-bin
+table, measured on nineteen satellites on one date, against the operator's *published prediction*
+rather than the realised orbit: a 72-hour file carries planned burns and the operator's drag model,
+and whether the fit or the file is nearer where the satellite went cannot be told from it. The
+lineage of each pair was then checked, because a set fitted to one file and compared with another
+would be measuring the revision of the plan as well: a supplemental set's epoch is the start of the
+file it was fitted to, and of the 300 stored pairs from the same day 17 share their file with the
+states they are compared against, 105 were fitted to an earlier file and 178 to a later one. All
+three give the same curve (the 17 verified pairs: 0.29, 2.8, 11.8, 27.6, 51.8 and 82.2 km by bin),
+so the disagreement is not the plan changing between files. What stays open is why the fit drifts:
+past 24 hours it runs ahead of the file on nine of the verified objects and behind on eight, which
+planned manoeuvres inside the file would do and fit noise in the mean motion would do equally, and
+only the next file's first states, the nearest thing to a realised trajectory SpaceX publishes,
+could separate them (`docs/spacex-ephemerides.md`, "Lineage, checked").
+
 ### 2. The published files are in a different frame from the one the catalogue uses, and only the filename says so
 
 SpaceX's states are in MEME (J2000). The file header names the covariance frame and never the
@@ -53,28 +68,31 @@ attempt to match derivatives is the likely explanation. An interpolant must not 
 use of these files that assumes one smooth 72-hour arc is wrong by a few hundred metres for part
 of it (`docs/methods.md`, screening; `docs/spacex-ephemerides.md`).
 
-### 4. The storm term has demonstrated skill for one population, at one end of the window
+### 4. The storm term has demonstrated skill for one population, at one end of the window, on one storm
 
 The in-track displacement a storm produces was measured against the May 2024 Gannon storm as a
 forecast test: each object's last pre-storm element set propagated through the storm and compared
 with the sets issued during it, against a quiet control at the same lead times
 (`docs/storm-validation.md`).
 
-- **It is predictive only where the ballistic coefficient was measured from the object's own
-  decay** (correlation 0.88 over 422 comparisons), and has **no demonstrated skill** for an object
-  carrying a B\* inversion or a population stand-in (correlation −0.10 over the free-flying
-  population as a whole; a B\* coefficient regresses at slope −1.39). Every event therefore carries
-  `storm_validity`, and every aggregate is reported over the validated events, the indicative ones
-  and both, never both alone.
+- **It has skill only where the ballistic coefficient was measured from the object's own decay**,
+  and **no demonstrated skill** for an object carrying a B\* inversion or a population stand-in (a
+  B\* coefficient regresses at slope −1.39; the free-flying population as a whole is uncorrelated).
+  Every event therefore carries `storm_validity`, and every aggregate is reported over the validated
+  events, the indicative ones and both, never both alone. The correlation of 0.88 this bullet used
+  to quote for the measured population is withdrawn as a headline (item 5, third claim): it was 0.64
+  when the sample was redrawn on 2026-09-05, and no correlation is quoted.
 - **The skill is concentrated at three to four days of lead and is near zero inside two**
-  (recomputed 2026-09-05). On the validated population the observed sign agrees with the
-  predicted one on 39 and 41 per cent of comparisons at one and two days, chance being 50, and on
-  91 and 96 per cent at three and four; the robust slope is −0.15 and −0.04 inside two days
-  against 0.63 and 0.71 beyond. The quiet-time propagation error is already 10 km at three days,
-  and a predicted storm shift of 2 to 5 km at one or two days is inside it. A storm forecast one
-  or two days out is an uncertainty on an event, not a correction to it.
-- **NRLMSIS 2.1 over-predicts the storm's three-day density enhancement by about 22 per cent**
-  over 450 to 2,000 km with no resolvable altitude dependence, in the opposite direction to the
+  (recomputed 2026-09-05, and reproduced on a redrawn sample the same day). On the validated
+  population the observed sign agrees with the predicted one on 39 and 41 per cent of comparisons
+  at one and two days on the first draw and 38 and 33 on the second, chance being 50, and on 91 and
+  96 per cent at three and four (88 and 97 on the second draw); the robust slope is −0.15 and −0.04
+  inside two days against 0.63 and 0.71 beyond (−0.12 and −0.09 against 0.63 and 0.75). The
+  quiet-time propagation error is already 8 to 10 km at three days, and a predicted storm shift of 2
+  to 5 km at one or two days is inside it. A storm forecast one or two days out is an uncertainty on
+  an event, not a correction to it.
+- **NRLMSIS 2.1 over-predicts the storm's three-day density enhancement by 22 to 23 per cent** (the
+  two draws) over 450 to 2,000 km with no resolvable altitude dependence, in the opposite direction to the
   published accelerometer assessments, which measure a different quantity (the peak, at a point).
   Recorded and deliberately not applied; a test pins the untuned prior.
 - **Corrected 2026-09-05: the term must not be applied to operator-controlled objects.** A
@@ -92,7 +110,7 @@ with the sets issued during it, against a quiet control at the same lead times
   from 0 red, 16 yellow and 71 unscoreable to 1 red, 19 yellow and none, and the storm scenarios
   likewise, the one red being the dilution-region flag in item 5.
 
-### 5. Two headlines were falsified, and both corrections are dated
+### 5. Three headlines were withdrawn, and every correction is dated
 
 **"A storm lowers the probability on most events, because the two objects are displaced alike."**
 Falsified twice. The explanation, common-mode cancellation, went on 2026-09-03: the diagnostic
@@ -123,11 +141,44 @@ confidence, in the notes, the report and the viewer. What survives is that the c
 trajectory moved a dilution-region probability across the red threshold at a fifteen-hour lead,
 which the term Phase 2 carried for that choice could not have done (`docs/writeup-notes.md`).
 
+**"The storm term is predictive at r = 0.88 where the coefficient is measured."** Withdrawn
+2026-09-05 by the project's own rerun of the validation, made to write the lead-time table into
+`gannon.json`. The sample is drawn from the latest snapshot, and the redraw shared four objects with
+the 2 September draw: 101 measured-coefficient objects and 498 comparisons against 81 and 422, and
+a correlation of 0.64 against 0.88. On the four shared objects the two runs agree to the third
+decimal, so the code did not move; the statistic did, because a Pearson correlation on this
+population is carried by its largest events (dropping the largest two per cent of predictions takes
+0.88 to 0.68 and 0.64 to 0.55) and the two draws had different large events. What reproduced: the
+robust slope (0.65, then 0.68), the sign agreement at three and four days (91 and 96 per cent, then
+88 and 97), the absence of skill inside two days, the density over-prediction (22 per cent, then 23)
+and the absence of skill without a measured coefficient. So `validated` on a row means what it
+always meant, that both coefficients were measured, and the claim behind it is the bounded one
+below, with no correlation in it (`docs/storm-validation.md`, "Redrawn 2026-09-05").
+
+**What the storm work shows, bounded (2026-09-05).** On one storm, May 2024, for free-flying
+objects whose ballistic coefficient was measured from their own decay, the storm term's predicted
+in-track shift agrees in sign with the observed one on about nine comparisons in ten at three and
+four days of lead (91 and 96 per cent on one draw of the sample, 88 and 97 on another), with a
+robust slope of 0.63 to 0.75; inside two days the sign agreement is below chance and the robust
+slope is zero or negative; without a measured coefficient there is no demonstrated skill at any
+lead. NRLMSIS 2.1 over-predicts the storm's three-day density enhancement by 22 to 23 per cent on
+the two draws, and nothing is tuned to it. No correlation is quoted, because the one that was moved
+from 0.88 to 0.64 between draws. What none of this measures: the term's skill on a second storm, its
+calibration against an independent truth (the later element sets are fits by the same network, so
+the comparison bounds the error in neither direction), the direction in which a storm moves a
+free-flying event's probability, or the covariance driftwatch puts around any event, which the
+Kelvins reproduction does not calibrate either. The sample is drawn from today's catalogue, so the
+3,891 objects that decayed since May 2024 are absent from it.
+
 Everything above is indicative, not operational: the covariances come from the consistency of
-public element sets, which is a floor on the error rather than a measurement of it, and the
-probabilities are computed by the two-dimensional method, which is a known underestimate for slow
-encounters. `docs/methods.md` lists every approximation, with the precedent this rests on
-(Flohrer, Krag and Klinkrad, 2008; Parker and Linares, 2024) and what is done differently.
+public element sets, which measures how much successive fits by one network disagree and bounds
+their accuracy in neither direction, because successive sets share observations and assumptions and
+nothing here has been calibrated against an independent truth (`docs/methods.md`, "Uncertainty and
+probability", says what such a calibration would need); the Kelvins reproduction validates the
+probability arithmetic on ESA's inputs and calibrates none of this; and the probabilities are
+computed by the two-dimensional method, which is a known underestimate for slow encounters.
+`docs/methods.md` lists every approximation, with the precedent this rests on (Flohrer, Krag and
+Klinkrad, 2008; Parker and Linares, 2024) and what is done differently.
 
 **Status: Phases 1 to 3 built; Phase 4 stops at the pipeline** (a daily GitHub Actions run that
 fetches, screens, scores every scenario, publishes to Vercel and keeps every run). The landing
@@ -192,9 +243,10 @@ What works today:
   pairs only. See `docs/storm-term.md`.
 - Every aggregate the tool prints is reported **twice**: over the events whose two objects both
   have a ballistic coefficient measured from their own decay (`validated`), and over the rest
-  (`indicative`). Step 4 measured the storm term against May 2024 and found it predictive at
-  r = 0.88 with a measured coefficient and of no demonstrated skill without one, so the split is
-  the difference between a measurement and an extrapolation. `storm_validity` is on every row.
+  (`indicative`). Step 4 measured the storm term against May 2024 and found its sign right on
+  about nine comparisons in ten at three to four days of lead with a measured coefficient, no
+  skill inside two days, and no demonstrated skill without a measured coefficient, so the split
+  is the difference between a measurement and an extrapolation. `storm_validity` is on every row.
 - `driftwatch snapshot-as-of --date <when>` rebuilds the catalogue as it stood on a past date
   from `gp_history`, taking each object's newest element set **at or before** that date and
   nothing later, bounded by an altitude range or a launch's international designator to keep the
@@ -249,9 +301,13 @@ What works today:
   successive versions and CelesTrak keeps only the latest one.
 - `driftwatch kelvins` reproduces the risk column of ESA's Kelvins Collision Avoidance
   Challenge data from its own inputs. The hard-body radius ESA used turns out to be in
-  the data: with the combined radius taken as `(t_span + c_span) / 2` and nothing fitted,
-  the 162,634-row training set is reproduced to a median residual of 0.07 % with 87 % of
-  the high-risk tail within a factor of two (`docs/kelvins-reproduction.md`).
+  the data: with the combined radius taken as `(t_span + c_span) / 2`, the 162,634-row
+  training set is reproduced to a median residual of 0.07 % with 87 % of the high-risk tail
+  within a factor of two. The convention was recovered from those rows, so it is confirmed on
+  held-out splits (each half of the events against the other, and the training file against
+  the challenge's test file) before being called unfitted. It validates the probability
+  arithmetic on ESA's inputs and does not calibrate driftwatch's covariance
+  (`docs/kelvins-reproduction.md`).
 - `driftwatch cdm match <run> --cdm <dir>` reads an operator's Conjunction Data Messages
   (CCSDS 508.0-B-1, KVN or XML), matches them to a stored run's events on the object pair and
   a ten-minute TCA tolerance, and reports which operator-warned conjunctions public data found
@@ -433,8 +489,9 @@ data/                   cache, snapshots, history, supplemental and SpaceX ephem
 - `docs/data-schema.md`: every column in the snapshot, state, conjunction and viewer files.
 - `docs/screening.md`: the three screening stages, the step-and-threshold derivation
   with its brute-force proof, what an event's numbers mean; then the covariance from
-  element-set consistency and why it is a floor, the manoeuvre flag, the encounter
-  plane, the three probability integrators, the dilution maximum and the flags.
+  element-set consistency and why it is a consistency measure and not a bound on accuracy,
+  the manoeuvre flag, the encounter plane, the three probability integrators, the dilution
+  maximum and the flags.
 - `docs/methods.md`: the running list of approximations.
 - `docs/kelvins-reproduction.md`: the ESA Kelvins reproduction as the command writes it,
   with `docs/kelvins-reproduction.svg`, the residual against ESA's risk.

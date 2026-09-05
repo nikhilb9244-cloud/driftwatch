@@ -494,10 +494,12 @@ def build_bundle(
             "probability was computed from; the geometry's own miss is what the two element sets predicted "
             "before the storm term moved them, and the two answer different questions.",
             "storm_validity says how far Step 4's May 2024 validation reaches an event: validated when both "
-            "objects have a ballistic coefficient fitted from their own decay, indicative otherwise. The "
-            "storm term is predictive at a correlation of 0.88 for the first group and has no demonstrated "
-            "skill for the second. Nothing is weighted or withheld by the label and every aggregate is "
-            "reported both ways.",
+            "objects have a ballistic coefficient fitted from their own decay, indicative otherwise. With a "
+            "measured coefficient the term's predicted sign is right on about nine comparisons in ten at "
+            "three to four days of lead and it has no skill inside two; without one it has no demonstrated "
+            "skill at any lead (one storm; no correlation is quoted, the 0.88 once given moved to 0.64 on a "
+            "redrawn sample). Nothing is weighted or withheld by the label and every aggregate is reported "
+            "both ways.",
             "The storm displaces the two objects of a free-flying pair nearly independently, not in common: "
             "the relative shift is a median 1.85 times the mean of the two absolute shifts, out of a possible "
             "2. Whether a displacement lowers or raises an event's probability depends on its size against "
@@ -815,9 +817,10 @@ def storm_section(rows: pd.DataFrame, scenario: str) -> list[str]:
 
     Empty for a scenario with no storm layer. The order is fixed -- validated, indicative,
     combined -- and the combined column is never the only one, because Step 4 measured the term
-    against the May 2024 record and found it predictive at r = 0.88 only where **both** objects
-    have a ballistic coefficient fitted from their own decay. A median taken over a population
-    that is mostly indicative reads as a measurement and is not one.
+    against the May 2024 record and found skill (the right sign on about nine comparisons in ten
+    at three to four days of lead) only where **both** objects have a ballistic coefficient fitted
+    from their own decay. A median taken over a population that is mostly indicative reads as a
+    measurement and is not one.
     """
     if "relative_shift_km" not in rows.columns or not len(rows):
         return []
@@ -834,11 +837,14 @@ def storm_section(rows: pd.DataFrame, scenario: str) -> list[str]:
         "**Every figure here is given both ways.** `validated` means **both** objects of the event "
         "have a ballistic coefficient fitted from their own decay history; `indicative` means at "
         "least one rests on a B\\* inversion, a population stand-in, or no coefficient at all. Step 4 "
-        "measured the storm term against the May 2024 record and found it predictive at a "
-        "correlation of **0.88** for objects with a measured coefficient and of **no demonstrated "
-        "skill** otherwise, so the split is the difference between a measurement and an "
-        "extrapolation. Nothing is weighted, widened or withheld by the label — the numbers are "
-        "identical either way, and the label says how far the validation reaches.",
+        "measured the storm term against the May 2024 record: with a measured coefficient the "
+        "predicted sign is right on about **nine comparisons in ten at three to four days of lead** "
+        "(robust slope 0.65 to 0.75) and there is no skill inside two days; without one there is **no "
+        "demonstrated skill** at any lead. One storm, and no correlation is quoted — the 0.88 once "
+        "given here moved to 0.64 when the sample was redrawn (2026-09-05). So the split is the "
+        "difference between a measurement and an extrapolation. Nothing is weighted, widened or "
+        "withheld by the label — the numbers are identical either way, and the label says how far "
+        "the validation reaches.",
         "",
         "**Operator-controlled objects are not displaced** (corrected 2026-09-05). An object on the "
         "operator's own published trajectory, or CelesTrak's fit to it, already carries the operator's "
@@ -1016,8 +1022,10 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         "## How to read this",
         "",
         "- **The probability is not a forecast.** The covariance comes from how much each object's own "
-        "element sets disagree after propagation, which is a floor on the error and not a measure of it "
-        f"(`docs/screening.md`). Secondaries here: {sources}.",
+        "element sets disagree after propagation. That is a measure of consistency, not of accuracy, and "
+        "it bounds the accuracy in neither direction: successive sets share observations and assumptions, "
+        "so an error common to them is invisible here, and nothing here has been calibrated against an "
+        f"independent truth (`docs/screening.md`). Secondaries here: {sources}.",
         "- **Maximum probability and its scale.** `Max Pc` is the largest probability over covariance scale "
         "factors from 0.1 to 10, with the miss held fixed. Where its scale is above one the covariance is "
         "smaller than the miss and a larger uncertainty would raise the probability; where it is below one "

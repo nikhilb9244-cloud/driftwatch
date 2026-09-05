@@ -23,8 +23,9 @@ carries the shifted miss and the viewer's Miss column reads from it.
 **Every aggregate in the summary is given both ways**, over the events whose two objects both
 have a ballistic coefficient measured from their own decay and over the rest, plus a third
 population for events whose two objects are both operator-controlled and so were not displaced
-(2026-09-05). Step 4 measured the storm term against the May 2024 record and found it predictive
-at r = 0.88 for the first group and of no demonstrated skill for the second. A single combined
+(2026-09-05). Step 4 measured the storm term against the May 2024 record and found skill for the
+first group -- the right sign on about nine comparisons in ten at three to four days of lead, none
+inside two -- and no demonstrated skill for the second. A single combined
 figure averages populations the validation reaches differently, weighted by the coverage of the
 coefficient fit rather than by physics. (The 0.16-against-0.89 split this docstring used to quote
 was an artefact of displacing operator-controlled objects; `docs/storm-term.md`, "Corrected
@@ -374,9 +375,11 @@ def build_overlays(run: RunDirectory, bundle: dict[str, Any]) -> dict[str, Any]:
             "The miss under a scenario is the shifted miss, not the geometry's: the scenario moved "
             "the objects, and the shifted miss is what its probability was computed from.",
             "storm_validity is validated when both objects have a ballistic coefficient fitted from "
-            "their own decay and indicative otherwise. The storm term is predictive at r = 0.88 for "
-            "the first group and has no demonstrated skill for the second, so every aggregate is "
-            "given both ways. Nothing is weighted or withheld by the label.",
+            "their own decay and indicative otherwise. For the first group the storm term's predicted "
+            "sign is right on about nine comparisons in ten at three to four days of lead and it has "
+            "no skill inside two (one storm; no correlation is quoted); for the second it has no "
+            "demonstrated skill, so every aggregate is given both ways. Nothing is weighted or "
+            "withheld by the label.",
             "An operator-controlled object -- one on an operator's published trajectory, or a "
             "station-kept or observed-manoeuvring satellite -- is given no mean shift under any "
             "scenario, because the storm excess is undefined for a trajectory that already carries "

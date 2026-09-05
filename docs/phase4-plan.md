@@ -616,6 +616,21 @@ of what they are: ten catalogue entries propagating one element set. (The thresh
 says 0.857 m rather than 0.862 m because it came from a 300-second diagnostic sweep; the run's
 own grid is 30 seconds and catches a slightly higher peak. Nothing turns on the difference.)
 
+> **Why the runner dropped nothing, explained 2026-09-05.** Both runner runs (2026-09-03 19:11
+> and 2026-09-04 11:18) reported the same ten pairs excluded and **no candidate dropped**, and
+> "never more than 0 m apart"; this run dropped 2,170 candidates at 0.198 to 0.862 m. It is the
+> input, not the machine. On the afternoon of 2026-09-03 both Space-Track and CelesTrak carried
+> the station's own record at TLE precision — eccentricity 0.0005015, seven decimals — and the
+> ten attached objects' records at eight (0.00050146), same epoch: one element set, two copies
+> four units apart in the eighth decimal, which propagate 0.27 to 0.58 m apart, once an orbit, so
+> Stage B finds a closest approach on every orbit and the filter has 217 candidates a pair to
+> drop. By the time the runner fetched, the whole cluster was on one copy to the last digit: the
+> separation is exactly zero, the range rate never changes sign, Stage B has no candidate, and
+> the filter reports the pair attached with nothing to drop. Both are the filter working, and
+> `tests/test_screening.py` now pins both readings (the twin on the same set, the twin four units
+> off in the eighth decimal). The remaining question — whether the same snapshot gives the same
+> events on both machines — is answered in `docs/pipeline.md`, "Reproducibility".
+
 **Cost.** Stage B went from 205.1 s to 239.8 s, a **17 per cent overhead** for five array
 reductions per chunk per primary group over the same separations Stage B already computes. Read
 that as an upper bound rather than a measurement: the two runs were not alone on the machine and

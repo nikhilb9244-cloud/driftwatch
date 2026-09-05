@@ -16,8 +16,10 @@
  * The summary block is the one place the storm's effect is stated as a number rather than
  * implied by a list, and it is given **both ways** — over the events whose two objects both
  * have a ballistic coefficient measured from their own decay, and over the rest. Step 4 found
- * the storm term predictive at r = 0.88 for the first group and of no demonstrated skill for
- * the second. A third column, `operator-controlled`, holds the events whose two objects were both
+ * the storm term's sign right on about nine comparisons in ten at three to four days of lead for
+ * the first group (none inside two) and no demonstrated skill for the second; the r = 0.88 once
+ * quoted here moved to 0.64 on a redrawn sample and is withdrawn (docs/storm-validation.md).
+ * A third column, `operator-controlled`, holds the events whose two objects were both
  * given no displacement (2026-09-05). The combined figure is shown last and never alone, because
  * it averages populations the validation reaches differently, weighted by the coverage of the
  * coefficient fit rather than by physics. (The 0.16-against-0.89 split this comment used to quote
@@ -162,11 +164,12 @@ export function buildStormControl(
       `<p class="caveat"><b>Both columns, always.</b> <code>validated</code> means both objects of the event
         have a ballistic coefficient fitted from their own decay history; <code>indicative</code> means at
         least one rests on a B* inversion, a population stand-in, or no coefficient at all. Step 4 measured
-        the storm term against the May 2024 record and found it predictive at a correlation of 0.88 for the
-        first group and of <b>no demonstrated skill</b> for the second. Nothing is weighted or withheld by
-        the label — the numbers are identical either way — but a median taken across both populations
-        together is an average of a measured effect and an unmeasured one. Skill is concentrated at three
-        to four days of lead and is near zero inside two.</p>` +
+        the storm term against the May 2024 record: for the first group the predicted sign is right on
+        about nine comparisons in ten at three to four days of lead and there is no skill inside two; for
+        the second there is <b>no demonstrated skill</b> at any lead. One storm, and no correlation is
+        quoted. Nothing is weighted or withheld by the label — the numbers are identical either way — but
+        a median taken across both populations together is an average of a measured effect and an
+        unmeasured one.</p>` +
       `<p class="caveat"><b>Operator-controlled objects are not displaced.</b> An object on the operator's own
         published trajectory, or on CelesTrak's fit to it, already carries the operator's drag model and
         planned burns, so a storm excess over SGP4's atmosphere is undefined for it and no term is applied;

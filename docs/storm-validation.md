@@ -52,6 +52,14 @@ noise are dropped rather than divided by.
 | **NRLMSIS** for the same days and orbits | **2.21** | 1.75 | 2.96 |
 | observed / modelled | **0.78** | | |
 
+> **Redrawn 2026-09-05.** `driftwatch validate gannon` draws its sample from the latest snapshot,
+> and the rerun that wrote the lead-time table into `gannon.json` drew a different population
+> from the 3 September catalogue: 68 objects with two usable decay rates, observed median
+> **1.73** against a modelled **2.32**, observed over modelled **0.77** — a 23 per cent
+> over-prediction against the 22 above, with the same sign at every altitude band (0.84, 0.82,
+> 0.74 and 0.75 from 350 to 800 km). The size and the direction reproduce; the sample does not,
+> which is the point of recording both.
+
 By altitude, and this is the part that matters, because a model right on average and wrong at
 500 km is not right:
 
@@ -207,8 +215,11 @@ the control that error is read as the storm's. Pivot 24 April, window 25 to 28 A
 the storm comparisons by lead time in whole days.
 
 **The later element set is not truth.** It is another fit with its own error of hundreds of
-metres to kilometres. What is measured is the disagreement between two fits, which is a *floor*
-on the propagation error rather than a measurement of it.
+metres to kilometres. What is measured is the disagreement between two fits by the same network,
+which bounds the propagation error in neither direction (reworded 2026-09-05; the earlier text
+called it a floor): the two share observations and assumptions, so an error common to them is
+invisible here, and a shared assumption can equally make them disagree by more than either is
+wrong. Only a comparison against an independent truth would calibrate it, and none has been made.
 
 ### The control, first, because it sets the scale
 
@@ -248,6 +259,28 @@ observed shift is between 0.65 and 1.3 times the predicted** depending on the es
 term has the right sign, tracks the event-to-event variation, and is right in magnitude to
 within about a factor of two.
 
+> **Redrawn 2026-09-05, and the correlation withdrawn.** The rerun made to write the lead-time
+> table into `gannon.json` drew its sample from the 3 September snapshot and shared **four**
+> measured-coefficient objects with the 2 September draw above. Its table:
+>
+> | Population | comparisons | objects | slope | robust slope | correlation |
+> | --- | ---: | ---: | ---: | ---: | ---: |
+> | Everything scoreable | 974 | 154 | 0.42 | 0.65 | 0.05 |
+> | Free-flying | 664 | 137 | 0.73 | 0.61 | 0.36 |
+> | **Free-flying with a measured coefficient** | **498** | **101** | **0.74** | **0.68** | **0.64** |
+>
+> On the four shared objects the two runs agree to the third decimal, so the code did not move.
+> The correlation did, from 0.88 to 0.64, because a Pearson correlation on this population is
+> carried by its largest events — dropping the largest two per cent of predictions takes 0.88 to
+> 0.68 on the first draw and 0.64 to 0.55 on the second — and the two draws had different large
+> events. **The r = 0.88 is therefore withdrawn as a headline and no correlation is quoted.**
+> What reproduced: the robust slope (0.65, then 0.68), the sign agreement by lead (below), the
+> absence of skill inside two days and the absence of skill without a measured coefficient. The
+> quiet control drifted a median 7.8 km along track on the second draw against 10.2 km on the
+> first, over the same 2.9 days. The sentence that survives is the bounded one on the findings
+> page: the right sign on about nine comparisons in ten at three to four days of lead, a robust
+> slope of 0.63 to 0.75, no skill inside two days, one storm.
+
 The two slopes disagree because they are answering slightly different questions and the tail is
 doing work. `slope` is least squares through the origin and is pulled by the largest events;
 `slope_robust` is the median of observed over predicted across the half of the events with the
@@ -268,7 +301,9 @@ coefficients and to the linearisation.
 > by whole day of lead, with the sign agreement and the typical residual beside the slope pair
 > and the correlation. `driftwatch validate gannon` now writes this table as
 > `free_flying_measured_coefficient.by_lead_day`; the numbers below were computed by the same
-> function over the stored per-comparison file of the 2026-09-02 run.
+> function over the stored per-comparison file of the 2026-09-02 run, and the second table is
+> the rerun of 2026-09-05 that wrote it into `gannon.json`, on a redrawn sample (498 comparisons,
+> 101 objects, four of them shared with the first draw).
 
 | Lead | n | objects | observed (km) | predicted (km) | slope | robust slope | correlation | sign agreement | median \|residual\| (km) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -276,6 +311,21 @@ coefficients and to the linearisation.
 | 2 days | 150 | 74 | −0.31 | 5.01 | 0.81 | **−0.04** | 0.62 | **41 %** | 6.3 |
 | 3 days | 124 | 59 | 10.9 | 18.8 | 1.62 | **0.63** | 0.94 | **91 %** | 8.5 |
 | 4 days | 115 | 53 | 26.5 | 34.4 | 1.17 | **0.71** | 0.87 | **96 %** | 10.0 |
+
+The redrawn sample of 2026-09-05, same columns:
+
+| Lead | n | objects | observed (km) | predicted (km) | slope | robust slope | correlation | sign agreement | median \|residual\| (km) |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
+| 1 day | 40 | 36 | −0.44 | 2.10 | 0.10 | **−0.12** | 0.13 | **38 %** | 3.3 |
+| 2 days | 186 | 82 | −0.56 | 3.77 | 0.25 | **−0.09** | 0.08 | **33 %** | 6.6 |
+| 3 days | 142 | 70 | 8.3 | 10.2 | 0.67 | **0.63** | 0.33 | **88 %** | 6.9 |
+| 4 days | 115 | 57 | 21.2 | 27.4 | 0.83 | **0.75** | 0.64 | **97 %** | 10.1 |
+| 5 days | 11 | 9 | 36.5 | 76.1 | 0.58 | 0.54 | 0.67 | 91 % | 34.5 |
+
+The two draws agree on everything but the correlation column, which on the second draw is 0.13
+and 0.08 inside two days and 0.33 and 0.64 beyond — low even where the sign agreement is 88 and
+97 per cent, which is the clearest statement in this document that a correlation is the wrong
+statistic for this population and the sign agreement and the robust slope are the right ones.
 
 **The plain statement: the storm term's skill is concentrated at three to four days of lead and
 is near zero inside two.** Inside two days the median observed shift is within a kilometre of
@@ -296,8 +346,9 @@ displacement grows with the square of the elapsed time and only clears that nois
 day. What it does mean for a screening is that **a storm forecast one or two days out does not
 move an individual event's probability in a direction this validation can support**, and the
 `forecast` scenario's day-one and day-two shifts should be read as an uncertainty, not a
-correction. The headline r = 0.88 is a population figure and stands; where in the window it lives
-is this table.
+correction. The headline r = 0.88 does not stand: it was 0.64 on the redrawn sample (above, and
+"Redrawn 2026-09-05") and is not quoted; where in the window the skill lives is this table, on
+both draws.
 
 The quadratic growth is still there in the observed column — a median observed shift going 0, 0,
 11, 27 km against a predicted 2, 5, 19, 34 km — which is the shape the derivation predicts, and a

@@ -138,12 +138,17 @@ one**, and why, because the difference is the whole reason it is worth doing.
 The ESA Kelvins reproduction (`docs/kelvins-reproduction.md`) is a check against **a competition
 dataset**: valuable, public, and widely used, but assembled for a machine-learning challenge, with
 a hard-body radius this project had to infer from the span of the data because the organisers did
-not publish one. The Office of Space Commerce's **Dataset for Conjunction Assessment Verification**
-is a **government-issued test set with a published answer key**, developed for TraCSS — the US
-civil space traffic coordination system — and issued expressly so that space situational awareness
-providers can check their conjunction assessment algorithms against a common reference. Agreeing
-with it is a claim about matching the reference the American civil regulator publishes, not about
-scoring well on a contest.
+not publish one — an inference made on the evaluation rows, and since confirmed on held-out splits
+(2026-09-05; `docs/kelvins-reproduction.md`). It validates the probability arithmetic on ESA's
+inputs and calibrates nothing about this project's covariance. The Office of Space Commerce's
+**Dataset for Conjunction Assessment Verification** is a **government-issued test set with a
+published answer key**, developed for TraCSS — the US civil space traffic coordination system,
+which as of June 2026 was in **pilot evaluation with 52 users in 21 countries**, not in production
+(corrected 2026-09-05; the earlier text read as though it were operational) — and issued
+expressly so that space situational awareness providers can check their conjunction assessment
+algorithms against a common reference. Agreeing with it is a claim about matching the reference
+the Office of Space Commerce publishes for a system still in pilot, not about scoring well on a
+contest.
 
 Three things that have to travel with the claim, or it is overstated:
 
@@ -153,8 +158,8 @@ Three things that have to travel with the claim, or it is overstated:
   and the write-up must not let a reader take it for the latter.
 - **Which screening volume was compared against** — the key is published for a spherical volume and
   for an SFSH rectangular one, and driftwatch's own 2 x 25 x 25 km box is neither.
-- **Nothing was tuned to it**, on the same terms as the 22 % NRLMSIS bias and the 0.88 correlation:
-  a record, not a calibration.
+- **Nothing was tuned to it**, on the same terms as the 22 % NRLMSIS bias and the sign agreement
+  by lead (the 0.88 correlation was withdrawn on 2026-09-05): a record, not a calibration.
 
 Note also what it tests that Kelvins could not: the dataset is **ephemerides**, so it exercises the
 Phase 4 Step 1 served-trajectory path rather than the SGP4 one. The two validations do not overlap.
@@ -268,3 +273,173 @@ source and by altitude, which are the axes along which a *physical* cancellation
 not by whether the objects were under control, which is the axis along which a *category error*
 shows. A diagnostic can only falsify along the axes somebody thought to give it. The review found
 the error by asking what a served trajectory means, which no split in the tool could have asked.
+
+---
+
+## The second review, and the correlation the project's own rerun took back (2026-09-05)
+
+**Name this as the third thing the project had to take back**, after the cancellation explanation
+and the storm-lowers-probability headline — and note that this time no reviewer found it. A second
+external review corrected five claims (below); the third withdrawal came from rerunning
+`driftwatch validate gannon` so that `gannon.json` would carry the lead-time table, which the
+reviewers had asked for and the stored file predated.
+
+**The withdrawn claim.** "The storm term is predictive at r = 0.88 where the ballistic coefficient
+is measured." The rerun draws its sample from the latest snapshot, and the redraw shared **four**
+measured-coefficient objects with the 2 September draw: 101 objects and 498 comparisons against 81
+and 422, and a correlation of **0.64 against 0.88**. On the four shared objects the two runs agree
+to the third decimal, so the code did not move. The statistic did, because a Pearson correlation on
+this population is carried by its largest events — dropping the largest two per cent of predictions
+takes 0.88 to 0.68 on the first draw and 0.64 to 0.55 on the second — and the two draws had
+different large events. Per lead the second draw's correlations are 0.13 and 0.08 inside two days
+and 0.33 and 0.64 beyond, low even where the sign agreement is 88 and 97 per cent. What reproduced
+across the draws: the robust slope (0.65, then 0.68), the sign agreement at three and four days
+(91 and 96 per cent, then 88 and 97), the absence of skill inside two days (39 and 41 per cent,
+then 38 and 33, chance being 50), the density over-prediction (22 per cent, then 23) and the
+absence of skill without a measured coefficient. `docs/storm-validation.md`, "Redrawn 2026-09-05".
+
+**The bounded statement, which is the one to publish.** On one storm, May 2024, for free-flying
+objects whose ballistic coefficient was measured from their own decay, the storm term's predicted
+in-track shift agrees in sign with the observed one on about nine comparisons in ten at three and
+four days of lead, with a robust slope of 0.63 to 0.75; inside two days the sign agreement is below
+chance and the robust slope is zero or negative; without a measured coefficient there is no
+demonstrated skill at any lead. NRLMSIS 2.1 over-predicts the storm's three-day density enhancement
+by 22 to 23 per cent, and nothing is tuned to it. No correlation is quoted. What none of this
+measures: a second storm; a calibration against an independent truth (the later element sets are
+fits by the same network, so the comparison bounds the error in neither direction); the direction
+in which a storm moves a free-flying event's probability; or the covariance driftwatch puts around
+any event, which the Kelvins reproduction does not calibrate either. The sample is drawn from
+today's catalogue, so the 3,891 objects that decayed since May 2024 are absent from it.
+
+**The lesson for the paper.** A correlation on a heavy-tailed population is not a finding; it is a
+statement about whichever events happened to be largest in the draw. Report a statistic a tail
+cannot carry (the sign agreement) beside one that says the magnitude (the robust slope), by lead,
+and redraw the sample before quoting either. The project's own "storm-check" habit — attack the
+result before reporting it — was applied to the storm term's *effect* and not to the *validation*
+of the term, which is where this one lived.
+
+**The five corrections from the second review**, each applied where the claim stood, with the
+date:
+
+1. **Language.** Element-set disagreement is no longer called a floor on the prediction error,
+   anywhere. Successive sets are fits by the same network to overlapping observations with the same
+   assumptions, so their consistency is blind to any shared error (the true error can be far
+   larger) and can equally exceed the true error (a set fitted across a manoeuvre, a change of
+   tracking geometry, SGP4's own re-initialisation drift): it bounds the accuracy in neither
+   direction. Independent calibration would need a truth that does not come from the same fits —
+   laser-ranging normal points, GNSS precise orbits, or a special-perturbations orbit determination
+   from raw observations — over the same leads and orbit classes, in enough objects to give the
+   ratio of actual error to consistency per class and its dependence on geomagnetic conditions, with
+   a storm inside the calibration period. Nothing here has made that comparison. `docs/methods.md`,
+   "Uncertainty and probability"; `docs/screening.md`; the report and the viewer.
+2. **The Starlink drift finding, qualified.** One lead bin of a six-bin table, nineteen satellites,
+   one date, against the operator's published prediction and not the realised orbit. The lineage of
+   each pair was then checked: a supplemental set's epoch is the start of the file it was fitted
+   to, and on the 300 stored pairs of that day 17 share their file with the states they are compared
+   against, 105 were fitted to an earlier file and 178 to a later one, with the same drift in all
+   three (the verified 17: 0.29, 2.8, 11.8, 27.6, 51.8 and 82.2 km by 12-hour bin). So the
+   disagreement is not the plan's revision between files. Why the fit drifts stays open: past 24
+   hours it leads the file on nine of the verified objects and lags on eight, which planned
+   manoeuvres in the file and fit noise in the mean motion would both do, and only the next file's
+   first states could separate them. `docs/spacex-ephemerides.md`, "Lineage, checked".
+3. **Kelvins.** The `(t_span + c_span) / 2` convention was recovered from the evaluation rows, so
+   it was a fitted choice however few parameters it carried, and it is now confirmed the way a
+   fitted parameter is: the multiplier is chosen on one half of the training events and scored on
+   the other, both ways, and chosen on the training file and scored on the challenge's test file.
+   Every split chooses a multiplier of one and reproduces the rows it never saw; only on that basis
+   does any page say nothing was fitted. And the reproduction validates the probability *arithmetic*
+   on ESA's inputs — their geometry and covariances through our integral — and calibrates nothing
+   about driftwatch's own covariance, which never enters it. `docs/kelvins-reproduction.md`,
+   "Confirmed on a held-out split".
+4. **TraCSS** is in pilot evaluation, with 52 users in 21 countries as of June 2026, not in
+   production. The Office of Space Commerce dataset entry above now says so.
+5. **Africa.** The statement that the continent has no independent tracking capability is
+   replaced, wherever it stood, with the absence of a comprehensive sovereign catalogue; SANSA and
+   DLR operate a debris-tracking telescope at Sutherland. `ROADMAP.md`, twice.
+
+---
+
+## Reproducibility: the attached filter, the runner, and the ISS's own element set (2026-09-05)
+
+**A discrepancy that was two days old and turned out to be the catalogue's, not the code's.** The
+attached-object filter dropped 2,170 candidates on the local 3 September run and none on two runner
+runs, while all three reported the same ten pairs excluded. The runner's logs said the ten objects
+were "never more than 0 m apart"; the local run had them 0.198 to 0.862 m apart. The cause is in
+the snapshot: on the afternoon of 2026-09-03 both Space-Track and CelesTrak published the ISS's own
+record at TLE precision — eccentricity 0.0005015, seven decimals, B\* 8.2215e-5 — and the ten
+attached objects' records at eight decimals (0.00050146, 8.2214763e-5), all at the same epoch. One
+element set, two copies, four units apart in the eighth decimal of the eccentricity, which is 0.27 m
+of radial separation and twice that along track, once an orbit; Stage B finds a closest approach on
+every orbit, 217 candidates a pair, and the filter drops them. By the time the runner fetched, the
+whole cluster was on one copy to the last digit: zero separation, a range rate that never changes
+sign, no candidate, nothing to drop, and the filter still reporting the pair attached. Both are the
+filter working. The number of candidates it drops is a property of the input.
+
+**What was done with it.** A test pins both readings (a twin on the same set produces no candidate
+and is reported attached; a twin four units off in the eighth decimal produces one an orbit and
+every one is dropped). The pipeline gained a reproducibility mode — `spacex: no` on a dispatch,
+which screens and scores without the operator's files so that every input of the run is on the
+store branch afterwards — and a gate: a production deploy is downgraded to a preview until
+`REPRODUCED_RUN` names an archived run whose events were reproduced on another machine from the
+same stored inputs. The comparison itself is in `docs/pipeline.md`, "Reproducibility".
+
+**For the paper.** The lesson is the same as the front-page one above, from the other side: a
+sub-metre "conjunction" between two copies of one record is arithmetic on correct inputs, and only
+the filter's *report* — which names the pairs whether or not it dropped anything — made the two
+runs comparable at all. A filter that only logged what it removed would have looked broken on the
+runner and fine locally, and the search would have gone to the wrong place.
+
+---
+
+## A small upstream fix for satchecker, and what TABASCAL does not need from us (2026-09-05)
+
+**What TABASCAL does.** TABASCAL (Finlay et al. 2025, A&A 701, A286; TABASCAL II, arXiv:2502.00106;
+code at `epfl-radio-astro/tabascal`) subtracts satellite interference from radio-interferometer
+visibilities by using each satellite's trajectory as a prior, propagated with SGP4 from a two-line
+element or an OMM. Its orbits come from the IAU CPS SatChecker service through its own
+`satchecker-client` package: one `get-nearest-tle` or `get-nearest-omm` request per NORAD id at
+the observation epoch, a client-side age ceiling (`remote_max_age_days`) that re-derives a TLE's
+epoch from line 1 rather than trusting a provider field, a per-satellite cache, and a rule that it
+will not run with an incomplete satellite model. Its author opened satchecker issue 246
+(2026-08-11): `tles-at-epoch` returns partially ingested catalogues that are indistinguishable from
+complete ones — 1 to 7 records against about 17,800 for epochs 12 to 16 days old, with
+`total_results` matching the partial count — and `get-nearest-tle` returns records up to 30 days
+old with no staleness indicator; a 30-day-old ISS TLE puts the station 9,700 km from where a
+contemporaneous one does. The issue asks for a `catalogue_complete` flag or an `expected_results`
+beside `total_results`, a staleness field or a `max_age_days` parameter on the nearest-record
+endpoints, and documentation of the ingest lag.
+
+**What of ours applies, and what does not.** Three things in driftwatch do the same job on the
+client side: `snapshot_as_of` takes each object's newest set at or before a date and refuses
+anything later, with `max_age_days` dropping objects whose newest set is too old; `check-run` reads
+a snapshot's age from its own `fetched_at` column rather than its file name and refuses to publish
+past a limit; and the supplemental path abandons a set more than a day older than the catalogue's.
+None of that fixes satchecker, whose problem is on the server side, and TABASCAL already does the
+client-side part better than a borrowed function would — its age ceiling and its coverage rule are
+exactly the two checks the issue asks the server to make possible. Nor does TABASCAL use
+`tles-at-epoch` at all: its documentation says so, and says why (it wants the record nearest on
+either side of the epoch, not the newest before it). So there is nothing of ours to supply to
+TABASCAL, and nothing to build.
+
+**The fix that is small, and where it would go.** In satchecker's `_get_all_orbital_data_at_epoch`
+(`src/api/adapters/repositories/tle_repository.py`) the first of two SQL queries already computes
+the set of satellites in orbit at the requested epoch — launched before it, not decayed, named — and
+the second takes each one's newest TLE from the fortnight before the epoch; `total_results` is the
+count of the second. Returning the count of the first beside it as `expected_results`, and
+`catalogue_complete` as their ratio against a threshold (or just the two counts, and let the client
+choose), is a change of a few lines in the repository, the service (`tools_service.py`) and the
+route (`tools_routes.py`, whose response schema is documented inline), plus a test in their pytest
+suite and a paragraph of documentation. The staleness field on the nearest-record endpoints is
+smaller still: the record's epoch is already in the response, so a signed `epoch_offset_days` is one
+subtraction, and `max_age_days` as an optional query parameter is a filter on the same number.
+**Estimated cost:** a day for the completeness fields with tests and documentation, half a day for
+the staleness field and parameter, for someone who has not touched the repository before (Flask,
+SQLAlchemy over PostgreSQL, pytest, a contributing guide, BSD-3), plus whatever review the
+maintainers need. The ingest lag itself — why recent epochs are empty and fill in a month later — is
+in their data pipeline (`retrieve_tle.py` daily, `retrieve_archival_tle_data.py` backfilling
+Space-Track in two-day chunks) and is theirs to explain; nothing of ours bears on it.
+
+**What this project should not do:** build a catalogue-completeness service, mirror satchecker, or
+wire the snapshot builder into TABASCAL. The overlap is one idea — say how complete the catalogue
+you are returning is, and say how old the record is — and it is worth a pull request of a few
+lines, not a platform.
