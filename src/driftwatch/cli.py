@@ -588,14 +588,25 @@ def fit_from_history(
     elif mode == "auto":
         log.info("No Space-Track credentials or history cache; fitting from the stored history only")
     window = history.backfill_window(end, days)
-    bounds = {"start": end - timedelta(days=int(days) + 1), "end": end} if historical else {}
-    hist = history.load_history(norad_ids=ids, history_dir=history_dir, snapshot_dir=snapshot_dir, **bounds)
+    # Every fit reads only its recorded window, live or historical (2026-09-05). Before this a
+    # live run passed no epoch bounds, so the fit read every stored row for its objects: the
+    # 3 September 2026 run's fit took the May 2024 sets the storm validation had stored for
+    # 1,794 of its 2,944 objects while its covariance block said 21 July to 3 September.
+    # `fit_covariance` refuses rows outside the window it is labelled with, so the label is
+    # true by construction; the end bound is the run's start rather than the last day's end,
+    # so a historical run reads nothing issued after the moment it replays.
+    window_start, _ = history.window_bounds(window)
+    hist = history.load_history(
+        norad_ids=ids, history_dir=history_dir, snapshot_dir=snapshot_dir, start=window_start, end=end
+    )
     log.info(
-        "History for the fit: %d element sets for %d of %d objects%s",
+        "History for the fit: %d element sets for %d of %d objects, bounded to %s to %s%s",
         len(hist),
         hist["norad_id"].nunique(),
         len(ids),
-        f", bounded to {window[0]} to {window[1]} (a historical run)" if historical else "",
+        window[0],
+        window[1],
+        " (a historical run)" if historical else "",
     )
     fit = fit_covariance(hist, objects, now=now, window=window)
     return fit, result

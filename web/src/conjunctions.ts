@@ -33,7 +33,15 @@ import * as THREE from "three";
 import { gstime } from "satellite.js";
 import type { Bundle, ConjunctionEvent, ConjunctionPair } from "./data";
 import { formatUtc } from "./geodesy";
-import { STORM_CALIBRATION_NOTE, eventUnder, labelOf, pairUnder, type ScenarioState } from "./scenarios";
+import {
+  HORIZON_HEADLINE,
+  STORM_CALIBRATION_NOTE,
+  STORM_CALIBRATION_SHORT,
+  eventUnder,
+  labelOf,
+  pairUnder,
+  type ScenarioState,
+} from "./scenarios";
 import { SCENE_PER_KM } from "./points";
 import { escapeHtml } from "./ui";
 
@@ -392,12 +400,16 @@ export function buildConjunctionPanel(
     const lowConfidence = flagged.filter((p) => p.confidence === "low").length;
     const label = labelOf(state.current);
     // Region and confidence before the colours, here as on every row.
+    // The horizon before any probability (2026-09-05): the first thing the panel says.
     header.innerHTML =
+      `<p class="caveat horizon"><b>Five days, two days, one day.</b> ${escapeHtml(HORIZON_HEADLINE)}</p>` +
       `<div>${data.n_events_total.toLocaleString()} events over ${data.n_pairs.toLocaleString()} pairs, ` +
       `${escapeHtml(data.window.start.slice(0, 10))} to ${escapeHtml(data.window.end.slice(0, 10))}.</div>` +
       `<div class="muted">${lowConfidence} of ${flagged.length} flagged pairs are in the dilution region at low ` +
       `confidence and not actionable; ${flagged.length - lowConfidence} in the robust region. ` +
-      `Flags: ${red} red, ${yellow} yellow. Scenario <code>${escapeHtml(label)}</code>, sorted by its probability.</div>`;
+      `Flags: ${red} red, ${yellow} yellow. Scenario <code>${escapeHtml(label)}</code>, sorted by its probability.</div>` +
+      // Under a storm scenario the list's probabilities are storm numbers, so the sentence sits above them.
+      (state.current === "quiet" ? "" : `<div class="muted">${escapeHtml(STORM_CALIBRATION_SHORT)}</div>`);
   };
 
   const matching = (): Array<{ pair: ConjunctionPair; index: number }> => {
@@ -631,9 +643,12 @@ function eventDetailHtml(
        uncertainty looks lost. The two objects are displaced <i>nearly independently</i> &mdash; a conjunction
        is a crossing, at a median 120° between their two in-track directions &mdash; and it is the relative
        displacement above, not either object's own, that moves the miss. An operator-controlled object is
-       not displaced at all; its side of the displacement is zero by rule.</p>
-       <p class="caveat">${escapeHtml(STORM_CALIBRATION_NOTE)}</p>`
+       not displaced at all; its side of the displacement is zero by rule.</p>`
     : "";
+  // The calibration note follows the scenario, not the displacement (2026-09-05): an event with no
+  // shift under a storm scenario still shows that scenario's probability, and that is a storm number.
+  const calibrationNote =
+    scenario === "quiet" ? "" : `<p class="caveat">${escapeHtml(STORM_CALIBRATION_NOTE)}</p>`;
 
   return (
     `<h2>${escapeHtml(pair.primary_name)} vs ${escapeHtml(pair.secondary_name)}</h2>` +
@@ -644,6 +659,7 @@ function eventDetailHtml(
     `<dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl>` +
     note +
     stormNote +
+    calibrationNote +
     `<p class="caveat">Computed by driftwatch${modelVersion ? ` (${escapeHtml(modelVersion)})` : ""}; the
       viewer only draws it.</p>`
   );

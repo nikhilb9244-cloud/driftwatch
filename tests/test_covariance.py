@@ -638,3 +638,55 @@ def test_label_cov_sources_uses_the_model_that_will_serve_each_object():
     model = fit_supplemental_covariance(EmpiricalCovariance(), history, [90901]).model
     labelled = label_cov_sources(objects, model)
     assert labelled["cov_source"].tolist() == ["supplemental:rms", "default:leo"]
+
+
+def test_a_fit_refuses_element_sets_outside_its_recorded_window():
+    """The window in the covariance block is provenance: a fit labelled with it has read nothing else."""
+    rng = np.random.default_rng(11)
+    base = base_orbit()
+    hist = history_frame(history_records(BASE_ID, lambda t: base, epochs_every(12.0, 30.0), rng, sigma_n_rel=1e-6))
+    objects = pd.DataFrame({"norad_id": [BASE_ID], "category": ["payload"], "altitude_band": ["leo"]})
+    whole = (T0.date(), (T0 + timedelta(days=30)).date())
+    fit = fit_covariance(hist, objects, now=T0 + timedelta(days=60), window=whole)
+    assert fit.model.window == whole
+    assert fit.table.loc[fit.table["kind"] == "object", "n_sets"].iloc[0] == 61
+    narrower = ((T0 + timedelta(days=5)).date(), (T0 + timedelta(days=30)).date())
+    with pytest.raises(ValueError, match="outside the fit's recorded window"):
+        fit_covariance(hist, objects, now=T0 + timedelta(days=60), window=narrower)
+
+
+def test_fit_from_history_reads_only_its_window(tmp_path):
+    """A live fit is bounded to its recorded window: rows the store holds from other years stay out.
+
+    Before 2026-09-05 a live run passed no epoch bounds to the history load, and the 3 September
+    2026 fit read the May 2024 sets a validation had stored while its covariance block said
+    21 July to 3 September.
+    """
+    from driftwatch.cli import fit_from_history
+
+    rng = np.random.default_rng(12)
+    base = base_orbit()
+    end = T0 + timedelta(days=40)
+    inside = history_records(BASE_ID, lambda t: base, epochs_every(12.0, 20.0, start=T0 + timedelta(days=18)), rng)
+    years_ago = history_records(BASE_ID, lambda t: base, epochs_every(12.0, 20.0, start=T0 - timedelta(days=730)), rng)
+    hist_dir = tmp_path / "history"
+    history.write_history(history_frame(inside), hist_dir / "gph_inside.parquet")
+    history.write_history(history_frame(years_ago), hist_dir / "gph_years_ago.parquet")
+    assert len(history.load_history(norad_ids=[BASE_ID], history_dir=hist_dir, snapshot_dir=tmp_path / "none")) == 82
+    labels = pd.DataFrame({"norad_id": [BASE_ID], "category": ["payload"], "altitude_band": ["leo"]})
+    fit, backfill = fit_from_history(
+        labels,
+        end=end,
+        days=45,
+        mode="off",
+        offline=True,
+        now=end,
+        cache_dir=tmp_path,
+        history_dir=hist_dir,
+        snapshot_dir=tmp_path / "none",
+    )
+    assert backfill is None
+    assert fit.model.window == history.backfill_window(end, 45)
+    assert fit.table.loc[fit.table["kind"] == "object", "n_sets"].iloc[0] == 41
+    lo, hi = history.window_bounds(fit.model.window)
+    assert lo <= T0 + timedelta(days=18) and end < hi

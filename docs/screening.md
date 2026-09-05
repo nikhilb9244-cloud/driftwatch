@@ -592,8 +592,12 @@ refuses URLs much beyond 4 KB with a bare 403, measured 2026-09-02, and the Step
 review's 8,000 was cut to fit), asking only for the element-set fields, and skipping
 every id and day a cached request already covers. A
 consolidated index, `data/history/index.parquet`, records which history file holds each
-(NORAD id, epoch) so that a lookup opens only the files it needs. The fit takes every
-element set in the history store for those objects, the snapshots included.
+(NORAD id, epoch) so that a lookup opens only the files it needs. The fit reads only the
+element sets inside its recorded window, the snapshots included, and refuses any outside it.
+**Corrected 2026-09-05.** Until then a live fit took every element set the store held for its
+objects and labelled the result with the backfill window: the 3 September 2026 fit read half a
+million April and May 2024 sets the storm validation had stored, for 13,440 of its 22,646
+objects (README, item 2, third correction).
 
 The backfill is a one-off. Every later run asks only for the days after each object's
 newest stored element set: the index gives that date per object, ids that share one are

@@ -1,18 +1,19 @@
 # State of play
 
-Written 2026-09-05, at the close-out that followed the calibration benchmark. It supersedes the
-earlier 2026-09-05 version and, like it, records **where things stand and what is unresolved**
-without restating the reasoning, which lives in the pages it points at. A snapshot; where it
-disagrees with a plan or a methods page, the page wins. **Nothing else is built until a user
-supplies a case.**
+Written 2026-09-05, after the close-out's two fixes and its verification. It supersedes the earlier
+2026-09-05 versions and, like them, records **where things stand and what is unresolved** without
+restating the reasoning, which lives in the pages it points at. A snapshot; where it disagrees with a
+plan or a methods page, the page wins. **Nothing else is built until a user supplies a case.**
 
 ## Reading order for a fresh session
 
-1. `README.md`, the **findings and corrections** page at the top. It now opens with the horizon,
-   ahead of any probability: five days quiet, two days in the May 2024 storm, one day in the
-   October 2024 storm, at the screening box's 25 km in-track half-width and the 95th percentile of
-   trials. Six items follow; item 6 is the calibration against ESA's precise orbits and carries the
-   open hypothesis about the manoeuvre detector and the two decisions the benchmark leaves open.
+1. `README.md`, the **findings and corrections** page at the top. It opens with the horizon, ahead
+   of any probability: five days quiet, two days in the May 2024 storm, one day in the October 2024
+   storm, at the screening box's 25 km in-track half-width and the 95th percentile of trials. Item 2
+   now carries three corrections of one class, the frame, the clock and the fit's window, each a
+   constant offset between two conventions that no self-comparison could see. Item 6 is the
+   calibration against ESA's precise orbits and carries the explanation of the under-coverage in the
+   order the evidence supports, and the two decisions the benchmark leaves open.
 2. `docs/calibration-benchmark.md` — the page `driftwatch validate swarm` writes: three windows,
    four things by lead bin, every source with its origin and derivation.
 3. `ROADMAP.md`, "Plan change, 2026-09-05" and the paragraph added after it — Phase 4 stops at the
@@ -22,7 +23,8 @@ supplies a case.**
    through the provenance check, the CDM matcher and the same benchmark, with the network refused.
 5. `docs/writeup-notes.md` — additive; the last two entries are the second review and the benchmark.
 6. `docs/methods.md`, "Uncertainty and probability" — what the covariance is, and what one
-   calibration found about it.
+   calibration found about it; `docs/screening.md`, "History for the fit" — what the fit reads,
+   corrected.
 7. `docs/storm-validation.md` and `docs/storm-term.md` — the storm term, its May 2024 validation
    against later element sets, and the pointer to the same term measured against a truth.
 8. `docs/pipeline.md`, `docs/cdm-matching.md`, `docs/phase4-plan.md` — the pipeline, the matcher and
@@ -30,30 +32,56 @@ supplies a case.**
 
 ## What the close-out did (2026-09-05)
 
-Close-out only; no new development. Each item is on the findings page or in the code named.
+Two passes. The first recorded and set defaults; the second fixed two things and looked.
 
 | Item | What was done | Where |
 | --- | --- | --- |
-| **Quiet is the default** | `driftwatch report` and the viewer's bundle default to `quiet` wherever it was scored (they took the first scenario by name before, which was `forecast`). The live viewer switches to `quiet` once the overlays land unless a scenario was carried across; a replay keeps its own, because entering replay is the explicit choice. The pipeline already passed `--scenario quiet`. One test pins the default. | `src/driftwatch/export/report.py`, `default_scenario`; `src/driftwatch/cli.py`; `web/src/main.ts` |
-| **Every storm number carries the calibration** | One plain-text note, quoted from the benchmark and not computed: the covariance under-covers in a storm (two sigma holds 65 to 80 and 62 to 75 per cent against 95), the storm term helps only from about four days and hurts inside three, hurts from one to six days in a quiet week (the quiet-week bias), and over-corrects at seven days (about 1.5 times the actual in May). It heads the report's storm section, sits in the bundle's caveats, and in the viewer is shown under the scenario control, above the storm summary table and in the event detail whenever the scenario is not `quiet`. | `STORM_CALIBRATION_NOTE` in `report.py` and `web/src/scenarios.ts`; `web/src/storm.ts`; `web/src/conjunctions.ts` |
-| **The horizon is the headline** | The report opens with "The horizon" before its summary; the findings page opens with it before item 1. | `HORIZON_HEADLINE` in `report.py`; `README.md` |
-| **GPS-to-UTC recorded as a correction** | Placed beside the frame finding (item 2) as the same class of error in the time system: a constant 137 km in-track offset at every lead, invisible to every internal check, exposed only by the independent truth. | `README.md` item 2 |
-| **Manoeuvre-detector hypothesis recorded** | The number below; not acted on. | `README.md` item 6; open item 3 here |
-| **Two open decisions recorded** | Quiet-condition baseline and storm-conditional covariance scale, as open, with the constraints on each. | `README.md` item 6; open items 1 and 2 here |
+| **The fit reads only its window** | A live run's covariance fit passed no epoch bounds to the history load and read every stored element set for its objects, labelling the result with the 45-day backfill window; only a historical replay was bounded. Now every fit is bounded to `[window start, run start]`, `fit_covariance` refuses rows outside the window it is labelled with, and two tests pin it (one on the guard, one on `fit_from_history` with a store holding rows from other years). | `src/driftwatch/cli.py`, `fit_from_history`; `src/driftwatch/catalogue/history.py`, `window_bounds`; `src/driftwatch/risk/covariance.py`; `tests/test_covariance.py` |
+| **The 3 September run refitted** | On a copy, with the bound in place, the original kept beside it. What the unbounded fit had read outside its window: 615,648 of 2,714,544 sets, of which 513,838 were April and May 2024 for 13,440 of 22,646 objects (the storm validation's store), 8,387 were 2022 (the Starlink validation's), and 93,423 were 19 and 20 July 2026 (the earlier run's backfill days). The delta is in README item 2 and below. | `data/conjunctions/step3-bounded/demo_20260903T160600Z` (gitignored) against `step2-attached/` |
+| **Provenance defect recorded** | On the findings page beside the frame and the time offset, as the third of one class. | `README.md` item 2; `docs/screening.md`, "History for the fit" |
+| **Hypothesis restated** | In the order the check supports: quiet history cannot describe storm error (primary); the detector reading a storm as a burn (secondary, only when a storm falls inside the fit window, two of seventeen its measured size). | `README.md` item 6; open item 3 here |
+| **Viewer verified in a browser** | A regenerated bundle from the 3 September run, `npm run dev`, headless Chromium through Playwright, at 1500 by 1000: quiet is the scenario in force on load and again after a reload; the horizon is the first line of the conjunctions panel; under G5 the one-sentence calibration sits under the scenario control and inside the storm block's first fold, the full note heads the storm summary above its table, the sentence heads the list, and the full note is in the event detail; none of it appears under quiet; no console errors. Screenshots were looked at. | `web/src/scenarios.ts`, `storm.ts`, `conjunctions.ts`, `main.ts`, `style.css` |
+| Quiet is the default (first pass) | `driftwatch report` and the viewer's bundle default to `quiet` wherever it was scored; the live viewer switches to `quiet` once the overlays land unless a scenario was carried across; a replay keeps its own. One test pins the default. | `src/driftwatch/export/report.py`, `default_scenario` |
+| The horizon is the headline (first pass) | The report opens with "The horizon" before its summary; the findings page before item 1; the viewer's conjunctions panel before its counts. | `HORIZON_HEADLINE` in `report.py` and `scenarios.ts` |
+| GPS-to-UTC recorded (first pass) | Beside the frame finding: a constant 137 km at every lead, invisible to every internal check, exposed only by the independent truth. | `README.md` item 2 |
 
-Verification: `ruff`, the report, storm-export and export tests, and the viewer's `tsc --noEmit`
-pass; the 3 September run's report was regenerated under the default (it came out `quiet`, with the
-horizon first) and under `storm-g5` (the calibration note heads the storm section), and left under
-`quiet`. The viewer changes are type-checked only: **nobody has opened them in a browser**, and no
-bundle was regenerated for `web/public/data`.
+**The refit's delta, in numbers** (the original 3 September fit against the bounded one, same
+events, same everything else). Covariance: 610,130 sets left the fit; 222 objects moved from their
+own fit to a pool (empirical 22,261 to 22,039; pooled 385 to 607); the in-track one-day sigma changed
+on 21,644 of 22,039 fitted objects, median −5 per cent, tenth percentile −49 per cent, ninetieth
++10; the fleet members' own in-track sigma fell by a median 47 per cent, because their 2024 rows
+were from solar maximum; the pools moved by −47 to +18 per cent, most of them down. Under `quiet`:
+21 flagged events became 12 (11 lost, 2 gained; one red became two), the region changed on 285 of
+6,224 events (244 robust to dilution, 41 the other way), and the ratio of the probability after to
+before has a median of 0.98, a fifth percentile of 0.15 and a ninety-fifth of 2.5.
+Under the storm scenarios the same: `forecast` 20 flagged events became 12 (10 lost, 2 gained), `storm-g4` 18 became 11 (9 lost, 2 gained), `storm-g5` 18 became 12 (9 lost, 3 gained), the region changing on 277 to 286 events in each, and the median of the probability ratio 0.99 with a fifth percentile of 0.13 to 0.16 and a ninety-fifth of 2.5; the fleet members in-track sigma at the encounter fell by a median 26, 20 and 17 per cent under the three, less than under `quiet` because the storm variance term is added on top and is the same in both fits. The benchmark is unaffected: its fits bound their own history to the weeks
+before each window, and the guard holds on them.
+
+Three things the verification found and this session did not fix, because they are outside the
+two fixes asked for:
+
+- **The conjunction list's name column collapses to one character per line** on the pairs whose
+  flag chip is long (`dilution · low confidence · red`) beside an `operator-controlled` chip: the
+  numbers column is `white-space: nowrap` and takes the row's width. Pre-existing, visible under
+  `quiet` too, in every screenshot. A one-line stylesheet change; not made.
+- The storm block is capped and scrolls, so under a storm scenario the summary table is below its
+  first fold; its floor was raised from 190 to 250 px so the control, the scenario's line and the
+  calibration sentence sit above the fold. The list loses 60 px at a 1000 px viewport.
+- The bundle in `web/public/data` is regenerated from the **original** 3 September run, not the
+  bounded refit, because the refit lives in a copy; the pipeline's next run, when it completes, is
+  bounded by construction.
+
+Verification of the code: `ruff`, the full test suite, and the viewer's `tsc --noEmit` pass; the
+Playwright script is in the session's scratchpad, not the repository.
 
 ## Where things stand
 
 | Item | State | Where |
 | --- | --- | --- |
-| **Calibration benchmark** | **Run and published.** Swarm A, B and C against ESA's `SW_OPER_SP3xCOM_2_` precise orbits; 57, 54 and 61 element sets in the quiet (20 to 27 April 2024), May 2024 storm and held-out October 2024 windows; one trial per set; manoeuvres from ESA's `SW_OPER_SC_xDYN_1B` thruster record (two in 150 satellite-days, both also found by the precise-orbit step detector). Results in `docs/calibration-benchmark.md` and README item 6; per-trial file `data/validation/swarm_benchmark.parquet` (gitignored). | `README.md` item 6; `docs/calibration-benchmark.md`; `src/driftwatch/storm/precise.py` |
-| **Local-analysis path** | **Built and tested**, not yet used by anyone: `driftwatch local` runs a stored run's provenance check, the CDM matcher and the ephemeris benchmark over an operator's own files with every outbound request refused. | `docs/local-analysis.md`; `src/driftwatch/local.py`; `tests/test_local.py` |
-| Defaults | **Quiet everywhere; storm scenarios explicit and annotated** (this close-out). | table above |
+| **Calibration benchmark** | **Run and published.** Swarm A, B and C against ESA's `SW_OPER_SP3xCOM_2_` precise orbits; 57, 54 and 61 element sets in the quiet (20 to 27 April 2024), May 2024 storm and held-out October 2024 windows; one trial per set; manoeuvres from ESA's `SW_OPER_SC_xDYN_1B` thruster record. Its own covariance fits were always bounded, so the provenance defect did not reach it. | `README.md` item 6; `docs/calibration-benchmark.md`; `src/driftwatch/storm/precise.py` |
+| **The covariance fit** | **Bounded to its window, with a guard and tests** (this close-out). The stored 3 September run's fit is the unbounded one; the bounded refit is in a gitignored copy. No pipeline run has been made with the bound. | `src/driftwatch/cli.py`; `docs/screening.md` |
+| **Local-analysis path** | **Built and tested**, not yet used by anyone. | `docs/local-analysis.md`; `src/driftwatch/local.py` |
+| Defaults | **Quiet everywhere; storm scenarios explicit and annotated**, now seen in a browser. | table above |
 | Second review's corrections | Committed. | `docs/writeup-notes.md`, "The second review" |
 | Parked items | Premises rewritten, dated 2026-09-05. | `ROADMAP.md`, parked items |
 | Precondition check | Unchanged: `VERCEL_TOKEN` is still not set; only the account holder can create it. The pipeline's deploy step fails by name until it is. | `docs/pipeline.md`, "Hosting" |
@@ -77,28 +105,27 @@ half-width at the 95th percentile: five days quiet, two days in May, one day in 
 
 ## What is committed, and what is not
 
-`main`, one commit for this close-out on top of the four the benchmark session made. Not pushed by
-this session unless the log says otherwise.
+`main`, two close-out commits on top of the four the benchmark session made. Not pushed by this
+session unless the log says otherwise; **nothing was pushed before the browser verification**, as
+asked.
 
 Local state that is **not** in the repository, all gitignored deliberately:
 `data/cache/swarm/` (150 precise-orbit zips and 150 thruster-record zips, about 600 MB, plus the
-server listings), `data/validation/swarm_benchmark.{json,parquet}` (the benchmark's outputs; the
-page in `docs/` is regenerated from them), the 2022 and 2024 element-set history in `data/history/`
-(the Starlink 2022 and Gannon validations' rows and the Swarm rows; see open item 3 for what they
-did to the 3 September fit), and everything the earlier state-of-play listed
+server listings), `data/validation/swarm_benchmark.{json,parquet}`, the 2022 and 2024 element-set
+history in `data/history/` (the Starlink 2022 and Gannon validations' rows and the Swarm rows: half
+a million rows that the unbounded fit read and the bounded one refuses), the bounded refit
+`data/conjunctions/step3-bounded/`, and everything the earlier state-of-play listed
 (`data/conjunctions/step*`, `data/spacex/`, `data/cache/`, `data/ballistic/`, `data/validation/`,
 `.vercel/`).
 
 ## What has never happened
 
 - **No pipeline run has completed end to end**, and **no deploy from CI** on either host; the deploy
-  is blocked on `VERCEL_TOKEN`. Unchanged.
+  is blocked on `VERCEL_TOKEN`. Unchanged. **No pipeline run has been made with the bounded fit.**
 - **No real Conjunction Data Message has been matched**, and **nobody has run `driftwatch local`**
   on real files. Both are built and tested against designed inputs only.
 - **No second object class has been calibrated.** The benchmark covers three well-tracked
   satellites at 460 to 506 km.
-- **Nobody has seen the quiet default or the calibration note in a browser.** Type-checked and
-  reasoned about; not looked at.
 
 ## Open items
 
@@ -116,44 +143,32 @@ did to the 3 September fit), and everything the earlier state-of-play listed
    is a calibration on one orbit class and two storms; **it must be fitted on May 2024 and validated
    on October 2024**, held out as the benchmark held it, or it is a tuning on the number it is meant
    to predict. Not made.
-3. **The manoeuvre-detector hypothesis** (recorded 2026-09-05; not acted on). The covariance is fitted
-   from pairs of element sets that span no detected burn, and the detector reads an unexplained
-   change in semi-major axis as a burn; the benchmark watched it read the 11 October storm as a burn
-   on Swarm A and C. The hypothesis: the production fit has been excluding storm intervals and is
-   therefore calibrated on quiet-biased history, which would explain part of the under-coverage in
-   a storm. **Checked cheaply**, on the 3 September run's 2,944 objects in events, by the maximum
-   observed Kp inside each excluded interval (the interval from the previous set's epoch to the jump
-   epoch):
-   - The fit's 45-day window, 21 July to 3 September 2026, had **no** three-hour interval at Kp 6 or
-     above (maximum 5.7). **0 of the 17,033** excluded intervals inside the window coincide with one;
-     1,148 coincide with Kp 5 or above.
-   - The fit also read element sets from outside its window: **a live run passes no epoch bounds to
-     the history load** (`fit_from_history` bounds only a historical run), so the 3 September fit read
-     every stored row for its objects, including the May 2024 rows the Gannon validation had stored
-     for 1,794 of the 2,944 and the 2022 rows the Starlink validation had stored for 9, while its
-     covariance block labels the window 21 July to 3 September. Among those out-of-window rows, **155
-     of 4,617** excluded intervals coincide with Kp 6 or above, on 127 objects: 145 on Starlinks
-     (`known` manoeuvrers), 7 on payloads flagged `observed`, and **3 on debris, which does not
-     manoeuvre**, two of them 10 to 11 May 2024 at Kp 9. Most of those 2024 rows end at the
-     storm's onset (they came from the pre-storm snapshot pulls): only 40 of the 2,944 have stored
-     history spanning 10 to 13 May, 17 of them free-flying, and **2 of those 17, both debris, had
-     the storm interval excluded as a burn**.
-   - The 1 September run, made before those rows were stored, has all 17,581 of its excluded
-     intervals inside its window and 0 at Kp 6 or above.
-   - Consistent with the hypothesis; not a test of it. The test is the coverage of a fit made with
-     and without the storm intervals, against a truth. The out-of-window rows in a live fit are a
-     second observation, recorded here and not fixed: the fit for six in ten of the objects in
-     events was made on their 2026 window plus a fortnight of 2024 rows, storm-time for a few.
-   The script is not in the repository; the counts are reproducible from `objects.parquet`,
-   `data/history/` and CelesTrak's `SW-All.csv`.
-4. **The held-out window holds two storms** (7 to 8 October, then 10 to 11), and the sets issued
+3. **Why the covariance under-covers in a storm**, in the order the evidence supports (restated
+   2026-09-05). **Primary:** a covariance fitted from the consistency of quiet history cannot describe
+   storm-time error; nothing in how quiet fits disagree with each other says how far a storm will
+   move the object, and the benchmark's own fits, bounded to the weeks before each window, under-cover
+   in both storms. **Secondary, with a measured size:** the fit excludes pairs that span a detected
+   manoeuvre, the detector reads an unexplained change in semi-major axis as a burn, and a storm's
+   drag is such a change, so where a storm falls inside the fit window the detector can discard the
+   storm-time intervals and calibrate the fit on the quiet days either side (it read the 11 October
+   storm as a burn on Swarm A and C). It matters only when a storm falls inside the window: the
+   3 September run's window held no interval at Kp 6 or above, so none of its 17,033 in-window
+   exclusions coincide with one; in the May 2024 rows the unbounded fit had read, 155 of 4,617
+   exclusions coincide with Kp 6 or above, 145 of them on Starlinks, and **2 of the 17 free-flying
+   objects whose stored history spans the 10 to 13 May storm, both debris, had the storm interval
+   excluded as a burn**. Two of seventeen, on one storm, is its size. Nothing in the detector was
+   changed. The counts are reproducible from `objects.parquet`, `data/history/` and CelesTrak's
+   `SW-All.csv`; the script is not in the repository.
+4. **The conjunction list's name column collapses** on rows with a long flag chip (found by the
+   browser verification; pre-existing; not fixed). See the list above.
+5. **The held-out window holds two storms** (7 to 8 October, then 10 to 11), and the sets issued
    between them over-predict the decay for the quiet days that followed; the `B*`-across-a-storm
    explanation is an inference. Swarm's TU Delft density products (`SW_OPER_DNSxPOD_2_`) would
    separate the atmosphere's error from the object's response and are the next thing to read.
-5. **Generalisation.** Whether the ratio of actual error to consistency found here holds for debris,
+6. **Generalisation.** Whether the ratio of actual error to consistency found here holds for debris,
    for higher orbits, or for objects the network tracks less often is not measured; laser-ranging
    objects and other GNSS-carrying missions with public precise orbits are the way to extend it.
-6. Everything the earlier state-of-play listed and this session did not touch: the attached-object
+7. Everything the earlier state-of-play listed and this session did not touch: the attached-object
    filter's runner reading (settled in `docs/pipeline.md`, "Reproducibility"), the deploy and the
    archive never having run on a runner, the `spacex-ephemeris+sgp4-fit` covariance path never
    exercised by real data, the storm's effect on how often an operator's plan is revised, and the

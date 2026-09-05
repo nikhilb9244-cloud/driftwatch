@@ -82,6 +82,27 @@ and a test pins the 18 s (`docs/calibration-benchmark.md`, sources). The lesson 
 constant offset between two conventions is invisible to every check that compares a source with
 itself, and this project had no other kind of check until item 6.
 
+**Corrected 2026-09-05: the covariance fit read outside the window it was labelled with.** A third
+error of the same class, in provenance rather than in a frame or a clock. A live run's fit passed no
+epoch bounds to the history load, so it read every stored element set for its objects, and its
+covariance block then labelled the result with the 45-day backfill window. The 3 September run's
+fit, labelled 21 July to 3 September 2026, had read 2,714,544 element sets, of which **615,648 lay
+before the window**: 513,838 from April and May 2024, stored by the storm validation for 13,440 of
+its 22,646 objects; 8,387 from 2022, stored by the Starlink validation; and 93,423 from 19 and
+20 July 2026, the earlier run's backfill days. Only a historical replay had been bounded. Every
+internal check passed, because a fit reads whatever it is given and the label was written from the
+configuration rather than from the data. The fit now reads only its recorded window,
+`fit_covariance` refuses rows outside the window it is labelled with, and a test fails if a fit
+reads outside it. Refitted on the same run with the bound in place
+(`data/conjunctions/step3-bounded/`, the original kept beside it): 610,130 sets left the fit, 222
+objects moved from their own fit to a pool, the in-track one-day sigma changed on 21,644 of 22,039
+fitted objects (median −5 per cent, tenth percentile −49 per cent), and the fleet members' own
+in-track sigma fell by a median 47 per cent, because their 2024 rows were from solar maximum. Under
+`quiet`, 21 flagged events became 12 (11 lost, 2 gained; one red became two), the region changed on
+285 of 6,224 events, and the ratio of the probability after to before has a median of 0.98, a fifth
+percentile of 0.15 and a ninety-fifth of 2.5. Under the storm scenarios the same: `forecast` 20 flagged events became 12 (10 lost, 2 gained), `storm-g4` 18 became 11 (9 lost, 2 gained), `storm-g5` 18 became 12 (9 lost, 3 gained), the region changing on 277 to 286 events in each, and the median of the probability ratio 0.99 with a fifth percentile of 0.13 to 0.16 and a ninety-fifth of 2.5; the fleet members in-track sigma at the encounter fell by a median 26, 20 and 17 per cent under the three, less than under `quiet` because the storm variance term is added on top and is the same in both fits. The benchmark is unaffected: its
+fits bound their own history to the weeks before each window, and the guard holds on them.
+
 ### 3. Every published file has a seam at exactly 48 hours
 
 Ten of ten files, then nineteen of nineteen: the position steps by a few hundred metres at
@@ -254,25 +275,24 @@ October storm (37.5 km at 36 hours). An engineer screening on public element set
 storm has a day to two days of lead in which the coarse stage can be trusted to keep the object
 inside its box, and the covariance carried beside it is too small by the numbers above.
 
-**An open hypothesis about the under-coverage (2026-09-05; recorded, not acted on).** The covariance
-is fitted from pairs of element sets that span no detected manoeuvre, and the manoeuvre detector
-reads an unexplained change in semi-major axis as a burn. A storm changes the semi-major axis
-through drag faster than the set's own `B*` predicts, and the benchmark watched the detector do
-exactly that: left to itself it read the 11 October storm as a burn on Swarm A and C. If the same
-happens in the production fit, the intervals a storm disturbs are the ones the fit throws away, the
-covariance is calibrated on quiet-biased history, and part of the under-coverage in a storm is the
-fit's own selection. Checked cheaply on the 3 September run's 2,944 objects in events, by the
-maximum observed Kp inside each interval the detector excluded. The fit's 45-day window (21 July to
-3 September 2026) held no three-hour interval at Kp 6 or above, its maximum being 5.7, so **0 of the
-17,033** excluded intervals inside the window coincide with one, and 1,148 coincide with Kp 5 or
-above. The fit also read the May 2024 element sets that the storm validation had left in the history
-store for 1,794 of those objects (`docs/state-of-play.md`, open items), and there **155 of 4,617**
-excluded intervals coincide with Kp 6 or above, on 127 objects: 145 on Starlinks, which manoeuvre;
-7 on payloads flagged `observed`; and **3 on debris, which does not manoeuvre**, two of them on 10 to
-11 May at Kp 9. Only 40 of the 2,944 have stored history that spans that storm, 17 of them
-free-flying, and **2 of those 17, both debris, had the storm interval excluded as a burn**. That
-is consistent with the hypothesis and is not a test of it. The test is the coverage
-of a fit made with and without the storm intervals, against a truth, and nothing was changed.
+**Why the covariance under-covers in a storm, in the order the evidence supports (2026-09-05).** The
+primary explanation is the plain one: the covariance is fitted from the consistency of an object's
+element sets over the weeks before the run, and a fit made on quiet history cannot describe
+storm-time error, because nothing in how quiet fits disagree with each other says how far a storm
+will move the object. The benchmark's own fits, bounded to the weeks before each window, are exactly
+that, and they under-cover in both storms. A secondary mechanism exists and has a measured size. The
+fit excludes pairs that span a detected manoeuvre, the detector reads an unexplained change in
+semi-major axis as a burn, and a storm's drag is such a change; so where a storm falls inside the
+fit window, the detector can throw the storm-time intervals away and calibrate the fit on the quiet
+days either side. The benchmark watched it read the 11 October storm as a burn on Swarm A and C. It
+matters only when a storm falls inside the window. The 3 September run's 45-day window held no
+three-hour interval at Kp 6 or above (its maximum was 5.7), so none of the 17,033 intervals excluded
+inside the window coincide with one. Where a storm did fall inside stored history, in the May 2024
+rows the fit had read outside its window (the provenance defect in item 2), 155 of 4,617 excluded
+intervals coincide with Kp 6 or above, 145 of them on Starlinks, which manoeuvre; and among the 17
+free-flying objects whose stored history spans the 10 to 13 May storm, **2, both debris, had the
+storm interval excluded as a burn**. Two of seventeen is the measured size of the secondary
+mechanism, on one storm. Recorded; nothing in the detector was changed.
 
 **What this does not show.** Three well-tracked satellites at two altitudes in one orbit class, one
 week of sets per window; whether the ratio of actual error to consistency generalises to debris, to

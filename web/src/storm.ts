@@ -30,6 +30,7 @@ import type { Bundle } from "./data";
 import {
   SCENARIO_HELP,
   STORM_CALIBRATION_NOTE,
+  STORM_CALIBRATION_SHORT,
   isReplayScenario,
   labelOf,
   type ScenarioFigures,
@@ -126,10 +127,11 @@ export function buildStormControl(
     }
     const help = SCENARIO_HELP[state.current] ?? (isReplayScenario(state.current) ? REPLAY_HELP : "");
     // Every storm number carries the benchmark's calibration beside it (2026-09-05); quiet has none.
+    // One sentence here, because this block is capped and scrolls: the paragraph is above the table.
     note.innerHTML =
       state.current === "quiet"
         ? escapeHtml(help)
-        : `${escapeHtml(help)}<p class="caveat">${escapeHtml(STORM_CALIBRATION_NOTE)}</p>`;
+        : `${escapeHtml(help)}<p class="caveat">${escapeHtml(STORM_CALIBRATION_SHORT)}</p>`;
   };
 
   const renderSummary = () => {

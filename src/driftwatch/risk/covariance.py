@@ -67,6 +67,7 @@ import numpy as np
 import pandas as pd
 from sgp4.api import SatrecArray
 
+from driftwatch.catalogue.history import window_bounds
 from driftwatch.orbit.propagator import WGS72_MU_KM3_S2, build_satrecs
 from driftwatch.orbit.time import julian_dates
 from driftwatch.risk.manoeuvre import JumpDetection, detect_jumps
@@ -807,6 +808,20 @@ def fit_covariance(
     labels = objects.drop_duplicates("norad_id").set_index("norad_id")
     wanted = [int(i) for i in labels.index]
     hist = history[history["norad_id"].isin(wanted)]
+    if window is not None and len(hist):
+        # A fit labelled with a window has read nothing outside it (2026-09-05). The label is
+        # provenance: a reader of the covariance block takes it as the span the consistency was
+        # measured over, and a fit that quietly read a storm two years earlier would be
+        # mislabelled in the direction that matters. Refused, not filtered, because the caller
+        # chose what to load and a silent filter here would hide the same defect again.
+        lo, hi = window_bounds(window)
+        epochs = pd.to_datetime(hist["epoch"], utc=True)
+        outside = int(((epochs < lo) | (epochs >= hi)).sum())
+        if outside:
+            raise ValueError(
+                f"{outside} of {len(hist)} element sets lie outside the fit's recorded window "
+                f"{window[0]} to {window[1]}; a fit reads only its window"
+            )
     by_object = {int(k): g for k, g in hist.groupby("norad_id", sort=False)}
 
     fits: dict[int, PowerLawGrowth] = {}

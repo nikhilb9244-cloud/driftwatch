@@ -290,6 +290,18 @@ class BackfillResult:
     path: Path | None
 
 
+def window_bounds(window: tuple[date, date]) -> tuple[datetime, datetime]:
+    """The epoch bounds a whole-day ``window`` implies: its first day's start to its last day's end, UTC.
+
+    ``[start, end)``: a set at the last day's midnight belongs to the next day. This is the one
+    definition of "inside the window" the history load and the fit's guard share, so that a fit
+    labelled with a window has read nothing outside it.
+    """
+    start = datetime(window[0].year, window[0].month, window[0].day, tzinfo=UTC)
+    last = window[1] + timedelta(days=1)
+    return start, datetime(last.year, last.month, last.day, tzinfo=UTC)
+
+
 def backfill_window(end: datetime, days: int = config.HISTORY_BACKFILL_DAYS) -> tuple[date, date]:
     """The whole-day window ``[end - (days - 1), end]`` ending on the day of ``end`` (UTC)."""
     end_day = parse_utc(end).date()

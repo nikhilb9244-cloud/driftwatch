@@ -165,6 +165,14 @@ export const SCENARIO_HELP: Record<string, string> = {
  * every storm number. Quoted, not computed: it is a stored measurement on Swarm A, B and C against
  * ESA's precise orbits, and the report carries the same text.
  */
+/** The benchmark's horizon, shown ahead of any probability; the report opens with the same sentence. */
+export const HORIZON_HEADLINE =
+  "Against ESA's precise orbits for Swarm A, B and C, a public element set keeps the satellite inside the " +
+  "25 km in-track half-width of the screening box, at the 95th percentile of trials, for five days in a quiet " +
+  "week, two days in the May 2024 storm and one day in the October 2024 storm. Read every probability after " +
+  "that number: a set propagated past its horizon no longer predicts the position the probability is " +
+  "computed from.";
+
 export const STORM_CALIBRATION_NOTE =
   "Read every storm number against the benchmark: against ESA's precise orbits for Swarm A, B and C, the " +
   "covariance under-covers in a storm (two sigma held 65 to 80 per cent of the May 2024 residuals and 62 to " +
@@ -172,6 +180,12 @@ export const STORM_CALIBRATION_NOTE =
   "helps only from about four days of lead, hurts from twelve hours to three days, hurts from one to six days " +
   "in a quiet week because its excess is not zero without a storm, and over-corrects at seven days, about 1.5 " +
   "times the actual in May. The horizon at 25 km is five days quiet, two in May, one in October.";
+
+/** One sentence of the same calibration, for the places a paragraph would push the numbers below the fold. */
+export const STORM_CALIBRATION_SHORT =
+  "Calibrated against ESA's precise orbits for Swarm A, B and C: the covariance under-covers in a storm, the " +
+  "storm term helps only beyond about four days and hurts inside three and in a quiet week, and it over-corrects " +
+  "at seven days; the horizon at 25 km is five, two and one days (quiet, May 2024, October 2024).";
 
 export function decode(column: Encoded | undefined, i: number): string {
   if (!column || !column.i) return "";

@@ -439,7 +439,9 @@ dd {
   /* A floor as well as a ceiling. In replay the scrubber takes 200 px off the panel, and with
      a ceiling alone the scenario block was squeezed to a sliver with its own heading scrolled
      out of view -- which reads as broken rather than as compact. */
-  min-height: 190px;
+  /* Raised from 190 px on 2026-09-05 so that the control, the scenario's line and the one-sentence
+     calibration beside it sit inside the first fold; the summary and its table scroll below. */
+  min-height: 250px;
   max-height: 38vh;
   overflow-y: auto;
 }
