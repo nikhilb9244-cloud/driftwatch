@@ -1577,7 +1577,8 @@ def cmd_storm_check(args: argparse.Namespace) -> int:
             print(
                 "\nStorm-term validity. `validated` means BOTH objects have a ballistic coefficient"
                 "\nmeasured from their own decay, which is the only population Step 4's May 2024 test"
-                "\nreaches (r = 0.88 there, no demonstrated skill otherwise). Nothing is weighted or"
+                "\nreaches (the right sign on about nine in ten at three to four days of lead, no skill"
+                "\ninside two, no demonstrated skill otherwise). Nothing is weighted or"
                 "\nwithheld by the label; it says how far the validation goes, not how large the shift is."
                 "\nAn operator-controlled object is given no mean shift, so an event with one such side is"
                 "\njudged on its free-flying side alone (2026-09-05)."
@@ -2122,6 +2123,334 @@ def cmd_validate_gannon(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_validate_swarm(args: argparse.Namespace) -> int:
+    """Calibrate public element sets against ESA's precise orbits for Swarm A, B and C; see ``storm/precise.py``."""
+    from driftwatch.storm import precise
+
+    now = datetime.now(UTC)
+    wanted = [w for w in precise.WINDOWS if args.window in ("all", w.name)]
+    if not wanted:
+        log.error("no such window %r; choose all, quiet, storm or held-out", args.window)
+        return 2
+    ids = sorted(precise.SWARM.values())
+
+    # Category and altitude band, for the covariance model's pools and defaults, from the latest snapshot
+    # where there is one; Swarm is a payload in low Earth orbit either way.
+    labels: dict[int, tuple[str, str]] = {i: ("payload", "leo") for i in ids}
+    try:
+        current = snapshot.read_snapshot(snapshot.latest_snapshot(config.SNAPSHOT_DIR))
+        for row in current[current["norad_id"].isin(ids)].itertuples():
+            labels[int(row.norad_id)] = (str(row.category), str(row.altitude_band))
+    except FileNotFoundError:
+        pass
+
+    # Every element set from the covariance history before the earliest window to the last truth.
+    frames = []
+    for window in wanted:
+        start = window.sets_from - timedelta(days=precise.COVARIANCE_HISTORY_DAYS + 1)
+        frames.append(
+            historical_history(ids, end=window.truth_to, days=(window.truth_to - start).days, offline=args.offline)
+        )
+    sets = pd.concat(frames, ignore_index=True).drop_duplicates(["norad_id", "epoch"]) if frames else pd.DataFrame()
+    if not len(sets):
+        log.error("no element sets came back for Swarm; nothing to calibrate")
+        return 2
+    sets = sets.merge(
+        pd.DataFrame({"norad_id": ids, "category": [labels[i][0] for i in ids]}), on="norad_id", how="left"
+    )
+
+    # The observed space weather over the whole span, for the storm term. Nothing forecast.
+    grid = None
+    weather_used = None
+    if not args.no_storm_term:
+        table = weather_for_density(
+            now,
+            min(w.sets_from for w in wanted) - timedelta(days=precise.COEFFICIENT_HISTORY_DAYS + 3),
+            max(w.truth_to for w in wanted),
+            offline=args.offline,
+        )
+        grid = density_mod.weather_grid(table)
+        weather_used = table.attrs.get("sources_used")
+
+    trials: list[pd.DataFrame] = []
+    orbits: dict[str, precise.PreciseOrbit] = {}
+    records: dict[str, precise.ThrusterRecord | None] = {}
+    for window in wanted:
+        for letter, norad_id in precise.SWARM.items():
+            key = f"{letter} ({window.name})"
+            day_from = (window.sets_from - timedelta(days=1)).date()
+            orbit = precise.load_precise_orbit(letter, day_from, window.truth_to.date(), offline=args.offline)
+            orbits[key] = orbit
+            # ESA's published thruster record decides the manoeuvre exclusion; the project's own
+            # detection is computed beside it as a cross-check. Without the record, detection decides.
+            record: precise.ThrusterRecord | None = None
+            if not args.no_esa_record:
+                try:
+                    record = precise.load_thruster_record(
+                        letter, day_from, window.truth_to.date(), offline=args.offline
+                    )
+                except (OSError, httpx.HTTPError, ImportError, ValueError) as exc:
+                    log.warning(
+                        "Swarm %s, %s window: ESA's thruster record is unavailable (%s); manoeuvres will be "
+                        "detected instead",
+                        letter,
+                        window.name,
+                        exc,
+                    )
+            records[key] = record
+            category, band = labels[norad_id]
+            inputs = precise.fit_inputs(
+                norad_id, sets, window, grid, label=letter, category=category, altitude_band=band
+            )
+            log.info(
+                "Swarm %s, %s window: %d trial sets, covariance %s from %d sets (%s to %s), coefficient %s",
+                letter,
+                window.name,
+                len(inputs.trial_sets),
+                inputs.covariance_source,
+                inputs.covariance_history[2],
+                inputs.covariance_history[0],
+                inputs.covariance_history[1],
+                None
+                if inputs.coefficient is None
+                else f"{float(inputs.coefficient['b_m2_kg']):.4f} m2/kg ({inputs.coefficient.get('source')})",
+            )
+            if not len(inputs.trial_sets):
+                continue
+            trials.append(precise.satellite_trials(inputs, orbit, window, grid, record=record))
+    if not trials:
+        log.error("no trials: no element set fell inside any window")
+        return 2
+    frame = pd.concat(trials, ignore_index=True)
+    summary = precise.summarise(frame)
+    sources = precise.sources_record(orbits, retrieved_at=now, weather_sources=weather_used, records=records)
+
+    out = Path(args.out or config.DATA_DIR / "validation")
+    out.mkdir(parents=True, exist_ok=True)
+    frame.to_parquet(out / "swarm_benchmark.parquet", index=False)
+    record = {
+        "built_at": now.isoformat(),
+        "windows": {w.name: w.as_dict() for w in wanted},
+        "leads_hours": list(precise.LEADS_HOURS),
+        "summary": summary,
+        "sources": sources,
+    }
+    (out / "swarm_benchmark.json").write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    text = precise.to_markdown(summary, sources, {w.name: w for w in wanted}, built_at=now)
+    if args.page:
+        page = Path(args.page)
+        page.parent.mkdir(parents=True, exist_ok=True)
+        page.write_text(text + "\n", encoding="utf-8")
+        log.info("Wrote %s", page)
+    for name, w in summary["windows"].items():
+        h = w["horizon"]
+        print(
+            f"\n=== {name} ({w['role']}): {w['n_sets']} sets; horizon within {h['last_lead_h_within']} h, beyond at "
+            f"{h['first_lead_h_beyond']} h"
+        )
+        for lead, e in w["by_lead_h"].items():
+            i, s = e["in_track"], e["storm_term"]
+            print(
+                f"  {float(lead):5g} h  n={e['n']:3d}  in-track median {i['median_km']:7.2f} p95 {i['p95_km']:8.2f} "
+                f"km  "
+                f"inside 1s {i['inside_1_sigma']:.0%} 2s {i['inside_2_sigma']:.0%}  storm term: "
+                + (
+                    f"{s['median_abs_raw_km']:.2f} -> {s['median_abs_corrected_km']:.2f} km ({s['improvement']:+.0%})"
+                    if s["n"] and s["improvement"] is not None
+                    else "n/a"
+                )
+            )
+    print(f"\n{out / 'swarm_benchmark.json'}")
+    return 0
+
+
+def cmd_local(args: argparse.Namespace) -> int:
+    """An operator's own files through the provenance check, the CDM matcher and the ephemeris benchmark, offline.
+
+    Every outbound request is refused for the duration (``driftwatch.local.no_network``), so the
+    messages, the ephemeris and the records never leave the machine; what is read comes from the
+    operator's files, the local run and history stores, and the cached space weather. See
+    ``docs/local-analysis.md``.
+    """
+    from driftwatch import local as local_mod
+    from driftwatch.storm import precise
+
+    now = datetime.now(UTC)
+    out = Path(args.out)
+    if not any([args.run, args.cdm, args.ephemeris]):
+        log.error("nothing to do: give --run, --cdm (with --run), or --ephemeris with --norad")
+        return 2
+    if args.cdm and not args.run:
+        log.error("--cdm needs --run: the messages are matched to a stored run")
+        return 2
+    if args.ephemeris and args.norad is None:
+        log.error("--ephemeris needs --norad: which public catalogue object the ephemeris describes")
+        return 2
+    report: dict[str, Any] = {
+        "built_at": now.isoformat(),
+        "network": "every outbound request refused for the duration (driftwatch.local.no_network)",
+        "sources": [],
+    }
+    with local_mod.no_network():
+        try:
+            if args.run:
+                run_dir = resolve_run(args.run)
+                result = check_run(run_dir, max_snapshot_age_hours=args.max_snapshot_age_hours, now=now)
+                for warning in result.warnings:
+                    log.warning("%s", warning)
+                for problem in result.problems:
+                    log.error("%s", problem)
+                report["provenance"] = {
+                    "run": run_dir.name,
+                    "path": str(run_dir.path),
+                    "snapshot": result.snapshot.name if result.snapshot else None,
+                    "snapshot_fetched_at": result.fetched_at.isoformat() if result.fetched_at else None,
+                    "snapshot_age_hours": round(result.age_hours, 3) if result.age_hours is not None else None,
+                    "warnings": result.warnings,
+                    "problems": result.problems,
+                    "ok": result.ok,
+                }
+                report["sources"].append(
+                    {
+                        "source": "Stored run",
+                        "origin": f"{run_dir.path} (run.json, events, objects and risk tables written by driftwatch on "
+                        f"this machine); snapshot {result.snapshot.name if result.snapshot else 'unresolved'}",
+                    }
+                )
+                if args.cdm:
+                    messages = cdm_parse.load_cdms(Path(args.cdm))
+                    if not messages:
+                        log.error("no messages under %s", args.cdm)
+                        return 2
+                    match = cdm_match.match_cdms(
+                        messages, run_dir.read_conjunctions(), tolerance_s=args.tolerance_s, scenario=args.scenario
+                    )
+                    print("\n".join(cdm_match.report_lines(match)))
+                    report["cdm"] = {
+                        "summary": match.summary,
+                        "matches": json.loads(match.matches.to_json(orient="records", date_format="iso"))
+                        if len(match.matches)
+                        else [],
+                        "unmatched_cdms": json.loads(match.unmatched_cdms.to_json(orient="records", date_format="iso"))
+                        if len(match.unmatched_cdms)
+                        else [],
+                        "unwarned_flags": json.loads(match.unwarned_flags.to_json(orient="records", date_format="iso"))
+                        if len(match.unwarned_flags)
+                        else [],
+                    }
+                    report["sources"].append(
+                        {
+                            "source": "Conjunction Data Messages",
+                            "origin": f"{len(messages)} message(s) under {args.cdm}, the operator's own, read on this "
+                            "machine and copied nowhere",
+                        }
+                    )
+            if args.ephemeris:
+                segments = local_mod.load_oem(args.ephemeris)
+                label = args.label or segments[0].object_name or str(args.norad)
+                orbit = local_mod.oem_to_precise_orbit(segments, norad_id=int(args.norad), label=label)
+                span = orbit.span
+                if span is None:
+                    log.error("the ephemeris holds no states")
+                    return 2
+                if args.sets:
+                    records = json.loads(Path(args.sets).read_text(encoding="utf-8"))
+                    sets = history.frame_from_records(records, source="local", fetched_at=now)
+                    sets_origin = f"{len(sets)} OMM records from {args.sets}"
+                else:
+                    sets = history.load_history(
+                        norad_ids=[int(args.norad)],
+                        start=(span[0] - pd.Timedelta(days=precise.COVARIANCE_HISTORY_DAYS + 15)).tz_localize("UTC"),
+                        end=span[1].tz_localize("UTC"),
+                    )
+                    sets_origin = f"{len(sets)} element sets from the local history store ({config.HISTORY_DIR})"
+                if not len(sets):
+                    log.error(
+                        "no element sets for %s are held locally; pass --sets <OMM JSON>, or fetch history beforehand "
+                        "with `driftwatch history` (which needs the network, and is not this command)",
+                        args.norad,
+                    )
+                    return 2
+                sets = sets.assign(category=sets.get("category", "payload"))
+                published = local_mod.load_manoeuvre_records(args.manoeuvres) if args.manoeuvres else None
+                grid = None
+                weather_origin = "not used: --storm-term not given"
+                if args.storm_term:
+                    try:
+                        table = weather_for_density(
+                            now,
+                            (span[0] - pd.Timedelta(days=precise.COEFFICIENT_HISTORY_DAYS + 3)).to_pydatetime(),
+                            span[1].to_pydatetime(),
+                            offline=True,
+                        )
+                        grid = density_mod.weather_grid(table)
+                        weather_origin = f"cached observed record: {table.attrs.get('sources_used')}"
+                    except (FileNotFoundError, ValueError, KeyError) as exc:
+                        log.warning("Storm term skipped: no cached space weather (%s)", exc)
+                        weather_origin = f"not available offline ({exc}); the storm term was skipped"
+                leads = tuple(float(x) for x in str(args.leads).split(","))
+                bench = local_mod.ephemeris_benchmark(
+                    int(args.norad),
+                    sets,
+                    orbit,
+                    label=label,
+                    leads_hours=leads,
+                    published=published,
+                    grid=grid,
+                    tolerance_km=args.tolerance_km,
+                )
+                out.mkdir(parents=True, exist_ok=True)
+                bench.trials.to_parquet(out / "ephemeris_trials.parquet", index=False)
+                coefficient = bench.inputs.coefficient
+                report["ephemeris"] = {
+                    "norad_id": int(args.norad),
+                    "label": label,
+                    "frame": orbit.frame,
+                    "time_systems": sorted({seg.time_system for seg in segments}),
+                    "span": [span[0].isoformat(), span[1].isoformat()],
+                    "n_states": int(len(orbit.table)),
+                    "n_files": len(orbit.files),
+                    "files": orbit.files,
+                    "window": bench.window.as_dict(),
+                    "n_trial_sets": int(len(bench.inputs.trial_sets)),
+                    "covariance_source": bench.inputs.covariance_source,
+                    "covariance_history": [str(v) for v in bench.inputs.covariance_history],
+                    "coefficient": None
+                    if coefficient is None
+                    else {"b_m2_kg": float(coefficient["b_m2_kg"]), "source": str(coefficient.get("source"))},
+                    "manoeuvre_record": args.manoeuvres,
+                    "leads_hours": list(leads),
+                    "summary": bench.summary,
+                }
+                report["sources"] += [
+                    {
+                        "source": "Operator ephemeris",
+                        "origin": f"{args.ephemeris} ({len(segments)} segment(s), frame {orbit.frame}, time system "
+                        f"{', '.join(sorted({seg.time_system for seg in segments}))}), read on this machine and copied "
+                        "nowhere; interpolated by cubic Hermite on its own velocities and rotated to TEME with astropy",
+                    },
+                    {"source": "Public element sets", "origin": sets_origin},
+                    {
+                        "source": "Manoeuvre record",
+                        "origin": f"the operator's own, {args.manoeuvres}: decides the exclusion; the project's "
+                        "detection is reported beside it"
+                        if args.manoeuvres
+                        else "none supplied: the project's own detection decides the exclusion",
+                    },
+                    {"source": "Space weather", "origin": weather_origin},
+                ]
+        except local_mod.NetworkRefused as exc:
+            log.error("%s", exc)
+            return 3
+        except (FileNotFoundError, ValueError) as exc:
+            log.error("%s", exc)
+            return 2
+    json_path, md_path = local_mod.write_report(report, out)
+    print(md_path.read_text(encoding="utf-8"))
+    print(json_path)
+    return 0
+
+
 def starlink_2022_control(args: argparse.Namespace, end: datetime) -> tuple[pd.DataFrame, list[int]]:
     """Starlinks already on station near 500 km through the same days, as the control group.
 
@@ -2641,6 +2970,19 @@ def cmd_kelvins(args: argparse.Namespace) -> int:
     stale = kelvins_mod.compare_span_radius_lookup(radii)
     if stale:
         log.warning("SPAN_RADIUS_M no longer matches the data: %s", stale)
+    # The span convention was recovered from these rows, so it is confirmed on rows it never
+    # saw: the training events halved, and the challenge's own test file where it sits beside
+    # the training one.
+    held_out: list[dict[str, Any]] = []
+    if primary is not None:
+        test_path = kelvins_mod.find_test_dataset(data)
+        test = kelvins_mod.load_kelvins(test_path) if test_path is not None else None
+        try:
+            held_out = kelvins_mod.held_out_checks(df, test)
+        except ValueError as exc:
+            log.warning("Kelvins held-out check skipped: %s", exc)
+        for check in held_out:
+            log.info("Kelvins held out: %s", check)
 
     out = Path(args.out) if args.out else None
     plot_name = None
@@ -2655,7 +2997,9 @@ def cmd_kelvins(args: argparse.Namespace) -> int:
         out.parent.mkdir(parents=True, exist_ok=True)
         (out.parent / plot_name).write_text(svg, encoding="utf-8")
         log.info("Wrote %s", out.parent / plot_name)
-    text = kelvins_mod.to_markdown(fit, data, extra, primary=primary, proxies=proxies, radii=radii, plot_path=plot_name)
+    text = kelvins_mod.to_markdown(
+        fit, data, extra, primary=primary, proxies=proxies, radii=radii, plot_path=plot_name, held_out=held_out
+    )
     print(text)
     if out is not None:
         out.write_text(text + "\n", encoding="utf-8")
@@ -3029,7 +3373,19 @@ def build_parser() -> argparse.ArgumentParser:
         "validate",
         help="Phase 3 Step 4: measure the storm term against the May 2024 and February 2022 records",
     )
-    validate.add_argument("case", choices=("gannon", "starlink-2022"), help="which validation case to run")
+    validate.add_argument("case", choices=("gannon", "starlink-2022", "swarm"), help="which validation case to run")
+    validate.add_argument("--window", default="all", help="swarm: all, quiet, storm or held-out (default: all)")
+    validate.add_argument(
+        "--page",
+        default="docs/calibration-benchmark.md",
+        help="swarm: write the benchmark page here (default: docs/calibration-benchmark.md; empty to skip)",
+    )
+    validate.add_argument("--no-storm-term", action="store_true", help="swarm: skip the storm-term comparison")
+    validate.add_argument(
+        "--no-esa-record",
+        action="store_true",
+        help="swarm: do not read ESA's thruster record (SC_xDYN_1B); detect manoeuvres instead",
+    )
     validate.add_argument("--sample", type=int, default=300, help="objects to measure (gannon; default 300)")
     validate.add_argument("--min-perigee-km", type=float, default=250.0, help="lower edge of the altitude range")
     validate.add_argument("--max-perigee-km", type=float, default=750.0, help="upper edge of the altitude range")
@@ -3058,7 +3414,11 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--out", help=f"output directory (default {config.DATA_DIR / 'validation'})")
     validate.add_argument("--offline", action="store_true", help="use only cached history and space weather")
     validate.set_defaults(
-        func=lambda a: cmd_validate_gannon(a) if a.case == "gannon" else cmd_validate_starlink_2022(a)
+        func=lambda a: {
+            "gannon": cmd_validate_gannon,
+            "starlink-2022": cmd_validate_starlink_2022,
+            "swarm": cmd_validate_swarm,
+        }[a.case](a)
     )
 
     asof = sub.add_parser(
@@ -3236,6 +3596,44 @@ def build_parser() -> argparse.ArgumentParser:
     cdm_from.add_argument("--limit", type=int, default=200, help="rows to convert (default 200)")
     cdm_from.add_argument("--reference-epoch", help="the synthetic week starts here (default 2024-05-09T00:00:00Z)")
     cdm.set_defaults(func=cmd_cdm)
+
+    local = sub.add_parser(
+        "local",
+        help="an operator's own ephemerides, messages and records through the provenance check, the CDM matcher "
+        "and the ephemeris benchmark, with every outbound request refused",
+    )
+    local.add_argument(
+        "--out", required=True, help="directory for local_analysis.json, local_analysis.md and the trials"
+    )
+    local.add_argument("--run", help="a stored run: directory, name under data/conjunctions, or 'latest'")
+    local.add_argument("--max-snapshot-age-hours", type=float, help="fail the provenance check past this age")
+    local.add_argument("--cdm", help="the operator's messages (a file or a directory); needs --run")
+    local.add_argument("--scenario", help="which scored scenario the messages are matched against (default quiet)")
+    local.add_argument(
+        "--tolerance-s",
+        type=float,
+        default=cdm_match.DEFAULT_TOLERANCE_S,
+        help=f"TCA tolerance for a match in seconds (default {cdm_match.DEFAULT_TOLERANCE_S:g})",
+    )
+    local.add_argument("--ephemeris", help="the operator's CCSDS OEM (KVN) file, or a directory of them")
+    local.add_argument("--norad", type=int, help="the public catalogue id the ephemeris describes")
+    local.add_argument("--label", help="a name for the object in the report (default: the OEM's OBJECT_NAME)")
+    local.add_argument(
+        "--sets", help="the object's element sets as OMM JSON (CelesTrak/Space-Track form); default: the local history"
+    )
+    local.add_argument(
+        "--manoeuvres", help="the operator's manoeuvre record: a CSV with start,end columns of UTC times"
+    )
+    local.add_argument(
+        "--leads", default="6,12,24,36,48,72,96,120,144,168", help="lead times in hours (default 6 h to 7 days)"
+    )
+    local.add_argument("--tolerance-km", type=float, default=25.0, help="the horizon's in-track tolerance (default 25)")
+    local.add_argument(
+        "--storm-term",
+        action="store_true",
+        help="apply the storm term with the cached observed ap; skipped, and said so, when no weather is cached",
+    )
+    local.set_defaults(func=cmd_local)
     return parser
 
 
