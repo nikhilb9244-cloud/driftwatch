@@ -1,0 +1,8 @@
+{
+  "product": "kp-forecast",
+  "url": "https://services.swpc.noaa.gov/products/noaa-planetary-k-index-forecast.json",
+  "issued_at": "2026-09-04T12:30:00+00:00",
+  "issued_from": "companion",
+  "fetched_at": "2026-09-05T00:04:36.234725+00:00",
+  "bytes": 6911
+}

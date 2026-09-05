@@ -1,0 +1,8 @@
+{
+  "product": "solar-wind",
+  "url": "https://services.swpc.noaa.gov/products/geospace/propagated-solar-wind.json",
+  "issued_at": "2026-09-04T23:57:00+00:00",
+  "issued_from": "last-observation",
+  "fetched_at": "2026-09-05T00:04:36.234725+00:00",
+  "bytes": 1153197
+}
