@@ -40,6 +40,10 @@ on:
         description: "Deploy to Vercel: production, preview, or no"
         required: false
         default: "production"
+      spacex:
+        description: "Use SpaceX's published ephemerides: yes, or no for a run reproducible from the store branch alone"
+        required: false
+        default: "yes"
 
 concurrency:
   # One run at a time, and never cancelled: a run interrupted mid-deploy is the one case that
@@ -55,6 +59,17 @@ env:
   FLEET: ${{ inputs.fleet || 'fleets/demo.yaml' }}
   SCENARIOS: ${{ inputs.scenarios || 'forecast,storm-g3,storm-g4,storm-g5' }}
   DEPLOY: ${{ inputs.deploy || 'production' }}
+  # `no` skips the ephemeris fetch and screens and scores with --no-spacex, so that every input
+  # the run used is on the store branch afterwards and the run can be repeated on another
+  # machine from the archive alone. The operator's files are the one input that is never
+  # stored (docs/spacex-ephemerides.md, terms), so a run that used them can only be reproduced
+  # over the events that did not involve a served object. docs/pipeline.md, "Reproducibility".
+  SPACEX: ${{ inputs.spacex || 'yes' }}
+  # The name of the archived run whose events were reproduced on another machine from the same
+  # stored inputs (docs/pipeline.md, "Reproducibility"). While it is empty a production deploy
+  # is downgraded to a preview, with a warning: nothing goes to production until the same
+  # inputs have been shown to give the same events in both environments.
+  REPRODUCED_RUN: ""
   # The snapshot the run screened must be fresher than this, or the bundle is not published.
   # Six hours: a daily pipeline whose fetch silently fell back to yesterday's cache has not
   # run, whatever its exit code said.
@@ -157,6 +172,7 @@ jobs:
       # after the first day: the Starlink objects near a fixed fleet do not change much in a day
       # and the pass costs four minutes. docs/pipeline.md.
       - name: Seed the ephemeris selection, first run only
+        if: env.SPACEX != 'no'
         env:
           SPACETRACK_USER: ${{ secrets.SPACETRACK_USER }}
           SPACETRACK_PASS: ${{ secrets.SPACETRACK_PASS }}
@@ -174,6 +190,7 @@ jobs:
       # fetched file and compares, with a 5 km threshold an order of magnitude clear of both the
       # published fit residual and a frame error.
       - name: Fetch SpaceX ephemerides, with the frame check
+        if: env.SPACEX != 'no'
         env:
           DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
         run: |
@@ -186,7 +203,9 @@ jobs:
           SPACETRACK_PASS: ${{ secrets.SPACETRACK_PASS }}
         run: |
           set -o pipefail
-          uv run driftwatch screen --fleet "$FLEET" --no-viewer | tee "$RUNNER_TEMP/screen.out"
+          extra=""
+          [ "$SPACEX" = "no" ] && extra="--no-spacex"
+          uv run driftwatch screen --fleet "$FLEET" --no-viewer $extra | tee "$RUNNER_TEMP/screen.out"
           echo "screen,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
           # `driftwatch screen` prints the run directory as its last line.
           echo "RUN_DIR=$(tail -1 "$RUNNER_TEMP/screen.out")" >> "$GITHUB_ENV"
@@ -223,12 +242,14 @@ jobs:
         env:
           DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
         run: |
+          extra=""
+          [ "$SPACEX" = "no" ] && extra="--no-spacex"
           IFS=',' read -ra names <<< "$SCENARIOS"
           for name in "${names[@]}"; do
             [ -n "$name" ] || continue
             echo "== $name"
             before=$SECONDS
-            uv run driftwatch risk "$RUN_DIR" --scenario "$name"
+            uv run driftwatch risk "$RUN_DIR" --scenario "$name" $extra
             echo "risk_$name,$(( SECONDS - before ))" >> "$RUNNER_TEMP/timings.csv"
           done
 
@@ -255,6 +276,12 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
+          target="$DEPLOY"
+          if [ "$DEPLOY" = "production" ] && [ -z "$REPRODUCED_RUN" ]; then
+            echo "::warning::No archived run has yet been reproduced on another machine from the same stored inputs (REPRODUCED_RUN is empty), so this production deploy is downgraded to a preview. docs/pipeline.md, 'Reproducibility'."
+            target=preview
+          fi
+          echo "DEPLOY_TARGET=$target" >> "$GITHUB_ENV"
           missing=""
           [ -n "$VERCEL_TOKEN" ] || missing="$missing VERCEL_TOKEN"
           [ -n "$VERCEL_ORG_ID" ] || missing="$missing VERCEL_ORG_ID"
@@ -280,7 +307,7 @@ jobs:
             echo "BUNDLE_DIR=web/dist" >> "$GITHUB_ENV"
           else
             target=preview
-            [ "$DEPLOY" = "production" ] && target=production
+            [ "${DEPLOY_TARGET:-$DEPLOY}" = "production" ] && target=production
             npx --yes "$VERCEL_CLI" pull --yes --environment="$target" --token "$VERCEL_TOKEN"
             if [ "$target" = "production" ]; then
               npx --yes "$VERCEL_CLI" build --prod --token "$VERCEL_TOKEN"
@@ -312,12 +339,12 @@ jobs:
         env:
           VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
         run: |
-          if [ "$DEPLOY" = "production" ]; then
+          if [ "${DEPLOY_TARGET:-$DEPLOY}" = "production" ]; then
             url="$(npx --yes "$VERCEL_CLI" deploy --prebuilt --prod --token "$VERCEL_TOKEN")"
           else
             url="$(npx --yes "$VERCEL_CLI" deploy --prebuilt --token "$VERCEL_TOKEN")"
           fi
-          echo "Deployed ($DEPLOY): $url"
+          echo "Deployed (${DEPLOY_TARGET:-$DEPLOY}): $url"
           echo "DEPLOY_URL=$url" >> "$GITHUB_ENV"
           echo "deploy,$SECONDS" >> "$RUNNER_TEMP/timings.csv"
 
@@ -383,7 +410,11 @@ jobs:
             fi
             echo
             if [ -n "$DEPLOY_URL" ]; then
-              echo "Deployed ($DEPLOY): $DEPLOY_URL"
+              echo "Deployed (${DEPLOY_TARGET:-$DEPLOY}): $DEPLOY_URL"
+              echo
+            fi
+            if [ "$SPACEX" = "no" ]; then
+              echo "Screened and scored with --no-spacex: every input is on the store branch (reproducibility mode)."
               echo
             fi
             echo "Planning figures are in \`docs/pipeline.md\`. If these disagree with them, that page is wrong."
