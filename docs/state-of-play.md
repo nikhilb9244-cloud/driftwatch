@@ -1,136 +1,108 @@
 # State of play
 
-Written 2026-09-05 (late evening UTC), at the end of the session that took an external review's
-corrections, changed the plan and moved the hosting. It supersedes the 2026-09-03 version and,
-like it, records **where things stand and what is unresolved** without restating the reasoning,
-which lives in the pages it points at. A snapshot; where it disagrees with a plan or a methods
-page, the page wins.
+Written 2026-09-05, at the end of the session that ran the calibration benchmark against precise
+orbits, built the local-analysis path, and committed the second review's corrections with the
+parked items' premises rewritten. It supersedes the earlier 2026-09-05 version and, like it,
+records **where things stand and what is unresolved** without restating the reasoning, which lives
+in the pages it points at. A snapshot; where it disagrees with a plan or a methods page, the page
+wins.
 
 ## Reading order for a fresh session
 
-1. `README.md`, the **findings and corrections** page at the top — the two-page statement of
-   what this project has found and what it has had to take back, with dates.
-2. `ROADMAP.md`, "Plan change, 2026-09-05" — Phase 4 now stops at the pipeline; Steps 3 to 7
-   and the OSC validation are deferred indefinitely and replaced by two items, both built.
-3. `docs/storm-term.md`, "Corrected 2026-09-05: operator-controlled objects" — the correctness
-   error the review found, what it moved, and the 42 unscoreable Starlinks it explained.
-4. `docs/storm-validation.md`, "By lead time" — where the storm term's skill actually lives.
-5. `docs/writeup-notes.md` — additive; the EOS SAT-1 entry now leads with its region.
-6. `docs/pipeline.md` — the daily run, the Vercel deploy, and the first scheduled run's numbers.
-7. `docs/cdm-matching.md` — the CDM parser and matcher, and why the Kelvins rows are its test
-   input and not a validation.
-8. `docs/phase4-prompt.md` and `docs/phase4-plan.md` — the original specification and the working
-   record, with the deferred steps still described.
+1. `README.md`, the **findings and corrections** page at the top — six items now. Item 6 is the
+   calibration against ESA's precise orbits for Swarm A, B and C: the first comparison of a public
+   element set with an independent truth in this project, published whatever it showed.
+2. `docs/calibration-benchmark.md` — the page `driftwatch validate swarm` writes: three windows,
+   four things by lead bin, every source with its origin and derivation.
+3. `ROADMAP.md`, "Plan change, 2026-09-05" and the paragraph added after it — Phase 4 stops at the
+   pipeline; the benchmark and the local path are the one bounded experiment and the one optional
+   path added after the second review; the parked items have their premises rewritten, not deleted.
+4. `docs/local-analysis.md` — `driftwatch local`: an operator's own ephemerides, messages and records
+   through the provenance check, the CDM matcher and the same benchmark, with the network refused.
+5. `docs/writeup-notes.md` — additive; the last two entries are the second review and the benchmark.
+6. `docs/methods.md`, "Uncertainty and probability" — what the covariance is, and now what one
+   calibration found about it.
+7. `docs/storm-validation.md` and `docs/storm-term.md` — the storm term, its May 2024 validation
+   against later element sets, and the pointer to the same term measured against a truth.
+8. `docs/pipeline.md`, `docs/cdm-matching.md`, `docs/phase4-plan.md` — the pipeline, the matcher and
+   the working record, unchanged this session.
 
-## Where Phase 4 stands
+## Where things stand
 
 | Item | State | Where |
 | --- | --- | --- |
-| Precondition check | **The four original Actions secrets are verified present** (`gh secret list`, 2026-09-05, from the repository-owning account); this closes the 2026-09-03 open item. Two of the three Vercel secrets, `VERCEL_ORG_ID` and `VERCEL_PROJECT_ID`, were set by this session. **`VERCEL_TOKEN` is not set** and only the account holder can create it (Vercel dashboard, Account Settings, Tokens). Until it is, the pipeline's deploy-credentials check fails the run by name. | `docs/pipeline.md`, "Hosting" |
-| **1. Stage C on the published states** | Built and reviewed, unchanged. | `phase4-plan.md` §Step 1 |
-| **2. The daily pipeline** | **Built; the schedule has fired once on its own** (2026-09-04, run `33867306871`, 11:18 UTC): every step through `check-bundle` passed — the four scenarios on a runner for the first time, in 23 minutes — and the Cloudflare upload failed on the token's missing Pages permission. The deploy is now Vercel. **No run has yet completed end to end**, so no release archive, no stability file and no store commit has been written by a runner. | `docs/pipeline.md` |
-| Warning-stability read path | Built; no analysis, deliberately. | `pipeline.md` §"The index warning stability reads" |
-| **2A. Office of Space Commerce validation** | **Deferred indefinitely.** Read, nothing fetched. | `ROADMAP.md`, plan change; `phase4-plan.md` §"Step 2A preparation" |
-| 3 to 7. Landing page, export, visual pass, parked items, write-up | **Deferred indefinitely**: they change nobody's decision while no operator uses the output. | `ROADMAP.md`, plan change |
-| Replacement 1: findings and corrections page | **Built**, at the top of the README. | `README.md` |
-| Replacement 2: CDM parser and matcher | **Built**: `src/driftwatch/cdm/`, `driftwatch cdm parse | match | from-kelvins`, tests against the Kelvins rows. No real message has been matched yet. | `docs/cdm-matching.md` |
+| **Calibration benchmark** | **Run and published.** Swarm A, B and C against ESA's `SW_OPER_SP3xCOM_2_` precise orbits; 57, 54 and 61 element sets in the quiet (20 to 27 April 2024), May 2024 storm and held-out October 2024 windows; one trial per set; manoeuvres from ESA's `SW_OPER_SC_xDYN_1B` thruster record (two in 150 satellite-days, both also found by the precise-orbit step detector). Results in `docs/calibration-benchmark.md` and README item 6; per-trial file `data/validation/swarm_benchmark.parquet` (gitignored). | `README.md` item 6; `docs/calibration-benchmark.md`; `src/driftwatch/storm/precise.py` |
+| **Local-analysis path** | **Built and tested**, not yet used by anyone: `driftwatch local` runs a stored run's provenance check, the CDM matcher and the ephemeris benchmark over an operator's own files with every outbound request refused. OEM (KVN) reader for ITRF, TEME and J2000 frames and UTC, TAI and GPS time systems; manoeuvre records as CSV. | `docs/local-analysis.md`; `src/driftwatch/local.py`; `tests/test_local.py` |
+| Second review's corrections | **Committed** (they were in the working tree, uncommitted, at the start of this session). | `docs/writeup-notes.md`, "The second review" |
+| Parked items | **Premises rewritten**, dated 2026-09-05, per the instruction: investigation burden replaces manoeuvre burden; lifetime loss requires validated decay modelling; the Starlink latency record is a separate causal study, not an overlay; commandability needs an operator's contact and command constraints; Hermanus needs a grid engineer's action criterion. | `ROADMAP.md`, parked items |
+| Precondition check | Unchanged: `VERCEL_TOKEN` is still not set; only the account holder can create it. The pipeline's deploy step fails by name until it is. | `docs/pipeline.md`, "Hosting" |
+| The daily pipeline | Unchanged this session: built, fired once on its own (2026-09-04), **no run has completed end to end**. | `docs/pipeline.md` |
+| Steps 3 to 7, OSC validation | Deferred indefinitely, unchanged. | `ROADMAP.md`, plan change |
+| CDM parser and matcher | Built; **no real message has been matched**. The local path is the way one would be. | `docs/cdm-matching.md`, `docs/local-analysis.md` |
 
-## What changed on 2026-09-05
+## What the benchmark found, in one paragraph
 
-The external review found two correctness errors and a set of framing problems. All are fixed,
-each with a dated note where the old claim stood rather than a silent rewrite.
-
-- **The storm term displaced operator-controlled objects.** A SpaceX-served trajectory, or
-  CelesTrak's supplemental fit to it, already carries the operator's drag model and burns, so the
-  storm excess over SGP4's atmosphere is undefined for it; a station-kept primary will burn rather
-  than drift. Those objects now get no mean shift (no term at all on an operator's trajectory; the
-  in-track variance kept for a manoeuvring object on a tracking-derived set), are labelled
-  `operator-controlled/<reason>`, and an event with one such side is judged on its free-flying
-  side alone. The 36 to 42 "unscoreable" Starlinks of the earlier runs were this error seen from
-  the other side: thrusting plans read as drag. Every scenario of the 2026-09-03 run was rescored:
-  no event is unscoreable; `forecast` went from 0 red, 16 yellow, 71 unscoreable to 1 red, 19
-  yellow, 0 (`storm-g4` 0/15/71 to 1/17/0, `storm-g5` 0/13/70 to 1/17/0), the one red being the
-  EOS SAT-1 dilution flag; the relative-to-absolute ratio over the 981 events with both objects
-  free-flying is 1.85 under every scenario; and **the Phase 3 headline — a storm lowers the
-  probability on most events — is withdrawn as a finding of these runs**, because the lowering
-  lived entirely in events with an operator-controlled side (median `pc / pc_variance_only` 0.67
-  there against 0.98 on the both-free-flying events, before and after alike).
-- **The EOS SAT-1 red is in the dilution region at low confidence** (maximum probability at 0.85
-  times the covariance) and the write-up notes did not say so. Every mention now leads with the
-  region and the confidence — the notes, the report, the viewer's chips, header and detail view.
-  On the public page, fleet members other than stations are shown by category and NORAD id until
-  their operator has agreed to appear.
-- **The lead-time split.** On the free-flying measured-coefficient population the storm term's
-  skill is concentrated at three to four days of lead and is near zero inside two (sign agreement
-  39 and 41 per cent at one and two days against 91 and 96 at three and four). The table is on the
-  validation page and `driftwatch validate gannon` now writes it.
-- **Precedent.** Flohrer, Krag and Klinkrad (2008) and Parker and Linares (2024) are cited on the
-  methods page with what this project does relative to each.
-- **The supplemental workflow** had failed every three hours since 2026-09-04 on nine-digit
-  placeholder NORAD ids in CelesTrak's supplemental file; the propagator now initialises an
-  out-of-range id as zero. A day of supplemental versions was lost.
-- **Hosting moved from Cloudflare Pages to Vercel.** The project (team `nikolodeon-s-projects`,
-  `driftwatch`, root directory `web`, framework Vite) existed since 2026-09-03 **with the GitHub
-  repository connected and Git builds not in fact disabled**: fourteen Git deployments had errored
-  on 2026-09-03 and the push of 2026-09-05 created one more, a data-less production deployment
-  that now holds the production aliases behind the team's authentication. The repository was
-  disconnected on 2026-09-05, so only the pipeline and `scripts/deploy-vercel.ps1` deploy from now
-  on; both build with the Vercel CLI, run `check-bundle` over the prebuilt output, and deploy
-  `--prebuilt`. The Cloudflare project and its URL are retired; `scripts/deploy-pages.ps1` stays,
-  marked retired, until the first Vercel production deploy has succeeded.
+In-track median absolute residual at 6 h / 24 h / 72 h / 7 days: quiet 0.3 / 0.5 / 3.2 / 24 km, May
+storm 0.5 / 0.8 / 7.2 / 75 km, October storm 0.9 / 1.8 / 15 / 49 km, with 95th percentiles of 62,
+197 and 652 km at seven days. The empirical covariance over-covers in the quiet week from one to
+five days (82 to 96 per cent inside one sigma) and under-covers inside twelve hours; in both storms
+it under-covers at every lead (two sigma holds 65 to 80 and 62 to 75 per cent against the 95 it
+claims). The storm term with the observed ap helps in May only from four days of lead (+20 to +48
+per cent on the median) and hurts from twelve hours to three days; in October it helps from six
+hours to five days and hurts at six and seven; in the quiet week it hurts from one to six days,
+because its excess is not zero without a storm; at seven days in May its shift is about 1.5 times
+the actual. The horizon for keeping the satellite inside the screening box's 25 km in-track
+half-width at the 95th percentile: five days quiet, two days in May, one day in October.
 
 ## What is committed, and what is not
 
-`main`, pushed. Three branches on the remote: `main`, `pipeline-store`, `supplemental-store`.
+`main`, four commits this session (the second review and the roadmap rewrites; the benchmark
+module, command, tests and the `cdflib` dependency; the result and its pages; the local path and
+this page). Not pushed by this session unless the log says otherwise.
 
-Local state that is **not** in the repository: `data/conjunctions/step1-baseline`, `step1-served`
-and `step2-attached` (the 2026-09-03 runs; `step2-attached` is the one rescored on 2026-09-05 and
-now carries `storm/<scenario>/2` in its model versions), `data/spacex/`, `data/history/`,
-`data/cache/`, `data/ballistic/`, `data/validation/` (whose `gannon.json` predates the by-lead
-table; the parquet beside it is what the table was computed from), and `.vercel/` (the project
-link and the pulled environment). All gitignored deliberately.
+Local state that is **not** in the repository, all gitignored deliberately:
+`data/cache/swarm/` (150 precise-orbit zips and 150 thruster-record zips, about 600 MB, plus the
+server listings), `data/validation/swarm_benchmark.{json,parquet}` (the benchmark's outputs; the
+page in `docs/` is regenerated from them), the 2024 Swarm element-set history in `data/history/`
+(fetched by the previous session), and everything the earlier state-of-play listed
+(`data/conjunctions/step*`, `data/spacex/`, `data/cache/`, `data/ballistic/`, `data/validation/`,
+`.vercel/`).
 
 ## What has never happened
 
-- **No pipeline run has completed end to end.** The 2026-09-04 run reached the deploy.
-- **No deploy from CI**, on either host. The first Vercel deploy was a preview made by hand from
-  this machine with `scripts/deploy-vercel.ps1` on 2026-09-05:
-  <https://driftwatch-44a7rqujz-nikolodeon-s-projects.vercel.app>, behind Vercel Authentication
-  (the team's default protects every deployment except custom domains, so the site is not public
-  until a custom domain is attached or the protection is changed; `docs/pipeline.md`, "Hosting").
-- **No release archive and no stability file written by a runner.**
-- **No real Conjunction Data Message has been matched.** The matcher has run only against the
-  Kelvins rows, where agreement is by construction.
+- **No pipeline run has completed end to end**, and **no deploy from CI** on either host; the deploy
+  is blocked on `VERCEL_TOKEN`. Unchanged.
+- **No real Conjunction Data Message has been matched**, and **nobody has run `driftwatch local`**
+  on real files. Both are built and tested against designed inputs only.
+- **No second object class has been calibrated.** The benchmark covers three well-tracked
+  satellites at 460 to 506 km.
 
 ## Open items
 
-1. **The attached-object filter dropped nothing on the runner, and 2,170 candidates locally.**
-   Still unexplained. The 2026-09-04 run reported the same ten pairs and, again, dropped no
-   candidates — but it did not reach the archive, so the query that settles it (any `(25544,
-   25575)` row in a runner's `events.parquet`) still cannot be made. Its event count was 5,903
-   against the local filtered 6,224, which is the same weak evidence as before.
-2. **The deploy, the stability index, the archive and the store push have never run on a
-   runner.** Everything before them now has (2026-09-04). The deploy is blocked on `VERCEL_TOKEN`.
-3. **The 22 per cent NRLMSIS storm bias, the validity split and the lead-time structure all rest
-   on one storm.** A second storm in the observed record is the thing that would move any of them
-   from a record to a calibration, and none of them is tuned.
-4. **No warning-stability analysis, deliberately** — nothing should be concluded from a pipeline
-   that has not run for a week, and it has not yet run for a day.
-5. **The `spacex-ephemeris+sgp4-fit` covariance path has never been produced by real data.**
-   Correct and tested; unexercised.
-6. **The storm's effect on how often an operator's plan is revised is real and unmodelled.** An
-   object on an operator's trajectory now gets no storm term at all, which is right for the mean
-   and arguable for the variance: SpaceX revised plans constantly through May 2024. The
-   supplemental store accumulates exactly the versions that would measure it, over a storm.
-7. **`gannon.json` on disk predates the by-lead table.** Rerunning `driftwatch validate gannon`
-   refreshes it; the sample is drawn from the latest snapshot, so the population may differ
-   slightly from the 2026-09-02 one the docs quote.
+1. **The storm term applies a non-zero mean shift in quiet conditions**, and the benchmark shows it
+   makes the residual worse from one to six days in a quiet week (README item 6). The `forecast`
+   scenario applies the term whenever it has a coefficient. Whether to zero the mean shift below
+   some ap, or to subtract the quiet-time excess, is a decision about the model that should be made
+   against this measurement and recorded, not tuned; nothing was changed this session.
+2. **The covariance under-covers in a storm by the numbers in item 6**, and the screening carries
+   it unchanged. The same applies: a storm-conditional scale would be a calibration on one orbit
+   class and two storms, and it has not been made.
+3. **The held-out window holds two storms** (7 to 8 October, then 10 to 11), and the sets issued
+   between them over-predict the decay for the quiet days that followed; the `B*`-across-a-storm
+   explanation is an inference. Swarm's TU Delft density products (`SW_OPER_DNSxPOD_2_`) would
+   separate the atmosphere's error from the object's response and are the next thing to read.
+4. **Generalisation.** Whether the ratio of actual error to consistency found here holds for debris,
+   for higher orbits, or for objects the network tracks less often is not measured; laser-ranging
+   objects and other GNSS-carrying missions with public precise orbits are the way to extend it.
+5. Everything the earlier state-of-play listed and this session did not touch: the attached-object
+   filter's runner reading (settled in `docs/pipeline.md`, "Reproducibility"), the deploy and the
+   archive never having run on a runner, the `spacex-ephemeris+sgp4-fit` covariance path never
+   exercised by real data, the storm's effect on how often an operator's plan is revised, and the
+   NRLMSIS storm bias recorded and not applied.
 
 ## The runner and the ceiling
 
-The 2026-09-04 run measured the scenarios at 0.12 s per object per scenario on a runner against
-the 0.34 s measured locally, and the 2026-09-05 correction computes no density track for the 1,681
-of 2,944 objects on an operator's trajectory. Both move the fleet ceiling in `docs/pipeline.md`
-outward, by roughly a factor of three each; the ceiling is left as written there until a second
-completed run confirms the first. The positioning it implies is unchanged: a university group, a
-single-spacecraft mission, a small national operator — which is who the CDM matcher is for.
+Unchanged from the earlier state-of-play: the ceiling in `docs/pipeline.md` is left as written until
+a second completed run confirms the first, and the positioning it implies is unchanged — a
+university group, a single-spacecraft mission, a small national operator — which is who the CDM
+matcher and the local path are for.
