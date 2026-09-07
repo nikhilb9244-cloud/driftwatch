@@ -35,7 +35,7 @@ Their correction does not validate the remaining model.
 ## Documentation boundary
 
 Procedural verification, test counts, viewport checks, command transcripts, commit narration
-and planning history are consolidated in [development-log.md](development-log.md).
+and planning history are kept outside the repository.
 Scientific dates identifying sample windows and source products remain with measurements.
 Current pages carry one last-updated marker.
 
