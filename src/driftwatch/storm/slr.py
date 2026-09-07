@@ -235,8 +235,7 @@ def parse_crd(text: str) -> pd.DataFrame:
             "window_s",
         ],
     )
-    if len(frame):
-        frame["t"] = pd.to_datetime(frame["t"], utc=True)
+    frame["t"] = pd.to_datetime(frame["t"], utc=True)
     return frame
 
 
@@ -266,7 +265,9 @@ def load_normal_points(
                 have.append(day)
                 frames.append(parse_crd(path.read_text(encoding="ascii", errors="replace")))
             day += timedelta(days=1)
+    frames = [f for f in frames if len(f)]
     points = pd.concat(frames, ignore_index=True) if frames else parse_crd("")
+    points["t"] = pd.to_datetime(points["t"], utc=True)
     if len(points):
         points = points.sort_values("t").reset_index(drop=True)
     return points, have, missing
