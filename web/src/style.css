@@ -1,746 +1,373 @@
 :root {
-  --bg: #05070d;
-  --panel: rgba(10, 14, 24, 0.86);
-  --border: rgba(255, 255, 255, 0.08);
-  --text: #e6ecf5;
-  --muted: #8d99ae;
-  --accent: #4cc9f0;
-  font-family: "IBM Plex Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
-  font-size: 13px;
-  color: var(--text);
+  color-scheme: dark;
+  --bg: #070b10; --panel: rgba(12, 19, 27, .985); --surface: #14212b;
+  --border: #34454f; --line: rgba(151, 185, 204, .17);
+  --text: #edf5f7; --muted: #a8bdc8; --accent: #c4f563; --cyan: #61dfff; --amber: #ffc277;
+  color: var(--text); font: 14px/1.55 "Segoe UI", system-ui, sans-serif;
+  font-synthesis: none;
+}
+* { box-sizing: border-box; }
+[hidden] { display: none !important; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); }
+button, input, select { font: inherit; }
+button, a, input, select, summary { -webkit-tap-highlight-color: transparent; }
+button, summary { cursor: pointer; }
+button { color: inherit; }
+button:disabled { opacity: .45; cursor: not-allowed; }
+a { color: var(--accent); }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+p { margin: 0 0 14px; }
+h2, h3 { line-height: 1.25; }
+h3 { margin: 20px 0 12px; font-size: 16px; font-weight: 600; }
+svg { fill: none; stroke: currentColor; stroke-width: 1.5; stroke-linecap: round; stroke-linejoin: round; }
+#globe { position: fixed; inset: 0; }
+#globe:focus-visible { outline-offset: -5px; }
+.scene-shade { position: fixed; inset: 0; pointer-events: none; background: linear-gradient(90deg, rgba(7,11,16,.85), transparent 57%), linear-gradient(0deg, #070b10, transparent 27%, transparent 86%, rgba(7,11,16,.8)); }
+.masthead { position: fixed; z-index: 3; inset: 0 0 auto; padding: 24px 36px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
+.wordmark { display: flex; align-items: center; gap: 10px; color: var(--text); font-size: 22px; font-weight: 650; text-decoration: none; letter-spacing: -.7px; }
+.wordmark svg { width: 34px; height: 34px; color: var(--accent); }
+.wordmark .orbit-dot { fill: var(--accent); stroke: none; }
+.wordmark-section { color: var(--muted); font-size: 12px; font-weight: 400; letter-spacing: .08em; margin-left: 12px; }
+.workspace-link { color: var(--text); font-size: 13px; text-decoration: none; border: 1px solid var(--border); background: rgba(12,19,27,.8); border-radius: 24px; padding: 10px 18px; }
+.workspace-link span { color: var(--accent); margin-left: 12px; }
+.scene-intro { position: fixed; pointer-events: none; top: clamp(105px, 17vh, 190px); left: 40px; max-width: 365px; }
+.eyebrow { font-size: 10px; font-weight: 650; letter-spacing: .16em; text-transform: uppercase; color: var(--muted); margin: 0; display: flex; align-items: center; gap: 8px; }
+.status-dot { width: 6px; height: 6px; background: var(--cyan); box-shadow: 0 0 12px #61dfff66; border-radius: 50%; }
+.scene-intro h1 { font-size: clamp(52px, 5.7vw, 86px); font-weight: 400; line-height: 1.01; letter-spacing: -.06em; margin: 24px 0; }
+.scene-intro h1 em { color: var(--accent); font-style: normal; }
+.intro-copy { color: var(--muted); font-size: 15px; line-height: 1.7; }
+.scene-count { display: flex; align-items: baseline; flex-wrap: wrap; gap: 10px; margin: 30px 0 4px; }
+.scene-count strong { font-size: 22px; font-weight: 500; letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.scene-count span, .model-note { color: var(--muted); font-size: 11px; }
+.action-dock { position: fixed; z-index: 6; left: 40px; bottom: 164px; display: flex; padding: 5px; gap: 4px; border: 1px solid var(--border); border-radius: 16px; background: rgba(12,19,27,.93); box-shadow: 0 12px 36px #0005; backdrop-filter: blur(16px); }
+.dock-action { min-height: 46px; display: flex; align-items: center; justify-content: center; gap: 10px; padding: 10px 16px; border: 1px solid transparent; border-radius: 11px; background: transparent; font-size: 13px; }
+.dock-action svg { width: 19px; height: 19px; color: var(--accent); }
+.dock-action:hover { background: #ffffff0b; }
+.dock-action[aria-expanded="true"] { background: var(--accent); color: var(--bg); }
+.dock-action[aria-expanded="true"] svg { color: inherit; }
+.drawer { position: fixed; z-index: 5; top: 92px; bottom: 234px; left: 40px; width: min(440px, calc(100vw - 80px)); display: flex; flex-direction: column; background: var(--panel); border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 24px 80px #0008; overflow: hidden; }
+body[data-panel="approaches"] .drawer { width: min(540px, calc(100vw - 80px)); }
+body[data-panel] .scene-intro { visibility: hidden; }
+.drawer-heading { display: flex; align-items: center; justify-content: space-between; gap: 18px; padding: 22px 24px 18px; border-bottom: 1px solid var(--line); background: linear-gradient(125deg, #c4f56308, transparent 70%); }
+.drawer-heading h2 { margin: 6px 0 0; font-size: 24px; font-weight: 500; letter-spacing: -.035em; }
+.drawer-scroll { overflow: auto; overscroll-behavior: contain; padding: 22px 24px; scrollbar-width: thin; scrollbar-color: #40545f transparent; }
+.lead { font-size: 15px; color: var(--muted); }
+.field-label { display: block; font-size: 12px; font-weight: 550; margin-bottom: 7px; }
+input[type="search"], select { color: var(--text); background: #0a131b; border: 1px solid #536974; border-radius: 9px; min-height: 44px; padding: 10px 12px; max-width: 100%; }
+input[type="search"] { width: 100%; min-width: 0; }
+input::placeholder { color: #8ca4b2; }
+.search-row, .row { display: flex; gap: 10px; align-items: center; }
+.search-row input { flex: 1; }
+#search-feedback { font-size: 12px; margin: 10px 0; }
+.btn, .icon-button { background: #15222c; border: 1px solid var(--border); border-radius: 9px; min-height: 44px; padding: 10px 14px; line-height: 1.3; font-size: 13px; }
+.btn:hover, .icon-button:hover { border-color: var(--accent); }
+.icon-button { width: 44px; flex: 0 0 44px; padding: 0; display: inline-flex; align-items: center; justify-content: center; font-size: 22px; }
+.icon-button svg { width: 22px; height: 22px; }
+.primary { background: var(--accent); border-color: var(--accent); color: #101809; font-weight: 600; }
+.search-results { display: grid; gap: 5px; }
+.search-result { display: flex; justify-content: space-between; gap: 12px; text-align: left; padding: 12px; min-height: 52px; background: #15222c; border: 1px solid var(--line); border-radius: 8px; }
+.search-result:hover { border-color: var(--accent); }
+.search-result small { color: var(--muted); white-space: nowrap; }
+.selected-card { margin: 20px 0; padding: 18px; border: 1px solid #c4f5634d; border-radius: 12px; background: #c4f56305; }
+.selected-card h3 { margin: 8px 0 18px; font-size: 20px; overflow-wrap: anywhere; }
+.selected-card .row { flex-wrap: wrap; margin-top: 14px; }
+#selected-visibility:empty { display: none; }
+dl { display: grid; grid-template-columns: minmax(0, .9fr) minmax(0, 1.1fr); gap: 8px 16px; font-size: 12px; }
+dt { color: var(--muted); }
+dd { margin: 0; overflow-wrap: anywhere; font-variant-numeric: tabular-nums; }
+.muted, .caveat { color: var(--muted); }
+.caveat { font-size: 12px; line-height: 1.65; margin: 12px 0; }
+.warn { color: var(--amber); font-size: 12px; }
+.inline-note { border-left: 2px solid var(--amber); background: #ffc27707; padding: 10px 14px; color: #d8c9b6; font-size: 12px; }
+details { border-top: 1px solid var(--line); margin-top: 16px; }
+details > summary { padding: 13px 0; min-height: 46px; font-size: 13px; font-weight: 550; }
+details > summary::marker { color: var(--accent); font-size: 10px; }
+details > p { font-size: 13px; color: var(--muted); }
+.summary-hint { color: var(--muted); float: right; font-size: 11px; font-weight: 400; margin: 2px 0 0 8px; }
+.checks { display: grid; gap: 4px; }
+.checks label { display: flex; gap: 9px; align-items: center; min-height: 42px; cursor: pointer; padding: 5px 9px; border-radius: 7px; }
+.checks label:has(input:checked) { background: #ffffff04; }
+input[type="checkbox"] { accent-color: var(--accent); width: 17px; height: 17px; flex-shrink: 0; }
+.chip { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.checks .count { margin-left: auto; color: var(--muted); font-variant-numeric: tabular-nums; font-size: 12px; }
+#filter-reset { margin-top: 16px; }
+.explanation { display: grid; grid-template-columns: 24px 1fr; gap: 14px; margin: 24px 0; }
+.step-number { color: var(--accent); font-size: 10px; padding-top: 3px; font-variant-numeric: tabular-nums; }
+.explanation h3 { margin: 0 0 7px; }
+.explanation p { margin: 0; color: var(--muted); font-size: 13px; }
+.replay-invite { margin-top: 24px; padding: 18px; border: 1px solid var(--line); border-radius: 12px; background: #61dfff05; }
+.replay-invite h3 { margin-top: 8px; }
+.replay-invite p:not(.eyebrow) { font-size: 13px; color: var(--muted); }
+.scene-tools { position: fixed; z-index: 3; right: 36px; top: 42%; display: grid; gap: 7px; }
+.scene-tools .icon-button { background: rgba(12,19,27,.85); }
+.time-dock { position: fixed; z-index: 4; left: 40px; right: 40px; bottom: 22px; padding: 15px 20px 9px; border: 1px solid var(--border); border-radius: 16px; background: rgba(12,19,27,.94); backdrop-filter: blur(20px); }
+.time-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; font-size: 11px; margin-bottom: 7px; }
+.transport { display: flex; align-items: center; gap: 12px; }
+.clock { font: 18px/1.4 ui-monospace, "Cascadia Mono", Consolas, monospace; font-variant-numeric: tabular-nums; letter-spacing: -.04em; margin-right: auto; }
+.speed select { border-color: var(--border); min-width: 75px; }
+.timeline { display: flex; align-items: center; gap: 16px; font-size: 10px; color: var(--muted); font-variant-numeric: tabular-nums; }
+.timeline span { white-space: nowrap; }
+#slider { min-width: 0; flex: 1; height: 26px; accent-color: var(--accent); cursor: ew-resize; }
+.conjunction-search { margin-top: 18px; }
+.checkbox { display: flex; gap: 8px; align-items: center; min-height: 44px; font-size: 12px; color: var(--muted); cursor: pointer; }
+.run-summary { display: flex; gap: 24px; padding: 16px 0; border-bottom: 1px solid var(--line); }
+.run-summary strong { font-size: 23px; display: block; color: var(--text); font-weight: 500; }
+.run-summary span { font-size: 11px; color: var(--muted); }
+#conjunction-list { border-top: 1px solid var(--line); }
+.cj-row { border-bottom: 1px solid var(--line); }
+.cj-head { display: grid; gap: 8px; width: 100%; text-align: left; background: transparent; border: 0; padding: 18px 8px; border-radius: 8px; }
+.cj-head:hover, .cj-head[aria-expanded="true"] { background: #61dfff08; }
+.cj-names { overflow-wrap: anywhere; font-size: 14px; font-weight: 550; }
+.cj-nums { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.cj-sub { font-size: 11px; }
+.flag, .chip-validity { display: inline-block; border-radius: 4px; padding: 2px 6px; font-size: 10px; line-height: 1.4; font-weight: 600; }
+.flag.red { background: #ff8c9d; color: #21080d; }
+.flag.yellow { background: var(--amber); color: #261606; }
+.flag.low, .flag.none, .chip-validity { background: #ffffff05; border: 1px solid var(--border); color: var(--muted); font-weight: 400; }
+.cj-events { margin: 0 0 12px 8px; display: grid; gap: 5px; }
+.cj-event { display: grid; grid-template-columns: 1fr auto; gap: 4px 12px; width: 100%; text-align: left; background: #14232c; border: 1px solid var(--line); border-left: 2px solid var(--cyan); border-radius: 5px; padding: 12px; min-height: 44px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.cj-event:hover { border-color: var(--cyan); }
+#conjunction-detail { margin: 20px 0; border: 1px solid #61dfff55; border-radius: 12px; padding: 18px; scroll-margin: 16px; }
+#conjunction-detail h2 { font-size: 17px; font-weight: 550; overflow-wrap: anywhere; }
+#conjunction-detail svg { display: block; max-width: 320px; margin: 0 auto 16px; }
+#conjunction-detail .muted { font-size: 12px; }
+.storm-segments { display: flex; gap: 4px; flex-wrap: wrap; }
+.storm-seg { flex: 1; border: 1px solid var(--border); border-radius: 7px; background: #15222c; padding: 8px; min-height: 44px; font-size: 11px; }
+.storm-seg[aria-pressed="true"] { background: var(--accent); color: var(--bg); border-color: var(--accent); }
+.storm-dropdown { display: none; }
+.storm-dropdown select { width: 100%; }
+.storm-note { font-size: 12px; margin-top: 12px; }
+#storm-summary { overflow-x: auto; }
+.storm-table { width: 100%; border-collapse: collapse; font-size: 11px; font-variant-numeric: tabular-nums; }
+.storm-table th, .storm-table td { text-align: right; padding: 8px 6px; border-bottom: 1px solid var(--line); }
+.storm-table th { font-weight: 500; color: var(--muted); }
+.storm-table th[scope="row"] { text-align: left; }
+.storm-table td:first-of-type { color: var(--accent); }
+.storm-explainer { min-width: 0; }
+.storm-unscoreable { list-style: none; padding: 0; }
+.storm-unscoreable li { display: grid; font-size: 12px; gap: 4px; padding: 12px 0; border-bottom: 1px solid var(--line); }
+#tooltip { position: fixed; pointer-events: none; background: var(--panel); border: 1px solid var(--border); border-radius: 10px; padding: 12px 16px; max-width: min(300px, 90vw); z-index: 9; font-size: 12px; box-shadow: 0 10px 30px #0006; }
+#tooltip b { display: block; margin-bottom: 5px; }
+#loading { position: fixed; z-index: 10; left: 50%; top: 50%; transform: translate(-50%,-50%); max-width: 85vw; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; padding: 20px 26px; color: var(--accent); box-shadow: 0 20px 80px #0008; }
+#replay { position: fixed; z-index: 4; left: 40px; right: 40px; bottom: 160px; display: flex; gap: 16px; padding: 12px 16px; background: var(--panel); border: 1px solid var(--border); border-radius: 14px; }
+#replay-panel { flex: 1; min-width: 0; }
+#replay-sun-box { width: 96px; height: 96px; flex-shrink: 0; border-radius: 8px; overflow: hidden; }
+#replay-sun { width: 100%; height: 100%; object-fit: cover; display: block; }
+#replay-sun.placeholder { filter: blur(3px); }
+.replay-readout { display: flex; flex-wrap: wrap; gap: 12px; font-size: 11px; font-variant-numeric: tabular-nums; }
+.replay-readout .g { color: var(--amber); }
+.replay-bar { height: 48px; margin-top: 6px; border: 1px solid var(--border); cursor: crosshair; overflow: hidden; border-radius: 5px; }
+.replay-bar svg { width: 100%; height: 100%; display: block; }
+.replay-legend { display: flex; flex-wrap: wrap; gap: 10px; font-size: 10px; color: var(--muted); }
+.replay-legend .swatch { display: inline-block; width: 8px; height: 8px; margin-right: 4px; }
+.replay-legend .swatch.kp { background: linear-gradient(90deg,#8d99ae,#c1121f); }
+#replay-sun-caption { font-size: 10px; }
+.replay-details { margin-top: 5px; }
+.replay-details > summary { min-height: 24px; padding: 3px 0; font-size: 10px; }
+body[data-replay] .action-dock { bottom: calc(174px + var(--replay-height, 140px)); }
+body[data-replay] .drawer { bottom: calc(244px + var(--replay-height, 140px)); }
+/* In replay the chart is the page's second subject and the headline block has to give way to it.
+   The count already did; the standing paragraph and the snapshot note now go with it at every
+   width rather than only below 600 px, because at 1280 x 781 the full block reached down into the
+   navigation. The snapshot date is still under "Snapshot & technical checks". */
+body[data-replay] .scene-count, body[data-replay] .intro-copy, body[data-replay] .model-note { display: none; }
+.visually-hidden { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+@media (min-width: 1600px) {
+  .scene-intro { left: 4vw; } .action-dock, .drawer, .time-dock, #replay { left: 4vw; } .time-dock, #replay { right: 4vw; }
+  .drawer { width: 470px; }
 }
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  height: 100%;
-  background: var(--bg);
-  overflow: hidden;
-}
-
-#globe {
-  position: fixed;
-  inset: 0;
-}
-
-#panel {
-  position: fixed;
-  top: 12px;
-  left: 12px;
-  width: 320px;
-  max-height: calc(100vh - 24px);
-  overflow-y: auto;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px 16px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-}
-
-#panel header h1 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-}
-
-#panel header .sub {
-  margin: 4px 0 12px;
-  color: var(--muted);
-}
-
-#panel h2 {
-  margin: 14px 0 6px;
-  font-size: 11px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-}
-
-section {
-  border-top: 1px solid var(--border);
-  padding-top: 10px;
-  margin-top: 10px;
-}
-
-section#time {
-  border-top: none;
-  margin-top: 0;
-  padding-top: 0;
-}
-
-.clock {
-  display: flex;
-  justify-content: space-between;
-  align-items: baseline;
-  font-variant-numeric: tabular-nums;
-  font-size: 15px;
-}
-
-.clock #clock-offset {
-  color: var(--muted);
-  font-size: 12px;
-}
-
-#slider {
-  width: 100%;
-  margin: 8px 0 6px;
-  accent-color: var(--accent);
-}
-
-.row {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
-
-.speed {
-  color: var(--muted);
-}
-
-.speed select {
-  margin-left: 4px;
-  background: #121826;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 3px 6px;
-}
-
-.btn {
-  background: #121826;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 10px;
-  cursor: pointer;
-  font-size: 13px;
-}
-
-.btn:hover {
-  border-color: var(--accent);
-}
-
-.btn.small {
-  padding: 3px 8px;
-  font-size: 12px;
-}
-
-.checks {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px 10px;
-}
-
-.checks label {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  cursor: pointer;
-  white-space: nowrap;
-  min-width: 0;
-}
-
-.checks label .name {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.checks label .chip {
-  width: 10px;
-  height: 10px;
-  border-radius: 50%;
-  flex: none;
-}
-
-.checks label .count {
-  color: var(--muted);
-  margin-left: auto;
-  font-variant-numeric: tabular-nums;
-  flex: none;
-}
-
-#find {
-  width: 100%;
-  background: #121826;
-  color: var(--text);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
-dl {
-  display: grid;
-  grid-template-columns: auto 1fr;
-  gap: 3px 10px;
-  margin: 0;
-}
-
-dt {
-  color: var(--muted);
-}
-
-dd {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
-}
-
-.caveat {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.4;
-  margin: 10px 0 0;
-}
-
-#tooltip {
-  position: fixed;
-  pointer-events: none;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 8px 10px;
-  max-width: 280px;
-  z-index: 10;
-  font-variant-numeric: tabular-nums;
-  line-height: 1.35;
-}
-
-#tooltip b {
-  display: block;
-  font-size: 13px;
-  margin-bottom: 2px;
-}
-
-#tooltip .muted {
-  color: var(--muted);
-}
-
-#loading {
-  position: fixed;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 8px;
-  padding: 10px 16px;
-  z-index: 20;
-}
-
-@media (max-width: 720px) {
-  #panel {
-    width: calc(100vw - 24px);
-    max-height: 45vh;
-  }
-}
-
-/* Conjunctions panel ------------------------------------------------------- */
-
-#conjunctions {
-  position: fixed;
-  top: 12px;
-  right: 12px;
-  width: 360px;
-  max-height: calc(100vh - 24px);
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 14px 16px 16px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-}
-
-#conjunctions header h1 {
-  margin: 0;
-  font-size: 15px;
-  letter-spacing: 0.02em;
-}
-
-#conjunctions .sub {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.45;
-  margin-top: 4px;
-}
-
-#conjunctions .row {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-#conjunction-filter {
-  flex: 1;
-  min-width: 0;
-}
-
-#conjunctions label.checkbox {
-  color: var(--muted);
-  font-size: 11px;
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  white-space: nowrap;
-}
-
-#conjunction-list {
-  overflow-y: auto;
-  flex: 1 1 auto;
-  /* The queue is what the panel is for, so it keeps a floor even when the scenario block is
-     open and the replay scrubber has taken the bottom two hundred pixels. */
-  min-height: 170px;
-  border-top: 1px solid var(--border);
-  padding-top: 6px;
-}
-
-.cj-row {
-  border-bottom: 1px solid var(--border);
-}
-
-.cj-head {
-  display: grid;
-  grid-template-columns: 1fr auto;
-  gap: 2px 8px;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: 0;
-  color: var(--text);
-  padding: 7px 2px;
-  cursor: pointer;
-  font: inherit;
-}
-
-.cj-head:hover {
-  background: rgba(255, 255, 255, 0.04);
-}
-
-.cj-names {
-  overflow-wrap: anywhere;
-}
-
-.cj-nums {
-  font-variant-numeric: tabular-nums;
-  white-space: nowrap;
-}
-
-.cj-sub {
-  grid-column: 1 / -1;
-  font-size: 11px;
-}
-
-.flag {
-  display: inline-block;
-  border-radius: 4px;
-  padding: 0 5px;
-  margin-left: 6px;
-  font-size: 11px;
-  font-weight: 600;
-  color: #05070d;
-}
-
-.flag.red {
-  background: #ef476f;
-}
-
-.flag.yellow {
-  background: #ffd166;
-}
-
-.flag.low {
-  background: none;
-  border: 1px solid var(--muted);
-  color: var(--muted);
-  font-weight: 400;
-}
-
-.cj-events {
-  padding: 0 0 8px 8px;
-}
-
-.cj-event {
-  display: grid;
-  grid-template-columns: 1fr auto auto auto;
-  gap: 8px;
-  width: 100%;
-  text-align: left;
-  background: none;
-  border: 0;
-  border-left: 2px solid var(--border);
-  color: var(--text);
-  padding: 4px 6px;
-  cursor: pointer;
-  font: inherit;
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
-}
-
-.cj-event:hover {
-  border-left-color: var(--accent);
-  background: rgba(255, 255, 255, 0.04);
-}
-
-#conjunction-detail {
-  border-top: 1px solid var(--border);
-  padding-top: 8px;
-  max-height: 46vh;
-  overflow-y: auto;
-}
-
-#conjunction-detail h2 {
-  font-size: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  color: var(--muted);
-  margin: 0 0 8px;
-}
-
-#conjunction-detail svg {
-  display: block;
-  margin-bottom: 6px;
-}
-
-#conjunction-detail .muted {
-  color: var(--muted);
-  font-size: 11px;
-  line-height: 1.4;
-  margin: 0 0 8px;
-}
-
-@media (max-width: 1100px) {
-  #conjunctions {
-    display: none;
-  }
-}
-
-/* ------------------------------------------------------------------------------------
-   Storm mode (Phase 3, Step 5)
-
-   The segmented control and the dropdown are both in the DOM; this decides which is seen,
-   so a resize past 900 px never loses the selection. Names are never abbreviated in either:
-   `G4` alone beside a probability is too easy to read as a flag.
-   ------------------------------------------------------------------------------------ */
-
-#storm {
-  border-top: 1px solid var(--border);
-  /* The queue is the thing being read, so the scenario block is capped and scrolls rather than
-     pushing the list below the fold. `#conjunction-list` is the flex child that should grow. */
-  flex: 0 1 auto;
-  /* A floor as well as a ceiling. In replay the scrubber takes 200 px off the panel, and with
-     a ceiling alone the scenario block was squeezed to a sliver with its own heading scrolled
-     out of view -- which reads as broken rather than as compact. */
-  /* Raised from 190 px on 2026-09-05 so that the control, the scenario's line and the one-sentence
-     calibration beside it sit inside the first fold; the summary and its table scroll below. */
-  min-height: 250px;
-  max-height: 38vh;
-  overflow-y: auto;
-}
-
-.storm-segments {
-  display: flex;
-  gap: 1px;
-  background: var(--border);
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  overflow: hidden;
-}
-
-.storm-seg {
-  flex: 1 1 0;
-  padding: 6px 4px;
-  font: inherit;
-  font-size: 11px;
-  color: var(--muted);
-  background: rgba(255, 255, 255, 0.02);
-  border: none;
-  cursor: pointer;
-  white-space: nowrap;
-}
-
-.storm-seg:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.07);
-  color: var(--text);
-}
-
-.storm-seg[aria-pressed="true"] {
-  background: rgba(76, 201, 240, 0.18);
-  color: var(--text);
-  font-weight: 600;
-}
-
-.storm-seg:disabled {
-  opacity: 0.35;
-  cursor: not-allowed;
-}
-
-.storm-dropdown {
-  display: none;
-}
-
-.storm-dropdown select {
-  width: 100%;
-  font: inherit;
-  color: var(--text);
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
-.storm-note {
-  margin: 8px 0 4px;
-  font-size: 11px;
-  line-height: 1.45;
-}
-
-.storm-note .warn,
-.warn {
-  color: #f4a261;
-}
-
-.storm-table {
-  width: 100%;
-  margin: 8px 0 4px;
-  border-collapse: collapse;
-  font-size: 11px;
-  font-variant-numeric: tabular-nums;
-}
-
-.storm-table th,
-.storm-table td {
-  padding: 3px 4px;
-  text-align: right;
-  border-bottom: 1px solid var(--border);
-}
-
-.storm-table thead th {
-  color: var(--muted);
-  font-weight: 600;
-  text-transform: none;
-}
-
-.storm-table th[scope="row"] {
-  text-align: left;
-  color: var(--muted);
-  font-weight: 400;
-}
-
-/* The validated column is the measured one and is read first, so it carries the weight. */
-.storm-table td:first-of-type,
-.storm-table thead th:nth-child(2) {
-  color: var(--text);
-  font-weight: 600;
-}
-
-/* The prose that explains the two columns folds away: it is needed once, not on every read. */
-.storm-explainer {
-  margin-top: 6px;
-}
-
-.storm-explainer > summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-.storm-explainer .caveat {
-  margin-top: 6px;
-}
-
-.storm-unscoreable-box {
-  margin: 8px 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 6px 8px;
-}
-
-.storm-unscoreable-box > summary {
-  cursor: pointer;
-  color: var(--muted);
-  font-size: 11px;
-}
-
-ul.storm-unscoreable {
-  list-style: none;
-  margin: 6px 0 0;
-  padding: 0;
-  max-height: 220px;
-  overflow-y: auto;
-}
-
-ul.storm-unscoreable li {
-  display: flex;
-  flex-direction: column;
-  gap: 1px;
-  padding: 4px 0;
-  border-top: 1px solid var(--border);
-  font-size: 11px;
-}
-
-.chip-validity {
-  margin-left: 5px;
-  padding: 0 4px;
-  border: 1px solid var(--border);
-  border-radius: 3px;
-  color: var(--muted);
-  font-size: 10px;
-  letter-spacing: 0.02em;
-  cursor: help;
-}
-
-.cj-delta {
-  margin-left: 6px;
-  font-variant-numeric: tabular-nums;
-}
-
-.visually-hidden {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-}
-
-/* ------------------------------------------------------------------------------------
-   The replay scrubber. Sits along the bottom, full width, with the Sun beside it.
-   ------------------------------------------------------------------------------------ */
-
-/* In replay mode the scrubber owns the bottom of the screen; the panels stop above it. */
-body[data-replay] #panel,
-body[data-replay] #conjunctions {
-  max-height: calc(100vh - 200px);
-}
-
-/* `hidden` has to win over these display rules, or the scrubber shows outside replay mode. */
-#replay[hidden],
-#replay-sun[hidden] {
-  display: none;
-}
-
-#replay {
-  position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: 12px;
-  display: flex;
-  gap: 12px;
-  align-items: stretch;
-  padding: 10px 12px;
-  background: var(--panel);
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  backdrop-filter: blur(10px);
-  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5);
-}
-
-#replay-panel {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-#replay-sun-box {
-  flex: 0 0 auto;
-  width: 96px;
-  height: 96px;
-  border-radius: 6px;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.4);
-}
-
-#replay-sun {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-  transition: filter 220ms ease;
-}
-
-/* The 64 px thumbnail, upscaled while the full frame is in flight. Blurred rather than left
-   crisp so that it reads as a placeholder at a glance; the caption says so in words too. */
-#replay-sun.placeholder {
-  filter: blur(3px) saturate(0.9);
-}
-
-.replay-readout {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 14px;
-  align-items: baseline;
-  font-variant-numeric: tabular-nums;
-  margin-bottom: 6px;
-}
-
-.replay-readout .g {
-  padding: 0 4px;
-  border-radius: 3px;
-  background: rgba(226, 85, 79, 0.25);
-  color: #f4a261;
-  font-size: 11px;
-}
-
-.replay-bar {
-  height: 64px;
-  cursor: crosshair;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  overflow: hidden;
-  background: rgba(0, 0, 0, 0.25);
-}
-
-.replay-bar svg {
-  display: block;
-  width: 100%;
-  height: 100%;
-}
-
-.replay-legend {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  margin-top: 5px;
-  font-size: 11px;
-  color: var(--muted);
-}
-
-.replay-legend .swatch {
-  display: inline-block;
-  width: 9px;
-  height: 9px;
-  margin-right: 4px;
-  border-radius: 2px;
-  vertical-align: baseline;
-}
-
-.replay-legend .swatch.kp {
-  background: linear-gradient(90deg, rgba(141, 153, 174, 0.45), #c1121f);
-}
-
 @media (max-width: 900px) {
-  .storm-segments {
-    display: none;
-  }
-
-  .storm-dropdown {
-    display: block;
-  }
-
-  #replay {
-    flex-direction: column;
-  }
-
-  #replay-sun-box {
-    width: 64px;
-    height: 64px;
-  }
+  .masthead { padding: 18px 22px; } .wordmark-section { display: none; }
+  .scene-intro { left: 24px; top: 110px; } .scene-intro h1 { font-size: 60px; }
+  .drawer, body[data-panel="approaches"] .drawer { left: 24px; width: min(490px, calc(100vw - 48px)); }
+  .action-dock, .time-dock, #replay { left: 24px; } .time-dock, #replay { right: 24px; }
+  .scene-tools { right: 24px; }
+  .storm-segments { display: none; } .storm-dropdown { display: block; }
+  .clock { font-size: 15px; } .transport { gap: 8px; }
+  .transport .btn { font-size: 11px; padding: 8px 10px; }
+}
+@media (max-width: 600px) {
+  .masthead { padding: 16px; gap: 10px; } .wordmark { font-size: 19px; gap: 7px; } .wordmark svg { width: 28px; height: 28px; }
+  .workspace-link { font-size: 11px; padding: 9px 12px; } .workspace-link span { margin-left: 4px; }
+  .scene-shade { background: linear-gradient(0deg, #070b10 0%, transparent 44%), linear-gradient(135deg, #070b10bb, transparent 70%); }
+  .scene-intro { left: 24px; top: 91px; text-shadow: 0 2px 14px #000, 0 1px 3px #000; } .scene-intro h1 { font-size: 40px; margin: 14px 0; } .intro-copy { display: none; }
+  .scene-intro h1 br { display: none; }
+  .scene-count { margin-top: 16px; gap: 8px; } .scene-count strong { font-size: 18px; } .model-note { font-size: 10px; }
+  .action-dock { left: 12px; right: 12px; bottom: 169px; padding: 4px; gap: 1px; border-radius: 14px; }
+  .dock-action { flex: 1; min-width: 0; flex-direction: column; gap: 5px; padding: 9px 3px; font-size: 10px; }
+  .dock-action svg { width: 18px; height: 18px; }
+  .drawer, body[data-panel="approaches"] .drawer { left: 12px; right: 12px; top: 76px; bottom: 246px; width: auto; border-radius: 14px; }
+  .drawer-heading { padding: 16px 18px 13px; } .drawer-heading h2 { font-size: 21px; } .drawer-scroll { padding: 18px; }
+  .scene-tools { right: 16px; top: auto; bottom: 263px; gap: 4px; } .scene-tools .icon-button { width: 40px; min-height: 40px; font-size: 20px; }
+  body[data-panel] .scene-tools { visibility: hidden; }
+  .time-dock { left: 12px; right: 12px; bottom: 12px; padding: 12px 14px 8px; border-radius: 14px; }
+  .transport { display: grid; grid-template-columns: 36px 1fr 64px; gap: 7px 10px; }
+  .transport .icon-button { min-height: 36px; width: 36px; }
+  .clock { font-size: 13px; letter-spacing: -.06em; white-space: nowrap; }
+  .speed select { min-height: 36px; min-width: 0; width: 100%; padding: 6px 8px; font-size: 12px; }
+  #now { grid-column: 2; justify-self: start; min-height: 26px; font-size: 10px; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); }
+  #live { grid-column: 3; min-height: 26px; font-size: 10px; padding: 3px 0; border: 0; border-radius: 0; background: transparent; color: var(--muted); }
+  .time-heading { font-size: 10px; gap: 6px; } .time-heading .eyebrow { font-size: 9px; letter-spacing: .08em; }
+  .timeline { gap: 8px; font-size: 8px; } #slider { height: 24px; }
+  #replay { left: 12px; right: 12px; bottom: 165px; padding: 10px; max-height: 220px; overflow: auto; }
+  #replay-sun-box { display: none; } .replay-readout { gap: 6px; font-size: 9px; } .replay-legend, #replay-sun-caption { font-size: 9px; }
+  body[data-replay] .action-dock { bottom: calc(177px + var(--replay-height, 140px)); } body[data-replay] .drawer { bottom: calc(254px + var(--replay-height, 140px)); }
+  body[data-replay] .scene-tools { bottom: 407px; }
+  .selected-card { padding: 14px; } dl { gap: 8px; } .summary-hint { font-size: 10px; }
+}
+@media (max-aspect-ratio: 1/1) {
+  /* Every viewport at least as tall as it is wide, not only a phone-width one. A 768 x 1024 tablet
+     took the landscape composition -- the headline pinned left over the middle of Earth -- with
+     none of the legibility the narrow breakpoint adds, and the scene shade has faded to almost
+     nothing by the headline's right edge. The bound is 1/1 rather than 4/5 because a near-square
+     window fell between the two breakpoints that would otherwise have caught it: 601 x 651 is a
+     pixel outside both `max-width: 600px` and `max-height: 650px`, and took the full-height
+     headline with the standing paragraph, which ran into the navigation. Keyed on the shape of the
+     screen rather than on a third width. */
+  .scene-intro { text-shadow: 0 2px 14px #000, 0 1px 3px #000; }
+  .intro-copy { display: none; }
+}
+@media (max-height: 780px) {
+  /* In replay the chart takes a band out of the middle of the screen, so everything above it has
+     less room than the viewport height alone suggests. The zoom buttons hang off the height the
+     chart actually got, rather than the fixed 407 px that assumed a tall phone -- at 601 x 651,
+     a pixel outside both `max-width: 600px` and `max-height: 650px` and so caught by neither, they
+     sat over the chart. Placed before the 650 px block so that block's tighter offsets win where
+     both apply. */
+  body[data-replay] .scene-tools { top: auto; bottom: calc(174px + var(--replay-height, 127px)); }
+}
+@media (max-height: 780px) and (min-aspect-ratio: 1/1) {
+  /* Landscape. The headline has nowhere left to stand once the chart is on screen, and the zoom
+     buttons lie down in a row beside the navigation. In portrait neither is true: there is clear
+     space above the navigation, which is the whole difference between the two shapes here. */
+  body[data-replay] .scene-intro { visibility: hidden; }
+  body[data-replay] .scene-tools { grid-auto-flow: column; }
+}
+@media (max-height: 780px) and (max-aspect-ratio: 0.9999/1) {
+  /* Portrait. The headline stays -- there is clear space above the navigation here, which is the
+     whole difference from landscape. The zoom buttons stay a column, and because the navigation is
+     full width they go above it rather than beside it, so they need the navigation's own 66 px and
+     two gaps on top of the chart's height. */
+  body[data-replay] .scene-tools { bottom: calc(242px + var(--replay-height, 97px)); }
+}
+@media (max-height: 780px) and (min-height: 651px) and (max-aspect-ratio: 0.9999/1) {
+  /* Above 650 px the headline still has the narrow breakpoint's 60 px, which at 601 x 651 ran 3 px
+     into the navigation. Below 650 px the block further down has already taken it to 30 px on one
+     line, and bumping it back to 40 here wrapped it to two at 320 x 480 and put it back over the
+     navigation -- so this is bounded at both ends. */
+  body[data-replay] .scene-intro h1 { font-size: 40px; }
+}
+@media (max-height: 780px) and (min-height: 651px) and (max-width: 700px) {
+  /* The navigation still has its full padding in this band -- it is only compacted below 650 px --
+     and is nearly 480 px wide, so a horizontal zoom row cannot sit beside it. Earth still answers
+     drag, pinch and the arrow keys without the buttons. */
+  body[data-replay] .scene-tools { display: none; }
+}
+@media (max-height: 540px) and (max-aspect-ratio: 0.9999/1) {
+  /* Portrait, and too short for the column to fit between the masthead and the navigation once the
+     chart has taken its band: it needs about 447 px plus the chart's own height, so it runs out at
+     roughly 540. Drag, pinch and the arrow keys still zoom. */
+  body[data-replay] .scene-tools { display: none; }
+}
+@media (max-height: 650px) {
+  /* A phone held sideways, or a short desktop window. The masthead, the headline, the navigation
+     and the transport all want their full height and there is not enough of it: the headline goes
+     to one line, its snapshot note gives way to the same fact under "Snapshot & technical checks",
+     and the navigation loses a row of padding. */
+  .scene-intro { top: 78px; } .scene-intro h1 { font-size: 30px; margin: 10px 0; }
+  .scene-intro h1 br { display: none; }
+  .intro-copy, .scene-count, .model-note { display: none; }
+  .drawer, body[data-replay] .drawer { bottom: 160px; }
+  body[data-panel] .action-dock { visibility: hidden; }
+  body[data-panel][data-replay] #replay { visibility: hidden; }
+  /* In replay the weather chart asks for another 114 px the viewport has not got: measured at
+     844 x 390 the navigation climbed over the wordmark and the zoom buttons sat behind the chart.
+     Cap the chart rather than dropping any of it -- it keeps `overflow: auto`, so the legend and
+     the SDO citation stay reachable by scrolling inside it -- and hang the navigation and the zoom
+     buttons off the height actually measured. The cap is chosen so the navigation's top edge lands
+     92 px down whatever the viewport height: chart = 100vh - 310, navigation bottom = 168 + chart
+     = 100vh - 142, so its top sits 92 px from the top of the screen, clear of the 78 px masthead. */
+  body[data-replay] #replay { max-height: calc(100vh - 310px); overflow: auto; padding: 8px 12px; }
+  body[data-replay] .replay-bar { height: 26px; }
+  body[data-replay] .action-dock { bottom: calc(168px + var(--replay-height, 80px)); }
+}
+@media (max-height: 650px) and (min-aspect-ratio: 1/1) and (min-width: 660px) {
+  /* The zoom buttons are a column at 42% of the height on a tall screen; on a short one that column
+     runs from the masthead down into the transport, so on a *landscape* short screen they lie down
+     in a row beside the navigation instead. Both guards are load-bearing. Without the aspect guard
+     a small phone held upright -- 360 x 640, 320 x 568 -- is short enough to take the row, and the
+     navigation there is full width, so the row lands on top of it. Without the 660 px guard the
+     466 px navigation and the 146 px row do not both fit between the 24 px margins: at 601 x 400
+     the whole "+" button sat behind the opaque dock and a click on it reached the dock's third
+     button instead. Below 660 the buttons are dropped, as they are on a narrow phone; drag, pinch
+     and the arrow keys still work. */
+  .scene-tools { top: auto; bottom: 160px; grid-auto-flow: column; }
+  body[data-replay] .scene-tools { bottom: calc(168px + var(--replay-height, 80px)); }
+  /* The drawer is 490 px wide and reaches the same band, and is painted over them -- the same
+     reason the narrow block hides them behind an open panel. */
+  body[data-panel] .scene-tools { visibility: hidden; }
+}
+@media (max-height: 650px) and (max-aspect-ratio: 0.9999/1), (max-height: 650px) and (max-width: 659px) {
+  /* Everything the row form does not cover: a short viewport held upright, or one too narrow for a
+     row. The column form the narrow block already defines stays, except where it cannot fit -- at
+     601 x 400 the column at 42% of the height runs into the transport -- so below 660 px they go.
+     Portrait keeps them: at 360 x 640 the column sits clear on the right. */
+  .scene-tools { grid-auto-flow: row; }
+}
+@media (max-height: 650px) and (min-aspect-ratio: 1/1) and (max-width: 659px) {
+  .scene-tools { display: none; }
+}
+@media (max-height: 650px) and (min-width: 601px) {
+  /* Only where the dock is still a row of side-by-side buttons; below 601 px it stacks icon over
+     label and this height would clip it. */
+  .dock-action { min-height: 38px; padding: 7px 14px; }
+}
+@media (max-height: 650px) and (min-height: 375px) and (min-width: 901px) {
+  /* The masthead is 90 px tall above 900 px and 78 below it, and the block above pulls the headline
+     up to clear the shorter one. Above 375 px there is height to spare, so put it back below the
+     taller masthead. Only above 375 px: at 1024 x 360 those same 16 px are what pushes the last
+     14 px of the headline behind the opaque navigation. */
+  .scene-intro { top: 94px; }
+}
+@media (max-height: 650px) and (max-width: 600px) and (min-aspect-ratio: 1/1) {
+  /* Below roughly 600 x 400 held sideways -- a first-generation phone -- the composition runs out
+     of room and the headline has nowhere to go that the full-width navigation does not already
+     occupy, so it is dropped; the wordmark still names the page. The aspect guard is the whole
+     point of this block: without it a 360 x 640 phone held upright, which is also under 600 x 650,
+     lost its only <h1> and its <main> landmark to a rule written for landscape, on a screen with
+     240 px of clear space between the masthead and the navigation. */
+  .scene-intro { display: none; }
+}
+@media (max-height: 340px) {
+  /* The floor, and it is a height rather than a width. The chart's cap is `100vh - 310`, so below
+     328 px that is less than the chart's own padding and border, and below 310 px it is negative --
+     an invalid declaration the browser drops, which would leave the chart uncapped and the
+     navigation back over the wordmark on, say, a 900 x 300 desktop window. At 568 x 320 the
+     masthead is 69 px, the navigation 69 and the transport 142: 292 of the 320 before the chart
+     asks for anything, and its own padding alone is 18. There is no arrangement that leaves a
+     legible chart as well as the controls, so the chart and the headline are dropped rather than
+     shown as slivers. Replay still works -- the clock reads replay time and the slider still
+     scrubs the storm window -- but its weather chart is not there and nothing on screen says so.
+     `display: none` rather than `visibility: hidden` so the ResizeObserver measures the chart as
+     zero and the navigation's `calc(168px + var(--replay-height))` settles back to where it sits
+     outside replay. */
+  .scene-intro { display: none; }
+  body[data-replay] #replay { display: none; }
+  /* The masthead is 90 px above 900 px wide, and everything below is spaced off the 78 px it is
+     under that. At 1024 x 300 the navigation landed 4 px inside it. */
+  .masthead { padding: 14px 22px; }
+  /* The panel is `top: 92px; bottom: 160px`, which at 300 px leaves it 48 px tall -- less than its
+     own heading, so the close button was pushed off its own box. With a panel open the navigation
+     and the chart are already hidden here, so let it run down over the transport instead; it is
+     above it in the stack and the reader closes the panel to reach the clock again. */
+  .drawer, body[data-replay] .drawer { top: 74px; bottom: 12px; }
+  /* ...and the transport steps aside while it is open, rather than being covered by it: its
+     buttons would still be under the panel and take the click. It comes back when the panel
+     closes, the same way the navigation and the chart do. */
+  body[data-panel] .time-dock { visibility: hidden; }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .drawer { animation: drawer-in 180ms ease-out; }
+  .dock-action, .btn, .search-result { transition: background 140ms, border-color 140ms; }
+  @keyframes drawer-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 }

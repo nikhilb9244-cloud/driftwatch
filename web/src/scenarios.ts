@@ -151,8 +151,8 @@ export const SCENARIO_LABELS: Record<string, string> = {
 
 export const SCENARIO_HELP: Record<string, string> = {
   quiet:
-    "The default. The Phase 2 model untouched: no storm layer, no displacement. The baseline every other " +
-    "scenario is read against; a storm scenario is chosen explicitly and carries the benchmark's calibration beside it.",
+    "The baseline model, with no additional storm term. Other scenarios estimate how added atmospheric " +
+    "drag changes the separation and position uncertainty.",
   forecast:
     "NOAA SWPC's three-day Kp forecast, the 27-day outlook beyond it, and the observed record where it reaches.",
   "storm-g3": "The May 2024 sequence scaled to a peak Kp of 7, starting one day into the window.",
@@ -167,25 +167,24 @@ export const SCENARIO_HELP: Record<string, string> = {
  */
 /** The benchmark's horizon, shown ahead of any probability; the report opens with the same sentence. */
 export const HORIZON_HEADLINE =
-  "Against ESA's precise orbits for Swarm A, B and C, a public element set keeps the satellite inside the " +
-  "25 km in-track half-width of the screening box, at the 95th percentile of trials, for five days in a quiet " +
-  "week, two days in the May 2024 storm and one day in the October 2024 storm. Read every probability after " +
-  "that number: a set propagated past its horizon no longer predicts the position the probability is " +
-  "computed from.";
+  "In the measured Swarm A/B/C sample, the last tested leads before the 95th-percentile along-track error " +
+  "exceeded 25 km were 120 hours in the quiet week, 48 in May 2024 and 24 in October. These are sample " +
+  "results for three related spacecraft, not validated horizons for this demo fleet. Treat its probabilities as indicative.";
 
 export const STORM_CALIBRATION_NOTE =
   "Read every storm number against the benchmark: against ESA's precise orbits for Swarm A, B and C, the " +
   "covariance under-covers in a storm (two sigma held 65 to 80 per cent of the May 2024 residuals and 62 to " +
   "75 per cent of the October 2024 ones, against the 95 it claims) and nothing here scales it. The storm term " +
-  "helps only from about four days of lead, hurts from twelve hours to three days, hurts from one to six days " +
+  "helps May's sample from about four days but hurts at twelve to seventy-two hours; it helps October's " +
+  "sample from six to 120 hours. It hurts from one to six days " +
   "in a quiet week because its excess is not zero without a storm, and over-corrects at seven days, about 1.5 " +
   "times the actual in May. The horizon at 25 km is five days quiet, two in May, one in October.";
 
 /** One sentence of the same calibration, for the places a paragraph would push the numbers below the fold. */
 export const STORM_CALIBRATION_SHORT =
-  "Calibrated against ESA's precise orbits for Swarm A, B and C: the covariance under-covers in a storm, the " +
-  "storm term helps only beyond about four days and hurts inside three and in a quiet week, and it over-corrects " +
-  "at seven days; the horizon at 25 km is five, two and one days (quiet, May 2024, October 2024).";
+  "Measured against ESA's Swarm A/B/C orbits: uncertainty bands under-cover during storms. The correction " +
+  "hurts May's 12–72 hour sample but helps October's 6–120 hour sample, and hurts the quiet 1–6 day sample. " +
+  "The result depends on the period and lead; it is not a universal correction.";
 
 export function decode(column: Encoded | undefined, i: number): string {
   if (!column || !column.i) return "";

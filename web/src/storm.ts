@@ -30,7 +30,6 @@ import type { Bundle } from "./data";
 import {
   SCENARIO_HELP,
   STORM_CALIBRATION_NOTE,
-  STORM_CALIBRATION_SHORT,
   isReplayScenario,
   labelOf,
   type ScenarioFigures,
@@ -38,7 +37,6 @@ import {
 } from "./scenarios";
 import { el, escapeHtml } from "./ui";
 
-const NARROW_PX = 900;
 
 const REPLAY_HELP =
   "The weather that actually happened over this window, driving the storm term on a catalogue "  +
@@ -126,12 +124,8 @@ export function buildStormControl(
       return;
     }
     const help = SCENARIO_HELP[state.current] ?? (isReplayScenario(state.current) ? REPLAY_HELP : "");
-    // Every storm number carries the benchmark's calibration beside it (2026-09-05); quiet has none.
-    // One sentence here, because this block is capped and scrolls: the paragraph is above the table.
-    note.innerHTML =
-      state.current === "quiet"
-        ? escapeHtml(help)
-        : `${escapeHtml(help)}<p class="caveat">${escapeHtml(STORM_CALIBRATION_SHORT)}</p>`;
+    // The panel summary carries calibration before the probabilities; do not repeat it in this control.
+    note.textContent = help;
   };
 
   const renderSummary = () => {
@@ -146,9 +140,9 @@ export function buildStormControl(
     if (state.current === "quiet" || moved === 0) {
       summary.hidden = false;
       summary.innerHTML =
-        `<p class="muted">No storm term under <code>${escapeHtml(state.current)}</code>: this is the Phase 2 ` +
-        `model untouched, and it is the baseline every other scenario is read against. Pick another scenario ` +
-        `to see what a storm does to these events.</p>`;
+        state.current === "quiet"
+          ? '<p class="caveat">Quiet is the baseline: no additional storm displacement or uncertainty term. Compare another scenario to see the modelled change.</p>'
+          : '<p class="caveat">No events have a modelled displacement in this scenario. Their position uncertainty may still change.</p>';
       return;
     }
     summary.hidden = false;
@@ -232,6 +226,7 @@ export function buildStormControl(
   };
 
   const render = () => {
+    el("scenario-current").textContent = labelOf(state.current);
     for (const button of segments.querySelectorAll<HTMLButtonElement>(".storm-seg")) {
       button.setAttribute("aria-pressed", String(button.dataset.scenario === state.current));
     }
@@ -255,18 +250,19 @@ export function buildStormControl(
     onChange();
   });
   render();
-  // A mode switch rebuilds this block, and the browser keeps the old scroll offset -- which
-  // left the heading above the fold and the section looking truncated rather than compact.
-  root.scrollTop = 0;
-
-  // Narrow layouts get the dropdown; the media query in the stylesheet does the switching, and
-  // this only mirrors it into `aria-hidden` so a screen reader is not offered both.
-  const applyWidth = () => {
-    const narrow = window.innerWidth < NARROW_PX;
-    segments.setAttribute("aria-hidden", String(narrow));
-    select.setAttribute("aria-hidden", String(!narrow));
-  };
-  window.addEventListener("resize", applyWidth, { signal });
-  applyWidth();
+  // Two things used to live here and both were removed on 2026-09-06.
+  //
+  // `root.scrollTop = 0` after a mode switch: `root` is the `<details id="storm">`, which has no
+  // `overflow` in the stylesheet and so has no scroll box, and the assignment was discarded. The
+  // element that does scroll is `.drawer-scroll`, and the shell now restores its offset per panel
+  // on purpose, so reinstating the reset against the real container would fight that.
+  //
+  // A resize listener mirroring the stylesheet's 900 px switch into `aria-hidden` on whichever of
+  // the two controls was out of use. The stylesheet gives the unused one `display: none`, which
+  // already takes it out of the accessibility tree and the tab order, so the mirror added nothing
+  // -- and it put `aria-hidden="true"` on a focusable `<select>`, which is the one placement ARIA
+  // rules out. It also tested `innerWidth < 900` against a `max-width: 900px` query, so at exactly
+  // 900 px it hid from assistive technology the control that was on screen and exposed the one
+  // that was not.
   return render;
 }

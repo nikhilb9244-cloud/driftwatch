@@ -6,11 +6,11 @@ import { CATEGORY_COLOURS, type CataloguePoints } from "./points";
 import type { SimClock } from "./clock";
 
 const BAND_LABELS: Record<string, string> = {
-  leo: "LEO",
-  meo: "MEO",
-  geo: "GEO",
-  heo: "HEO",
-  other: "other",
+  leo: "Low Earth (LEO)",
+  meo: "Medium Earth (MEO)",
+  geo: "Geostationary band (GEO)",
+  heo: "Highly elliptical (HEO)",
+  other: "Other orbits",
 };
 
 const BAND_TITLES: Record<string, string> = {
@@ -158,8 +158,17 @@ export function bindClock(clock: SimClock): void {
   // the offset measured against a reference time two years away.
   const render = () => {
     utc.textContent = formatUtc(clock.tMs);
-    offset.textContent = formatOffset(clock.tMs, clock.t0Ms);
+    offset.textContent = formatOffset(clock.tMs, clock.t0Ms).replace("t₀", "Reference");
     play.textContent = clock.playing ? "⏸" : "▶";
+    play.setAttribute("aria-label", clock.playing ? "Pause playback" : "Play time");
+    speed.value = String(clock.speed);
+    slider.setAttribute("aria-valuetext", formatUtc(clock.tMs));
+    const live = el<HTMLButtonElement>("live");
+    const currentMs = Date.now();
+    live.disabled = currentMs < clock.minMs || currentMs > clock.maxMs;
+    live.title = live.disabled ? "Current UTC is outside this snapshot's available time window. Use Reference time instead." : "Jump to current UTC using this snapshot's elements";
+    el("window-start").textContent = formatUtc(clock.minMs).slice(5, 16);
+    el("window-end").textContent = formatUtc(clock.maxMs).slice(5, 16);
     if (!dragging) slider.value = String(Math.round(clock.fraction * steps));
   };
   clock.onChange(render);
@@ -167,6 +176,7 @@ export function bindClock(clock: SimClock): void {
 
   slider.addEventListener("pointerdown", () => (dragging = true));
   slider.addEventListener("pointerup", () => (dragging = false));
+  slider.addEventListener("pointercancel", () => (dragging = false));
   slider.addEventListener("input", () => {
     const f = Number(slider.value) / steps;
     clock.set(clock.minMs + f * (clock.maxMs - clock.minMs));
@@ -180,7 +190,7 @@ export function bindClock(clock: SimClock): void {
   el<HTMLButtonElement>("now").addEventListener("click", () => clock.set(clock.t0Ms));
   el<HTMLButtonElement>("live").addEventListener("click", () => clock.set(Date.now()));
   window.addEventListener("keydown", (ev) => {
-    if (ev.code === "Space" && !(ev.target instanceof HTMLInputElement)) {
+    if (ev.code === "Space" && (ev.target === document.body || ev.target === el("globe"))) {
       ev.preventDefault();
       clock.playing = !clock.playing;
       render();
@@ -258,40 +268,51 @@ export function showSelected(d: ObjectDetails | null): void {
   if (!d) {
     section.hidden = true;
     body.innerHTML = "";
+    el("selected-orbit").innerHTML = "";
     return;
   }
   section.hidden = false;
+  el("selected-name").textContent = d.name;
   const rows: Array<[string, string]> = [
-    ["Name", d.name],
-    ["NORAD", String(d.norad)],
-    ["Category", `${d.category.replace("_", " ")} (${d.objectType})`],
-    ["Band", d.band.toUpperCase()],
-    ["Height", fmt(d.heightKm, 1, " km (WGS84)")],
-    ["Lat, lon", `${fmt(d.latDeg, 3, "°")}, ${fmt(d.lonDeg, 3, "°")}`],
-    ["Speed", fmt(d.speedKms, 3, " km/s (inertial)")],
-    ["Period", fmt(d.periodMin, 1, " min")],
-    ["Inclination", fmt(d.inclinationDeg, 2, "°")],
-    ["Perigee / apogee", `${fmt(d.perigeeKm, 0)} / ${fmt(d.apogeeKm, 0)} km (mean)`],
-    ["Element-set age", fmt(d.epochAgeDays, 2, " days at t₀")],
+    ["Catalogue number", `NORAD ${d.norad}`],
+    ["Object type", `${d.category.replace("_", " ")} (${d.objectType})`],
+    ["Orbit group", BAND_LABELS[d.band] ?? d.band],
+    ["Height above Earth", fmt(d.heightKm, 1, " km")],
+    ["Latitude / longitude", `${fmt(d.latDeg, 3, "°")}, ${fmt(d.lonDeg, 3, "°")}`],
+    ["Orbital speed", fmt(d.speedKms, 3, " km/s")],
+  ];
+  const orbitRows: Array<[string, string]> = [
+    ["Time for one orbit", fmt(d.periodMin, 1, " min")],
+    ["Tilt to the equator", fmt(d.inclinationDeg, 2, "°")],
+    ["Lowest / highest altitude", `${fmt(d.perigeeKm, 0)} / ${fmt(d.apogeeKm, 0)} km`],
+    ["Element age at reference", fmt(d.epochAgeDays, 2, " days")],
   ];
   body.innerHTML = rows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("");
+  el("selected-orbit").innerHTML = orbitRows.map(([k, v]) => `<dt>${k}</dt><dd>${escapeHtml(v)}</dd>`).join("");
 }
 
 export function escapeHtml(s: string): string {
   return s.replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]!);
 }
 
-/** Find the first object whose name contains the query or whose NORAD id equals it. */
+/** Catalogue punctuation varies; exact identifiers and names rank ahead of partial names. */
+export function findObjects(bundle: Bundle, query: string): number[] {
+  const normalise = (value: string) => value.toUpperCase().replace(/[^A-Z0-9]/g, "");
+  const q = normalise(query.trim());
+  if (!q) return [];
+  const id = Number(q.replace(/^NORAD/, ""));
+  const index = Number.isInteger(id) ? bundle.objects.norad_id.indexOf(id) : -1;
+  if (index >= 0) return [index];
+  const exact: number[] = [], prefix: number[] = [], partial: number[] = [];
+  bundle.objects.name.forEach((value, i) => {
+    const name = normalise(value);
+    if (name === q) exact.push(i);
+    else if (name.startsWith(q)) prefix.push(i);
+    else if (name.includes(q)) partial.push(i);
+  });
+  return [...exact, ...prefix, ...partial];
+}
+
 export function findObject(bundle: Bundle, query: string): number {
-  const q = query.trim().toUpperCase();
-  if (!q) return -1;
-  const asNumber = Number(q);
-  if (Number.isInteger(asNumber)) {
-    const i = bundle.objects.norad_id.indexOf(asNumber);
-    if (i >= 0) return i;
-  }
-  for (let i = 0; i < bundle.n; i++) {
-    if (bundle.objects.name[i].toUpperCase().includes(q)) return i;
-  }
-  return -1;
+  return findObjects(bundle, query)[0] ?? -1;
 }

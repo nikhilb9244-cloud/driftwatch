@@ -391,6 +391,16 @@ export function buildConjunctionPanel(
   };
 
   let expanded: number | null = null;
+  /**
+   * What the header and any open detail were last written under; null before the first render.
+   *
+   * The overlay is compared by identity as well as the scenario name, because the numbers can
+   * change without the name doing so: `ScenarioState.load` emits when the overlays land, and until
+   * they do the panel is showing the bundle's own block for the same scenario. Keying on the name
+   * alone would leave a reader who opened an encounter during the fetch looking at the pre-overlay
+   * figures under the post-overlay heading.
+   */
+  let renderedUnder: { scenario: string; overlay: unknown } | null = null;
 
   const renderHeader = () => {
     const rows = rankedPairs().map((r) => r.pair);
@@ -399,27 +409,25 @@ export function buildConjunctionPanel(
     const yellow = flagged.filter((p) => p.flag === "yellow").length;
     const lowConfidence = flagged.filter((p) => p.confidence === "low").length;
     const label = labelOf(state.current);
-    // Region and confidence before the colours, here as on every row.
-    // The horizon before any probability (2026-09-05): the first thing the panel says.
+    // Limitations precede the list; the exact benchmark is available on demand.
     header.innerHTML =
-      `<p class="caveat horizon"><b>Five days, two days, one day.</b> ${escapeHtml(HORIZON_HEADLINE)}</p>` +
-      `<div>${data.n_events_total.toLocaleString()} events over ${data.n_pairs.toLocaleString()} pairs, ` +
-      `${escapeHtml(data.window.start.slice(0, 10))} to ${escapeHtml(data.window.end.slice(0, 10))}.</div>` +
-      `<div class="muted">${lowConfidence} of ${flagged.length} flagged pairs are in the dilution region at low ` +
-      `confidence and not actionable; ${flagged.length - lowConfidence} in the robust region. ` +
-      `Flags: ${red} red, ${yellow} yellow. Scenario <code>${escapeHtml(label)}</code>, sorted by its probability.</div>` +
-      // Under a storm scenario the list's probabilities are storm numbers, so the sentence sits above them.
-      (state.current === "quiet" ? "" : `<div class="muted">${escapeHtml(STORM_CALIBRATION_SHORT)}</div>`);
+      `<div class="run-summary"><div><strong>${data.n_pairs.toLocaleString()}</strong><span>object pairs</span></div><div><strong>${data.n_events_total.toLocaleString()}</strong><span>close approaches</span></div></div>` +
+      `<p class="caveat">${escapeHtml(data.window.start.slice(0, 10))} to ${escapeHtml(data.window.end.slice(0, 10))} · ${escapeHtml(label)} scenario. Ranked by estimated collision probability.</p>` +
+      `<p class="caveat"><b>${lowConfidence} of ${flagged.length} flagged pairs have low confidence.</b> Their uncertainty is too large to interpret a small probability as safety (the dilution region).</p>` +
+      `<details><summary>How to interpret these results</summary><p class="caveat">Flags: ${red} red, ${yellow} yellow. ${flagged.length - lowConfidence} flagged pairs are in the robust region of the model, which does not certify accurate positions. All probabilities here remain indicative.</p><p class="caveat">${escapeHtml(HORIZON_HEADLINE)}</p></details>` +
+      (state.current === "quiet" ? "" : `<p class="inline-note">Storm corrections have limited validation and can make predictions worse at some lead times. ${escapeHtml(STORM_CALIBRATION_SHORT)}</p>`);
   };
 
   const matching = (): Array<{ pair: ConjunctionPair; index: number }> => {
-    const q = filter.value.trim().toLowerCase();
+    const normalise = (value: string) => value.toLowerCase().replace(/[^a-z0-9]/g, "");
+    const q = normalise(filter.value);
     return rankedPairs().filter(({ pair }) => {
       if (onlyFlagged.checked && (pair.flag === "none" || pair.flag === "unscoreable")) return false;
       if (!q) return true;
       return (
-        pair.secondary_name.toLowerCase().includes(q) ||
-        pair.primary_name.toLowerCase().includes(q) ||
+        normalise(pair.secondary_name).includes(q) ||
+        normalise(pair.primary_name).includes(q) ||
+        String(pair.primary_norad_id).includes(q) ||
         String(pair.secondary_norad_id).includes(q)
       );
     });
@@ -433,13 +441,22 @@ export function buildConjunctionPanel(
       secondaryIndex: indexOfNorad.get(pair.secondary_norad_id) ?? -1,
     });
     detail.hidden = false;
+    root.querySelector<HTMLButtonElement>("#conjunction-clear")!.hidden = false;
     detail.dataset.eventIndex = String(eventIndex);
     detail.innerHTML = eventDetailHtml(pair, event, quietEventAt(eventIndex), data.model_version, state.current);
     detail.scrollIntoView({ block: "nearest" });
+    detail.focus({ preventScroll: true });
   };
 
   const render = () => {
-    renderHeader();
+    // The header counts every pair under the scenario and the filter box cannot change them, so
+    // it is rewritten when the numbers move and not on every keystroke — its own <details>,
+    // "How to interpret these results", stayed open that way too.
+    const numbersChanged =
+      renderedUnder === null ||
+      renderedUnder.scenario !== state.current ||
+      renderedUnder.overlay !== state.overlay;
+    if (numbersChanged) renderHeader();
     const pairs = matching();
     const shown = pairs.slice(0, LIST_LIMIT);
     list.innerHTML = "";
@@ -454,12 +471,11 @@ export function buildConjunctionPanel(
         `${escapeHtml(pair.secondary_name)}</span>` +
         // The miss quoted beside the probability is the miss of the event that produced it, which
         // for a pair seen many times is often not the closest pass. The closest is in the subtitle.
-        `<span class="cj-nums">${fmtKm(pair.miss_at_max_pc_km ?? pair.closest_km)} km · ${fmtPc(pair.max_pc)} ` +
-        `${flagChip(pair.flag, pair.confidence, pair.region)}${validityChip(pair.storm_validity)}</span>` +
-        `<span class="muted cj-sub">${pair.n_events} event${pair.n_events === 1 ? "" : "s"} · ` +
+        `<span class="cj-nums">${flagChip(pair.flag, pair.confidence, pair.region)}${validityChip(pair.storm_validity)}<span>Separation ${fmtKm(pair.miss_at_max_pc_km ?? pair.closest_km)} km · probability ${fmtPc(pair.max_pc)}</span></span>` +
+        `<span class="muted cj-sub">${pair.n_events} encounter${pair.n_events === 1 ? "" : "s"} · ` +
         `closest ${fmtKm(pair.closest_km)} km · ` +
-        `first ${escapeHtml(pair.first_tca.slice(5, 16).replace("T", " "))} · ${escapeHtml(pair.secondary_category)}` +
-        `${pair.n_in_box > 0 ? ` · ${pair.n_in_box} in box` : ""}` +
+        `first ${escapeHtml(pair.first_tca.slice(5, 16).replace("T", " "))} UTC · ${escapeHtml(pair.secondary_category)}` +
+        `${pair.n_in_box > 0 ? ` · ${pair.n_in_box} in the screening box` : ""}` +
         // The Δ is on every row, not only the interesting ones: seeing it small twenty times and
         // large once is how the phase's result is learnt from the screen.
         `${
@@ -474,7 +490,9 @@ export function buildConjunctionPanel(
       head.addEventListener("click", () => {
         expanded = expanded === index ? null : index;
         render();
+        list.querySelector<HTMLButtonElement>(`[data-pair-index="${index}"]`)?.focus({ preventScroll: true });
       });
+      head.dataset.pairIndex = String(index);
       if (expanded === index) {
         const events = document.createElement("div");
         events.className = "cj-events";
@@ -489,9 +507,9 @@ export function buildConjunctionPanel(
           const button = document.createElement("button");
           button.className = "cj-event";
           button.innerHTML =
-            `<span>${escapeHtml(event.tca.slice(5, 19).replace("T", " "))}</span>` +
+            `<span>${escapeHtml(event.tca.slice(5, 19).replace("T", " "))} UTC</span>` +
             `<span>${fmtKm(missOf(event))} km</span>` +
-            `<span>${fmtPc(event.pc)}</span>` +
+            `<span>Probability ${fmtPc(event.pc)}</span>` +
             `<span class="muted">${escapeHtml(
               quietEvent ? deltaAgainstQuiet(event.pc, quietEvent.pc) : event.region,
             )}</span>`;
@@ -512,22 +530,24 @@ export function buildConjunctionPanel(
       list.innerHTML = `<p class="muted">No pair matches.</p>`;
     }
     // A detail view left open must follow the scenario, or it is showing the previous one's
-    // numbers under the new one's name.
+    // numbers under the new one's name. It must follow *only* the scenario: `render` also runs on
+    // every keystroke in the filter box and on every pair expanded, and rewriting the detail there
+    // shut the disclosures the reader had opened inside it — "How to read the uncertainty" closing
+    // itself while they typed a name.
     const openIndex = detail.hidden ? null : Number(detail.dataset.eventIndex);
-    if (openIndex != null && Number.isInteger(openIndex)) {
-      const event = eventAt(openIndex);
-      const pair = data.pairs.find((p) => p.events.includes(openIndex));
-      if (pair) {
-        const index = data.pairs.indexOf(pair);
+    if (numbersChanged && openIndex != null && Number.isInteger(openIndex)) {
+      const index = data.pairs.findIndex((p) => p.events.includes(openIndex));
+      if (index >= 0) {
         detail.innerHTML = eventDetailHtml(
-          pairUnder(pair, index, state.overlay),
-          event,
+          pairUnder(data.pairs[index], index, state.overlay),
+          eventAt(openIndex),
           quietEventAt(openIndex),
           data.model_version,
           state.current,
         );
       }
     }
+    renderedUnder = { scenario: state.current, overlay: state.overlay };
   };
 
   filter.addEventListener("input", render, { signal });
@@ -536,12 +556,15 @@ export function buildConjunctionPanel(
     "click",
     () => {
       detail.hidden = true;
+      root.querySelector<HTMLButtonElement>("#conjunction-clear")!.hidden = true;
       delete detail.dataset.eventIndex;
       onSelect(null);
+      filter.focus({ preventScroll: true });
     },
     { signal },
   );
   detail.hidden = true;
+  root.querySelector<HTMLButtonElement>("#conjunction-clear")!.hidden = true;
   delete detail.dataset.eventIndex;
   render();
   return { refresh: render };
@@ -581,7 +604,7 @@ function eventDetailHtml(
     ["Scenario", labelOf(scenario)],
     ["Region and confidence", regionText],
     ["Time of closest approach", formatUtc(Date.parse(event.tca))],
-    ["Miss distance", `${fmtKm(shifted)} km${stormy ? " (after the storm term moved both objects)" : ""}`],
+    ["Predicted separation", `${fmtKm(shifted)} km${stormy ? " (after the model's relative displacement)" : ""}`],
   ];
   if (stormy) {
     rows.push(["Miss without the storm term", `${fmtKm(event.miss_km)} km`]);
@@ -589,10 +612,10 @@ function eventDetailHtml(
   }
   rows.push(
     ["Relative speed", `${fmtKm(event.rel_speed_kms, 2)} km/s`],
-    ["Combined hard-body radius", `${event.hbr_m?.toFixed(1) ?? "—"} m`],
-    ["In-track sigma, primary", `${fmtKm(event.sigma_i_primary_km, 2)} km`],
-    ["In-track sigma, secondary", `${fmtKm(event.sigma_i_secondary_km, 2)} km`],
-    ["Covariance source", event.cov_source_secondary ?? "—"],
+    ["Combined object radius (HBR)", `${event.hbr_m?.toFixed(1) ?? "—"} m`],
+    ["Along-track uncertainty, primary (1σ)", `${fmtKm(event.sigma_i_primary_km, 2)} km`],
+    ["Along-track uncertainty, secondary (1σ)", `${fmtKm(event.sigma_i_secondary_km, 2)} km`],
+    ["Uncertainty source", event.cov_source_secondary ?? "—"],
     ["Probability", fmtPc(event.pc)],
   );
   if (stormy) {
@@ -652,15 +675,20 @@ function eventDetailHtml(
 
   return (
     `<h2>${escapeHtml(pair.primary_name)} vs ${escapeHtml(pair.secondary_name)}</h2>` +
+    `<p class="inline-note">${escapeHtml(regionText)}. Indicative probability; not a manoeuvre recommendation.</p>` +
     encounterPlaneSvg(event, quiet) +
-    `<p class="muted">The encounter plane: the disc is the combined hard-body radius at the primary, the
-      ellipses are the one and three sigma contours of the combined covariance about the miss, and the line
-      between them is the miss vector. The probability is the mass of the ellipse's Gaussian inside the disc.</p>` +
+    `<p class="muted">A cross-section of the encounter. The line shows predicted separation; the blue
+      ellipses show position uncertainty. The small disc represents the combined object radius.</p>` +
     `<dl>${rows.map(([k, v]) => `<dt>${escapeHtml(k)}</dt><dd>${escapeHtml(v)}</dd>`).join("")}</dl>` +
+    `<details><summary>How to read the uncertainty</summary><p class="caveat">This plane is perpendicular
+      to relative velocity. The ellipses are the 1σ and 3σ contours of the combined covariance.
+      Collision probability is the integral of the assumed two-dimensional Gaussian distribution over
+      the hard-body disc. Minimum drawing sizes keep thin ellipses and the disc visible; the disc's
+      enlargement is labelled on the plot.</p>` +
     note +
     stormNote +
     calibrationNote +
     `<p class="caveat">Computed by driftwatch${modelVersion ? ` (${escapeHtml(modelVersion)})` : ""}; the
-      viewer only draws it.</p>`
+      viewer displays the stored result.</p></details>`
   );
 }

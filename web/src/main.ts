@@ -20,7 +20,9 @@
  * not scored under. Each of those is reported rather than silently dropped.
  */
 
-import Globe, { type GlobeInstance } from "globe.gl";
+import { type GlobeInstance } from "globe.gl";
+import { createEarth } from "./earth";
+import { buildCatalogueShell, catalogueHomeAltitude } from "./catalogue-shell";
 import * as THREE from "three";
 import { SimClock } from "./clock";
 import { buildConjunctionPanel, ConjunctionTracks, type ConjunctionSelection } from "./conjunctions";
@@ -47,8 +49,10 @@ import {
   filterMask,
   filterNames,
   findObject,
+  findObjects,
   showSelected,
   showTooltip,
+  escapeHtml,
   type FilterNames,
 } from "./ui";
 
@@ -82,23 +86,19 @@ async function main(): Promise<void> {
 
   // ---- Built once, for the life of the page -------------------------------------------
   const container = el<HTMLDivElement>("globe");
-  const globe = new Globe(container)
-    .globeImageUrl("textures/earth-blue-marble.jpg")
-    .bumpImageUrl("textures/earth-topology.png")
-    .backgroundImageUrl("textures/night-sky.png")
-    .showAtmosphere(true)
-    .atmosphereAltitude(0.12)
-    .showGraticules(false);
+  const globe = createEarth(container);
   const camera = globe.camera() as THREE.PerspectiveCamera;
   camera.far = 100 * 400; // cislunar objects sit at a few thousand globe radii; keep them in view
   camera.updateProjectionMatrix();
   globe.controls().maxDistance = 100 * 60;
-  globe.pointOfView({ lat: -20, lng: 25, altitude: 2.4 }, 0);
+  globe.pointOfView({ lat: -20, lng: 25, altitude: catalogueHomeAltitude() }, 0);
+  const shell = buildCatalogueShell(globe);
   verifyGlobeConvention(globe);
 
   // The clock outlives every catalogue; `setRange` moves its window when the mode changes, so
   // the slider, the play button and the speed selector stay bound to one object throughout.
   const clock = new SimClock(Date.now(), 48);
+  clock.playing = !matchMedia("(prefers-reduced-motion: reduce)").matches;
   bindClock(clock);
 
   let pointer = { x: -1, y: -1, inside: false };
@@ -109,9 +109,18 @@ async function main(): Promise<void> {
     pointer.inside = false;
     current?.clearHover();
   });
-  container.addEventListener("click", () => current?.click());
+  let down = { x: 0, y: 0 };
+  container.addEventListener("pointerdown", event => { down = { x: event.clientX, y: event.clientY }; });
+  container.addEventListener("click", event => {
+    if (Math.hypot(event.clientX - down.x, event.clientY - down.y) < 6) current?.click();
+  });
 
   let current: Mounted | null = null;
+  // Which catalogue is mounted, tracked here rather than read back off `document.body.dataset
+  // .replay`: that attribute is set inside `buildReplay`, which is skipped when a replay run has
+  // no timeline — a state this file explicitly supports and warns about — so a replay without one
+  // would report itself as live and file its scenario under the wrong mode on the way out.
+  let mountedReplay = replayInUrl();
   let switching = false;
   // The scenario is remembered *per mode*, not carried across as one value. A replay run is
   // scored under `quiet` and its own observed record; the live run under quiet, forecast and the
@@ -130,11 +139,15 @@ async function main(): Promise<void> {
    */
   async function mountCatalogue(replay: boolean, carried: Carried | null): Promise<Mounted> {
     const base = dataBaseFor(replay);
+    // Before the fetch, not after it. `switchMode` has already unmounted the outgoing catalogue,
+    // so the globe is bare for the whole of a several-megabyte download, and a reader who pressed
+    // a button and watched every object vanish is owed a card that says what is happening.
+    loading.hidden = false;
+    loading.textContent = replay ? "Loading the May 2024 catalogue…" : "Loading the catalogue…";
     const bundle = await loadBundle(base);
     const aborter = new AbortController();
     const { signal } = aborter;
 
-    loading.hidden = false;
     loading.textContent = `Propagating ${bundle.n.toLocaleString()} objects…`;
 
     // ---- Points and worker ------------------------------------------------------------
@@ -202,39 +215,87 @@ async function main(): Promise<void> {
     el("stat-t0").textContent = bundle.manifest.reference_time.replace("T", " ").replace(/\.\d+Z$/, "Z");
     el("stat-age").textContent = describeAges(bundle);
     el("credit").textContent = (bundle.manifest.attribution ?? []).join(" ");
+    el("snapshot-date").textContent = `snapshot ${bundle.manifest.reference_time.slice(0, 10)}`;
+    el("catalogue-mode").textContent = replay ? "May 2024 replay" : "Public catalogue";
+    el("time-mode").textContent = replay ? "Replay time · UTC" : "Model time · UTC";
+    el("conjunctions-empty").hidden = !!bundle.conjunctions;
 
     let selected = -1;
+    let lastDetails = 0;
     let hovered = -1;
     let pairSecondary = -1;
     const updateVisible = () => {
-      el("stat-visible").textContent = `${points.visibleCount().toLocaleString()} of ${bundle.n.toLocaleString()}`;
+      el("stat-visible").textContent = points.visibleCount().toLocaleString();
+      if (selected >= 0) {
+        el("selected-visibility").textContent = filters.categories.has(bundle.objects.category[selected]) && filters.bands.has(bundle.objects.band[selected])
+          ? "" : "This object is hidden by your globe filters.";
+      }
     };
     const visibleTimer = window.setInterval(updateVisible, 1000);
     updateVisible();
 
-    const select = (index: number) => {
+    const select = (index: number, reveal = true) => {
       selected = index;
       points.setHighlight(index, pairSecondary);
       showSelected(index >= 0 ? describe(bundle, points, index) : null);
+      el("search-feedback").textContent = index >= 0
+        ? `Selected ${bundle.objects.name[index]}. Use Centre on object to bring it into view.`
+        : "No object selected. Search by name or catalogue number.";
+      if (index >= 0 && reveal) shell.revealSelection();
+      updateVisible();
     };
 
     const find = el<HTMLInputElement>("find");
-    find.addEventListener(
-      "keydown",
-      (ev) => {
-        if (ev.key !== "Enter") return;
-        const i = findObject(bundle, find.value);
-        select(i);
-        find.setCustomValidity(i < 0 ? "No match" : "");
-        find.reportValidity();
-      },
-      { signal },
-    );
+    const results = el("search-results");
+    const feedback = el("search-feedback");
+    const choose = (index: number) => {
+      pairSecondary = -1;
+      select(index);
+      results.replaceChildren();
+      feedback.textContent = index >= 0 ? `Selected ${bundle.objects.name[index]}. Use Centre on object to bring it into view.` : "No matching object. Try a shorter name or an exact catalogue number.";
+    };
+    const search = () => {
+      const q = find.value.trim().toUpperCase();
+      results.replaceChildren();
+      if (!q) { feedback.textContent = "Search the whole loaded catalogue, including hidden categories."; return; }
+      const matches = findObjects(bundle, q);
+      feedback.textContent = matches.length ? `${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"}${matches.length > 8 ? " · showing the first 8; refine your search" : ""}.` : "No matching object. Try a shorter name or an exact catalogue number.";
+      for (const i of matches.slice(0, 8)) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "search-result";
+        button.innerHTML = `<span>${escapeHtml(bundle.objects.name[i])}</span><small>NORAD ${bundle.objects.norad_id[i]}</small>`;
+        button.addEventListener("click", () => { choose(i); el("locate").focus({ preventScroll: true }); });
+        results.append(button);
+      }
+    };
+    find.addEventListener("input", search, { signal });
+    el("search").addEventListener("submit", ev => { ev.preventDefault(); choose(findObject(bundle, find.value)); }, { signal });
+    search();
+    el("locate").addEventListener("click", () => {
+      if (selected < 0) return;
+      const position = describe(bundle, points, selected);
+      if (!Number.isFinite(position.latDeg) || !Number.isFinite(position.lonDeg)) {
+        el("selected-visibility").textContent = "A position is not available at this model time. Try returning to the reference time.";
+        return;
+      }
+      globe.pointOfView({ lat: position.latDeg, lng: position.lonDeg, altitude: Math.max(catalogueHomeAltitude(), position.heightKm / 6371 + .8) },
+        matchMedia("(prefers-reduced-motion: reduce)").matches ? 0 : 700);
+    }, { signal });
+    el("filter-reset").addEventListener("click", () => {
+      for (const input of document.querySelectorAll<HTMLInputElement>("#filters input[type=checkbox]")) {
+        if (!input.checked) { input.checked = true; input.dispatchEvent(new Event("change")); }
+      }
+    }, { signal });
     el("clear").addEventListener(
       "click",
       () => {
         pairSecondary = -1;
         select(-1);
+        // #clear lives inside #selected, and deselecting hides that section; the focused button
+        // goes with it and the browser falls back to <body>. Hand focus to the search box, the
+        // way "Clear encounter" hands it to the pair filter.
+        find.focus({ preventScroll: true });
       },
       { signal },
     );
@@ -243,7 +304,7 @@ async function main(): Promise<void> {
     // differently and 13,376 of them are not the same 13,376.
     if (carried?.noradId != null) {
       const i = bundle.objects.norad_id.indexOf(carried.noradId);
-      if (i >= 0) select(i);
+      if (i >= 0) select(i, false);
     }
 
     // ---- Conjunctions, storm mode and replay -------------------------------------------
@@ -263,7 +324,9 @@ async function main(): Promise<void> {
         clock.playing = false;
         clock.set(Date.parse(selection.event.tca));
         pairSecondary = selection.secondaryIndex;
-        select(selection.primaryIndex);
+        // `reveal = false`: the reader is in the encounter list and chose a row in it. Bringing the
+        // explore pane forward here would take the list away from them mid-comparison.
+        select(selection.primaryIndex, false);
         tracks.show(bundle, selection.event);
       },
       signal,
@@ -302,7 +365,10 @@ async function main(): Promise<void> {
       tracks,
       replay: replayHandle,
       tick: (nowMs: number) => {
-        if (selected >= 0 && (nowMs | 0) % 8 === 0) showSelected(describe(bundle, points, selected));
+        if (selected >= 0 && nowMs - lastDetails >= 250) {
+          showSelected(describe(bundle, points, selected));
+          lastDetails = nowMs;
+        }
         replayHandle?.tick();
       },
       hover: (px, py, rect) => {
@@ -317,7 +383,12 @@ async function main(): Promise<void> {
         if (selected < 0) points.setHighlight(-1, pairSecondary);
       },
       click: () => {
-        if (hovered >= 0) select(hovered);
+        if (hovered < 0) return;
+        // A selection made on the globe is not part of the encounter that was open: clear its
+        // partner and its drawn tracks, as choosing from the search results already does.
+        pairSecondary = -1;
+        tracks.hide();
+        select(hovered);
       },
       unmount: () => {
         aborter.abort();
@@ -349,11 +420,20 @@ async function main(): Promise<void> {
     switching = true;
     setReplayLabel(replay, true);
     const leaving = current;
-    const wasReplay = document.body.dataset.replay === "1";
+    const wasReplay = mountedReplay;
     const carried = leaving?.unmount() ?? null;
+    // Dropped before the await, not after it. `unmount` has disposed the point cloud, terminated
+    // the worker and destroyed the replay handle, but the animation loop below runs throughout the
+    // load; while `current` still pointed at the outgoing catalogue the loop kept calling its
+    // `tick` and `hover`, which put the selected-object card and the tooltip back on screen out of
+    // disposed buffers and kept the destroyed replay fetching Sun frames over the new bundle's
+    // download. If the object is not in the incoming catalogue, nothing would have taken that card
+    // down again and it would have outlived the catalogue it describes.
+    current = null;
     if (carried) lastScenario[modeKey(wasReplay)] = carried.scenario;
     try {
       current = await mountCatalogue(replay, carried ? { ...carried, scenario: lastScenario[modeKey(replay)] } : null);
+      mountedReplay = replay;
       setReplayInUrl(replay);
     } catch (err) {
       console.error(err);

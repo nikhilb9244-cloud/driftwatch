@@ -402,14 +402,32 @@ export function bindReplayControl(onToggle: (replay: boolean) => void): (replay:
   if (!(button instanceof HTMLButtonElement)) return () => void 0;
   let current = replayInUrl();
 
+  // Disabling the focused button drops focus to <body>, and the browser does not give it back
+  // when the button is enabled again. A reader who pressed Enter on "Replay May 2024" would find
+  // the whole catalogue changed under them and their keyboard position at the top of the
+  // document, with the button that says what just happened nine tabs away. Remember that it held
+  // focus while it was disabled and hand it back when the switch finishes — including when the
+  // switch fails, because `switchMode` re-enables the button in a `finally`.
+  let heldFocus = false;
+
   const apply = (replay: boolean, busy = false) => {
     current = replay;
+    if (busy && !button.disabled) heldFocus = document.activeElement === button;
     button.disabled = busy;
-    button.textContent = busy ? "loading…" : replay ? "leave replay" : "replay May 2024";
+    button.textContent = busy ? "Loading catalogue…" : replay ? "Return to current snapshot" : "Replay May 2024";
     button.title = replay
-      ? "Return to the live catalogue and the current screening window"
+      ? "Return to the current catalogue snapshot and its screening window"
       : "Load the historical catalogue for 9 May 2024 and scrub through the Gannon storm. " +
         "The Sun imagery and the historical positions are fetched only when you do this.";
+    if (!busy && heldFocus) {
+      heldFocus = false;
+      // Only when focus is still where the disable dropped it. A reader who clicked the button
+      // with a mouse and then went somewhere else while the catalogue loaded has chosen where
+      // they are, and pulling them back to the button would be worse than never restoring it.
+      if (document.activeElement === document.body || document.activeElement === null) {
+        button.focus({ preventScroll: true });
+      }
+    }
   };
 
   button.addEventListener("click", () => onToggle(!current));
