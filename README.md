@@ -1,27 +1,104 @@
 # driftwatch
 
-A visual workspace for comparing orbit products, evaluating storm models and testing
-ground-contact timing. The existing interactive Earth and public conjunction screener
-remain available. Its contribution is evidence about the limits of orbit data; agreement
-between predictions is not proof of their accuracy.
+[![ci](https://github.com/nikhilb9244-cloud/driftwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/nikhilb9244-cloud/driftwatch/actions/workflows/ci.yml)
+[![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
+[![benchmark: swarm-benchmark-2026-09](https://img.shields.io/badge/benchmark-swarm--benchmark--2026--09-informational)](https://github.com/nikhilb9244-cloud/driftwatch/releases/tag/swarm-benchmark-2026-09)
 
-**New, 6 September 2026:** test OEM/OMM files, CDMs, contact logs and model-trial CSVs on
-your own PC. Start with `uv sync`, then `npm ci` and `npm run build` inside `web`, followed
-by `uv run --offline python -m driftwatch.workbench` from the repository root. Open
-`http://127.0.0.1:8765`. Windows users can then use `start-workspace.cmd`.
+driftwatch screens a satellite fleet against the public orbital catalogue, estimates collision
+probability from an uncertainty model fitted to how successive element sets for the same object
+disagree, and adds a storm term that displaces objects and widens their covariance under a
+geomagnetic scenario.
 
-The browser includes downloadable synthetic examples and the separate measured Swarm
-benchmark. Private input files are processed by the local Python service, not a cloud
-upload endpoint. See [workspace instructions and limits](docs/workspace.md),
-and the
-[active roadmap](ROADMAP.md). These are research tools, not an operational collision service.
+## The horizon
 
-The visual rework adds adjustable rendering detail and trace visibility. Orbit imports now
-include OEM/OMM XML and KVN, GP JSON/CSV, legacy TLE and explicitly mapped state tables;
-ground contacts include a single-antenna request planner. See [supported formats](docs/input-formats.md)
-and the [design research](docs/experience-design.md). **6 September clarification:** the new
-case-analysis workspace opens on the labelled May storm hindcast; the existing catalogue
-and screening scenario defaults remain quiet.
+Against ESA's reduced-dynamic precise science orbits for **Swarm A, B and C** — three
+sun-synchronous satellites near 460 km, the only population this has been measured on — a public
+element set keeps the satellite inside the 25 km in-track half-width of the screening box, at the
+95th percentile of trials, for **five days in a quiet week** (20–27 April 2024), **two days in the
+May 2024 Gannon storm** (6–13 May) and **one day in a held-out October 2024 storm** (6–13 October).
+Those three windows are the whole of the evidence. A probability computed from an element set
+propagated past its horizon is arithmetic on a position the set no longer predicts, so the quiet
+scenario is the default everywhere and a storm scenario is an explicit choice. The measured
+tolerance for three Swarm-class satellites does not establish an operating horizon for any other
+spacecraft. Detail: [docs/calibration-benchmark.md](docs/calibration-benchmark.md).
+
+## Three findings about provenance
+
+Each was measured, and each is stated with the correction it forced.
+
+1. **A public SGP4 fit drifts from the operator's own ephemeris by two orders of magnitude more
+   than its published fit residual.** CelesTrak's supplemental Starlink sets carry a residual near
+   0.20 km; measured against the published states on nineteen matched files (2026-09-03), the
+   median separation runs from 0.30 km under 12 hours to **82.9 km at 60–72 hours**, almost all
+   along track. Qualified: one lead bin of six, nineteen satellites, one date, against the
+   operator's published *prediction* rather than the realised orbit.
+
+2. **A frame or a clock stated only in a filename or a header will be read wrongly, and nothing
+   internal will catch it.** SpaceX's published states are MEME (J2000), 0.36 degrees from TEME by
+   2026: read as TEME they sit **36.2 km** from the fit to the same file, and 0.356 km when
+   rotated. The same class of error in the time system put ESA's Swarm orbits **137 km** along
+   track when their GPS epochs were read as UTC — invisible to every check that compares a source
+   with itself, and visible only against an independent reference.
+
+3. **A covariance fit labelled with one window had read outside it.** The 3 September 2026 run's
+   fit, labelled 21 July to 3 September, had read 2,714,544 element sets of which **615,648 lay
+   before the window**, most from the 2024 solar maximum. Refitted under the bound, the in-track
+   one-day sigma changed on 21,644 of 22,039 objects (median −5 per cent) and the flagged events
+   under `quiet` went from 21 to 12.
+
+## Scope and limits
+
+- **Absolute probabilities are indicative, not operational.** They combine a predicted separation,
+  assumed object sizes and an uncertainty estimate, and each can change the answer.
+- **The uncertainty model measures consistency, not accuracy.** It is fitted from how an object's
+  successive element sets disagree; those sets share observations and assumptions, so their
+  agreement bounds the true error in neither direction. The one comparison against an independent
+  reference found it over-covering from one to five days in a quiet week and under-covering at
+  every lead in a storm.
+- **All positions come from the public catalogue. There is no independent orbit determination**,
+  no sensor, and no tracking of any kind in this project.
+- **The storm term has demonstrated skill for one population, at one end of the window, on one
+  storm**, and its effect depends on the period: it helps at longer leads in October's sample and
+  hurts May's 12–72 hour sample and the quiet 1–6 day sample.
+- **A flag is reported with its region and confidence before its colour.** A red in the dilution
+  region is a statement about the size of the covariance, not about the encounter.
+- **No operator has used this tool**, and no organisation has adopted it or agreed to be named in
+  connection with it. Nothing here has been exercised against operational practice.
+- The conjunction-message reconciler and the contact planner ship no example and **have not been
+  exercised on real data**.
+
+## Where to read next
+
+| | |
+| --- | --- |
+| What the repository contains and how it is laid out | [Layout](#layout) |
+| **What has been found, and what has been withdrawn** | [Findings and corrections](#findings-and-corrections) |
+| The measured calibration against ESA's Swarm orbits | [docs/calibration-benchmark.md](docs/calibration-benchmark.md) |
+| Method, frames, time systems and their approximations | [docs/methods.md](docs/methods.md), [docs/frames-and-time.md](docs/frames-and-time.md) |
+| The screening algorithm and its no-miss argument | [docs/screening.md](docs/screening.md) |
+| The storm term and its validation | [docs/storm-term.md](docs/storm-term.md), [docs/storm-validation.md](docs/storm-validation.md) |
+| The local analysis workspace and its limits | [docs/workspace.md](docs/workspace.md) |
+| Supported input formats | [docs/input-formats.md](docs/input-formats.md) |
+| The daily pipeline and its reproducibility rule | [docs/pipeline.md](docs/pipeline.md) |
+| Working record: verification runs, test counts, checks | [docs/development-log.md](docs/development-log.md) |
+
+## Data sources and attribution
+
+Element sets and SATCAT metadata come from **CelesTrak** (celestrak.org, T.S. Kelso) and from
+**Space-Track.org** (United States Space Force). Space-Track's sets are redistributed with citation
+under its user agreement; the viewer bundle carries the attribution. Space weather comes from
+CelesTrak and the **NOAA Space Weather Prediction Center**.
+
+Two datasets are **analysis-only and are never redistributed**. **SpaceX's published Starlink
+ephemerides** are served without a stated licence for the express purpose of letting other
+operators screen against Starlink: driftwatch computes with them and publishes the results with
+credit, and never republishes the files, a repackaged copy or the covariance store derived from
+them. **ESA's Kelvins Collision Avoidance Challenge** data is used under its challenge terms for
+checking probability calculations, and is not redistributed either. Both live under gitignored
+directories, and `driftwatch check-bundle` refuses to publish a bundle containing either.
+
+Full terms, as read on the dates given: [docs/data-sources.md](docs/data-sources.md). Citation
+metadata for the software and the benchmark: [CITATION.cff](CITATION.cff).
 
 ## Findings and corrections
 
@@ -194,7 +271,7 @@ screened through a real storm (`docs/storm-term.md`, "Attacking the result" and 
 2026-09-05").
 
 **"Screening on the operator's own published states gives the demo fleet its one red flag."** The
-flag exists — EOS SAT-1 (shown on the public page as `payload 55053`) against Starlink 61705,
+flag exists — EOS SAT-1 against Starlink 61705,
 2.780 km at a fifteen-hour lead, probability 1.076 × 10⁻⁴ against 6.19 × 10⁻⁶ on the catalogue's
 fit — and the write-up quoted it as a red. Corrected 2026-09-05: it is **in the dilution region at
 low confidence**, with its maximum probability over covariance scale factors at 0.85 times the
@@ -515,7 +592,7 @@ Requirements: Python 3.11+, [uv](https://docs.astral.sh/uv/), Node 20+.
 
 ```bash
 uv sync                                   # Python environment
-export SPACETRACK_USER=you@example.org    # optional: Space-Track login for the full catalogue
+export SPACETRACK_USER=user@example.org   # optional: Space-Track login for the full catalogue
 export SPACETRACK_PASS=...                #   (PowerShell: $env:SPACETRACK_USER = "..."). Never put these in a file.
 uv run driftwatch fetch                   # ~30 s; CelesTrak groups + Space-Track gp, writes data/snapshots/gp_<stamp>.parquet
 uv run driftwatch propagate --at 2026-09-01T12:00:00Z
@@ -580,9 +657,12 @@ pwsh -File scripts/deploy-vercel.ps1 -Production -Run <run> -Scenario quiet
    (`manifest.json`, `objects.json`, `elements.bin`, `reference.bin`) and `driftwatch report`
    the conjunctions side (`conjunctions.json`, `scenarios.json`, `conjunction-tracks.bin`).
    Neither rescreens. `-SkipExport` deploys what is already in `web/public/data`; `-Run` and
-   `-Scenario` choose which stored run and scenario to show. On the public page, fleet members
-   other than stations appear by category and NORAD id, not by name, until their operator has
-   agreed to appear.
+   `-Scenario` choose which stored run and scenario to show. The bundle names every fleet member.
+   A rule that hid them behind their catalogue number ran from 5 to 7 September 2026 and was
+   withdrawn: the catalogue number is public and `objects.json` ships the name against it, so the
+   rule withheld nothing while making the page harder to read. What limits how a flag may be read
+   is that every one of them leads with its region and confidence, which is unchanged.
+   `docs/writeup-notes.md` records the reasoning both ways.
 2. **Build with the Vercel CLI.** `vercel pull` fetches the project settings and `vercel build`
    runs the Vite build locally into `.vercel/output/`. Building here and deploying prebuilt is
    what lets the next step check exactly the files that will be served.
@@ -613,7 +693,7 @@ succeeded. `docs/pipeline.md` has the deploy design and why the host changed.
 `elements.bin` at 2.7 MiB and `conjunctions.json` at about 3 MiB, well inside the 25 MiB per-file
 ceiling. Source maps are not published (`web/vite.config.ts`).
 
-## What you are looking at
+## What the viewer shows
 
 Each point is one catalogued object at the time on the clock, coloured by category:
 space stations, Starlink, OneWeb, other constellations, other payloads, rocket bodies,

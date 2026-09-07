@@ -445,10 +445,21 @@ def build_bundle(
     joined = run.read_conjunctions()
     scenarios = sorted(str(s) for s in joined["scenario"].dropna().unique())
     scenario = scenario or default_scenario(scenarios)
-    # The bundle is the public page. Fleet members other than stations are shown by category and
-    # NORAD id until their operator has agreed to appear (2026-09-05); the run directory keeps
-    # the names, because it is the operator's own report.
-    rows = anonymise_primaries(normalise(joined[joined["scenario"] == scenario]))
+    # The bundle is the public page and it names the fleet member.
+    #
+    # A rule introduced on 2026-09-05 replaced every primary outside a small set of categories with
+    # its category and NORAD id -- `payload 55053` -- until its operator had agreed to appear. It
+    # was withdrawn on 2026-09-07. The catalogue number is public and sits in the same row: every
+    # pair carries `primary_norad_id`, and `objects.json` in the same bundle ships all 32,372
+    # catalogue names keyed by it, so the two join in one line. The rule therefore withheld nothing
+    # from anyone who wanted the name, and cost every other reader the one label that says which
+    # encounter they are looking at.
+    #
+    # The safeguard that does work is unchanged and is not this: every flag is rendered with its
+    # region and confidence first, so a dilution-region red reads as a statement about the size of
+    # the covariance before it reads as a warning about the encounter. That ordering, not a missing
+    # name, is what stops a number being over-read. docs/writeup-notes.md records both directions.
+    rows = normalise(joined[joined["scenario"] == scenario])
     rows["tca"] = pd.to_datetime(rows["tca"], utc=True)
     # Kept before `rows` is narrowed to the detail set below, because the storm summary and the
     # unscoreable list are statements about the whole scenario. Computed over the detail subset
@@ -555,9 +566,6 @@ def build_bundle(
             "by the size of the covariance rather than by the geometry, and is not actionable. It means the "
             "data cannot support a judgement either way, not that better data would clear the flag. Every "
             "flag is shown with its region and confidence first.",
-            "Fleet members other than stations are shown by category and NORAD id, not by name, until "
-            "their operator has agreed to appear on this page. The catalogue's own object names are the "
-            "public record and are unchanged.",
             "Every pair is listed. Individual events are carried for the flagged pairs, the pairs with an "
             "event inside the notification box, and the highest-probability pairs; the parquet in the run "
             "directory holds every event of every pair.",
@@ -652,37 +660,6 @@ def _verdicts(flagged: pd.DataFrame) -> list[str]:
         )
     lines.append("")
     return lines
-
-
-#: Fleet members in these categories are named on the public page; the rest are shown by category
-#: and NORAD id until their operator has agreed to appear. A station is public infrastructure with
-#: a published position; a small operator's satellite in a conjunction warning is not.
-PUBLICLY_NAMED_CATEGORIES: frozenset[str] = frozenset({"station"})
-
-
-def public_primary_name(name: Any, category: Any, norad_id: Any) -> str:
-    """The name a fleet member is shown under on the public page.
-
-    ``ISS (Zarya)`` stays ``ISS (Zarya)``; a payload becomes ``payload 55053``. The catalogue's
-    own object names are untouched -- they are the public record -- and so is everything in the
-    run directory, which is the operator's own report. Only the published bundle is anonymised.
-    """
-    if str(category) in PUBLICLY_NAMED_CATEGORIES:
-        return str(name)
-    return f"{str(category).replace('_', ' ')} {int(norad_id)}"
-
-
-def anonymise_primaries(rows: pd.DataFrame) -> pd.DataFrame:
-    """``primary_name`` replaced by :func:`public_primary_name` on every row, for the public exports."""
-    if not len(rows) or "primary_name" not in rows.columns:
-        return rows
-    out = rows.copy()
-    categories = out["primary_category"] if "primary_category" in out.columns else pd.Series("payload", index=out.index)
-    out["primary_name"] = [
-        public_primary_name(name, category, norad_id)
-        for name, category, norad_id in zip(out["primary_name"], categories, out["primary_norad_id"], strict=True)
-    ]
-    return out
 
 
 def _pair_rows(pairs: pd.DataFrame) -> list[str]:

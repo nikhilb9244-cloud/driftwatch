@@ -26,11 +26,46 @@ corrected in place with the date, in the same style as the phase plans.
 > *raises* the number slightly (1.09 × 10⁻⁴ under `forecast` against 1.076 × 10⁻⁴ under `quiet`).
 > Before the correction the scenarios displaced the Starlink by a stand-in coefficient and the
 > event read yellow at 4.98 × 10⁻⁵ under every storm scenario, which was arithmetic on an undefined
-> excess. On the public page the primary appears as `payload 55053` until its operator has agreed
-> to be named.
+> excess. The public page names the primary.
 
 **Name this event in the write-up, region first.** It is the demonstration Step 1 existed to
 produce.
+
+### Anonymising the primary: applied 5 September 2026, withdrawn 7 September 2026
+
+The public bundle spent two days replacing every fleet member outside a small set of categories
+with its category and catalogue number — `EOS SAT-1` appeared as `payload 55053`. The rule has been
+withdrawn. Both directions are recorded here because the reasoning for it was not silly, and
+because a reader of the write-up will see the name and should know it was once withheld.
+
+**The case for anonymising.** A conjunction warning names a party. A small operator's satellite
+appearing on a public page beside a collision probability is a statement about that operator,
+published without their agreement, and one they cannot correct. The probabilities here are
+indicative, computed from public element sets with no independent orbit determination, so the page
+could attach a number to a named third party that the number does not support. Stations are
+different: public infrastructure with a published position, already named everywhere. That
+asymmetry is what `PUBLICLY_NAMED_CATEGORIES` encoded.
+
+**The case against, which won.** The rule withheld nothing. Every pair in the same file carries
+`primary_norad_id`, and `objects.json`, shipped in the same bundle, holds all 32,372 catalogue
+names keyed by that id. The two join in one line of anything. A catalogue number is not a
+pseudonym: it is a public identifier that resolves instantly, for anyone motivated enough to care,
+while costing every other reader the one label that says which encounter is on screen. The page was
+therefore not protecting the operator; it was making itself harder to read and appearing to protect
+them, which is worse than either alternative. A measure that looks like discretion without being
+discretion is a claim the software cannot keep.
+
+**What actually protects a reader from over-reading the number**, and what is unchanged
+throughout, is the ordering of the flag. Every flag is rendered with its region and its confidence
+before its colour: a red in the dilution region reads as *dilution region, low confidence, red*,
+so the qualifier arrives before the alarm. That is the safeguard — it constrains what the number
+may be taken to mean — and it is asserted in
+`tests/test_report.py::test_report_marks_a_dilution_red_as_low_confidence_everywhere_it_appears`,
+which checks that "dilution" precedes "red" in the rendered string. Removing a name never did that
+work, and keeping the qualifier ordering does.
+
+The run directory and the weekly report always carried the real names; only the published bundle
+was ever affected.
 
 A South African satellite in the demo fleet — **EOS SAT-1 (55053)**, built by a manufacturer in
 Stellenbosch for EOS Data Analytics and owned by SAFR — gains a **dilution-region, low-confidence

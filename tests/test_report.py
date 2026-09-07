@@ -233,33 +233,24 @@ def test_report_marks_a_dilution_red_as_low_confidence_everywhere_it_appears(tmp
     assert _fmt_flag("none", "standard", "robust") == "—"
 
 
-def test_the_public_bundle_names_a_station_and_anonymises_every_other_primary(run):
-    """A small operator's satellite is not named in a public warning until they have agreed."""
-    from driftwatch.export.report import anonymise_primaries, public_primary_name
+def test_the_public_bundle_names_the_fleet_member(run):
+    """The page names the primary, and the safeguard is the region-first flag, not a missing name.
 
-    assert public_primary_name("ISS (Zarya)", "station", 25544) == "ISS (Zarya)"
-    assert public_primary_name("EOS SAT-1", "payload", 55053) == "payload 55053"
-    assert public_primary_name("Some Body", "rocket_body", 9) == "rocket body 9"
-    rows = pd.DataFrame(
-        {
-            "primary_name": ["ISS (Zarya)", "EOS SAT-1"],
-            "primary_category": ["station", "payload"],
-            "primary_norad_id": [25544, 55053],
-            "secondary_name": ["A", "B"],
-        }
-    )
-    out = anonymise_primaries(rows)
-    assert out["primary_name"].tolist() == ["ISS (Zarya)", "payload 55053"]
-    assert out["secondary_name"].tolist() == ["A", "B"], "catalogue names are the public record"
-    assert rows["primary_name"].iloc[1] == "EOS SAT-1", "the input frame is not touched"
-
+    A rule that replaced every non-station primary with ``payload 55053`` ran from 2026-09-05 to
+    2026-09-07. It was withdrawn because it withheld nothing: the catalogue number is in the same
+    row and ``objects.json`` ships the name against it, so the two join in one line. What protects
+    a reader from over-reading a number is that every flag leads with its region and confidence,
+    which is asserted separately in ``test_report_marks_a_dilution_red_as_low_confidence_everywhere_it_appears``.
+    """
     run_dir, snap = run
     bundle, _ = build_bundle(run_dir, snap)
+    assert bundle["pairs"], "the fixture screens one designed conjunction"
     for pair in bundle["pairs"]:
-        assert pair["primary_name"] != "Primary"
-        assert pair["primary_name"].endswith(str(pair["primary_norad_id"]))
-    assert any("agreed to appear" in c for c in bundle["caveats"])
-    # The run directory's own report keeps the name: it is the operator's report, not the page.
+        assert pair["primary_name"] == "Primary", "the fleet's own name for the object"
+        assert not pair["primary_name"].endswith(str(pair["primary_norad_id"]))
+        assert pair["secondary_name"] == "SECONDARY", "catalogue names were always the public record"
+    assert not any("agreed to appear" in c for c in bundle["caveats"])
+    # The run directory's own report is unchanged; it carried the name throughout.
     assert "Primary" in weekly_report(run_dir)
 
 

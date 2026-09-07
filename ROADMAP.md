@@ -28,7 +28,7 @@ Browser verification now covers OEM and element-set comparison against the two g
 
 The catalogue page, which shares that Earth, was finished after the workspace. Rotating a phone from landscape to portrait had been carrying the landscape camera altitude into a portrait aspect and cropping Earth off both sides; the resize handler now re-fits, and a rotated viewport renders identically to a fresh load at that size. A hundred and sixty layout checks — forty viewports from 320 × 480 to 2560 × 1440, each plain, plain with a panel open, in replay, and in replay with a panel open — are now clear of overlap and horizontal overflow, with every visible control hit-tested at its own centre and the headline, zoom buttons, navigation and transport asserted present rather than merely un-overlapped. In landscape the navigation had sat over the wordmark and the zoom buttons behind the chart. The first fix for that was keyed on width and height alone and was worse in places: it caught portrait phones too, and at 360 × 640 the page lost its only heading and all three Earth buttons on a screen with 240 px of clear space. An overlap test cannot see a missing element, which is why the suite now checks presence and hit-testing; the rules are keyed on shape as well as size. Replay preserves the open panel, the selection, the position through the window and now the keyboard's place: the button used to disable itself while the catalogue loaded and drop focus to the top of the document. Below about 600 × 400 the headline, the zoom buttons and the weather chart are dropped because there is no arrangement that fits them; replay's transport still works there and nothing on screen says the chart is missing. Every measurement is headless Chromium at a set viewport; no real handset, orientation change, touch, assistive technology or second engine has been tried. Detail and the remaining limits: [experience-design.md](docs/experience-design.md#the-catalogue-viewer--6-september-2026).
 
-The public bundle keeps its anonymisation: fleet members other than a station appear as `payload 55053` until their operator has agreed to appear. The viewer had separately begun substituting the catalogue name back in, so the same question was being answered two ways in two languages; the browser-side substitution was removed and the rule is applied in one place, the exporter.
+The public bundle names every fleet member. An anonymisation rule ran from 5 to 7 September 2026 and was withdrawn: it replaced each primary with its catalogue number, which is public and resolves against `objects.json` in the same bundle, so it withheld nothing and cost the reader the label identifying the encounter. The safeguard that does constrain how a flag is read — region and confidence before colour — is unchanged. `docs/writeup-notes.md` records the reasoning in both directions.
 
 Local input now recognises OEM KVN/XML, OMM KVN/XML, provider GP JSON/CSV and legacy TLE. Custom state tables have variable columns, delimiters, explicit units and clock/frame choices; inspection reveals recognised conventions and available objects. This is documented subset support, not full CCSDS certification. [input-formats.md](docs/input-formats.md).
 
@@ -82,7 +82,7 @@ Working name, rename freely. This file is written to live in the repository so t
 
 A geomagnetic storm heats the upper atmosphere, density rises, drag on every low Earth orbit object increases, and predicted positions drift, mostly along the direction of travel. Conjunction screening built on the public catalogue quietly gets worse at the moment it matters most. driftwatch screens conjunctions for a chosen fleet against the whole catalogue, then shows how miss distances and collision probabilities change under quiet and stormy conditions, both live and in replay of past storms. The end product is a public site, an open repository, a validated write-up and a portfolio piece aimed at the space situational awareness industry.
 
-## What you need before you start
+## Prerequisites
 
 ### Accounts
 
@@ -98,7 +98,7 @@ A geomagnetic storm heats the upper atmosphere, density rises, drag on every low
 - Space-Track gp_history for element sets around the validation storms.
 - NOAA SWPC JSON feeds at services.swpc.noaa.gov for real-time solar wind, the planetary K index and the three-day Kp forecast.
 - NASA OMNIweb for hourly and one-minute solar wind and geomagnetic indices, for analysis and any model training.
-- ESA's Kelvins Collision Avoidance Challenge dataset, around 160,000 anonymised real conjunction messages, for checking your probability calculations against how operators score risk.
+- ESA's Kelvins Collision Avoidance Challenge dataset, around 160,000 anonymised real conjunction messages, for checking probability calculations against how operators score risk.
 - Helioviewer API for Sun imagery in the storm replay.
 
 ### Tools and libraries
@@ -364,7 +364,7 @@ to saying the same thing a hundred thousand kilometres further out.
 
 - Public element sets are coarse. Position errors of hundreds of metres to kilometres mean absolute probabilities are indicative, not operational. Say so everywhere, and lean on relative changes and rankings, which is where the storm story lives anyway.
 - Density models are uncertain by tens of percent even in quiet conditions. Treat NRLMSIS as a baseline and report its uncertainty rather than hiding it.
-- CelesTrak and Space-Track have usage rules. Cache, rate limit, and check the terms before redistributing raw data. Derived products are yours.
+- CelesTrak and Space-Track have usage rules: cache, rate limit, and check the terms before redistributing raw data. Derived products are not covered by them.
 - Scope creep toward a tracking company. You do not own sensors. Stay on the analysis layer.
 - Browser performance with 30,000 points. Use typed arrays and instanced points, not one mesh per object.
 

@@ -1,0 +1,70 @@
+cff-version: 1.2.0
+title: >-
+  driftwatch: conjunction screening on public element sets, with a measured
+  storm-term calibration
+message: >-
+  If you use this software or its calibration benchmark, please cite it. The
+  benchmark is the measured comparison against ESA's Swarm precise orbits; cite
+  the release that produced the numbers you used, not the moving branch.
+type: software
+authors:
+  - family-names: Pather
+    given-names: Nikhil
+    orcid: null
+repository-code: "https://github.com/nikhilb9244-cloud/driftwatch"
+abstract: >-
+  driftwatch screens a fleet against the public catalogue, estimates collision
+  probability with an uncertainty model fitted from how successive element sets
+  for the same object disagree, and adds a storm term that displaces objects and
+  widens their covariance under a geomagnetic scenario. Its storm term and its
+  covariance are calibrated against ESA's reduced-dynamic precise science orbits
+  for Swarm A, B and C over three windows: a quiet control, the May 2024 Gannon
+  storm, and a held-out October 2024 window. All positions come from public
+  element sets; the project performs no orbit determination of its own, and every
+  probability it reports is indicative rather than operational.
+keywords:
+  - conjunction assessment
+  - space situational awareness
+  - SGP4
+  - geomagnetic storm
+  - thermospheric drag
+  - orbit uncertainty
+license: MIT
+version: 0.1.0
+date-released: "2026-09-07"
+references:
+  - type: data
+    title: Swarm Level 2 precise science orbits (SW_OPER_SP3xCOM_2_)
+    authors:
+      - name: European Space Agency
+    url: "https://swarm-diss.eo.esa.int/"
+    notes: >-
+      Reduced-dynamic reconstructed orbits, used as the independent reference in
+      the calibration benchmark. Epochs are GPS time and are converted to UTC.
+  - type: data
+    title: Swarm Level 1b spacecraft dynamics (SW_OPER_SC_xDYN_1B)
+    authors:
+      - name: European Space Agency
+    url: "https://swarm-diss.eo.esa.int/"
+    notes: >-
+      The published thruster record, used to decide which intervals contain a
+      manoeuvre rather than inferring one from a residual.
+  - type: data
+    title: General perturbations element sets
+    authors:
+      - name: United States Space Force
+      - name: Space-Track.org
+    url: "https://www.space-track.org/"
+    notes: >-
+      Element sets and gp_history, redistributed with citation under Space-Track's
+      user agreement.
+  - type: data
+    title: General perturbations element sets and space weather indices
+    authors:
+      - name: CelesTrak
+    url: "https://celestrak.org/"
+  - type: data
+    title: Geomagnetic and solar indices
+    authors:
+      - name: NOAA Space Weather Prediction Center
+    url: "https://services.swpc.noaa.gov/"

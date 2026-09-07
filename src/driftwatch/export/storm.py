@@ -60,7 +60,7 @@ import pandas as pd
 from driftwatch import __version__, config
 from driftwatch.drag import density as dn
 from driftwatch.export.conjunctions import RunDirectory
-from driftwatch.export.report import anonymise_primaries, cumulative_pc, normalise
+from driftwatch.export.report import cumulative_pc, normalise
 from driftwatch.storm import term
 from driftwatch.weather import helioviewer
 
@@ -341,8 +341,8 @@ def build_overlays(run: RunDirectory, bundle: dict[str, Any]) -> dict[str, Any]:
     stored = sorted(str(s) for s in joined["scenario"].dropna().unique())
     scenarios: dict[str, Any] = {}
     for name in stored:
-        # The same anonymisation as the base bundle: the overlay's unscoreable rows name the primary.
-        rows = anonymise_primaries(normalise(joined[joined["scenario"] == name])).copy()
+        # The overlay's unscoreable rows name the primary, the same way the base bundle does.
+        rows = normalise(joined[joined["scenario"] == name]).copy()
         rows["tca"] = pd.to_datetime(rows["tca"], utc=True)
         detail = rows[rows["event_id"].isin(set(event_ids))]
         scenarios[name] = {
