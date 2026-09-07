@@ -111,8 +111,10 @@ agreement with, the observatory.
 Archived MeerKAT observations are read from public records, each row of an observation CSV naming
 its source. The one record used is GCN Circular 36362 with the pointing from GCN Circular 36105.
 The [SARAO archive](https://archive.sarao.ac.za/) holds every released observation's pointing,
-start, duration and band after the proprietary period, but its search needs a SARAO account and
-was not queried; no account was created.
+start, duration and band after the proprietary period. Its documented route for reading them is a
+GraphQL API behind a logged-in account's token (`docs/radio-lane.md`, "The archive's route");
+`driftwatch radio archive` uses that route, read-only and paced, and keeps only records the
+archive marks public. Without a token the archive is not queried.
 
 Declared emissions are read from public regulatory filings and interface control documents, each
 row of `docs/radio-emissions.md` carrying its source: the GPS, GLONASS, Galileo, BeiDou, NavIC and

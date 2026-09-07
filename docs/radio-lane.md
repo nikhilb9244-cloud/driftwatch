@@ -56,10 +56,10 @@ through a burn, which the reports say. SpaceX's published ephemerides are not ar
 retrospective on 2024 has none to use and every Starlink falls to the catalogue.
 
 **Real observations, and where they come from.** The SARAO archive carries the pointing, start,
-duration and band of every released MeerKAT observation, but its search tool needs a SARAO
-account (the archive's own guidance says so), so it was not queried. The observation list is
-therefore a plain CSV, the shape an archive export reduces to, and every record carries the
-source it was read from. One public record was found inside the two periods: GCN Circular 36362,
+duration and band of every released MeerKAT observation, and its documented route for reading
+them is an API (below), which needs a logged-in account's token; without one the archive was not
+queried. The observation list is therefore a plain CSV, the shape an archive export reduces to,
+and every record carries the source it was read from. One public record was found inside the two periods: GCN Circular 36362,
 an S-band observation of the field of EP240414a on 23 April 2024, with the pointing taken as the
 counterpart's position from GCN Circular 36105 because the circular gives no phase centre. No
 published circular or paper read for this work gives a MeerKAT observation between 10 and 12
@@ -74,6 +74,46 @@ Second, every object whose predicted track passes inside the half-power radius, 
 approach to the boresight, the time, the element set's age, the cross-track angular uncertainty
 and the along-track shift at that age and geometry, and the two horizon labels, crossing and
 position. Both products are geometry.
+
+## The archive's route
+
+Read from the archive's own help page (archive.sarao.ac.za/help) and terms of use
+(archive.sarao.ac.za/terms-of-use) on 7 September 2026, before anything was automated.
+
+- **The permitted route is a documented API.** "You can interact with the MeerKAT Archive
+  programmatically using our GraphQL API. Visit /graphql in your browser to explore the schema and
+  run queries interactively using the built-in GraphQL Playground." The search interface's own
+  metadata download is that API: selecting rows and clicking "DOWNLOAD METADATA" hands out a
+  published script, `export_meerkat_archive.py`, which pages the `observations` query 25 records
+  at a time and is offered as "a reference implementation to extend for specific use cases".
+  There is no CSV export from the search interface, and the katdal endpoint
+  (`archive-gw-1.kat.ac.za/<capture block>/..._sdp_l0.full.rdb?token=...`) is for observation
+  data, which this lane never reads.
+- **Login.** "The API supports script-based authentication through the OAuth2 PKCE flow": a
+  browser login through the archive's `login.py` issues an access token and a refresh token, and
+  "Refresh tokens are valid for 30 days, and are rotated on successful logins". "Public datasets
+  are available to all logged-in users." There is no documented password login for scripts, so
+  `driftwatch radio archive` reads one token from `SARAO_ARCHIVE_TOKEN`, holds it in memory, and
+  never writes it to disk, a log or the cache.
+- **Proprietary periods.** "Open Time proposals typically have a proprietary period of 12 months
+  after the last observation has been obtained"; DDT three months; large survey projects vary; the
+  telescope and data access guidelines (SSA-0003C-001 rev. 02, 28 May 2024) say "After proprietary
+  periods expire, the relevant datasets will be available to anyone." The export keeps a record
+  only when the archive itself marks it public and its start is more than twelve months before the
+  export, and counts everything it excludes.
+- **Terms of use.** The site's terms grant permission "to display, copy, distribute, and download
+  the materials on this website for personal, non-commercial use only, provided you do not modify
+  the materials and that you retain all copyright and other proprietary notices contained in the
+  materials", and forbid mirroring. The export is a metadata table of public observations with the
+  archive's own identifiers in every row; no data product is copied. The archive's acknowledgement
+  statement for publications using MeerKAT data is: "The MeerKAT telescope is operated by the
+  South African Radio Astronomy Observatory, which is a facility of the National Research
+  Foundation, an agency of the Department of Science and Innovation."
+- **Pace and scope.** The help page states no rate limit; the export sends at most one request every
+  two seconds with a descriptive User-Agent, uses the published script's page size, and asks only
+  for observation metadata: capture block, proposal, start, duration, band, frequency range,
+  targets, pointings and the public flag. The API is described as "experimental and may be subject
+  to change".
 
 ## The catalogue as it stood
 
@@ -162,14 +202,19 @@ predictor with orbit-source provenance, not a radio tool, and carries no per-obj
 ```powershell
 uv run driftwatch radio horizon      # docs/radio-horizon.md, data/radio/horizon.json, data/radio/swarm_trials.csv
 uv run driftwatch radio emissions    # docs/radio-emissions.md
+uv run driftwatch radio archive quiet-2024-04   # needs SARAO_ARCHIVE_TOKEN; writes data/radio/observations/quiet-2024-04.csv
+uv run driftwatch radio archive storm-2024-05
 uv run driftwatch radio period quiet-2024-04 --observations data/radio/observations/quiet-2024-04.csv
 uv run driftwatch radio period storm-2024-05 --observations data/radio/observations/storm-2024-05.csv
 ```
 
 `radio horizon` reads the benchmark's per-trial file where it exists and otherwise the exported
-CSV beside the page, so the table recomputes from the repository. `radio period` needs the
-element-set history for the period in the local store (`data/history/`), which the Space-Track
-backfill writes, and an observation CSV with the columns `observation_id, target, ra, dec,
-start_utc, duration_s, band, centre_mhz, source, note`.
+CSV beside the page, so the table recomputes from the repository. `radio archive` reads the
+period's observations from the SARAO archive's documented GraphQL API with the token in
+`SARAO_ARCHIVE_TOKEN` (read-only, paced, metadata only, public records past the proprietary period
+only) into that CSV, keeping rows from other sources. `radio period` needs the element-set history
+for the period in the local store (`data/history/`), which the Space-Track backfill writes, and an
+observation CSV with the columns `observation_id, target, ra, dec, start_utc, duration_s, band,
+centre_mhz, source, note`.
 
 _Last updated 7 September 2026._

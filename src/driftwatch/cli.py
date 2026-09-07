@@ -3263,6 +3263,55 @@ def cmd_radio_emissions(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_radio_archive(args: argparse.Namespace) -> int:
+    """Export a period's observation metadata from the SARAO archive's documented API; see ``radio/archive.py``."""
+    from driftwatch.radio import archive as radio_archive
+    from driftwatch.radio import crossings as radio_crossings
+
+    if args.period not in radio_crossings.PERIODS:
+        log.error("no such period %r; choose one of %s", args.period, ", ".join(radio_crossings.PERIODS))
+        return 2
+    period = radio_crossings.PERIODS[args.period]
+    try:
+        token = radio_archive.token_from_env()
+    except radio_archive.ArchiveAuthError as exc:
+        log.error("%s", exc)
+        return 3
+    bands = [b.strip() for b in args.bands.split(",") if b.strip()]
+    with radio_archive.ArchiveClient(token) as client:
+        try:
+            records = client.observations(period.start, period.end, max_records=args.max_records)
+        except radio_archive.ArchiveError as exc:
+            log.error("%s", exc)
+            return 3
+        rotated = client.rotated_refresh_token is not None
+    if args.dry_run:
+        for record in records[: args.dry_run]:
+            print(json.dumps(record, indent=1, default=str))
+        print(f"{len(records)} record(s) listed for {period.label}; nothing written")
+        return 0
+    export = radio_archive.select_pointings(records, bands=bands, first_day=period.start, last_day=period.end)
+    out = Path(args.out) if args.out else config.DATA_DIR / "radio" / "observations" / f"{period.name}.csv"
+    radio_archive.write_observation_csv(export, out, keep_other_sources=not args.replace)
+    log.info(
+        "Archive: %d record(s) listed, %d pointing(s) in %d capture block(s) kept, excluded %s; wrote %s",
+        export.n_records,
+        len(export.pointings),
+        len({p.capture_block_id for p in export.pointings}),
+        export.excluded or {},
+        out,
+    )
+    print(radio_archive.observation_sources_sentence(export, period.label))
+    if rotated:
+        log.warning(
+            "The archive rotated the refresh token during this run; the new one was held in memory only and "
+            "is gone with this process. If the next run is refused, obtain a fresh token from the archive's "
+            "login step and set %s again.",
+            radio_archive.TOKEN_ENV,
+        )
+    return 0
+
+
 def cmd_radio_period(args: argparse.Namespace) -> int:
     """Run both products for one period on the catalogue as it stood; see ``radio/crossings.py``."""
     from driftwatch.radio import crossings as radio_crossings
@@ -3913,6 +3962,25 @@ def build_parser() -> argparse.ArgumentParser:
     )
     rp.add_argument("--out-dir", default="data/radio", help="exports go under <out-dir>/<period>/")
     rp.add_argument("--report", help="report path (default docs/radio/<period>.md)")
+    ra = radio_sub.add_parser(
+        "archive",
+        help="export a period's observation metadata from the SARAO archive's documented GraphQL API "
+        "(token from SARAO_ARCHIVE_TOKEN, read-only, paced)",
+    )
+    ra.add_argument("period", help="quiet-2024-04 or storm-2024-05")
+    ra.add_argument("--bands", default="UHF,L", help="receivers to keep (default UHF,L)")
+    ra.add_argument("--out", help="observation CSV (default data/radio/observations/<period>.csv)")
+    ra.add_argument(
+        "--replace", action="store_true", help="drop rows from other sources already in the CSV (default: keep)"
+    )
+    ra.add_argument("--max-records", type=int, help="stop after this many records (default: all)")
+    ra.add_argument(
+        "--dry-run",
+        type=int,
+        metavar="N",
+        help="print the first N records as the archive returns them and write nothing",
+    )
+    ra.set_defaults(func=cmd_radio_archive)
     rp.add_argument(
         "--observation-sources", help="a sentence for the report saying where the observation list came from"
     )

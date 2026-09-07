@@ -241,12 +241,13 @@ def _observation_section(r: ObservationResult, elevation_deg: float) -> list[str
 
 
 NO_RECORD = (
-    "No archived observation with a public record was found for this period. The SARAO archive search, which "
-    "carries the pointing, start, duration and band of every released observation, needs a SARAO account "
-    "(skaafrica.atlassian.net, ESDKB page 302546945), and no published circular or paper read for this work "
-    "gives a MeerKAT observation inside these days. Product two therefore has nothing to run on here; product "
-    "one is computed below for the whole period, hour by hour, because it needs no pointing. "
-    "`driftwatch radio period` runs both products the moment an observation list is exported from the archive."
+    "No archived observation with a public record was found for this period. The SARAO archive carries the "
+    "pointing, start, duration and band of every released observation and documents a GraphQL API for reading "
+    "them, which needs a logged-in account's token (`driftwatch radio archive`, `docs/radio-lane.md`); no such "
+    "token was available to this run, and no published circular or paper read for this work gives a MeerKAT "
+    "observation inside these days. Product two therefore has nothing to run on here; product one is computed "
+    "below for the whole period, hour by hour, because it needs no pointing. `driftwatch radio period` runs both "
+    "products the moment an observation list is exported from the archive."
 )
 
 LIMITS = [
