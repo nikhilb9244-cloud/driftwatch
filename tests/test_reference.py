@@ -287,3 +287,76 @@ def test_mean_altitude_from_mean_motion_and_the_summary_shape():
     assert "jason-3" in summary["by_mission"]
     statement = reference_run.population_statement([reference.MISSIONS["jason-3"]], list(reference.WINDOWS), trials)
     assert "1000-1400 km: Jason-3 (3 element sets" in statement and "4 windows" in statement
+
+
+def test_the_post_burn_table_reads_the_first_sets_after_a_burn_against_cadence_and_delay():
+    """Six sets eight hours apart and a burn between the second and the third: the third is the first set after
+    the burn, three hours after the interval's midpoint, and its residual is read at the fixed leads; a pair whose
+    own arc reaches a later burn is blank; the usable-trial median leaves the manoeuvre rows out; a burn after the
+    span and a burn with no set after it are listed apart; one burn gives no correlation."""
+    epochs = [pd.Timestamp("2024-04-20T00:00:00") + pd.Timedelta(hours=8 * k) for k in range(6)]
+    rows = []
+    for k, e in enumerate(epochs):
+        for lead in reference_run.POST_BURN_LEADS_H:
+            rows.append(
+                {
+                    "mission": "x",
+                    "window": "quiet",
+                    "set_epoch": e,
+                    "lead_h": lead,
+                    "t": e + pd.Timedelta(hours=lead),
+                    "gap": False,
+                    "sgp4_error": 0,
+                    "manoeuvre": k == 2,
+                    "in_track_km": 20.0 if k == 2 else 0.5 * (k + 1),
+                }
+            )
+    trials = pd.DataFrame(rows)
+    coverage = {
+        "x": {
+            "quiet": {
+                "manoeuvres_recorded": None,
+                "manoeuvres_detected_orbit": [
+                    ["2024-04-20T12:00:00", "2024-04-20T14:00:00"],
+                    ["2024-04-27T10:00:00", "2024-04-27T12:00:00"],
+                ],
+                "manoeuvres_detected_sets": [],
+            },
+            "storm": {
+                "manoeuvres_recorded": [["2024-05-12T23:00:00", "2024-05-12T23:05:00"]],
+                "manoeuvres_detected_orbit": [],
+                "manoeuvres_detected_sets": [],
+            },
+        }
+    }
+    windows = {
+        "quiet": {"sets_from": "2024-04-20T00:00:00+00:00", "sets_to": "2024-04-27T00:00:00+00:00"},
+        "storm": {"sets_from": "2024-05-06T00:00:00+00:00", "sets_to": "2024-05-13T00:00:00+00:00"},
+    }
+    post = reference_run.summarise_post_burn(trials, coverage, windows)
+    (burn,) = post["burns"]
+    assert burn["source"] == "orbit-step" and burn["cadence_h"] == 8.0
+    assert burn["n_sets"] == 6 and burn["n_sets_after"] == 4 and burn["burn_mid"] == "2024-04-20T13:00:00"
+    first, second, third = burn["sets_after"]
+    assert first["k"] == 1 and first["delay_h"] == pytest.approx(3.0) and first["in_track_km"]["24"] == 20.0
+    assert first["in_track_km"]["168"] is None, "its seven-day arc reaches the burn of 27 April"
+    assert second["delay_h"] == pytest.approx(11.0) and second["in_track_km"]["96"] == 2.0
+    assert third["in_track_km"]["24"] == 2.5
+    assert burn["clear_median_km"]["24"] == pytest.approx(2.0), "sets 1, 2, 4, 5, 6: 0.5, 1.0, 2.0, 2.5, 3.0"
+    assert post["burns_after_the_span"] == [
+        {
+            "mission": "x",
+            "window": "quiet",
+            "source": "orbit-step",
+            "burn_from": "2024-04-27T10:00:00",
+            "burn_to": "2024-04-27T12:00:00",
+        }
+    ]
+    assert post["burns_without_a_set_after"][0]["source"] == "record"
+    assert post["rank_correlation"]["per_burn"]["n"] == 1
+    assert post["rank_correlation"]["per_burn"]["cadence"]["24"]["rho"] is None
+    assert reference_run.summarise_post_burn(pd.DataFrame(), coverage, windows)["burns"] == []
+    names = {"x": "X"}
+    text = "\n".join(reference_run._post_burn_section(post, names))
+    assert "| X | quiet | 2024-04-20 13:00, orbit-step | 6, 8.0 h | 3.0 h; 20.0 / 20.0 / 20.0 / - |" in text
+    assert "Burns after a span" in text and "no set issued after them" in text

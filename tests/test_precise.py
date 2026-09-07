@@ -379,3 +379,8 @@ def test_a_trial_against_a_truth_built_from_its_own_set_has_no_residual_and_the_
     assert not precise.satellite_trials(inputs, orbit, window, None, leads_hours=leads, published=old_burn)[
         "manoeuvre"
     ].any()
+
+    # Intervals handed in as already detected are the detection, on the same arc, and the source says so.
+    handed = precise.satellite_trials(inputs, orbit, window, None, leads_hours=leads, detected=burn)
+    assert handed["manoeuvre"].all() and handed["manoeuvre_detected"].all()
+    assert handed["manoeuvre_source"].eq("detected").all()

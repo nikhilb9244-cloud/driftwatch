@@ -803,6 +803,7 @@ def satellite_trials(
     published: list[tuple[Any, Any]] | None = None,
     arc_hours: float = MANOEUVRE_ARC_HOURS,
     record_label: str = "esa-record",
+    detected: list[tuple[pd.Timestamp, pd.Timestamp]] | None = None,
 ) -> pd.DataFrame:
     """One row per element set per lead: the residual against the precise orbit and everything that qualifies it.
 
@@ -817,8 +818,12 @@ def satellite_trials(
     as a cross-check; without a record it is what excludes. ``manoeuvre_source`` says which on
     every row. (Until 2026-09-07 the detection looked only from the epoch onwards, so a set whose
     tracking arc spanned a burn was kept on the detection-only missions; Sentinel-3B showed it.)
+    ``detected`` hands in the two detectors' intervals where the caller already has them, as the
+    reference run does so that it can record them beside the result; left ``None`` they are
+    computed here.
     """
-    detected = manoeuvre_intervals_from_orbit(orbit) + manoeuvre_intervals_from_sets(inputs.sets)
+    if detected is None:
+        detected = manoeuvre_intervals_from_orbit(orbit) + manoeuvre_intervals_from_sets(inputs.sets)
     if record is not None:
         published_intervals: list[tuple[pd.Timestamp, pd.Timestamp]] | None = list(record.intervals)
         source = record_label

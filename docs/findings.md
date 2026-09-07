@@ -381,7 +381,8 @@ window but one: October at 800 km is 5 d (31 km at 6 d), carried by SARAL (4 d) 
 (5 d) while Sentinel-3B holds 7 d. The 7-day in-track median at 1,338 km is 0.4 to 0.8 km in three
 windows and 4.4 km in May.
 
-**Sentinel-3B, diagnosed 2026-09-07.** In the first run of this expansion the October figure at
+**Corrected 2026-09-07: the two manoeuvre-exclusion paths used different spans, and the detection
+path was brought to the record path's.** In the first run of this expansion the October figure at
 800 km was 3 d, carried by Sentinel-3B while Sentinel-3A, in the same orbit, held 7 d; 3B was also
 the short mission in the quiet week (4 d) and in August (4 d). The two spacecraft are alike in every
 element-set property compared: B-star of the same sign and size with no sign change in any window,
@@ -390,21 +391,71 @@ the same spread of epochs; they differ in cadence, a set every 6.7 hours for 3A 
 either, so their manoeuvre exclusion rests on the reconstructed orbit's own step detector, which
 finds one burn per spacecraft per window (two for 3A in October, two for 3B in August) and which the
 element sets never show, the set-jump detector finding none. The cause was in the exclusion rule.
-The record path (Swarm, GRACE-FO) excludes a set with a burn in the 24 hours before its epoch, since
-the network's fit spans the burn and the set is wrong from its epoch on; the detection path excluded
-only pairs whose propagation arc, from the epoch to the lead, crossed the burn. Every short 3B window
-was carried by the one set issued a few hours after that window's burn (10 October 10:20 UTC, an
-hour after a burn ending 09:25, +33 km at four days; 25 April 14:38, +25 km; 13 August 22:11,
-+30 km), and with 7 to 10 usable sets per window one such set is the 95th percentile. Why 3B's first
-post-burn sets are wrong by tens of kilometres and 3A's, after burns of the same kind, are not is
-recorded as open; the sets do not say how they were fitted. With the same 24-hour arc on both paths
-(`precise.MANOEUVRE_ARC_HOURS`) Sentinel-3B is at 7 d in the quiet week and October and 5 d in
-August, and the table above is the corrected one. The rule reaches every detection-only mission:
-CryoSat-2 in August and Sentinel-1A in May go from 6 d to 5 d, SWOT in October from 5 d to 7 d, and
-Sentinel-3A in October from 7 d to 5 d, because the pairs the arc removes were well-behaved ones and
-the set of 11 October 03:49, issued into the storm, now carries the 95th percentile on 25 sets. The
-October figures at 800 km for SARAL (4 d, 25 km at 5 d) and 3A are storm effects on 17 to 27 sets,
-not diagnosed further.
+The record path (Swarm, GRACE-FO) had from the first run dropped every set with a burn in the 24
+hours before its epoch, the tracking arc the set was fitted from, since such a set is wrong from its
+epoch on; the detection path had not: it dropped only pairs whose propagation arc, from the epoch to
+the lead, crossed the burn. Every short 3B window was carried by the one set issued a few hours
+after that window's burn (10 October 10:20 UTC, an hour after a burn ending 09:25, +33 km at four
+days; 25 April 14:38, +25 km; 13 August 22:11, +30 km), and with 7 to 10 usable sets per window one
+such set is the 95th percentile. The record path's rule was extended to the detection path without
+change, the same 24-hour arc (`precise.MANOEUVRE_ARC_HOURS`) on both, and the benchmark rerun with
+nothing else altered. The extension was applied after the results on the held-out windows had been
+seen: the rule and its arc were fixed on the record path before any held-out result existed and
+were not tuned, but the decision to apply them to the detection path was taken with the October and
+August results in view, and the held-out figures in the two bands it moved carry that
+qualification. It moved the 750-850 km October horizon up, from 3 d to 5 d, and the 600-750 km
+August horizon down, from 6 d to 5 d; the 460 to 507 km result, the five spacecraft with a published
+record, is unchanged in every window. Per mission: Sentinel-3B from 4 d, 7 d, 3 d, 4 d to 7 d, 7 d,
+7 d, 5 d; CryoSat-2 in August and Sentinel-1A in May from 6 d to 5 d; SWOT in October from 5 d to
+7 d; Sentinel-3A in October from 7 d to 5 d, because the pairs the arc removes were well-behaved
+ones and the set of 11 October 03:49, issued into the storm, now carries the 95th percentile on 25
+sets; the usable sets from 1,228 to 1,201. The table above is the corrected one; the table as it
+stood before the correction is kept here, and `docs/reference-benchmark.md` keeps both of its
+tables beside the correction:
+
+| Band (mean altitude of the sets) | Spacecraft | quiet | May 2024 | October 2024 | August 2024 |
+| --- | --- | --- | --- | --- | --- |
+| 460 to 507 km | Swarm A, B, C; GRACE-FO 1, 2 | 5 d | 2 d | 24 h | 2 d |
+| 696 to 719 km | Sentinel-1A, CryoSat-2 | 5 d | 5 d | 7 d | 6 d |
+| 783 to 803 km | SARAL, Sentinel-3A, 3B | 7 d | 7 d | 3 d | 7 d |
+| 893 to 952 km | SWOT, HY-2C, 2D | 7 d | 7 d | 7 d | 7 d |
+| 1,338 km | Jason-3, Sentinel-6A | 7 d | 7 d | 7 d | 7 d |
+
+The October figures at 800 km for SARAL (4 d, 25 km at 5 d) and 3A are storm effects on 17 to 27
+sets, not diagnosed further. Why 3B's first post-burn sets are wrong by tens of kilometres and 3A's,
+after burns of the same kind, are not was recorded open at the time; the next paragraph tests the
+one property the two were seen to differ in.
+
+**The cadence hypothesis, tested 2026-09-08.** The candidate explanation was the cadence of the
+element sets. Tested on every benchmark mission with a burn inside a window's set span and a set
+issued after it (`docs/reference-benchmark.md`, "The first element sets after a burn"): twelve burns
+on six spacecraft at 700 to 950 km, Sentinel-1A, CryoSat-2, Sentinel-3A, Sentinel-3B, SWOT and
+HY-2D, in all four windows, each burn placed by the orbit-step detector on the reconstructed orbit
+to about an orbit either side; the recorded burns of Swarm and GRACE-FO all fell after their
+windows' sets, so no record mission is in the population. The measure is the first set issued after
+each burn, its absolute in-track residual at fixed leads, against the mission's cadence in that
+window, the median gap between consecutive sets. The rank correlation with cadence at four days is
++0.78 per burn (n = 12, p = 0.003), and it is Sentinel-3B: its three burns are the three sparsest
+cadences (10 to 13 hours against 6.6 to 8.6) and the three largest residuals (25, 30 and 33 km).
+Without them the correlation is +0.48 on nine burns (p = 0.19), and with the spacecraft as the unit,
+means over each one's burns, +0.66 on six (p = 0.16). **Error does not scale with cadence on this
+population; the association is one spacecraft.** What holds at every level is the delay between the
+burn and the first set's epoch: −0.71 per burn (p = 0.010), −0.62 without 3B (p = 0.077), −0.89 per
+spacecraft (p = 0.019). The seven first sets issued within ten hours of the burn are wrong at four
+days by 2.3 to 33 km (19 to 33 on Sentinel-3B and SWOT, 2.3 to 4.6 on Sentinel-1A and CryoSat-2);
+the five issued twelve hours or later by 0.1 to 2.3 km; at a day, 0.6 to 9.6 km against 0.1 to 0.9.
+The second set after every burn is within 5.3 km at four days and the third within 8.3. The burn's
+size does not order it: Sentinel-3A's burns raised the semi-major axis by 66 and 75 m, as much as
+3B's 41 to 65 m, and the two largest, HY-2D's 95 m and CryoSat-2's 86 m, left the smallest
+residuals because their first sets came 59 and 10 hours later. So the two Sentinel-3 spacecraft
+differ not in cadence but in when the network issued the first set after each burn: 3A's came 12
+and 19 hours after its burns, 3B's 3 to 8 hours after, and the sparser catalogue got its first
+post-burn set sooner. What is measured about catalogue production is this: a set issued within
+hours of a burn is fitted across it and is wrong along track by kilometres to tens of kilometres
+from its epoch, and the next set is not; how long after a burn the first set is issued differs by
+object, and the sets do not say why. Why a set issued a few hours after a burn is wrong by 19 to
+33 km on Sentinel-3B and SWOT and by 2 to 5 km on Sentinel-1A and CryoSat-2 is not ordered by
+cadence, by delay or by burn size, and that part of the 3B question stays open.
 
 **Coverage of the empirical covariance** (in-track, inside two sigma, 95 per cent claimed). At 460
 to 507 km on five spacecraft item 6 repeats: 98 to 100 per cent in the quiet week from one to seven

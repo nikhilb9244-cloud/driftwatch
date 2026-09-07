@@ -182,6 +182,76 @@ The share of in-track residuals inside two sigma of the covariance the screening
 | Jason-3 | 1000-1400 km | 7 d (every lead measured) (19 sets) | 7 d (every lead measured) (18 sets) | 7 d (every lead measured) (17 sets) | 7 d (every lead measured) (17 sets) |
 | Sentinel-6A | 1000-1400 km | 7 d (every lead measured) (18 sets) | 7 d (every lead measured) (15 sets) | 7 d (every lead measured) (15 sets) | 7 d (every lead measured) (18 sets) |
 
+## Methodology correction, 7 September 2026: one manoeuvre-exclusion rule on both paths
+
+Manoeuvre arcs are excluded on two paths. Where a published thruster record exists (Swarm, GRACE-FO), the record path has from the first run dropped every set-lead pair with a burn between 24 hours before the set's epoch, the tracking arc the set was fitted from, and the lead's time. Where no record exists (the CNES, Copernicus and laser-only missions) detection decides, and until 7 September 2026 the detection path dropped only the pairs whose propagation arc, from the epoch to the lead, crossed a detected burn: a set fitted across a burn in the 24 hours before its epoch was kept. The record path's rule was extended to the detection path without change, the same 24-hour arc (`precise.MANOEUVRE_ARC_HOURS`) on both, and the benchmark was rerun with nothing else altered.
+
+The extension was applied after the results on the held-out windows had been seen: Sentinel-3B's October figure, 3 d against Sentinel-3A's 7 d in the same orbit, is what exposed the difference between the two paths. The rule and its arc were fixed on the record path before any held-out result existed and were not tuned, but the decision to apply them to the detection path was taken with the October and August results in view, and the held-out figures in the two bands the rule moved carry that qualification.
+
+It moved two figures in the band table: the 750-850 km October horizon up, from 3 d (26 km at 4 d) to 5 d (31 km at 6 d), and the 600-750 km August horizon down, from 6 d to 5 d, every lead measured in both. The 400-600 km row, the five spacecraft with a published record, is unchanged in every window: 5 d, 2 d, 24 h, 2 d. Per mission it moved Sentinel-3B from 4 d, 7 d, 3 d, 4 d to 7 d, 7 d, 7 d, 5 d, Sentinel-3A in October from 7 d to 5 d, Sentinel-1A in May from 6 d to 5 d, CryoSat-2 in August from 6 d to 5 d, and SWOT in October from 5 d to 7 d; the usable element sets went from 1,228 to 1,201. Both tables as they stood before the correction are kept below, as rendered on 7 September 2026 from the run of that day under the earlier detection rule; the two tables above are the corrected ones.
+
+**The horizon by altitude band and window, before the correction.**
+
+| Altitude band | Missions | quiet | storm | held-out | august |
+| --- | --- | --- | --- | --- | --- |
+| 400-600 km | GRACE-FO 1 (C), GRACE-FO 2 (D), Swarm A, Swarm B, Swarm C | 5 d (37 km at 6 d) | 2 d (35 km at 3 d) | 24 h (34 km at 36 h) | 2 d (38 km at 3 d) |
+| 600-750 km | CryoSat-2, Sentinel-1A | 5 d (26 km at 6 d) | 5 d (27 km at 6 d) | 7 d (every lead measured) | 6 d (every lead measured) |
+| 750-850 km | SARAL, Sentinel-3A, Sentinel-3B | 7 d (every lead measured) | 7 d (every lead measured) | 3 d (26 km at 4 d) | 7 d (every lead measured) |
+| 850-1000 km | HY-2C, HY-2D, SWOT | 7 d (every lead measured) | 7 d (every lead measured) | 7 d (every lead measured) | 7 d (every lead measured) |
+| 1000-1400 km | Jason-3, Sentinel-6A | 7 d (every lead measured) | 7 d (every lead measured) | 7 d (every lead measured) | 7 d (every lead measured) |
+
+**The horizon by mission and window, before the correction.**
+
+| Mission | Band | quiet | storm | held-out | august |
+| --- | --- | --- | --- | --- | --- |
+| Swarm A | 400-600 km | 5 d (42 km at 6 d) (19 sets) | 2 d (36 km at 3 d) (18 sets) | 24 h (38 km at 36 h) (21 sets) | 36 h (29 km at 2 d) (19 sets) |
+| Swarm B | 400-600 km | 5 d (38 km at 6 d) (19 sets) | 2 d (33 km at 3 d) (19 sets) | 2 d (51 km at 3 d) (19 sets) | 3 d (42 km at 4 d) (19 sets) |
+| Swarm C | 400-600 km | 5 d (39 km at 6 d) (19 sets) | 2 d (37 km at 3 d) (17 sets) | 24 h (38 km at 36 h) (21 sets) | 36 h (26 km at 2 d) (19 sets) |
+| GRACE-FO 1 (C) | 400-600 km | 6 d (34 km at 7 d) (19 sets) | 2 d (25 km at 3 d) (18 sets) | 36 h (39 km at 2 d) (19 sets) | 2 d (34 km at 3 d) (18 sets) |
+| GRACE-FO 2 (D) | 400-600 km | 6 d (32 km at 7 d) (19 sets) | 3 d (25 km at 4 d) (19 sets) | 24 h (26 km at 36 h) (20 sets) | 2 d (34 km at 3 d) (18 sets) |
+| Sentinel-1A | 600-750 km | 5 d (27 km at 6 d) (31 sets) | 6 d (every lead measured) (33 sets) | 4 d (27 km at 5 d) (27 sets) | 5 d (every lead measured) (26 sets) |
+| CryoSat-2 | 600-750 km | 7 d (every lead measured) (18 sets) | 5 d (27 km at 6 d) (18 sets) | 7 d (every lead measured) (17 sets) | 6 d (every lead measured) (18 sets) |
+| SARAL | 750-850 km | 7 d (every lead measured) (19 sets) | 7 d (every lead measured) (19 sets) | 4 d (25 km at 5 d) (17 sets) | 7 d (every lead measured) (18 sets) |
+| Sentinel-3A | 750-850 km | 7 d (every lead measured) (29 sets) | 7 d (every lead measured) (30 sets) | 7 d (every lead measured) (27 sets) | 5 d (every lead measured) (32 sets) |
+| Sentinel-3B | 750-850 km | 4 d (27 km at 5 d) (15 sets) | 7 d (every lead measured) (19 sets) | 3 d (27 km at 4 d) (13 sets) | 4 d (31 km at 5 d) (17 sets) |
+| SWOT | 850-1000 km | 7 d (every lead measured) (21 sets) | 7 d (every lead measured) (19 sets) | 5 d (25 km at 6 d) (20 sets) | 7 d (every lead measured) (17 sets) |
+| HY-2C | 850-1000 km | 7 d (every lead measured) (30 sets) | 7 d (every lead measured) (34 sets) | 7 d (every lead measured) (26 sets) | 7 d (every lead measured) (25 sets) |
+| HY-2D | 850-1000 km | 7 d (every lead measured) (27 sets) | 7 d (every lead measured) (29 sets) | 7 d (every lead measured) (19 sets) | 6 d (every lead measured) (23 sets) |
+| Jason-3 | 1000-1400 km | 7 d (every lead measured) (19 sets) | 7 d (every lead measured) (18 sets) | 7 d (every lead measured) (17 sets) | 7 d (every lead measured) (17 sets) |
+| Sentinel-6A | 1000-1400 km | 7 d (every lead measured) (18 sets) | 7 d (every lead measured) (15 sets) | 7 d (every lead measured) (15 sets) | 7 d (every lead measured) (18 sets) |
+
+## The first element sets after a burn, against cadence and delay
+
+Every burn that fell inside a window's set span with a set issued after it, from the published record where one exists and otherwise from the orbit-step detector on the reconstructed orbit, which places a burn to about an orbit either side: the cadence of the mission's sets in the window (the median gap between consecutive epochs) and, for the first 3 sets issued after the burn, the delay from the burn and the absolute in-track residual at 24 h / 3 d / 4 d / 7 d, km, beside the median of the window's usable trials at the same leads for scale. A pair whose own arc reaches a later burn is blank. The set-jump detector's intervals are not read as burns here: a storm produces them too.
+
+| Mission | Window | Burn (UTC), how found | Sets, cadence | First set after: delay; residual at 24 h / 3 d / 4 d / 7 d | Second set after: delay; residual at 24 h / 3 d / 4 d / 7 d | Third set after: delay; residual at 24 h / 3 d / 4 d / 7 d | Usable-trial median at 24 h / 3 d / 4 d / 7 d |
+| --- | --- | --- | --- | --- | --- | --- | --- |
+| Sentinel-1A | storm | 2024-05-07 21:55, orbit-step | 33, 6.6 h | 6.2 h; 1.5 / 3.2 / 4.2 / - | 14.5 h; 0.0 / 0.4 / 0.6 / - | 16.1 h; 0.8 / 0.4 / 1.1 / - | 0.9 / 1.0 / 0.9 / - |
+| CryoSat-2 | quiet | 2024-04-24 15:35, orbit-step | 18, 8.3 h | 5.4 h; 0.7 / 2.7 / 4.6 / 10.0 | 7.0 h; 1.2 / 3.2 / 5.3 / 10.4 | 21.9 h; 0.4 / 0.0 / 0.6 / 2.3 | 0.4 / 0.6 / 0.8 / 1.7 |
+| CryoSat-2 | held-out | 2024-10-09 03:47, orbit-step | 17, 8.3 h | 9.6 h; 0.6 / 2.3 / 2.3 / 4.4 | 16.2 h; 0.2 / 3.4 / 4.9 / 12.6 | 34.4 h; 1.3 / 6.2 / 8.3 / 21.4 | 1.0 / 3.7 / 5.0 / 14.3 |
+| CryoSat-2 | august | 2024-08-08 17:15, orbit-step | 18, 8.3 h | 18.6 h; 0.7 / 1.9 / 2.3 / - | 20.2 h; 1.2 / 2.4 / 2.9 / - | 28.5 h; 0.4 / 0.5 / 1.1 / - | 0.8 / 1.9 / 3.0 / - |
+| Sentinel-3A | quiet | 2024-04-24 09:00, orbit-step | 29, 6.7 h | 18.5 h; 0.3 / 0.8 / 0.2 / 1.6 | 26.9 h; 0.4 / 0.8 / 0.5 / 1.2 | 28.6 h; 0.6 / 1.5 / 0.8 / 0.6 | 0.6 / 1.5 / 1.2 / 1.6 |
+| Sentinel-3A | held-out | 2024-10-06 07:43, orbit-step | 27, 6.7 h | 11.7 h; 0.9 / 0.1 / 0.1 / 2.1 | 13.4 h; 0.8 / 0.3 / 0.2 / 2.0 | 20.2 h; 0.4 / 1.2 / 1.1 / 3.0 | 0.9 / 1.5 / 2.2 / 2.6 |
+| Sentinel-3B | quiet | 2024-04-25 07:52, orbit-step | 15, 10.1 h | 6.8 h; 7.0 / 18.6 / 25.3 / 44.9 | 20.2 h; 0.9 / 4.1 / 5.1 / 11.5 | 30.3 h; 0.1 / 1.1 / 2.8 / 6.8 | 0.7 / 1.1 / 2.8 / 7.0 |
+| Sentinel-3B | held-out | 2024-10-10 06:55, orbit-step | 13, 12.6 h | 3.4 h; 9.0 / 24.6 / 32.8 / 60.9 | 27.0 h; 0.2 / 0.2 / 0.8 / 3.1 | 35.4 h; 1.2 / 1.4 / 2.0 / 4.9 | 0.6 / 0.4 / 0.8 / 2.4 |
+| Sentinel-3B | august | 2024-08-13 13:51, orbit-step | 17, 10.9 h | 8.3 h; 9.6 / 22.4 / 30.1 / - | 15.1 h; 0.4 / 1.2 / 1.0 / - | 20.1 h; 0.2 / 0.7 / 0.6 / - | 0.5 / 0.5 / 0.9 / - |
+| SWOT | held-out | 2024-10-11 14:18, orbit-step | 20, 8.6 h | 2.4 h; 5.8 / 14.9 / 19.3 / 32.4 | 23.0 h; 0.1 / 0.6 / 0.7 / 1.7 | 29.8 h; 0.4 / 0.8 / 0.8 / 1.8 | 0.4 / 0.9 / 0.7 / 1.8 |
+| HY-2D | storm | 2024-05-07 06:30, orbit-step | 29, 6.9 h | 13.8 h; 0.5 / 0.4 / 0.2 / 2.4 | 15.5 h; 0.6 / 0.8 / 0.0 / 2.8 | 22.5 h; 0.1 / 0.4 / 1.7 / 3.7 | 0.5 / 0.7 / 1.4 / 3.7 |
+| HY-2D | held-out | 2024-10-10 01:56, orbit-step | 19, 6.9 h | 58.6 h; 0.1 / 0.4 / 0.4 / 2.1 | 67.3 h; 0.4 / 0.6 / 0.4 / 3.5 | - | 0.3 / 0.4 / 0.4 / 2.8 |
+
+Spearman rank correlation of the first set's residual with the cadence and with the delay after the burn, per burn (12) and per spacecraft, the means over each one's burns (6):
+
+| Lead | Per burn, cadence | Per burn, delay | Per spacecraft, cadence | Per spacecraft, delay |
+| --- | --- | --- | --- | --- |
+| 24 h | +0.67 (n 12, p 0.017) | -0.69 (n 12, p 0.014) | +0.60 (n 6, p 0.208) | -0.94 (n 6, p 0.005) |
+| 3 d | +0.73 (n 12, p 0.007) | -0.76 (n 12, p 0.004) | +0.60 (n 6, p 0.208) | -0.94 (n 6, p 0.005) |
+| 4 d | +0.78 (n 12, p 0.003) | -0.71 (n 12, p 0.010) | +0.66 (n 6, p 0.156) | -0.89 (n 6, p 0.019) |
+| 7 d | +0.97 (n 9, p 0.000) | -0.88 (n 9, p 0.002) | +1.00 (n 5, p 0.000) | -0.80 (n 5, p 0.104) |
+
+Burns inside a span with no set issued after them before the span's end: Sentinel-1A, august (2024-08-13 19:47 to 23:39, orbit-step); Sentinel-3A, august (2024-08-14 11:47 to 18:42, orbit-step).
+
+Burns after a span's last set, inside the truth period, which take out only the leads of earlier sets: Swarm A, held-out (2024-10-15 21:07 to 21:08, record); Swarm A, held-out (2024-10-15 21:54 to 21:54, record); Swarm B, held-out (2024-10-17 22:58 to 23:23, record); GRACE-FO 2 (D), storm (2024-05-15 06:11 to 06:14, record); Sentinel-1A, storm (2024-05-14 19:47 to 23:49, orbit-step); Sentinel-1A, storm (2024-05-16 12:32 to 15:49, orbit-step); Sentinel-1A, storm (2024-05-16 19:08 to 22:42, orbit-step); Sentinel-1A, held-out (2024-10-13 20:00 to 01:10, orbit-step); CryoSat-2, august (2024-08-15 15:55 to 19:43, orbit-step); Sentinel-3A, storm (2024-05-16 06:00 to 09:39, orbit-step); Sentinel-3A, held-out (2024-10-17 06:14 to 09:50, orbit-step); Sentinel-3B, storm (2024-05-15 05:16 to 09:52, orbit-step); Sentinel-3B, august (2024-08-20 06:57 to 11:20, orbit-step); HY-2C, storm (2024-05-15 00:13 to 03:45, orbit-step); HY-2C, august (2024-08-20 10:39 to 14:26, orbit-step); HY-2D, august (2024-08-15 06:09 to 10:37, orbit-step).
+
 ## Laser ranging: how the two references disagree
 
 Observed minus predicted one-way range of the reconstructed orbit against every ILRS normal point of the window above 20 degrees of elevation, metres: the median, the RMS and the 95th percentile of the absolute residual, with the number of points and stations. Marini-Murray troposphere from the station's own meteorology; station coordinates SLRF2020 with the ILRS site eccentricities; the retroreflector's offset from the centre of mass is not applied, so the figures bound the disagreement at the metre level and do not validate either product at its own centimetre level.

@@ -23,6 +23,7 @@ from typing import Any
 
 import numpy as np
 import pandas as pd
+from scipy import stats
 
 from driftwatch import config
 from driftwatch.catalogue import history
@@ -68,6 +69,9 @@ class MissionWindowRun:
     orbit_vs_slr: dict[str, Any] | None
     sgp4_vs_slr: pd.DataFrame | None
     notes: list[str] = field(default_factory=list)
+    # What the two detectors found, recorded whether or not a record decided the exclusions.
+    manoeuvres_detected_orbit: list[tuple[pd.Timestamp, pd.Timestamp]] = field(default_factory=list)
+    manoeuvres_detected_sets: list[tuple[pd.Timestamp, pd.Timestamp]] = field(default_factory=list)
 
 
 def _sgp4_residuals_by_lead(
@@ -156,6 +160,10 @@ def run_mission_window(
         mission.norad_id, sets, window, grid, label=mission.key, category="payload", altitude_band="leo"
     )
     n_sets = len(inputs.trial_sets)
+    # Both detectors once per mission-window, kept with the result: they decide the exclusions where
+    # no record exists, and the post-burn table needs the intervals back.
+    detected_orbit = precise.manoeuvre_intervals_from_orbit(orbit) if orbit is not None else []
+    detected_sets = precise.manoeuvre_intervals_from_sets(inputs.sets) if len(inputs.sets) else []
     log.info(
         "%s, %s window: %d trial sets, covariance %s from %d sets, coefficient %s, truth %s",
         mission.name,
@@ -171,7 +179,9 @@ def run_mission_window(
         label = {reference.MANOEUVRES_ESA: "esa-record", reference.MANOEUVRES_GRACEFO: "thr1b-record"}.get(
             mission.manoeuvres, "esa-record"
         )
-        trials = precise.satellite_trials(inputs, orbit, window, grid, record=record, record_label=label)
+        trials = precise.satellite_trials(
+            inputs, orbit, window, grid, record=record, record_label=label, detected=detected_orbit + detected_sets
+        )
         alt = mean_altitude_km(inputs.trial_sets["mean_motion"].to_numpy(dtype=float))
         by_epoch = dict(zip(pd.to_datetime(inputs.trial_sets["epoch"], utc=True).dt.tz_convert(None), alt, strict=True))
         trials["altitude_km"] = [by_epoch.get(pd.Timestamp(e), np.nan) for e in trials["set_epoch"]]
@@ -194,14 +204,21 @@ def run_mission_window(
             res = slr.range_residuals(points, orbit_fn, stations)
             orbit_vs_slr = {**slr.residual_summary(res), "dropped": res.attrs.get("dropped", {})}
         if len(points) and n_sets:
-            if record is not None:
-                excluded = list(record.intervals)
-            else:
-                excluded = precise.manoeuvre_intervals_from_sets(inputs.sets)
-                if orbit is not None:
-                    excluded += precise.manoeuvre_intervals_from_orbit(orbit)
+            excluded = list(record.intervals) if record is not None else detected_sets + detected_orbit
             sgp4_vs_slr = _sgp4_residuals_by_lead(mission, window, inputs, points, stations, excluded)
-    return MissionWindowRun(mission, window, orbit, record, n_sets, trials, orbit_vs_slr, sgp4_vs_slr, notes)
+    return MissionWindowRun(
+        mission,
+        window,
+        orbit,
+        record,
+        n_sets,
+        trials,
+        orbit_vs_slr,
+        sgp4_vs_slr,
+        notes,
+        detected_orbit,
+        detected_sets,
+    )
 
 
 # --------------------------------------------------------------------------------------
@@ -323,6 +340,170 @@ def summarise_sgp4_vs_slr_by_mission(frame: pd.DataFrame) -> dict[str, Any]:
     return out
 
 
+# --------------------------------------------------------------------------------------
+# The first element sets after a burn
+
+# The leads at which the first sets after a burn are tabulated, and how many sets after each burn.
+POST_BURN_LEADS_H: tuple[float, ...] = (24.0, 72.0, 96.0, 168.0)
+POST_BURN_SETS = 3
+
+
+def _naive(ts: Any) -> pd.Timestamp:
+    t = pd.Timestamp(ts)
+    return t.tz_convert(None) if t.tzinfo else t
+
+
+def burn_intervals(entry: dict[str, Any]) -> tuple[list[tuple[pd.Timestamp, pd.Timestamp]], str]:
+    """The burns a mission-window's exclusion rests on: the published record's where one exists, otherwise the
+    orbit-step detector's on the reconstructed orbit. The set-jump detector's intervals are not burns by
+    themselves (a storm produces them too) and are not read as burns here."""
+    recorded = entry.get("manoeuvres_recorded")
+    if recorded is not None:
+        return [(_naive(a), _naive(b)) for a, b in recorded], "record"
+    return [(_naive(a), _naive(b)) for a, b in entry.get("manoeuvres_detected_orbit") or []], "orbit-step"
+
+
+def _spearman(x: Any, y: Any) -> dict[str, Any]:
+    x = np.asarray(x, dtype=float)
+    y = np.asarray(y, dtype=float)
+    m = np.isfinite(x) & np.isfinite(y)
+    if m.sum() < 4:
+        return {"n": int(m.sum()), "rho": None, "p": None}
+    rho, p = stats.spearmanr(x[m], y[m])
+    return {"n": int(m.sum()), "rho": float(rho), "p": float(p)}
+
+
+def summarise_post_burn(trials: pd.DataFrame, coverage: dict[str, Any], windows: dict[str, Any]) -> dict[str, Any]:
+    """Every burn inside a window's set span with a set issued after it, and what the first sets after it did.
+
+    Per burn: the mission's cadence in the window (the median gap between consecutive trial-set
+    epochs), then for the first ``POST_BURN_SETS`` sets issued after the burn the delay from the
+    burn and the absolute in-track residual at ``POST_BURN_LEADS_H``, beside the median of the
+    window's usable trials at the same leads for scale. The delay is measured from the burn
+    interval's midpoint, so for a detected burn it carries the detector's resolution of about an
+    orbit either side. A pair whose own arc, from its epoch to the lead, reaches a later burn is
+    left blank. The rank correlations of the first set's residual with the cadence and with the
+    delay are given per burn and per spacecraft (means over each spacecraft's burns), because one
+    spacecraft's burns are not independent of one another.
+    """
+    leads = POST_BURN_LEADS_H
+    empty = {
+        "leads_h": list(leads),
+        "sets_after": POST_BURN_SETS,
+        "burns": [],
+        "burns_without_a_set_after": [],
+        "burns_after_the_span": [],
+        "rank_correlation": {},
+    }
+    if not len(trials):
+        return empty
+    t = trials.assign(set_epoch=pd.to_datetime(trials["set_epoch"]), t=pd.to_datetime(trials["t"]))
+    burns: list[dict[str, Any]] = []
+    without: list[dict[str, Any]] = []
+    after_span: list[dict[str, Any]] = []
+    for mission, by_w in coverage.items():
+        for wname, entry in by_w.items():
+            w = windows.get(wname)
+            if w is None:
+                continue
+            sets_from, sets_to = _naive(w["sets_from"]), _naive(w["sets_to"])
+            intervals, source = burn_intervals(entry)
+            detected_sets = [(_naive(a), _naive(b)) for a, b in entry.get("manoeuvres_detected_sets") or []]
+            g = t[(t["mission"] == mission) & (t["window"] == wname)]
+            epochs = np.array(sorted(g["set_epoch"].unique()), dtype="datetime64[us]")
+            for lo, hi in intervals:
+                head = {
+                    "mission": mission,
+                    "window": wname,
+                    "source": source,
+                    "burn_from": lo.isoformat(),
+                    "burn_to": hi.isoformat(),
+                }
+                if lo >= sets_to:
+                    after_span.append(head)
+                    continue
+                if hi < sets_from:
+                    continue
+                after = [pd.Timestamp(e) for e in epochs if pd.Timestamp(e) > hi]
+                if not after or len(epochs) < 2:
+                    without.append(head)
+                    continue
+                mid = lo + (hi - lo) / 2
+                usable = g[~g["gap"] & ~g["manoeuvre"] & (g["sgp4_error"] == 0)]
+                clear = {
+                    f"{ld:g}": _q(usable[usable["lead_h"] == ld]["in_track_km"].abs().to_numpy(), 0.5) for ld in leads
+                }
+                later = [(a, b) for a, b in intervals + detected_sets if a > mid]
+                rows = []
+                for k, epoch in enumerate(after[:POST_BURN_SETS], start=1):
+                    sub = g[g["set_epoch"] == epoch]
+                    residual: dict[str, float | None] = {}
+                    for ld in leads:
+                        r = sub[sub["lead_h"] == ld]
+                        value = None
+                        if len(r):
+                            r0 = r.iloc[0]
+                            reaches_later = any(a <= r0["t"] and b >= epoch for a, b in later)
+                            clean = not bool(r0["gap"]) and int(r0["sgp4_error"]) == 0
+                            if not reaches_later and clean and np.isfinite(r0["in_track_km"]):
+                                value = float(abs(r0["in_track_km"]))
+                        residual[f"{ld:g}"] = value
+                    rows.append(
+                        {
+                            "k": k,
+                            "epoch": epoch.isoformat(),
+                            "delay_h": float((epoch - mid).total_seconds() / 3600.0),
+                            "in_track_km": residual,
+                        }
+                    )
+                burns.append(
+                    {
+                        **head,
+                        "burn_mid": mid.isoformat(),
+                        "cadence_h": float(np.median(np.diff(epochs) / np.timedelta64(1, "h"))),
+                        "n_sets": int(len(epochs)),
+                        "n_sets_after": len(after),
+                        "clear_median_km": clear,
+                        "sets_after": rows,
+                    }
+                )
+    corr: dict[str, Any] = {}
+    if burns:
+        keys = [f"{ld:g}" for ld in leads]
+        cadence = np.array([b["cadence_h"] for b in burns])
+        delay = np.array([b["sets_after"][0]["delay_h"] for b in burns])
+        first = {
+            key: np.array(
+                [
+                    np.nan if b["sets_after"][0]["in_track_km"][key] is None else b["sets_after"][0]["in_track_km"][key]
+                    for b in burns
+                ]
+            )
+            for key in keys
+        }
+        frame = pd.DataFrame({"mission": [b["mission"] for b in burns], "cadence": cadence, "delay": delay, **first})
+        means = frame.groupby("mission").mean(numeric_only=True)
+        corr = {
+            "per_burn": {
+                "n": len(burns),
+                "cadence": {k: _spearman(cadence, first[k]) for k in keys},
+                "delay": {k: _spearman(delay, first[k]) for k in keys},
+            },
+            "per_spacecraft": {
+                "n": int(len(means)),
+                "cadence": {k: _spearman(means["cadence"], means[k]) for k in keys},
+                "delay": {k: _spearman(means["delay"], means[k]) for k in keys},
+            },
+        }
+    return {
+        **empty,
+        "burns": burns,
+        "burns_without_a_set_after": without,
+        "burns_after_the_span": after_span,
+        "rank_correlation": corr,
+    }
+
+
 def rebuild_summary(
     summary: dict[str, Any],
     trials: pd.DataFrame,
@@ -334,6 +515,7 @@ def rebuild_summary(
     mission_map = {m.key: m for m in missions}
     out = dict(summary)
     out["results"] = summarise_trials(trials) if len(trials) else {"by_band": {}, "by_mission": {}}
+    out["results"]["post_burn"] = summarise_post_burn(trials, out.get("coverage", {}), out.get("windows", {}))
     out["sgp4_vs_slr"] = summarise_sgp4_vs_slr(sgp4_vs_slr, mission_map)
     out["sgp4_vs_slr_by_mission"] = summarise_sgp4_vs_slr_by_mission(sgp4_vs_slr)
     out["population"] = population_statement(missions, windows, trials)
@@ -418,6 +600,10 @@ def run_reference(
                     "manoeuvres_recorded": None
                     if r.record is None
                     else [[a.isoformat(), b.isoformat()] for a, b in r.record.intervals],
+                    "manoeuvres_detected_orbit": [
+                        [a.isoformat(), b.isoformat()] for a, b in r.manoeuvres_detected_orbit
+                    ],
+                    "manoeuvres_detected_sets": [[a.isoformat(), b.isoformat()] for a, b in r.manoeuvres_detected_sets],
                     "orbit_vs_slr": r.orbit_vs_slr,
                     "notes": r.notes,
                 }
@@ -432,6 +618,7 @@ def run_reference(
         "sgp4_vs_slr_by_mission": summarise_sgp4_vs_slr_by_mission(sgp4_vs_slr),
         "population": population_statement(missions, windows, trials),
     }
+    summary["results"]["post_burn"] = summarise_post_burn(trials, summary["coverage"], summary["windows"])
     return ReferenceResult(trials, sgp4_vs_slr, runs, summary, now)
 
 
@@ -477,7 +664,192 @@ def _horizon_text(h: dict[str, Any]) -> str:
     return f"{_lead(within)} ({h['quantile_km_there']:.0f} km at {_lead(beyond)})"
 
 
-def to_markdown(result: ReferenceResult, windows: list[BenchmarkWindow], missions: list[Mission]) -> str:
+# The methodology correction of 7 September 2026 stays on the page, with the two tables as they stood before it.
+CORRECTION_2026_09_07 = [
+    "",
+    "## Methodology correction, 7 September 2026: one manoeuvre-exclusion rule on both paths",
+    "",
+    "Manoeuvre arcs are excluded on two paths. Where a published thruster record exists (Swarm, GRACE-FO), the "
+    "record path has from the first run dropped every set-lead pair with a burn between 24 hours before the "
+    "set's epoch, the tracking arc the set was fitted from, and the lead's time. Where no record exists (the "
+    "CNES, Copernicus and laser-only missions) detection decides, and until 7 September 2026 the detection path "
+    "dropped only the pairs whose propagation arc, from the epoch to the lead, crossed a detected burn: a set "
+    "fitted across a burn in the 24 hours before its epoch was kept. The record path's rule was extended to the "
+    "detection path without change, the same 24-hour arc (`precise.MANOEUVRE_ARC_HOURS`) on both, and the "
+    "benchmark was rerun with nothing else altered.",
+    "",
+    "The extension was applied after the results on the held-out windows had been seen: Sentinel-3B's October "
+    "figure, 3 d against Sentinel-3A's 7 d in the same orbit, is what exposed the difference between the two "
+    "paths. The rule and its arc were fixed on the record path before any held-out result existed and were not "
+    "tuned, but the decision to apply them to the detection path was taken with the October and August results "
+    "in view, and the held-out figures in the two bands the rule moved carry that qualification.",
+    "",
+    "It moved two figures in the band table: the 750-850 km October horizon up, from 3 d (26 km at 4 d) to 5 d "
+    "(31 km at 6 d), and the 600-750 km August horizon down, from 6 d to 5 d, every lead measured in both. The "
+    "400-600 km row, the five spacecraft with a published record, is unchanged in every window: 5 d, 2 d, 24 h, "
+    "2 d. Per mission it moved Sentinel-3B from 4 d, 7 d, 3 d, 4 d to 7 d, 7 d, 7 d, 5 d, Sentinel-3A in "
+    "October from 7 d to 5 d, Sentinel-1A in May from 6 d to 5 d, CryoSat-2 in August from 6 d to 5 d, and SWOT "
+    "in October from 5 d to 7 d; the usable element sets went from 1,228 to 1,201. Both tables as they stood "
+    "before the correction are kept below, as rendered on 7 September 2026 from the run of that day under the "
+    "earlier detection rule; the two tables above are the corrected ones.",
+    "",
+    "**The horizon by altitude band and window, before the correction.**",
+    "",
+    "| Altitude band | Missions | quiet | storm | held-out | august |",
+    "| --- | --- | --- | --- | --- | --- |",
+    "| 400-600 km | GRACE-FO 1 (C), GRACE-FO 2 (D), Swarm A, Swarm B, Swarm C | 5 d (37 km at 6 d) "
+    "| 2 d (35 km at 3 d) | 24 h (34 km at 36 h) | 2 d (38 km at 3 d) |",
+    "| 600-750 km | CryoSat-2, Sentinel-1A | 5 d (26 km at 6 d) | 5 d (27 km at 6 d) | 7 d (every lead measured) "
+    "| 6 d (every lead measured) |",
+    "| 750-850 km | SARAL, Sentinel-3A, Sentinel-3B | 7 d (every lead measured) | 7 d (every lead measured) "
+    "| 3 d (26 km at 4 d) | 7 d (every lead measured) |",
+    "| 850-1000 km | HY-2C, HY-2D, SWOT | 7 d (every lead measured) | 7 d (every lead measured) "
+    "| 7 d (every lead measured) | 7 d (every lead measured) |",
+    "| 1000-1400 km | Jason-3, Sentinel-6A | 7 d (every lead measured) | 7 d (every lead measured) "
+    "| 7 d (every lead measured) | 7 d (every lead measured) |",
+    "",
+    "**The horizon by mission and window, before the correction.**",
+    "",
+    "| Mission | Band | quiet | storm | held-out | august |",
+    "| --- | --- | --- | --- | --- | --- |",
+    "| Swarm A | 400-600 km | 5 d (42 km at 6 d) (19 sets) | 2 d (36 km at 3 d) (18 sets) "
+    "| 24 h (38 km at 36 h) (21 sets) | 36 h (29 km at 2 d) (19 sets) |",
+    "| Swarm B | 400-600 km | 5 d (38 km at 6 d) (19 sets) | 2 d (33 km at 3 d) (19 sets) "
+    "| 2 d (51 km at 3 d) (19 sets) | 3 d (42 km at 4 d) (19 sets) |",
+    "| Swarm C | 400-600 km | 5 d (39 km at 6 d) (19 sets) | 2 d (37 km at 3 d) (17 sets) "
+    "| 24 h (38 km at 36 h) (21 sets) | 36 h (26 km at 2 d) (19 sets) |",
+    "| GRACE-FO 1 (C) | 400-600 km | 6 d (34 km at 7 d) (19 sets) | 2 d (25 km at 3 d) (18 sets) "
+    "| 36 h (39 km at 2 d) (19 sets) | 2 d (34 km at 3 d) (18 sets) |",
+    "| GRACE-FO 2 (D) | 400-600 km | 6 d (32 km at 7 d) (19 sets) | 3 d (25 km at 4 d) (19 sets) "
+    "| 24 h (26 km at 36 h) (20 sets) | 2 d (34 km at 3 d) (18 sets) |",
+    "| Sentinel-1A | 600-750 km | 5 d (27 km at 6 d) (31 sets) | 6 d (every lead measured) (33 sets) "
+    "| 4 d (27 km at 5 d) (27 sets) | 5 d (every lead measured) (26 sets) |",
+    "| CryoSat-2 | 600-750 km | 7 d (every lead measured) (18 sets) | 5 d (27 km at 6 d) (18 sets) "
+    "| 7 d (every lead measured) (17 sets) | 6 d (every lead measured) (18 sets) |",
+    "| SARAL | 750-850 km | 7 d (every lead measured) (19 sets) | 7 d (every lead measured) (19 sets) "
+    "| 4 d (25 km at 5 d) (17 sets) | 7 d (every lead measured) (18 sets) |",
+    "| Sentinel-3A | 750-850 km | 7 d (every lead measured) (29 sets) | 7 d (every lead measured) (30 sets) "
+    "| 7 d (every lead measured) (27 sets) | 5 d (every lead measured) (32 sets) |",
+    "| Sentinel-3B | 750-850 km | 4 d (27 km at 5 d) (15 sets) | 7 d (every lead measured) (19 sets) "
+    "| 3 d (27 km at 4 d) (13 sets) | 4 d (31 km at 5 d) (17 sets) |",
+    "| SWOT | 850-1000 km | 7 d (every lead measured) (21 sets) | 7 d (every lead measured) (19 sets) "
+    "| 5 d (25 km at 6 d) (20 sets) | 7 d (every lead measured) (17 sets) |",
+    "| HY-2C | 850-1000 km | 7 d (every lead measured) (30 sets) | 7 d (every lead measured) (34 sets) "
+    "| 7 d (every lead measured) (26 sets) | 7 d (every lead measured) (25 sets) |",
+    "| HY-2D | 850-1000 km | 7 d (every lead measured) (27 sets) | 7 d (every lead measured) (29 sets) "
+    "| 7 d (every lead measured) (19 sets) | 6 d (every lead measured) (23 sets) |",
+    "| Jason-3 | 1000-1400 km | 7 d (every lead measured) (19 sets) | 7 d (every lead measured) (18 sets) "
+    "| 7 d (every lead measured) (17 sets) | 7 d (every lead measured) (17 sets) |",
+    "| Sentinel-6A | 1000-1400 km | 7 d (every lead measured) (18 sets) | 7 d (every lead measured) (15 sets) "
+    "| 7 d (every lead measured) (15 sets) | 7 d (every lead measured) (18 sets) |",
+]
+
+
+def _ordinal(k: int) -> str:
+    return {1: "First", 2: "Second", 3: "Third"}.get(k, f"{k}th")
+
+
+def _corr_cell(c: dict[str, Any] | None) -> str:
+    if not c or c.get("rho") is None:
+        return f"- (n {c['n']})" if c else "-"
+    return f"{c['rho']:+.2f} (n {c['n']}, p {c['p']:.3f})"
+
+
+def _post_burn_section(post: dict[str, Any], names: dict[str, str]) -> list[str]:
+    """The first element sets after a burn, against the cadence of the mission's sets and the delay after the burn."""
+    leads = [float(x) for x in post.get("leads_h", [])]
+    keys = [f"{ld:g}" for ld in leads]
+    heads = " / ".join(_lead(ld) for ld in leads)
+    n_after = int(post.get("sets_after", POST_BURN_SETS))
+    lines = [
+        "",
+        "## The first element sets after a burn, against cadence and delay",
+        "",
+        "Every burn that fell inside a window's set span with a set issued after it, from the published record "
+        "where one exists and otherwise from the orbit-step detector on the reconstructed orbit, which places a "
+        "burn to about an orbit either side: the cadence of the mission's sets in the window (the median gap "
+        f"between consecutive epochs) and, for the first {n_after} sets issued after the burn, the delay from the "
+        f"burn and the absolute in-track residual at {heads}, km, beside the median of the window's usable trials "
+        "at the same leads for scale. A pair whose own arc reaches a later burn is blank. The set-jump detector's "
+        "intervals are not read as burns here: a storm produces them too.",
+        "",
+    ]
+    burns = post.get("burns") or []
+    if not burns:
+        lines.append("No burn fell inside a window's set span with a set issued after it.")
+        return lines
+    lines += [
+        "| Mission | Window | Burn (UTC), how found | Sets, cadence | "
+        + " | ".join(f"{_ordinal(k)} set after: delay; residual at {heads}" for k in range(1, n_after + 1))
+        + f" | Usable-trial median at {heads} |",
+        "| --- | --- | --- | --- | " + " | ".join("---" for _ in range(n_after)) + " | --- |",
+    ]
+
+    def fmt(v: float | None) -> str:
+        return "-" if v is None else f"{v:.1f}"
+
+    for b in burns:
+        mid = pd.Timestamp(b["burn_mid"])
+        cells = []
+        for k in range(1, n_after + 1):
+            row = next((r for r in b["sets_after"] if r["k"] == k), None)
+            if row is None:
+                cells.append("-")
+            else:
+                cells.append(f"{row['delay_h']:.1f} h; " + " / ".join(fmt(row["in_track_km"].get(key)) for key in keys))
+        clear = " / ".join(fmt(b["clear_median_km"].get(key)) for key in keys)
+        lines.append(
+            f"| {names.get(b['mission'], b['mission'])} | {b['window']} | {mid:%Y-%m-%d %H:%M}, {b['source']} "
+            f"| {b['n_sets']}, {b['cadence_h']:.1f} h | " + " | ".join(cells) + f" | {clear} |"
+        )
+    corr = post.get("rank_correlation") or {}
+    if corr:
+        pb, ps = corr["per_burn"], corr["per_spacecraft"]
+        lines += [
+            "",
+            "Spearman rank correlation of the first set's residual with the cadence and with the delay after the "
+            f"burn, per burn ({pb['n']}) and per spacecraft, the means over each one's burns ({ps['n']}):",
+            "",
+            "| Lead | Per burn, cadence | Per burn, delay | Per spacecraft, cadence | Per spacecraft, delay |",
+            "| --- | --- | --- | --- | --- |",
+        ]
+        for ld, key in zip(leads, keys, strict=True):
+            lines.append(
+                f"| {_lead(ld)} | {_corr_cell(pb['cadence'].get(key))} | {_corr_cell(pb['delay'].get(key))} "
+                f"| {_corr_cell(ps['cadence'].get(key))} | {_corr_cell(ps['delay'].get(key))} |"
+            )
+
+    def burn_list(items: list[dict[str, Any]]) -> str:
+        return "; ".join(
+            f"{names.get(i['mission'], i['mission'])}, {i['window']} "
+            f"({pd.Timestamp(i['burn_from']):%Y-%m-%d %H:%M} to {pd.Timestamp(i['burn_to']):%H:%M}, {i['source']})"
+            for i in items
+        )
+
+    without = post.get("burns_without_a_set_after") or []
+    after_span = post.get("burns_after_the_span") or []
+    if without:
+        lines += [
+            "",
+            "Burns inside a span with no set issued after them before the span's end: " + burn_list(without) + ".",
+        ]
+    if after_span:
+        lines += [
+            "",
+            "Burns after a span's last set, inside the truth period, which take out only the leads of earlier sets: "
+            + burn_list(after_span)
+            + ".",
+        ]
+    return lines
+
+
+def to_markdown(
+    result: ReferenceResult,
+    windows: list[BenchmarkWindow],
+    missions: list[Mission],
+    rendered_at: datetime | None = None,
+) -> str:
+    """The page; ``rendered_at`` dates a re-render from the stored files, and the run's own date is kept beside it."""
     s = result.summary
     order = [w.name for w in windows]
     bands = [b for _, _, b in reference.ALTITUDE_BANDS if b in s["results"]["by_band"]]
@@ -633,6 +1005,8 @@ def to_markdown(result: ReferenceResult, windows: list[BenchmarkWindow], mission
             _horizon_text(by_w[w]["horizon"]) + f" ({by_w[w]['n_sets']} sets)" if w in by_w else "-" for w in order
         ]
         lines.append(f"| {m.name} | {reference.altitude_band_label(m.altitude_km)} | " + " | ".join(cells) + " |")
+    lines += CORRECTION_2026_09_07
+    lines += _post_burn_section(s["results"].get("post_burn") or {}, names)
     lines += [
         "",
         "## Laser ranging: how the two references disagree",
@@ -735,6 +1109,12 @@ def to_markdown(result: ReferenceResult, windows: list[BenchmarkWindow], mission
         "- The laser comparison bounds the reconstructed orbits at the metre level only, for the reasons above.",
         "- Jason-3 and Sentinel-6A fly at 1,336 km, just above the 1,300 km asked for; they are the top of the range.",
         "",
-        f"_Last updated {result.built_at:%d %B %Y}._",
+        _last_updated(result.built_at, rendered_at),
     ]
     return "\n".join(lines) + "\n"
+
+
+def _last_updated(built_at: datetime, rendered_at: datetime | None) -> str:
+    if rendered_at is None or rendered_at.date() == built_at.date():
+        return f"_Last updated {built_at:%d %B %Y}._"
+    return f"_Last updated {rendered_at:%d %B %Y}, from the run of {built_at:%d %B %Y}._"

@@ -2397,7 +2397,9 @@ def cmd_validate_reference(args: argparse.Namespace) -> int:
         if page == "docs/calibration-benchmark.md":
             page = "docs/reference-benchmark.md"
         if page:
-            Path(page).write_text(reference_run.to_markdown(result, windows, missions), encoding="utf-8")
+            Path(page).write_text(
+                reference_run.to_markdown(result, windows, missions, rendered_at=now), encoding="utf-8"
+            )
             log.info("Re-rendered %s from %s", page, out)
         return 0
     grid = None
