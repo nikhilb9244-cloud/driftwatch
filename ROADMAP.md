@@ -36,6 +36,13 @@ behaviour, not operational utility. Export previews and download requests do not
 operating-system save completed. No hardware command path, service guarantee, payment system or
 multi-user deployment is provided.
 
+The radio lane ([docs/radio-lane.md](docs/radio-lane.md)) turns the benchmark's residuals into
+angles on the sky for one 13.5 m dish and runs two geometric products on the catalogue as it
+stood. It computes no received power, occupancy or sensitivity loss, ingests no schedule beyond
+an observation CSV, and ran on one public observation record. Validating a crossing list needs
+the observatory's own monitoring data, and the archive's observation list needs an account;
+neither exists in this repository. No organisation has asked for this or agreed to be named.
+
 Current limitations and corrections are in [methods.md](docs/methods.md) and
 [findings.md](docs/findings.md).
 

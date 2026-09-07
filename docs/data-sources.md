@@ -98,6 +98,32 @@ for HRAO00ZAF, a surveyed geodetic marker. Its coordinates establish neither an 
 antenna nor an operating agreement. Contact geometry has no measured receiver-log validation.
 NASA OMNIweb is a possible future historical source, not an input to the current result.
 
+## The radio lane: site, archive records and regulatory filings
+
+The MeerKAT array phase centre, dish diameter and receiver bands come from SARAO's public
+[MeerKAT specifications](https://skaafrica.atlassian.net/wiki/spaces/ESDKB/pages/277315585/MeerKAT+specifications),
+and the space-based interference list from SARAO's
+[Radio Frequency Interference](https://skaafrica.atlassian.net/wiki/spaces/ESDKB/pages/305332225/Radio+Frequency+Interference+RFI)
+page. The primary beam width is Mauch et al. 2020 (ApJ 888, 61) scaled by wavelength as
+de Villiers 2023 (AJ 165, 78) reports. These describe the instrument; they imply no use of, or
+agreement with, the observatory.
+
+Archived MeerKAT observations are read from public records, each row of an observation CSV naming
+its source. The one record used is GCN Circular 36362 with the pointing from GCN Circular 36105.
+The [SARAO archive](https://archive.sarao.ac.za/) holds every released observation's pointing,
+start, duration and band after the proprietary period, but its search needs a SARAO account and
+was not queried; no account was created.
+
+Declared emissions are read from public regulatory filings and interface control documents, each
+row of `docs/radio-emissions.md` carrying its source: the GPS, GLONASS, Galileo, BeiDou, NavIC and
+QZSS interface specifications; FCC DA 16-875 (Iridium), DA 24-825 (Globalstar), DA 24-1193
+(SpaceX direct-to-cell), FCC 18-38 and FCC 17-77 (Ku-band downlinks); the ITU Radio Regulations
+for the Inmarsat L-band allocations. A declaration is a permission to transmit, not a measurement
+of an emission, and the absence of a published measurement is recorded as unknown.
+
+The element-set history for the two periods came from Space-Track's `gp_history` under the terms
+above, one request per chunk of ids, cached and never repeated.
+
 ## Local supplied data
 
 Local OEMs, OMMs, CDMs, state tables and receiver/request records are analysed in memory. They do

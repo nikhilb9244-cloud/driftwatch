@@ -127,6 +127,9 @@ The production gate remains in place. [Pipeline and retention limits](docs/pipel
 
 - [Findings and corrections](docs/findings.md): the bounded measurements and withdrawn claims.
 - [Calibration benchmark](docs/calibration-benchmark.md): all three windows, populations and lead bins.
+- [Radio lane](docs/radio-lane.md): the benchmark's residuals as angles on the sky for a 13.5 m dish over the
+  Karoo, the [radio horizon](docs/radio-horizon.md) by receiver, the [declared-emission table](docs/radio-emissions.md),
+  and two retrospective period reports on the catalogue as it stood. Geometry only; no received power anywhere.
 - [Methods and approximations](docs/methods.md), [screening](docs/screening.md), [frames and time](docs/frames-and-time.md).
 - [Data sources and redistribution](docs/data-sources.md): attribution and analysis-only inputs.
 - [Input formats](docs/input-formats.md), [commands](docs/commands.md), [remaining validation](ROADMAP.md).

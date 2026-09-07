@@ -139,6 +139,17 @@ What works today:
   empirical covariance against the 68 and 95 per cent it claims, the storm term's effect with
   the observed ap, and the horizon for the screening box, and reads ESA's thruster record for the
   manoeuvre exclusion (`docs/calibration-benchmark.md`, item 6 above).
+- `driftwatch radio horizon`, `driftwatch radio emissions` and `driftwatch radio period <name>` are
+  the radio lane (`docs/radio-lane.md`): the calibration benchmark's residuals as angles on the sky
+  for the 13.5 m MeerKAT dish, by receiver and lead (`docs/radio-horizon.md`); the declared
+  satellite emissions by band from public filings (`docs/radio-emissions.md`); and, for a period,
+  the two products on the catalogue as it stood at each observation start -- constellation members
+  above ten degrees, counted, and every object whose track passes inside the half-power radius,
+  with its closest approach, element-set age, cross-track angular uncertainty and horizon label --
+  written as a report under `docs/radio/` and an export in the IAU CPS SatChecker field-of-view
+  shape under `data/radio/`. Observations come from a CSV (the SARAO archive search needs an
+  account); the history for the period must be in `data/history/`. Geometry only: no received
+  power, occupancy or sensitivity loss is computed.
 - `driftwatch local` runs an operator's own files through the provenance check, the CDM matcher
   and the same benchmark with the operator's ephemeris as the truth, with every outbound request
   refused for the duration by an application-level guard over the clients this project fetches

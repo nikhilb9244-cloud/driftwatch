@@ -1,0 +1,452 @@
+[
+ {
+  "data": {
+   "satellites": {
+    "DELTA 1 DEB (10177)": {
+     "name": "DELTA 1 DEB",
+     "norad_id": 10177,
+     "positions": [
+      {
+       "altitude": 66.92978772794933,
+       "angle": 0.22336677978850483,
+       "azimuth": 28.612936138158325,
+       "date_time": "2024-04-23T20:27:32.058Z",
+       "dec": -9.892033422983866,
+       "julian_date": 2460424.3524543773,
+       "ra": 191.36348521622438,
+       "tle_epoch": "2024-04-23T19:12:39.561696Z",
+       "range_km": 1079.1615940081754,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 66.91662344245493,
+       "angle": 0.2041020927861643,
+       "azimuth": 28.698596043885512,
+       "date_time": "2024-04-23T20:27:32.158Z",
+       "dec": -9.894152592919811,
+       "julian_date": 2460424.3524555345,
+       "ra": 191.40044695584987,
+       "tle_epoch": "2024-04-23T19:12:39.561696Z",
+       "range_km": 1079.2129889290368,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 66.9034128989463,
+       "angle": 0.18995615792209258,
+       "azimuth": 28.784155120117187,
+       "date_time": "2024-04-23T20:27:32.258Z",
+       "dec": -9.896266331661364,
+       "julian_date": 2460424.352456692,
+       "ra": 191.4374061991105,
+       "tle_epoch": "2024-04-23T19:12:39.561696Z",
+       "range_km": 1079.2647525314223,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 66.89015619869767,
+       "angle": 0.18212384352490116,
+       "azimuth": 28.869613162326328,
+       "date_time": "2024-04-23T20:27:32.358Z",
+       "dec": -9.898374638107972,
+       "julian_date": 2460424.3524578493,
+       "ra": 191.47436292185333,
+       "tle_epoch": "2024-04-23T19:12:39.561696Z",
+       "range_km": 1079.3168847681804,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 66.87685344318687,
+       "angle": 0.18142287128914367,
+       "azimuth": 28.954969968118572,
+       "date_time": "2024-04-23T20:27:32.458Z",
+       "dec": -9.900477511175371,
+       "julian_date": 2460424.352459007,
+       "ra": 191.51131709986416,
+       "tle_epoch": "2024-04-23T19:12:39.561696Z",
+       "range_km": 1079.3693855915876,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 66.86350473402906,
+       "angle": 0.18793127351241307,
+       "azimuth": 29.04022533756446,
+       "date_time": "2024-04-23T20:27:32.558Z",
+       "dec": -9.9025749497936,
+       "julian_date": 2460424.352460164,
+       "ra": 191.54826870902775,
+       "tle_epoch": "2024-04-23T19:12:39.561696Z",
+       "range_km": 1079.4222549537849,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 66.85011017303904,
+       "angle": 0.20094808778569692,
+       "azimuth": 29.125379072850592,
+       "date_time": "2024-04-23T20:27:32.658Z",
+       "dec": -9.904666952908912,
+       "julian_date": 2460424.3524613217,
+       "ra": 191.58521772516278,
+       "tle_epoch": "2024-04-23T19:12:39.561696Z",
+       "range_km": 1079.4754928063387,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 66.83666986216474,
+       "angle": 0.21931595153126707,
+       "azimuth": 29.21043097861113,
+       "date_time": "2024-04-23T20:27:32.758Z",
+       "dec": -9.90675351948186,
+       "julian_date": 2460424.352462479,
+       "ra": 191.62216412418394,
+       "tle_epoch": "2024-04-23T19:12:39.561696Z",
+       "range_km": 1079.5290991006766,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      }
+     ]
+    },
+    "CZ-4C DEB (39231)": {
+     "name": "CZ-4C DEB",
+     "norad_id": 39231,
+     "positions": [
+      {
+       "altitude": 69.19627569367248,
+       "angle": 0.21783631237491147,
+       "azimuth": 7.561516790135204,
+       "date_time": "2024-04-23T21:01:20.303Z",
+       "dec": -9.927215973556443,
+       "julian_date": 2460424.375929443,
+       "ra": 191.57227486732694,
+       "tle_epoch": "2024-04-20T09:59:40.837632Z",
+       "range_km": 731.1392352750801,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 69.14246693485933,
+       "angle": 0.16045943106344412,
+       "azimuth": 7.5036874901091,
+       "date_time": "2024-04-23T21:01:20.403Z",
+       "dec": -9.871402493693287,
+       "julian_date": 2460424.375930601,
+       "ra": 191.55823262900475,
+       "tle_epoch": "2024-04-20T09:59:40.837632Z",
+       "range_km": 731.3617864570066,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 69.08866972861112,
+       "angle": 0.10325709177300736,
+       "azimuth": 7.4461765213657785,
+       "date_time": "2024-04-23T21:01:20.503Z",
+       "dec": -9.815620451773457,
+       "julian_date": 2460424.375931758,
+       "ra": 191.54420393171486,
+       "tle_epoch": "2024-04-20T09:59:40.837632Z",
+       "range_km": 731.5849984411024,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 69.03488432177357,
+       "angle": 0.04675067126747294,
+       "azimuth": 7.3889813666733275,
+       "date_time": "2024-04-23T21:01:20.603Z",
+       "dec": -9.759869918872603,
+       "julian_date": 2460424.3759329156,
+       "ra": 191.53018875400213,
+       "tle_epoch": "2024-04-20T09:59:40.837632Z",
+       "range_km": 731.8088706224015,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 68.98111095858735,
+       "angle": 0.017509179744778423,
+       "azimuth": 7.332099533445501,
+       "date_time": "2024-04-23T21:01:20.703Z",
+       "dec": -9.704150965335426,
+       "julian_date": 2460424.375934073,
+       "ra": 191.5161870743046,
+       "tle_epoch": "2024-04-20T09:59:40.837632Z",
+       "range_km": 732.0334023964656,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 68.92734988138577,
+       "angle": 0.07080528600212126,
+       "azimuth": 7.275528554516025,
+       "date_time": "2024-04-23T21:01:20.803Z",
+       "dec": -9.648463661488037,
+       "julian_date": 2460424.3759352304,
+       "ra": 191.5021988712581,
+       "tle_epoch": "2024-04-20T09:59:40.837632Z",
+       "range_km": 732.2585931566067,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 68.87360133033441,
+       "angle": 0.12765020818145337,
+       "azimuth": 7.219265987117244,
+       "date_time": "2024-04-23T21:01:20.903Z",
+       "dec": -9.59280807732589,
+       "julian_date": 2460424.3759363876,
+       "ra": 191.48822412347087,
+       "tle_epoch": "2024-04-20T09:59:40.837632Z",
+       "range_km": 732.4844422950639,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      },
+      {
+       "altitude": 68.81986554315496,
+       "angle": 0.1847663601608616,
+       "azimuth": 7.1633094124155745,
+       "date_time": "2024-04-23T21:01:21.003Z",
+       "dec": -9.537184282209182,
+       "julian_date": 2460424.375937545,
+       "ra": 191.4742628094886,
+       "tle_epoch": "2024-04-20T09:59:40.837632Z",
+       "range_km": 732.7109492042686,
+       "cross_track_uncertainty_deg": null,
+       "horizon": "no measured horizon"
+      }
+     ]
+    }
+   },
+   "total_position_results": 16,
+   "total_satellites": 2
+  },
+  "source": "driftwatch radio lane, on public element sets; response shape after the IAU CPS SatChecker field-of-view endpoint",
+  "version": "0.1.0",
+  "format": "IAU CPS SatChecker /fov/satellite-passes/ synchronous response (satchecker.readthedocs.io, Field of View endpoints)",
+  "added_fields": [
+   "cross_track_uncertainty_deg",
+   "horizon"
+  ],
+  "fov": {
+   "ra_deg": 191.50695833333336,
+   "dec_deg": -9.719111111111111,
+   "radius_deg": 0.23469387755102042,
+   "radius_is": "half of the primary beam's half-power width at the observation's centre frequency",
+   "start_time_utc": "2024-04-23T20:19:25Z",
+   "duration_s": 3743.0
+  },
+  "observation": {
+   "observation_id": "gcn-36362-ep240414a",
+   "target": "EP240414a field (optical counterpart AT 2024gsa)",
+   "ra_deg": 191.50695833333336,
+   "dec_deg": -9.719111111111111,
+   "start_utc": "2024-04-23T20:19:25Z",
+   "end_utc": "2024-04-23T21:21:48Z",
+   "duration_s": 3743.0,
+   "band": "S4",
+   "centre_mhz": 3062.5,
+   "beam_fwhm_deg": 0.46938775510204084,
+   "source": "GCN Circular 36362 (J. Bright, F. Carotenuto, P. G. Jonker, R. Fender, S. Smartt): MeerKAT observed the field of EP240414a with the S-band receiver (S4) at a central frequency of about 3 GHz between 20:19:25 and 21:21:48 UTC on 23 April 2024, https://gcn.nasa.gov/circulars/36362; pointing taken as the optical counterpart position 12:46:01.67 -09:43:08.8 (J2000) from GCN Circular 36105, https://gcn.nasa.gov/circulars/36105",
+   "note": "The circular gives no phase centre, so the counterpart position stands in for it. The S4 band centre, 3062.5 MHz, is used for the beam width; the circular says about 3 GHz."
+  },
+  "site": {
+   "name": "MeerKAT array phase centre",
+   "latitude_deg": -30.711055555555554,
+   "longitude_deg": 21.44388888888889,
+   "height_m": 1086.6,
+   "dish_diameter_m": 13.5,
+   "source": "SARAO, MeerKAT specifications (skaafrica.atlassian.net, ESDKB page 277315585): array phase centre 30d42m39.8s S, 21d26m38.0s E, 1086.6 m; dish 13.5 m nominal"
+  },
+  "catalogue": {
+   "as_of": "2024-04-23T20:19:25Z",
+   "n_objects": 24746,
+   "max_set_age_days": 7.0
+  },
+  "period": {
+   "name": "quiet-2024-04",
+   "label": "quiet week, 20 to 27 April 2024",
+   "benchmark_window": "quiet"
+  },
+  "in_view_elevation_cutoff_deg": 10.0,
+  "constellations_in_view": [
+   {
+    "constellation": "GPS",
+    "n_catalogued": 76,
+    "n_above": 25,
+    "mean_simultaneous": 22.046875,
+    "max_simultaneous": 25,
+    "status": "declared, out of band",
+    "detail": "L1 (C/A, P(Y), M, L1C) 1563.42-1587.42 MHz; L2 (P(Y), M, L2C) 1215.6-1239.6 MHz; L5 1164.45-1188.45 MHz"
+   },
+   {
+    "constellation": "GLONASS",
+    "n_catalogued": 142,
+    "n_above": 33,
+    "mean_simultaneous": 29.546875,
+    "max_simultaneous": 32,
+    "status": "declared, out of band",
+    "detail": "L1 FDMA (channels -7 to +6) 1593.06-1610.38 MHz; L2 FDMA (channels -7 to +6) 1237.94-1253.62 MHz; L3 CDMA 1191.8-1212.26 MHz"
+   },
+   {
+    "constellation": "Galileo",
+    "n_catalogued": 28,
+    "n_above": 10,
+    "mean_simultaneous": 8.4375,
+    "max_simultaneous": 9,
+    "status": "declared, out of band",
+    "detail": "E1 1563.14-1587.7 MHz; E6 1258.29-1299.21 MHz; E5 (E5a 1176.45, E5b 1207.14) 1166.22-1217.37 MHz"
+   },
+   {
+    "constellation": "BeiDou",
+    "n_catalogued": 53,
+    "n_above": 16,
+    "mean_simultaneous": 14.484375,
+    "max_simultaneous": 15,
+    "status": "declared, out of band",
+    "detail": "B1I 1559.05-1563.14 MHz; B1C 1559.05-1591.79 MHz; B2a 1166.22-1186.68 MHz; B2b 1196.91-1217.37 MHz; B3I 1258.29-1278.75 MHz"
+   },
+   {
+    "constellation": "NavIC",
+    "n_catalogued": 9,
+    "n_above": 5,
+    "mean_simultaneous": 5.0,
+    "max_simultaneous": 5,
+    "status": "declared, out of band",
+    "detail": "L5 1164.45-1188.45 MHz; S 2483.78-2500.28 MHz; L1 1563.42-1587.42 MHz"
+   },
+   {
+    "constellation": "QZSS",
+    "n_catalogued": 5,
+    "n_above": 0,
+    "mean_simultaneous": 0.0,
+    "max_simultaneous": 0,
+    "status": "declared, out of band",
+    "detail": "L1 1563.42-1587.42 MHz; L2 1215.6-1239.6 MHz; L5 1164.45-1188.45 MHz; L6 1258.29-1299.21 MHz"
+   },
+   {
+    "constellation": "Iridium",
+    "n_catalogued": 109,
+    "n_above": 18,
+    "mean_simultaneous": 1.921875,
+    "max_simultaneous": 4,
+    "status": "declared, out of band",
+    "detail": "service links 1617.78-1626.5 MHz"
+   },
+   {
+    "constellation": "Globalstar",
+    "n_catalogued": 85,
+    "n_above": 22,
+    "mean_simultaneous": 4.015625,
+    "max_simultaneous": 9,
+    "status": "declared, out of band",
+    "detail": "service uplink 1610-1621.35 MHz; service downlink 2483.5-2500 MHz"
+   },
+   {
+    "constellation": "Inmarsat",
+    "n_catalogued": 20,
+    "n_above": 10,
+    "mean_simultaneous": 10.0,
+    "max_simultaneous": 10,
+    "status": "declared, out of band",
+    "detail": "L-band service downlink 1525-1559 MHz; L-band service uplink 1626.5-1660.5 MHz"
+   },
+   {
+    "constellation": "Starlink",
+    "n_catalogued": 5834,
+    "n_above": 1297,
+    "mean_simultaneous": 122.140625,
+    "max_simultaneous": 135,
+    "status": "declared in-band",
+    "detail": "direct-to-cell downlink, outside the United States 2620-2690 MHz (subject to the administration's authority; direct-to-cell capability is not established per object from public data); unintended emission inside 544-3500 MHz: no published measurement inside the MeerKAT bands; treated as unknown, not as absent"
+   },
+   {
+    "constellation": "OneWeb",
+    "n_catalogued": 634,
+    "n_above": 133,
+    "mean_simultaneous": 21.203125,
+    "max_simultaneous": 25,
+    "status": "declared, out of band",
+    "detail": "Ku-band user downlink 10700-12700 MHz"
+   }
+  ],
+  "crossings": [
+   {
+    "norad_id": 10177,
+    "name": "DELTA 1 DEB",
+    "object_type": "DEB",
+    "category": "debris",
+    "constellation": null,
+    "mean_altitude_km": 877.6635011432827,
+    "eccentricity": 0.0522198,
+    "t_ca_utc": "2024-04-23T20:27:32.417835Z",
+    "separation_deg": 0.1808233489105248,
+    "elevation_deg": 66.88222704022192,
+    "azimuth_deg": 28.920538132578443,
+    "range_km": 1079.3481555791257,
+    "ra_deg": 191.49640528819347,
+    "dec_deg": -9.899629592765194,
+    "set_epoch_utc": "2024-04-23T19:12:39.561696Z",
+    "set_age_days": 0.05200064975694445,
+    "partial": false,
+    "projection_cross": 0.9502746992440859,
+    "projection_along": 0.9916482972869147,
+    "population": "no measured horizon",
+    "population_reason": "mean altitude 878 km is outside the 400 to 600 km benchmark population",
+    "horizon": "no measured horizon",
+    "fraction_inside": null,
+    "cross_track_uncertainty_deg": null,
+    "along_track_uncertainty_deg": null,
+    "along_track_shift_s": null,
+    "benchmark_window": "quiet",
+    "benchmark_lead_h": null,
+    "benchmark_n_trials": null,
+    "emission_status": "none expected",
+    "emission_detail": "debris or rocket body"
+   },
+   {
+    "norad_id": 39231,
+    "name": "CZ-4C DEB",
+    "object_type": "DEB",
+    "category": "debris",
+    "constellation": null,
+    "mean_altitude_km": 839.6172726239811,
+    "eccentricity": 0.0245824,
+    "t_ca_utc": "2024-04-23T21:01:20.683438Z",
+    "separation_deg": 0.012440282674046746,
+    "elevation_deg": 68.99211307226764,
+    "azimuth_deg": 7.343713318059278,
+    "range_km": 731.9874050598297,
+    "ra_deg": 191.51905100065002,
+    "dec_deg": -9.715549604393212,
+    "set_epoch_utc": "2024-04-20T09:59:40.837632Z",
+    "set_age_days": 3.459488956087963,
+    "partial": false,
+    "projection_cross": 0.9958265500312503,
+    "projection_along": 0.9514439469351353,
+    "population": "no measured horizon",
+    "population_reason": "mean altitude 840 km is outside the 400 to 600 km benchmark population",
+    "horizon": "no measured horizon",
+    "fraction_inside": null,
+    "cross_track_uncertainty_deg": null,
+    "along_track_uncertainty_deg": null,
+    "along_track_shift_s": null,
+    "benchmark_window": "quiet",
+    "benchmark_lead_h": null,
+    "benchmark_n_trials": null,
+    "emission_status": "none expected",
+    "emission_detail": "debris or rocket body"
+   }
+  ],
+  "limits": [
+   "Positions come from public element sets propagated with SGP4; no tracking, no orbit determination.",
+   "cross_track_uncertainty_deg is the 95th percentile of the calibration benchmark's cross-track residual at the element set's age, projected on the sky at the crossing's range; it applies only where horizon is inside or outside, and is null where the object is outside the benchmark's population.",
+   "Nothing here is a received power, an occupancy fraction or a sensitivity loss."
+  ]
+ }
+]

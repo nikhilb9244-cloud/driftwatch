@@ -3221,6 +3221,139 @@ def cmd_cdm(args: argparse.Namespace) -> int:
     return 0
 
 
+# --------------------------------------------------------------------------------------
+# The radio lane: satellite crossings of a dish's beam, with the accuracy attached
+
+
+def cmd_radio_horizon(args: argparse.Namespace) -> int:
+    """The radio horizon table from the calibration benchmark's stored trials; see ``radio/horizon.py``."""
+    from driftwatch.radio import horizon as radio_horizon
+
+    trials, source = radio_horizon.load_trials()
+    csv_path = radio_horizon.export_trials(trials)
+    table = radio_horizon.horizon_table(trials)
+    if args.out:
+        Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.out).write_text(radio_horizon.to_markdown(table, trials, source=source), encoding="utf-8")
+        log.info("Wrote %s", args.out)
+    if args.json:
+        Path(args.json).parent.mkdir(parents=True, exist_ok=True)
+        Path(args.json).write_text(
+            json.dumps(radio_horizon.to_json(table, source=source), indent=1) + "\n", encoding="utf-8"
+        )
+        log.info("Wrote %s", args.json)
+    log.info("Trials exported to %s (%d usable trials from %s)", csv_path, len(trials), source)
+    for c in radio_horizon.table_columns():
+        log.info("Horizon %s: %s", c.key, radio_horizon.horizon_hours(table, c))
+    return 0
+
+
+def cmd_radio_emissions(args: argparse.Namespace) -> int:
+    """Write the declared-emission table page; see ``radio/emissions.py``."""
+    from driftwatch.radio import report as radio_report
+
+    Path(args.out).parent.mkdir(parents=True, exist_ok=True)
+    Path(args.out).write_text(radio_report.emissions_page(), encoding="utf-8")
+    log.info("Wrote %s", args.out)
+    return 0
+
+
+def cmd_radio_period(args: argparse.Namespace) -> int:
+    """Run both products for one period on the catalogue as it stood; see ``radio/crossings.py``."""
+    from driftwatch.radio import crossings as radio_crossings
+    from driftwatch.radio import horizon as radio_horizon
+    from driftwatch.radio import observations as radio_obs
+    from driftwatch.radio import report as radio_report
+    from driftwatch.radio import site as radio_site
+
+    if args.period not in radio_crossings.PERIODS:
+        log.error("no such period %r; choose one of %s", args.period, ", ".join(radio_crossings.PERIODS))
+        return 2
+    period = radio_crossings.PERIODS[args.period]
+    satcat_path = satcat.satcat_path(config.CACHE_DIR)
+    satcat_frame = satcat.load_satcat(satcat_path) if satcat_path.exists() else None
+    if satcat_frame is None:
+        log.warning("No SATCAT in the cache; objects carry no type or owner, so GLONASS cannot be identified")
+    sets = radio_crossings.load_sets(period.first_day, period.last_day)
+    trials, source = radio_horizon.load_trials()
+    table = radio_horizon.horizon_table(trials)
+    site = radio_site.MEERKAT
+    out_dir = Path(args.out_dir) / period.name
+    out_dir.mkdir(parents=True, exist_ok=True)
+
+    observations = radio_obs.read_observations(Path(args.observations)) if args.observations else []
+    results = []
+    for obs in observations:
+        result = radio_crossings.run_observation(
+            sets, satcat_frame, site, obs, trials, period, elevation_deg=args.elevation
+        )
+        payload = radio_report.satchecker_export(result, site, period, args.elevation)
+        path = radio_report.write_export(payload, out_dir / f"crossings-{obs.observation_id}.json")
+        log.info("%s: %d crossing(s), export %s", obs.observation_id, len(result.crossings), path)
+        results.append(result)
+
+    hourly_summary = {}
+    for name in (b.strip() for b in args.bands.split(",") if b.strip()):
+        rx = radio_site.receiver(name)
+        hourly = radio_crossings.hourly_constellation_view(
+            sets, satcat_frame, site, period, rx, elevation_deg=args.elevation
+        )
+        # The status and detail are constant per constellation and band; the summary carries them once.
+        hourly.drop(columns=["status", "detail"], errors="ignore").to_csv(
+            out_dir / f"in-view-hourly-{rx.name}.csv", index=False
+        )
+        hourly_summary[rx.name] = radio_crossings.summarise_hourly(hourly)
+        log.info(
+            "%s band: hourly aggregate over %d hour(s) written",
+            rx.name,
+            hourly["hour_utc"].nunique() if len(hourly) else 0,
+        )
+
+    provenance = radio_crossings.sets_provenance(sets)
+    provenance["benchmark_trials"] = source
+    summary = {
+        "built_at": datetime.now(UTC).isoformat(),
+        "period": {
+            "name": period.name,
+            "label": period.label,
+            "first_day": period.first_day.isoformat(),
+            "last_day": period.last_day.isoformat(),
+            "benchmark_window": period.benchmark_window,
+            "why": period.why,
+        },
+        "site": radio_report.site_record(site),
+        "elevation_cutoff_deg": args.elevation,
+        "catalogue": provenance,
+        "observations": [
+            {
+                "observation": r.observation.record(),
+                "catalogue_as_of": r.catalogue_at,
+                "n_catalogue": r.n_catalogue,
+                "constellations_in_view": [c.__dict__ for c in r.counts],
+                "crossings": [c.record(with_samples=False) for c in r.crossings],
+            }
+            for r in results
+        ],
+        "hourly_summary": {k: json.loads(v.to_json(orient="records")) for k, v in hourly_summary.items()},
+    }
+    (out_dir / "period.json").write_text(json.dumps(summary, indent=1, default=str) + "\n", encoding="utf-8")
+    report = radio_report.period_report(
+        period,
+        site,
+        results,
+        hourly_summary,
+        provenance,
+        table,
+        elevation_deg=args.elevation,
+        observation_sources=args.observation_sources or "",
+    )
+    report_path = Path(args.report) if args.report else Path("docs") / "radio" / f"{period.name}.md"
+    report_path.parent.mkdir(parents=True, exist_ok=True)
+    report_path.write_text(report, encoding="utf-8")
+    log.info("Wrote %s and %s", report_path, out_dir / "period.json")
+    return 0
+
+
 def build_parser() -> argparse.ArgumentParser:
     """The argparse parser for the ``driftwatch`` command."""
     parser = argparse.ArgumentParser(
@@ -3748,6 +3881,38 @@ def build_parser() -> argparse.ArgumentParser:
         help="apply the storm term with the cached observed ap; skipped, and said so, when no weather is cached",
     )
     local.set_defaults(func=cmd_local)
+
+    radio = sub.add_parser(
+        "radio", help="satellite crossings of a dish's beam over the Karoo, with the accuracy attached"
+    )
+    radio_sub = radio.add_subparsers(dest="radio_command", required=True)
+    rh = radio_sub.add_parser("horizon", help="the radio horizon table from the calibration benchmark's stored trials")
+    rh.add_argument(
+        "--out", default="docs/radio-horizon.md", help="markdown page (default docs/radio-horizon.md; empty to skip)"
+    )
+    rh.add_argument(
+        "--json", default="data/radio/horizon.json", help="machine-readable table (default data/radio/horizon.json)"
+    )
+    rh.set_defaults(func=cmd_radio_horizon)
+    re_ = radio_sub.add_parser("emissions", help="the declared-emission table page")
+    re_.add_argument("--out", default="docs/radio-emissions.md")
+    re_.set_defaults(func=cmd_radio_emissions)
+    rp = radio_sub.add_parser(
+        "period", help="both products for one period, on the catalogue as it stood at each observation start"
+    )
+    rp.add_argument("period", help="quiet-2024-04 or storm-2024-05")
+    rp.add_argument("--observations", help="CSV of archived observations (data/radio/observations/<period>.csv)")
+    rp.add_argument("--bands", default="UHF,L", help="receivers for the hour-by-hour aggregate (default UHF,L)")
+    rp.add_argument(
+        "--elevation", type=float, default=10.0, help="elevation above which an object is in the sky (default 10)"
+    )
+    rp.add_argument("--out-dir", default="data/radio", help="exports go under <out-dir>/<period>/")
+    rp.add_argument("--report", help="report path (default docs/radio/<period>.md)")
+    rp.add_argument(
+        "--observation-sources", help="a sentence for the report saying where the observation list came from"
+    )
+    rp.set_defaults(func=cmd_radio_period)
+
     return parser
 
 

@@ -23,6 +23,10 @@ Negative findings and withdrawn interpretations remain part of the evidence.
 | A local network guard proves isolation | It disables supported clients during analysis. It does not secure a compromised PC, extensions or modified code and is not an operating-system sandbox. |
 | Schedule priority gain means revenue or reliability gain | Priorities are supplied preference points. Optimisation assumes visibility and feasibility, one antenna and fixed turnaround. No real request week or accepted operational baseline has been measured. |
 | Named prospects imply participation or willingness to pay | Workflows are described by engineering role. No organisation has adopted the tool or agreed to be identified as a prospect; no willingness-to-pay result is claimed. |
+| The radio horizon is seven days | The cross-track angular error of three Swarm-class satellites at zenith range stays under a third of every MeerKAT beam at every lead in three windows; the along-track error does not, and its horizon at the L-band centre is 24, 12 and 6 hours in the quiet, May and October windows. Neither is measured for any other orbit class or for a station-kept object. |
+| Beam-crossing lists quantify interference | Product two is geometry from public element sets: closest approach, time, element-set age and the benchmark's angular uncertainty. No received power, occupancy fraction or sensitivity loss is computed anywhere in the radio lane. |
+| Constellation counts are counts of transmitters | Membership is by catalogue name and orbit and includes retired satellites; the catalogue carries no transmit status. Emissions are declarations from filings, some made after the observations, not measurements. |
+| The retrospective covers the archive | One public observation record was found (GCN 36362, 23 April 2024, S-band) and none for 10 to 12 May 2024; the SARAO archive search needs an account and was not queried. The storm-week report carries only the product that needs no pointing. |
 
 ## Withdrawn claims retained as corrections
 
