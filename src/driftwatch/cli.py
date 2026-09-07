@@ -2362,6 +2362,188 @@ def cmd_validate_swarm(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_validate_reference(args: argparse.Namespace) -> int:
+    """The reference expansion: every mission with a public reconstructed orbit or laser ranging.
+
+    See ``storm/reference_run.py``.
+    """
+    from driftwatch.storm import precise, reference, reference_run
+
+    now = datetime.now(UTC)
+    windows = [w for w in reference.WINDOWS if args.window in ("all", w.name)]
+    if not windows:
+        log.error("no such window %r; choose all, quiet, storm, held-out or august", args.window)
+        return 2
+    keys = list(reference.MISSIONS) if args.missions == "all" else [k.strip() for k in args.missions.split(",")]
+    unknown = [k for k in keys if k not in reference.MISSIONS]
+    if unknown:
+        log.error("no such mission(s) %s; choose from %s", unknown, ", ".join(reference.MISSIONS))
+        return 2
+    missions = [reference.MISSIONS[k] for k in keys]
+    grid = None
+    weather_used = None
+    if not args.no_storm_term:
+        table = weather_for_density(
+            now,
+            min(w.sets_from for w in windows) - timedelta(days=precise.COEFFICIENT_HISTORY_DAYS + 3),
+            max(w.truth_to for w in windows),
+            offline=args.offline,
+        )
+        grid = density_mod.weather_grid(table)
+        weather_used = table.attrs.get("sources_used")
+    result = reference_run.run_reference(missions, windows, grid=grid, offline=args.offline, with_slr=not args.no_slr)
+    out = Path(args.out or config.DATA_DIR / "validation")
+    out.mkdir(parents=True, exist_ok=True)
+    if len(result.trials):
+        result.trials.to_parquet(out / "reference_benchmark.parquet", index=False)
+    if len(result.sgp4_vs_slr):
+        result.sgp4_vs_slr.to_parquet(out / "reference_slr.parquet", index=False)
+    record = {
+        "built_at": now.isoformat(),
+        "windows": {w.name: w.as_dict() for w in windows},
+        "leads_hours": list(precise.LEADS_HOURS),
+        "summary": result.summary,
+        "weather_sources": weather_used,
+    }
+    (out / "reference_benchmark.json").write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    page = args.page
+    if page == "docs/calibration-benchmark.md":
+        page = "docs/reference-benchmark.md"
+    if page:
+        path = Path(page)
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(reference_run.to_markdown(result, windows, missions), encoding="utf-8")
+        log.info("Wrote %s", path)
+    for band, by_w in result.summary["results"]["by_band"].items():
+        cells = []
+        for w, e in by_w.items():
+            h = e["horizon"]
+            cells.append(
+                f"{w}: within {h['last_lead_h_within']} h, beyond at {h['first_lead_h_beyond']} h "
+                f"({e['n_sets']} sets, {e['n_missions']} missions)"
+            )
+        print(f"{band}: " + "; ".join(cells))
+    print(f"\n{out / 'reference_benchmark.json'}")
+    return 0
+
+
+def cmd_validate_dsgp4(args: argparse.Namespace) -> int:
+    """ESA's dSGP4 and the ML-dSGP4 hybrid on the reference benchmark's trials; see ``storm/dsgp4_eval.py``."""
+    import dsgp4
+    import torch
+
+    from driftwatch.storm import dsgp4_eval, precise, reference, reference_run
+
+    now = datetime.now(UTC)
+    out = Path(args.out or config.DATA_DIR / "validation")
+    trials_path = out / "reference_benchmark.parquet"
+    if not trials_path.exists():
+        log.error("no %s; run `driftwatch validate reference` first", trials_path)
+        return 2
+    trials = pd.read_parquet(trials_path)
+    keys = (
+        sorted(trials["mission"].unique()) if args.missions == "all" else [k.strip() for k in args.missions.split(",")]
+    )
+    missions = [reference.MISSIONS[k] for k in keys if k in reference.MISSIONS]
+    windows = list(reference.WINDOWS)
+    sets = reference_run.load_sets(missions, windows)
+    orbits = {}
+    for m in missions:
+        if m.truth == reference.TRUTH_NONE:
+            continue
+        for w in windows:
+            day_from = (w.sets_from - timedelta(days=1)).date()
+            orbit, _ = reference.load_truth(m, day_from, w.truth_to.date(), offline=True)
+            if orbit is not None and len(orbit.table):
+                orbits[(m.key, w.name)] = orbit
+    items = dsgp4_eval.trial_sets(trials[trials["mission"].isin([m.key for m in missions])], sets, orbits)
+    training = [i for i in items if i.window in dsgp4_eval.TRAINING_WINDOWS]
+    swarm_keys = {k for k in reference.MISSIONS if k.startswith("swarm")}
+    populations = {"ML-dSGP4 (Swarm)": [i for i in training if i.mission in swarm_keys]}
+    if any(i.mission not in swarm_keys for i in training):
+        populations["ML-dSGP4 (all missions)"] = training
+    log.info("dSGP4: %d trial sets, %d in the training windows", len(items), len(training))
+    frames = [dsgp4_eval.storm_term_residuals(trials, items)]
+    frames.append(
+        dsgp4_eval.residuals_at_leads(
+            items, lambda o, t: dsgp4_eval.dsgp4_states(o, t, gravity="wgs-72"), method="dsgp4 (WGS72)"
+        )
+    )
+    frames.append(
+        dsgp4_eval.residuals_at_leads(
+            items, lambda o, t: dsgp4_eval.dsgp4_states(o, t, gravity="wgs-84"), method="dsgp4 (WGS-84)"
+        )
+    )
+    training_records = {}
+    for name, pop in populations.items():
+        if not pop:
+            continue
+        omms, tsince, states = dsgp4_eval.training_samples(pop)
+        model = dsgp4_eval.new_hybrid(args.hidden_size, seed=args.seed)
+        rec = dsgp4_eval.train_hybrid(
+            model,
+            omms,
+            tsince,
+            states,
+            epochs=args.epochs,
+            batch_size=args.batch_size,
+            learning_rate=args.lr,
+            seed=args.seed,
+        )
+        training_records[name] = rec.__dict__
+        frames.append(
+            dsgp4_eval.residuals_at_leads(items, lambda o, t, _m=model: dsgp4_eval.hybrid_states(_m, o, t), method=name)
+        )
+    residuals = pd.concat(frames, ignore_index=True)
+    summary = dsgp4_eval.summarise(residuals)
+    plain = "sgp4 (library, WGS72)"
+    improvement = dsgp4_eval.improvement_over_plain(summary, plain)
+    methods = [plain, "dsgp4 (WGS72)", "dsgp4 (WGS-84)", *populations.keys(), "sgp4 + storm term (observed ap)"]
+    methods = [m for m in methods if m in set(residuals["method"])]
+    record = {
+        "built_at": now.isoformat(),
+        "dsgp4_version": getattr(dsgp4, "__version__", "unknown"),
+        "torch_version": torch.__version__,
+        "citation": dsgp4_eval.CITATION,
+        "published_training": dsgp4_eval.PUBLISHED_TRAINING,
+        "what_was_done": (
+            f"{len(items)} trial sets from {len(missions)} missions over {len(windows)} windows; the hybrids trained "
+            f"on the {len(training)} sets of the quiet and May windows only, with the reconstructed orbit sampled "
+            f"hourly to seven days, corrections starting at zero, hidden size {args.hidden_size}; scored at the "
+            "benchmark's leads in the truth's radial, in-track, cross-track frame against plain SGP4, dsgp4 with "
+            "both gravity constants, and the storm term with the observed ap."
+        ),
+        "training_windows": list(dsgp4_eval.TRAINING_WINDOWS),
+        "held_out_windows": list(dsgp4_eval.HELD_OUT_WINDOWS),
+        "missions": [m.key for m in missions],
+        "training": training_records,
+        "plain": plain,
+        "methods": methods,
+        "summary": summary,
+        "improvement": improvement,
+        "recommendations": [
+            dsgp4_eval.recommendation(improvement, name) for name in populations if name in training_records
+        ],
+    }
+    out.mkdir(parents=True, exist_ok=True)
+    residuals.to_parquet(out / "dsgp4_residuals.parquet", index=False)
+    (out / "dsgp4_evaluation.json").write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    page = args.page
+    if page == "docs/calibration-benchmark.md":
+        page = "docs/dsgp4-evaluation.md"
+    if page:
+        Path(page).write_text(dsgp4_eval.to_markdown(record, now), encoding="utf-8")
+        log.info("Wrote %s", page)
+    for v in record["recommendations"]:
+        print(
+            f"{v['method']}: {'adopt' if v['adopt'] else 'do not adopt'}; held out: "
+            + "; ".join(f"{w} {v[w]}" for w in dsgp4_eval.HELD_OUT_WINDOWS if v.get(w))
+        )
+    print(f"\n{out / 'dsgp4_evaluation.json'}")
+    _ = precise
+    return 0
+
+
 def cmd_local(args: argparse.Namespace) -> int:
     """An operator's own files through the provenance check, the CDM matcher and the ephemeris benchmark, offline.
 
@@ -3668,12 +3850,24 @@ def build_parser() -> argparse.ArgumentParser:
         "validate",
         help="Phase 3 Step 4: measure the storm term against the May 2024 and February 2022 records",
     )
-    validate.add_argument("case", choices=("gannon", "starlink-2022", "swarm"), help="which validation case to run")
-    validate.add_argument("--window", default="all", help="swarm: all, quiet, storm or held-out (default: all)")
+    validate.add_argument(
+        "case", choices=("gannon", "starlink-2022", "swarm", "reference", "dsgp4"), help="which validation case to run"
+    )
+    validate.add_argument(
+        "--window", default="all", help="swarm, reference: all, quiet, storm, held-out or august (default: all)"
+    )
+    validate.add_argument("--missions", default="all", help="reference: comma-separated mission keys (default: all)")
+    validate.add_argument("--no-slr", action="store_true", help="reference: skip the laser-ranging comparison")
+    validate.add_argument("--hidden-size", type=int, default=35, help="dsgp4: hidden layer width (default 35)")
+    validate.add_argument("--epochs", type=int, default=30, help="dsgp4: training epochs (default 30)")
+    validate.add_argument("--batch-size", type=int, default=4096, help="dsgp4: training batch (default 4096)")
+    validate.add_argument("--lr", type=float, default=1e-3, help="dsgp4: learning rate (default 1e-3)")
+    validate.add_argument("--seed", type=int, default=0, help="dsgp4: random seed (default 0)")
     validate.add_argument(
         "--page",
         default="docs/calibration-benchmark.md",
-        help="swarm: write the benchmark page here (default: docs/calibration-benchmark.md; empty to skip)",
+        help="swarm, reference: write the benchmark page here (default: docs/calibration-benchmark.md for swarm, "
+        "docs/reference-benchmark.md for reference; empty to skip)",
     )
     validate.add_argument("--no-storm-term", action="store_true", help="swarm: skip the storm-term comparison")
     validate.add_argument(
@@ -3713,6 +3907,8 @@ def build_parser() -> argparse.ArgumentParser:
             "gannon": cmd_validate_gannon,
             "starlink-2022": cmd_validate_starlink_2022,
             "swarm": cmd_validate_swarm,
+            "reference": cmd_validate_reference,
+            "dsgp4": cmd_validate_dsgp4,
         }[a.case](a)
     )
 

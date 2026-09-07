@@ -18,10 +18,17 @@ dependencies = [
     "scipy>=1.17.1",
     "sgp4>=2.27",
     "skyfield>=1.55",
+    "unlzw3>=0.2.3",
 ]
 
 [project.scripts]
 driftwatch = "driftwatch.cli:main"
+
+[project.optional-dependencies]
+dsgp4 = [
+    "dsgp4>=1.3.0",
+    "torch>=2.2",
+]
 
 [build-system]
 requires = ["uv_build>=0.12.8,<0.13.0"]

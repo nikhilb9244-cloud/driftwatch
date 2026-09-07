@@ -798,6 +798,7 @@ def satellite_trials(
     record: ThrusterRecord | None = None,
     published: list[tuple[Any, Any]] | None = None,
     arc_hours: float = MANOEUVRE_ARC_HOURS,
+    record_label: str = "esa-record",
 ) -> pd.DataFrame:
     """One row per element set per lead: the residual against the precise orbit and everything that qualifies it.
 
@@ -814,7 +815,7 @@ def satellite_trials(
     detected = manoeuvre_intervals_from_orbit(orbit) + manoeuvre_intervals_from_sets(inputs.sets)
     if record is not None:
         published_intervals: list[tuple[pd.Timestamp, pd.Timestamp]] | None = list(record.intervals)
-        source = "esa-record"
+        source = record_label
     elif published is not None:
         published_intervals = [(_naive(lo), _naive(hi)) for lo, hi in published]
         source = "operator-record"
