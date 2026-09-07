@@ -1,0 +1,17 @@
+{
+  "prediction": {
+    "name": "iss-elements-2024-05-10.json",
+    "text": "[\n  {\n    \"NORAD_CAT_ID\": 25544,\n    \"OBJECT_NAME\": \"ISS (ZARYA)\",\n    \"OBJECT_ID\": \"1998-067A\",\n    \"EPOCH\": \"2024-05-10T20:04:09.655968\",\n    \"MEAN_MOTION\": 15.51091733,\n    \"ECCENTRICITY\": 0.0003508,\n    \"INCLINATION\": 51.6384,\n    \"RA_OF_ASC_NODE\": 140.5675,\n    \"ARG_OF_PERICENTER\": 155.9838,\n    \"MEAN_ANOMALY\": 262.9458,\n    \"BSTAR\": 0.00027646,\n    \"MEAN_MOTION_DOT\": 0.00015975,\n    \"MEAN_MOTION_DDOT\": 0.0,\n    \"EPHEMERIS_TYPE\": 0,\n    \"CLASSIFICATION_TYPE\": \"U\",\n    \"ELEMENT_SET_NO\": 999,\n    \"REV_AT_EPOCH\": 45275\n  }\n]\n"
+  },
+  "candidate": {
+    "name": "iss-elements-2024-05-04.json",
+    "text": "[\n  {\n    \"NORAD_CAT_ID\": 25544,\n    \"OBJECT_NAME\": \"ISS (ZARYA)\",\n    \"OBJECT_ID\": \"1998-067A\",\n    \"EPOCH\": \"2024-05-04T05:00:00.714240\",\n    \"MEAN_MOTION\": 15.50883865,\n    \"ECCENTRICITY\": 0.0003792,\n    \"INCLINATION\": 51.6397,\n    \"RA_OF_ASC_NODE\": 173.4518,\n    \"ARG_OF_PERICENTER\": 138.4817,\n    \"MEAN_ANOMALY\": 328.9117,\n    \"BSTAR\": 0.00026485,\n    \"MEAN_MOTION_DOT\": 0.00015168,\n    \"MEAN_MOTION_DDOT\": 0.0,\n    \"EPHEMERIS_TYPE\": 0,\n    \"CLASSIFICATION_TYPE\": \"U\",\n    \"ELEMENT_SET_NO\": 999,\n    \"REV_AT_EPOCH\": 45172\n  }\n]\n"
+  },
+  "latitude": -25.89,
+  "longitude": 27.687,
+  "height_m": 1414.744,
+  "mask_deg": 10,
+  "start": "2024-05-11T00:00:00Z",
+  "hours": 24,
+  "norad": 25544
+}

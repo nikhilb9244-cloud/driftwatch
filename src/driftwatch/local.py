@@ -12,7 +12,7 @@ their own files without a byte leaving the machine:
    found, at what miss and probability against theirs, and which public-data flags they never
    received;
 3. the **calibration against the operator's ephemeris**, the Swarm benchmark's machinery with
-   the operator's own orbit as the truth (``driftwatch.storm.precise``): for every public
+   the operator's own orbit as a declared reference (``driftwatch.storm.precise``): for every public
    element set issued while the ephemeris runs, the residual by lead in the satellite's RIC
    frame, the coverage of the covariance the screening would have carried, the storm term's
    effect if the weather is cached, and the horizon for the screening box. The operator's own
@@ -231,7 +231,7 @@ def load_oem(path: Path | str) -> list[OemSegment]:
 def oem_to_precise_orbit(
     segments: list[OemSegment], *, norad_id: int, label: str | None = None
 ) -> precise.PreciseOrbit:
-    """The segments as one truth the benchmark can compare against: one frame, epochs in UTC, gaps kept.
+    """The segments as one reference the benchmark can compare against: one frame, epochs in UTC, gaps kept.
 
     Segments must share a frame the rotation supports (:func:`driftwatch.storm.precise.frame_kind`);
     each segment's time system is converted with the SP3 reader's own conversion (UTC, TAI, GPS).
@@ -255,7 +255,20 @@ def oem_to_precise_orbit(
     )
     table["t"] = pd.to_datetime(table["t"]).astype("datetime64[us]")
     files = sorted({s.source for s in segments if s.source})
-    return precise.PreciseOrbit(label or str(norad_id), int(norad_id), table, [], files, frame=frame)
+    orbit = precise.PreciseOrbit(label or str(norad_id), int(norad_id), table, [], files, frame=frame)
+    # An OEM metadata boundary is a discontinuity even when its timestamps are close.
+    # Build each segment separately so Hermite interpolation never bridges that seam.
+    orbit.segments.clear()
+    previous_end = None
+    for t in sorted(tables, key=lambda x: x["t"].iloc[0] if len(x) else pd.Timestamp.max):
+        if not len(t):
+            continue
+        if previous_end is not None and t["t"].iloc[0] <= previous_end:
+            raise ValueError("OEM segments overlap; choose non-overlapping versions before comparing")
+        previous_end = t["t"].iloc[-1]
+        part = precise.PreciseOrbit(label or str(norad_id), int(norad_id), t, [], files, frame=frame)
+        orbit.segments.extend(part.segments)
+    return orbit
 
 
 # --------------------------------------------------------------------------------------
@@ -301,13 +314,16 @@ def ephemeris_benchmark(
     category: str = "payload",
     altitude_band: str = "leo",
     tolerance_km: float = precise.HORIZON_TOLERANCE_KM,
+    reference_kind: str = "prediction",
 ) -> EphemerisBenchmark:
-    """The Swarm benchmark's four outputs with the operator's ephemeris as the truth.
+    """The Swarm benchmark's four outputs with the operator's declared reference ephemeris.
 
     The trials are the public element sets issued while the ephemeris runs and at least the
     shortest lead before it ends; the covariance and the coefficient are fitted from the local
     history before the first of them, exactly as for Swarm.
     """
+    if reference_kind not in {"prediction", "reconstructed", "navigation"}:
+        raise ValueError("reference_kind must be prediction, reconstructed or navigation")
     span = orbit.span
     if span is None:
         raise ValueError("the ephemeris holds no states")
@@ -321,7 +337,7 @@ def ephemeris_benchmark(
         first.tz_localize("UTC").to_pydatetime(),
         sets_to.tz_localize("UTC").to_pydatetime(),
         None,
-        f"the operator's ephemeris {'; '.join(orbit.files) or '(unnamed)'} as the truth",
+        f"the operator's ephemeris {'; '.join(orbit.files) or '(unnamed)'} as a declared {reference_kind} reference",
     )
     inputs = precise.fit_inputs(
         norad_id, sets, window, grid, label=label or str(norad_id), category=category, altitude_band=altitude_band
@@ -342,8 +358,9 @@ def to_markdown(report: dict[str, Any]) -> str:
     lines = [
         "# Local analysis",
         "",
-        f"Written by `driftwatch local` on {report['built_at'][:19]}Z. Nothing left this machine: every outbound "
-        "request was refused for the duration of the command (`driftwatch.local.no_network`).",
+        f"Written by `driftwatch local` on {report['built_at'][:19]}Z. The project's supported HTTP clients "
+        "and astropy downloads were disabled during analysis (`driftwatch.local.no_network`). "
+        "This application guard is not OS-level network isolation.",
         "",
     ]
     check = report.get("provenance")
@@ -386,6 +403,12 @@ def to_markdown(report: dict[str, Any]) -> str:
             f"Object {eph['norad_id']} ({eph['label']}); ephemeris in {eph['frame']} from {eph['span'][0][:19]} to "
             f"{eph['span'][1][:19]}; {eph['n_states']} states in {eph['n_files']} file(s). A trial is one public "
             "element set; one residual per lead."
+        )
+        lines.append("")
+        lines.append(
+            f"Declared reference: {eph.get('reference_kind', 'unspecified')}. "
+            "Agreement with a prediction is consistency, not realised accuracy. "
+            "The reference's independence and quality must be established separately."
         )
         lines.append("")
         w = eph["summary"]["windows"]["ephemeris"]

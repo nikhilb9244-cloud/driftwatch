@@ -12,6 +12,17 @@ sets *may* be redistributed with citation, and are, which is why the manifest ca
 attribution -- so this is not a blanket "no data" rule but a specific one, and it is checked
 by name and by content rather than trusted to the exporter never changing.
 
+**Constructed demonstrations.** Until 2026-09-07 the workspace shipped invented inputs -- an
+OEM with a displacement chosen by the generator, CDMs carrying probabilities chosen by the
+generator, receiver lock times placed a fixed 35 seconds after the predicted acquisition, and a
+week of invented contact requests. A reader could not tell by looking which numbers on a screen
+were measured and which were designed. They were removed, and this check exists so they cannot
+return by accident: a file about to be published that names the old fixture object, or that
+declares itself a synthetic demonstration, stops the deploy. The rule is deliberately narrow --
+it matches the fixture identities and the generator's own labels, not the word "synthetic", which
+appears legitimately in the storm scenarios (built from real recorded weather) and in the Kelvins
+identifiers (which stand in for identities ESA removed from real data).
+
 **Credentials.** Space-Track's user and password live in the environment
 (:data:`driftwatch.config.SPACETRACK_USER_ENV`, ``SPACETRACK_PASS_ENV``) and nothing writes
 them anywhere. The strongest possible check is therefore also the simplest: take whatever
@@ -60,6 +71,18 @@ FORBIDDEN_CONTENT: tuple[tuple[str, str], ...] = (
     (r"api\.starlink\.com/public-files", "a link to the SpaceX file service"),
     (r"ephemeris_start\s+\d{13}", "the header of a published SpaceX ephemeris"),
     (r"created:\s*\d{13}\.\d+\s*\n\s*ephemeris_start", "a published SpaceX ephemeris"),
+)
+# Constructed demonstration inputs, by the identities and labels the retired generator wrote.
+# Narrow on purpose: "synthetic" alone is a legitimate word in this bundle (a synthetic G5 storm
+# scenario is built from the real May 2024 record), so each pattern names a fixture instead.
+FORBIDDEN_DEMONSTRATION: tuple[tuple[str, str], ...] = (
+    (r"\bSYNTHETIC-[12]\b", "the retired demonstration object SYNTHETIC-1/2"),
+    (r"COLLISION_PROBABILITY_METHOD\s*=\s*ILLUSTRATIVE", "a CDM with an illustrative probability"),
+    (r"DRIFTWATCH SYNTHETIC DEMONSTRATION", "an OEM from the retired synthetic generator"),
+    (r"DRIFTWATCH TEST FIXTURE", "a test fixture, which is never published"),
+    (r"Synthetic demonstration\. Not an operator case", "the retired synthetic-demonstration label"),
+    (r"\bDemonstration antenna\b", "the retired invented contact-request table"),
+    (r"\bTraining satellite [A-E]\b", "the retired invented contact-request table"),
 )
 # These have to survive a minified JavaScript bundle and its source map, which are full of
 # words like `token` and `secret` as ordinary identifiers. So every pattern here requires a
@@ -124,6 +147,9 @@ def _redactions(environ: Mapping[str, str]) -> list[tuple[str, str]]:
 def scan_text(text: str, path: str, *, redactions: list[tuple[str, str]]) -> list[Finding]:
     """Every forbidden pattern, secret pattern and literal credential value in one file."""
     findings: list[Finding] = []
+    for pattern, what in FORBIDDEN_DEMONSTRATION:
+        if re.search(pattern, text):
+            findings.append(Finding("error", path, f"contains {what}; constructed inputs are not published"))
     for pattern, what in FORBIDDEN_CONTENT:
         if re.search(pattern, text, re.IGNORECASE):
             findings.append(Finding("error", path, f"contains {what} ({pattern})"))

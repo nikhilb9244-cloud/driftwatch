@@ -1,0 +1,1832 @@
+{
+  "built_at": "2026-09-05T02:52:52.970216+00:00",
+  "windows": {
+    "quiet": {
+      "name": "quiet",
+      "role": "control",
+      "sets_from": "2024-04-20T00:00:00+00:00",
+      "sets_to": "2024-04-27T00:00:00+00:00",
+      "truth_to": "2024-05-04T01:00:00+00:00",
+      "disturbed": null,
+      "note": "the quiet control before the May 2024 storm; Kp at or under 4 over 25 to 28 April"
+    },
+    "storm": {
+      "name": "storm",
+      "role": "storm",
+      "sets_from": "2024-05-06T00:00:00+00:00",
+      "sets_to": "2024-05-13T00:00:00+00:00",
+      "truth_to": "2024-05-20T01:00:00+00:00",
+      "disturbed": [
+        "2024-05-10T12:00:00+00:00",
+        "2024-05-13T00:00:00+00:00"
+      ],
+      "note": "the May 2024 Gannon storm; sets issued from four days before the onset to its end"
+    },
+    "held-out": {
+      "name": "held-out",
+      "role": "held-out",
+      "sets_from": "2024-10-06T00:00:00+00:00",
+      "sets_to": "2024-10-13T00:00:00+00:00",
+      "truth_to": "2024-10-20T01:00:00+00:00",
+      "disturbed": [
+        "2024-10-10T12:00:00+00:00",
+        "2024-10-12T00:00:00+00:00"
+      ],
+      "note": "the 10 to 11 October 2024 storm (Kp 9-), held out from every tuning; nothing was chosen by looking at it"
+    }
+  },
+  "leads_hours": [
+    6.0,
+    12.0,
+    24.0,
+    36.0,
+    48.0,
+    72.0,
+    96.0,
+    120.0,
+    144.0,
+    168.0
+  ],
+  "summary": {
+    "trial": "one element set; one residual per lead bin",
+    "windows": {
+      "quiet": {
+        "role": "control",
+        "n_sets": 57,
+        "n_sets_by_satellite": {
+          "A": 19,
+          "B": 19,
+          "C": 19
+        },
+        "n_trial_leads": 570,
+        "n_excluded_gap": 0,
+        "n_excluded_manoeuvre": 0,
+        "n_excluded_sgp4_error": 0,
+        "manoeuvres": {
+          "source": [
+            "esa-record"
+          ],
+          "n_set_leads_excluded": 0,
+          "n_sets_excluded_any_lead": 0,
+          "n_sets_excluded_all_leads": 0,
+          "n_set_leads_detected": 0,
+          "cross_check": {
+            "both": 0,
+            "record_only": 0,
+            "detection_only": 0,
+            "neither": 570
+          }
+        },
+        "covariance_sources": [
+          "empirical"
+        ],
+        "b_sources": [
+          "history"
+        ],
+        "by_lead_h": {
+          "6": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.05344829519893153,
+              "p68_km": 0.06270621696143308,
+              "p95_km": 0.11562784806712031,
+              "max_km": 0.13377077167803153,
+              "median_signed_km": -0.003595086157320744,
+              "inside_1_sigma": 0.7192982456140351,
+              "inside_2_sigma": 0.9649122807017544,
+              "median_sigma_km": 0.06454144588813933
+            },
+            "in_track": {
+              "median_km": 0.32212085121875167,
+              "p68_km": 0.5969774405258217,
+              "p95_km": 1.4181748705683959,
+              "max_km": 1.5844131794269583,
+              "median_signed_km": -0.044172247738411254,
+              "inside_1_sigma": 0.49122807017543857,
+              "inside_2_sigma": 0.7543859649122807,
+              "median_sigma_km": 0.2905113962261013
+            },
+            "cross": {
+              "median_km": 0.19566074515130777,
+              "p68_km": 0.27971550083502844,
+              "p95_km": 0.39882961557566454,
+              "max_km": 0.4179260697769851,
+              "median_signed_km": -0.02563015954054415,
+              "inside_1_sigma": 0.03508771929824561,
+              "inside_2_sigma": 0.03508771929824561,
+              "median_sigma_km": 0.010825556919925077
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 0.32212085121875167,
+              "median_abs_corrected_km": 0.3249483212628231,
+              "median_abs_shift_km": 0.023453246852047277,
+              "improvement": -0.008777668484898138,
+              "share_of_trials_improved": 0.6140350877192983
+            }
+          },
+          "12": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.04325334563382982,
+              "p68_km": 0.06651752348893625,
+              "p95_km": 0.18488619511403162,
+              "max_km": 0.24934648108305144,
+              "median_signed_km": -0.012447649755683757,
+              "inside_1_sigma": 0.631578947368421,
+              "inside_2_sigma": 0.8596491228070176,
+              "median_sigma_km": 0.06454144588813933
+            },
+            "in_track": {
+              "median_km": 0.509651077491615,
+              "p68_km": 0.8434519839799934,
+              "p95_km": 1.6915113410154115,
+              "max_km": 1.790945961703477,
+              "median_signed_km": 0.29955953254912343,
+              "inside_1_sigma": 0.3684210526315789,
+              "inside_2_sigma": 0.5964912280701754,
+              "median_sigma_km": 0.2905113962261013
+            },
+            "cross": {
+              "median_km": 0.17928908946249372,
+              "p68_km": 0.20060216109057752,
+              "p95_km": 0.25136403671726476,
+              "max_km": 0.3072602495806077,
+              "median_signed_km": 0.061451451749902186,
+              "inside_1_sigma": 0.0,
+              "inside_2_sigma": 0.017543859649122806,
+              "median_sigma_km": 0.010825556919925077
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 0.509651077491615,
+              "median_abs_corrected_km": 0.4494125366626453,
+              "median_abs_shift_km": 0.09514677276326071,
+              "improvement": 0.11819565088619033,
+              "share_of_trials_improved": 0.38596491228070173
+            }
+          },
+          "24": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.06860026321519257,
+              "p68_km": 0.08816834231506743,
+              "p95_km": 0.14283008084571086,
+              "max_km": 0.1927082891005058,
+              "median_signed_km": -0.025210442656249013,
+              "inside_1_sigma": 0.9298245614035088,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.13834761787325978
+            },
+            "in_track": {
+              "median_km": 0.538251651865314,
+              "p68_km": 0.8008999705767196,
+              "p95_km": 1.5409811906285926,
+              "max_km": 2.2552760579433766,
+              "median_signed_km": 0.26540197559363593,
+              "inside_1_sigma": 0.8245614035087719,
+              "inside_2_sigma": 0.9824561403508771,
+              "median_sigma_km": 1.0088329499581825
+            },
+            "cross": {
+              "median_km": 0.19835952617792635,
+              "p68_km": 0.241507038223031,
+              "p95_km": 0.2855571216511285,
+              "max_km": 0.3740943685074957,
+              "median_signed_km": 0.06194207415716235,
+              "inside_1_sigma": 0.017543859649122806,
+              "inside_2_sigma": 0.07017543859649122,
+              "median_sigma_km": 0.021651113839850154
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 0.538251651865314,
+              "median_abs_corrected_km": 0.5907187628593111,
+              "median_abs_shift_km": 0.43491398599390346,
+              "improvement": -0.09747691588529661,
+              "share_of_trials_improved": 0.45614035087719296
+            }
+          },
+          "36": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.10867526752434364,
+              "p68_km": 0.2004252153902793,
+              "p95_km": 0.32622778282994636,
+              "max_km": 0.4437486424880497,
+              "median_signed_km": 0.10867526752434364,
+              "inside_1_sigma": 0.7017543859649122,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.21610861032422268
+            },
+            "in_track": {
+              "median_km": 1.1507907911342055,
+              "p68_km": 1.8482326488731073,
+              "p95_km": 3.1960655590909703,
+              "max_km": 4.346655520113432,
+              "median_signed_km": 0.9547827624780569,
+              "inside_1_sigma": 0.8421052631578947,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 2.269874137405911
+            },
+            "cross": {
+              "median_km": 0.09252979621373814,
+              "p68_km": 0.18024044911724565,
+              "p95_km": 0.29118186015032366,
+              "max_km": 0.33443471810680914,
+              "median_signed_km": 0.01174496760652377,
+              "inside_1_sigma": 0.3157894736842105,
+              "inside_2_sigma": 0.43859649122807015,
+              "median_sigma_km": 0.03247667075977523
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 1.1507907911342055,
+              "median_abs_corrected_km": 1.8513546904020914,
+              "median_abs_shift_km": 1.0127922198175219,
+              "improvement": -0.608767383841696,
+              "share_of_trials_improved": 0.3508771929824561
+            }
+          },
+          "48": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.19537475024588605,
+              "p68_km": 0.25462780343028313,
+              "p95_km": 0.3508193315525301,
+              "max_km": 0.38354771974863183,
+              "median_signed_km": -0.19537475024588605,
+              "inside_1_sigma": 0.7543859649122807,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.2965546108833432
+            },
+            "in_track": {
+              "median_km": 1.5685930981883174,
+              "p68_km": 2.2512372757978265,
+              "p95_km": 4.924047974443657,
+              "max_km": 6.557927522388137,
+              "median_signed_km": 0.8325563448704449,
+              "inside_1_sigma": 0.9298245614035088,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 4.03533179983273
+            },
+            "cross": {
+              "median_km": 0.14003534685224595,
+              "p68_km": 0.18414467239681861,
+              "p95_km": 0.2541578796545843,
+              "max_km": 0.2680743219404322,
+              "median_signed_km": -0.005324497086103386,
+              "inside_1_sigma": 0.10526315789473684,
+              "inside_2_sigma": 0.22807017543859648,
+              "median_sigma_km": 0.04330222767970031
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 1.5685930981883174,
+              "median_abs_corrected_km": 3.0797333221307603,
+              "median_abs_shift_km": 2.0548815612219498,
+              "improvement": -0.9633729905402293,
+              "share_of_trials_improved": 0.3684210526315789
+            }
+          },
+          "72": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.36128091373306803,
+              "p68_km": 0.45837985883959237,
+              "p95_km": 0.5703784931428242,
+              "max_km": 0.621102629526573,
+              "median_signed_km": 0.32587644361769064,
+              "inside_1_sigma": 0.6140350877192983,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.4477248912915357
+            },
+            "in_track": {
+              "median_km": 3.1658920073389627,
+              "p68_km": 4.340516492731906,
+              "p95_km": 8.951436012312502,
+              "max_km": 11.95911835101385,
+              "median_signed_km": 1.0192307295347942,
+              "inside_1_sigma": 0.9473684210526315,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 9.079496549623643
+            },
+            "cross": {
+              "median_km": 0.07453136396828827,
+              "p68_km": 0.11883853000728095,
+              "p95_km": 0.22553749933896178,
+              "max_km": 0.5066228122807113,
+              "median_signed_km": 0.0389574812561555,
+              "inside_1_sigma": 0.47368421052631576,
+              "inside_2_sigma": 0.7368421052631579,
+              "median_sigma_km": 0.06382954231963159
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 3.1658920073389627,
+              "median_abs_corrected_km": 6.044566066117683,
+              "median_abs_shift_km": 5.364336194271387,
+              "improvement": -0.9092774017893117,
+              "share_of_trials_improved": 0.2807017543859649
+            }
+          },
+          "96": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.08415444151204228,
+              "p68_km": 0.1198548695261622,
+              "p95_km": 0.2047650720162873,
+              "max_km": 0.22195240202976435,
+              "median_signed_km": 0.07277967496499468,
+              "inside_1_sigma": 1.0,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.5969665217220476
+            },
+            "in_track": {
+              "median_km": 6.891942847654109,
+              "p68_km": 8.550490067780554,
+              "p95_km": 12.892779085776054,
+              "max_km": 26.67673599467762,
+              "median_signed_km": -1.3603015726992669,
+              "inside_1_sigma": 0.9649122807017544,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 15.301275203831237
+            },
+            "cross": {
+              "median_km": 0.21679104245986913,
+              "p68_km": 0.2834561243870209,
+              "p95_km": 0.4123263633306617,
+              "max_km": 0.4595895247752013,
+              "median_signed_km": -0.051293836335084775,
+              "inside_1_sigma": 0.24561403508771928,
+              "inside_2_sigma": 0.43859649122807015,
+              "median_sigma_km": 0.0826925897601174
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 6.891942847654109,
+              "median_abs_corrected_km": 8.417433863379422,
+              "median_abs_shift_km": 10.32913347661319,
+              "improvement": -0.2213441186971774,
+              "share_of_trials_improved": 0.3684210526315789
+            }
+          },
+          "120": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.619877084072553,
+              "p68_km": 0.680669821153815,
+              "p95_km": 0.7652621504640642,
+              "max_km": 0.8145128244488292,
+              "median_signed_km": -0.5917695098585265,
+              "inside_1_sigma": 0.8771929824561403,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.7462081521525594
+            },
+            "in_track": {
+              "median_km": 9.906172635708188,
+              "p68_km": 13.966947483924987,
+              "p95_km": 22.951310632246035,
+              "max_km": 44.16156305699473,
+              "median_signed_km": -4.363515548387214,
+              "inside_1_sigma": 0.9122807017543859,
+              "inside_2_sigma": 0.9824561403508771,
+              "median_sigma_km": 21.86672016138236
+            },
+            "cross": {
+              "median_km": 0.13091828416695406,
+              "p68_km": 0.16389661730757787,
+              "p95_km": 0.2556190972575975,
+              "max_km": 0.2905188976347115,
+              "median_signed_km": -0.10438215591802386,
+              "inside_1_sigma": 0.40350877192982454,
+              "inside_2_sigma": 0.8596491228070176,
+              "median_sigma_km": 0.1020008776583759
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 9.906172635708188,
+              "median_abs_corrected_km": 12.21723893679129,
+              "median_abs_shift_km": 17.807288195888475,
+              "improvement": -0.233295581055446,
+              "share_of_trials_improved": 0.3684210526315789
+            }
+          },
+          "144": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.5557712381940978,
+              "p68_km": 0.6504677819986271,
+              "p95_km": 0.9233355728808127,
+              "max_km": 0.9523186609464291,
+              "median_signed_km": 0.5557712381940978,
+              "inside_1_sigma": 0.9473684210526315,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.8954497825830714
+            },
+            "in_track": {
+              "median_km": 14.362225750647692,
+              "p68_km": 22.876372191115266,
+              "p95_km": 39.656657176813866,
+              "max_km": 67.74762464244785,
+              "median_signed_km": -12.72285776162347,
+              "inside_1_sigma": 0.8421052631578947,
+              "inside_2_sigma": 0.9824561403508771,
+              "median_sigma_km": 29.273431928676384
+            },
+            "cross": {
+              "median_km": 0.14838851537162334,
+              "p68_km": 0.23186563962337184,
+              "p95_km": 0.4967656630697984,
+              "max_km": 0.6838631159586503,
+              "median_signed_km": 0.10443871818554273,
+              "inside_1_sigma": 0.43859649122807015,
+              "inside_2_sigma": 0.7368421052631579,
+              "median_sigma_km": 0.12240105319005107
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 14.362225750647692,
+              "median_abs_corrected_km": 15.600364561374988,
+              "median_abs_shift_km": 28.323222322998458,
+              "improvement": -0.08620800370523773,
+              "share_of_trials_improved": 0.45614035087719296
+            }
+          },
+          "168": {
+            "n": 57,
+            "n_sets": 57,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.5715879280960998,
+              "p68_km": 0.6598549432228701,
+              "p95_km": 0.9651703722473848,
+              "max_km": 1.5333994866844733,
+              "median_signed_km": 0.5715879280960998,
+              "inside_1_sigma": 0.9649122807017544,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 1.0446914130135831
+            },
+            "in_track": {
+              "median_km": 24.050124591049627,
+              "p68_km": 38.47277087691183,
+              "p95_km": 62.12430060930719,
+              "max_km": 99.54463682760944,
+              "median_signed_km": -21.215490583121735,
+              "inside_1_sigma": 0.7017543859649122,
+              "inside_2_sigma": 0.9649122807017544,
+              "median_sigma_km": 37.4617882055802
+            },
+            "cross": {
+              "median_km": 0.21854444607620938,
+              "p68_km": 0.27530477350780774,
+              "p95_km": 0.3451919893801559,
+              "max_km": 0.3627416605420102,
+              "median_signed_km": 0.09383266405050184,
+              "inside_1_sigma": 0.2807017543859649,
+              "inside_2_sigma": 0.7017543859649122,
+              "median_sigma_km": 0.14280122872172626
+            },
+            "storm_term": {
+              "n": 57,
+              "median_abs_raw_km": 24.050124591049627,
+              "median_abs_corrected_km": 17.136748985243532,
+              "median_abs_shift_km": 41.63613917885841,
+              "improvement": 0.28745695597680776,
+              "share_of_trials_improved": 0.543859649122807
+            }
+          }
+        },
+        "horizon": {
+          "task": "in-track residual within 25 km, the screening box's half-width, at the 95% of trials",
+          "tolerance_km": 25.0,
+          "quantile": 0.95,
+          "last_lead_h_within": 120.0,
+          "first_lead_h_beyond": 144.0,
+          "quantile_km_there": 39.656657176813866
+        }
+      },
+      "storm": {
+        "role": "storm",
+        "n_sets": 54,
+        "n_sets_by_satellite": {
+          "A": 18,
+          "B": 19,
+          "C": 17
+        },
+        "n_trial_leads": 540,
+        "n_excluded_gap": 0,
+        "n_excluded_manoeuvre": 0,
+        "n_excluded_sgp4_error": 0,
+        "manoeuvres": {
+          "source": [
+            "esa-record"
+          ],
+          "n_set_leads_excluded": 0,
+          "n_sets_excluded_any_lead": 0,
+          "n_sets_excluded_all_leads": 0,
+          "n_set_leads_detected": 0,
+          "cross_check": {
+            "both": 0,
+            "record_only": 0,
+            "detection_only": 0,
+            "neither": 540
+          }
+        },
+        "covariance_sources": [
+          "empirical"
+        ],
+        "b_sources": [
+          "history"
+        ],
+        "by_lead_h": {
+          "6": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.06873866620295085,
+              "p68_km": 0.0844990416947544,
+              "p95_km": 0.12909603828579386,
+              "max_km": 0.16158842288290168,
+              "median_signed_km": -0.04157511531620643,
+              "inside_1_sigma": 0.37037037037037035,
+              "inside_2_sigma": 0.9259259259259259,
+              "median_sigma_km": 0.059736819504611564
+            },
+            "in_track": {
+              "median_km": 0.4951064485229929,
+              "p68_km": 0.6783930666910312,
+              "p95_km": 1.2276277921987098,
+              "max_km": 1.5629905817144962,
+              "median_signed_km": 0.035613133972228886,
+              "inside_1_sigma": 0.3333333333333333,
+              "inside_2_sigma": 0.6666666666666666,
+              "median_sigma_km": 0.34310948796596963
+            },
+            "cross": {
+              "median_km": 0.2117348201995589,
+              "p68_km": 0.3121779415133472,
+              "p95_km": 0.4158992446340272,
+              "max_km": 0.42087526350873783,
+              "median_signed_km": 0.19770829318408656,
+              "inside_1_sigma": 0.0,
+              "inside_2_sigma": 0.018518518518518517,
+              "median_sigma_km": 0.011705067428665165
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 0.4951064485229929,
+              "median_abs_corrected_km": 0.5325120240794294,
+              "median_abs_shift_km": 0.06347278367222575,
+              "improvement": -0.07555057234262508,
+              "share_of_trials_improved": 0.46296296296296297
+            },
+            "through_disturbed": {
+              "n": 21,
+              "in_track_median_km": 0.8016882518180232,
+              "in_track_p95_km": 1.2890830169006853
+            }
+          },
+          "12": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.04829490064817964,
+              "p68_km": 0.060719235623809126,
+              "p95_km": 0.13168874863031818,
+              "max_km": 0.21285019642402916,
+              "median_signed_km": -0.03837183690767066,
+              "inside_1_sigma": 0.6296296296296297,
+              "inside_2_sigma": 0.9259259259259259,
+              "median_sigma_km": 0.059736819504611564
+            },
+            "in_track": {
+              "median_km": 0.37004052674754323,
+              "p68_km": 0.5933938487553444,
+              "p95_km": 0.9365086225035297,
+              "max_km": 1.2870467219593382,
+              "median_signed_km": 0.024532944101112127,
+              "inside_1_sigma": 0.4444444444444444,
+              "inside_2_sigma": 0.7592592592592593,
+              "median_sigma_km": 0.34310948796596963
+            },
+            "cross": {
+              "median_km": 0.16385510403905312,
+              "p68_km": 0.1981016937641239,
+              "p95_km": 0.23857474101204962,
+              "max_km": 0.2782802533028738,
+              "median_signed_km": -0.011128996048367507,
+              "inside_1_sigma": 0.018518518518518517,
+              "inside_2_sigma": 0.05555555555555555,
+              "median_sigma_km": 0.011705067428665165
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 0.37004052674754323,
+              "median_abs_corrected_km": 0.6073134116382632,
+              "median_abs_shift_km": 0.21952580159029716,
+              "improvement": -0.6412078346558978,
+              "share_of_trials_improved": 0.4444444444444444
+            },
+            "through_disturbed": {
+              "n": 21,
+              "in_track_median_km": 0.3336712498031729,
+              "in_track_p95_km": 1.168757476881746
+            }
+          },
+          "24": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.05911923820997661,
+              "p68_km": 0.09470675299680026,
+              "p95_km": 0.14745503698542267,
+              "max_km": 0.21057190039976004,
+              "median_signed_km": -0.024805821325601662,
+              "inside_1_sigma": 0.9074074074074074,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.132564302561488
+            },
+            "in_track": {
+              "median_km": 0.8246460980835993,
+              "p68_km": 1.4235049301454519,
+              "p95_km": 3.6998835015955276,
+              "max_km": 3.9105531617244633,
+              "median_signed_km": -0.6011021313177483,
+              "inside_1_sigma": 0.6666666666666666,
+              "inside_2_sigma": 0.7962962962962963,
+              "median_sigma_km": 1.1947766320840785
+            },
+            "cross": {
+              "median_km": 0.22072571926104206,
+              "p68_km": 0.24141271002084866,
+              "p95_km": 0.2947458302141612,
+              "max_km": 0.3305123000807695,
+              "median_signed_km": 0.1496098667378311,
+              "inside_1_sigma": 0.037037037037037035,
+              "inside_2_sigma": 0.037037037037037035,
+              "median_sigma_km": 0.02341013485733033
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 0.8246460980835993,
+              "median_abs_corrected_km": 1.385116393594822,
+              "median_abs_shift_km": 0.9799407541382215,
+              "improvement": -0.6796494845652012,
+              "share_of_trials_improved": 0.24074074074074073
+            },
+            "through_disturbed": {
+              "n": 29,
+              "in_track_median_km": 1.7000062653526713,
+              "in_track_p95_km": 3.7755385995157855
+            }
+          },
+          "36": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.08504276646050932,
+              "p68_km": 0.13005258362840763,
+              "p95_km": 0.22370435907785324,
+              "max_km": 0.2890798284623911,
+              "median_signed_km": 0.08504276646050932,
+              "inside_1_sigma": 0.8888888888888888,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.21131559023806637
+            },
+            "in_track": {
+              "median_km": 0.6982437699650187,
+              "p68_km": 1.3870250406175526,
+              "p95_km": 9.894161086491934,
+              "max_km": 12.251927639594538,
+              "median_signed_km": -0.41311283147605526,
+              "inside_1_sigma": 0.7592592592592593,
+              "inside_2_sigma": 0.7592592592592593,
+              "median_sigma_km": 2.5419324978072777
+            },
+            "cross": {
+              "median_km": 0.10472139067045266,
+              "p68_km": 0.22515516433837468,
+              "p95_km": 0.3693866702189591,
+              "max_km": 0.3806737519892118,
+              "median_signed_km": -0.023472344225847278,
+              "inside_1_sigma": 0.2222222222222222,
+              "inside_2_sigma": 0.37037037037037035,
+              "median_sigma_km": 0.03411213798084685
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 0.6982437699650187,
+              "median_abs_corrected_km": 2.701181114810459,
+              "median_abs_shift_km": 2.5191568507434745,
+              "improvement": -2.8685359340131105,
+              "share_of_trials_improved": 0.24074074074074073
+            },
+            "through_disturbed": {
+              "n": 30,
+              "in_track_median_km": 1.407657665027125,
+              "in_track_p95_km": 11.557726786713584
+            }
+          },
+          "48": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.20979400119203226,
+              "p68_km": 0.3219557203146358,
+              "p95_km": 0.45497529694136835,
+              "max_km": 0.5228821164246223,
+              "median_signed_km": -0.20979400119203226,
+              "inside_1_sigma": 0.6111111111111112,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.29417860641638455
+            },
+            "in_track": {
+              "median_km": 2.2028350927006874,
+              "p68_km": 5.066187517837051,
+              "p95_km": 15.867570869261845,
+              "max_km": 20.6465661752243,
+              "median_signed_km": -0.45340089724339405,
+              "inside_1_sigma": 0.6666666666666666,
+              "inside_2_sigma": 0.7592592592592593,
+              "median_sigma_km": 4.518991107212938
+            },
+            "cross": {
+              "median_km": 0.1565166403084136,
+              "p68_km": 0.17808721951987042,
+              "p95_km": 0.2297602395269691,
+              "max_km": 0.2438304127126001,
+              "median_signed_km": -0.007597906525134132,
+              "inside_1_sigma": 0.1111111111111111,
+              "inside_2_sigma": 0.2222222222222222,
+              "median_sigma_km": 0.04485586231204052
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 2.2028350927006874,
+              "median_abs_corrected_km": 4.247441280031987,
+              "median_abs_shift_km": 4.812084250069411,
+              "improvement": -0.9281703356307991,
+              "share_of_trials_improved": 0.37037037037037035
+            },
+            "through_disturbed": {
+              "n": 36,
+              "in_track_median_km": 5.0459178249860885,
+              "in_track_p95_km": 17.186753941109238
+            }
+          },
+          "72": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.34688005191659155,
+              "p68_km": 0.4180857421948878,
+              "p95_km": 0.6651630732134483,
+              "max_km": 0.6879328755646968,
+              "median_signed_km": 0.28542227452735913,
+              "inside_1_sigma": 0.7037037037037037,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.4689386558003127
+            },
+            "in_track": {
+              "median_km": 7.217157259558009,
+              "p68_km": 19.52166216291029,
+              "p95_km": 35.72803562008008,
+              "max_km": 39.0688315497155,
+              "median_signed_km": 0.9004129976156008,
+              "inside_1_sigma": 0.5185185185185185,
+              "inside_2_sigma": 0.6481481481481481,
+              "median_sigma_km": 10.16772999122911
+            },
+            "cross": {
+              "median_km": 0.05908395741701811,
+              "p68_km": 0.08690972424777643,
+              "p95_km": 0.23011404355563564,
+              "max_km": 0.4438277414685152,
+              "median_signed_km": -0.007186249485897286,
+              "inside_1_sigma": 0.5370370370370371,
+              "inside_2_sigma": 0.8888888888888888,
+              "median_sigma_km": 0.06866177589640471
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 7.217157259558009,
+              "median_abs_corrected_km": 8.80803687625827,
+              "median_abs_shift_km": 13.38370690713188,
+              "improvement": -0.22043022751006114,
+              "share_of_trials_improved": 0.48148148148148145
+            },
+            "through_disturbed": {
+              "n": 44,
+              "in_track_median_km": 13.474791082541001,
+              "in_track_p95_km": 35.96112561775374
+            }
+          },
+          "96": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.0861381963488648,
+              "p68_km": 0.099605755710674,
+              "p95_km": 0.6177429143298565,
+              "max_km": 0.749346593750339,
+              "median_signed_km": -0.014521830586804306,
+              "inside_1_sigma": 0.9629629629629629,
+              "inside_2_sigma": 1.0,
+              "median_sigma_km": 0.6528232020301643
+            },
+            "in_track": {
+              "median_km": 19.85833856595802,
+              "p68_km": 32.972324031893656,
+              "p95_km": 64.1521010628114,
+              "max_km": 73.22802801482091,
+              "median_signed_km": 10.081836533488548,
+              "inside_1_sigma": 0.4444444444444444,
+              "inside_2_sigma": 0.6481481481481481,
+              "median_sigma_km": 18.07596442885175
+            },
+            "cross": {
+              "median_km": 0.2113209506298348,
+              "p68_km": 0.26705124096963906,
+              "p95_km": 0.3702438039838,
+              "max_km": 0.4899439299704307,
+              "median_signed_km": -0.00429779565113142,
+              "inside_1_sigma": 0.14814814814814814,
+              "inside_2_sigma": 0.3333333333333333,
+              "median_sigma_km": 0.09287540176062788
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 19.85833856595802,
+              "median_abs_corrected_km": 15.861129433483292,
+              "median_abs_shift_km": 32.533816777020284,
+              "improvement": 0.20128618107694618,
+              "share_of_trials_improved": 0.5370370370370371
+            },
+            "through_disturbed": {
+              "n": 54,
+              "in_track_median_km": 19.85833856595802,
+              "in_track_p95_km": 64.1521010628114
+            }
+          },
+          "120": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.6277098610720057,
+              "p68_km": 0.6973210998174283,
+              "p95_km": 0.9870563195711729,
+              "max_km": 1.5076908206362614,
+              "median_signed_km": -0.3397298254552614,
+              "inside_1_sigma": 0.8333333333333334,
+              "inside_2_sigma": 0.9629629629629629,
+              "median_sigma_km": 0.8438050034661666
+            },
+            "in_track": {
+              "median_km": 37.37411442277538,
+              "p68_km": 52.21305076652821,
+              "p95_km": 100.2900067719788,
+              "max_km": 111.93741585509481,
+              "median_signed_km": 25.074113254548486,
+              "inside_1_sigma": 0.3333333333333333,
+              "inside_2_sigma": 0.6666666666666666,
+              "median_sigma_km": 28.24369442008086
+            },
+            "cross": {
+              "median_km": 0.09359709348352574,
+              "p68_km": 0.11063655997228977,
+              "p95_km": 0.23298768018143545,
+              "max_km": 0.38046668545007556,
+              "median_signed_km": -0.06598285553766818,
+              "inside_1_sigma": 0.6296296296296297,
+              "inside_2_sigma": 0.9444444444444444,
+              "median_sigma_km": 0.11705067428665165
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 37.37411442277538,
+              "median_abs_corrected_km": 21.683742117261886,
+              "median_abs_shift_km": 54.745576899256385,
+              "improvement": 0.4198192398092502,
+              "share_of_trials_improved": 0.6851851851851852
+            },
+            "through_disturbed": {
+              "n": 54,
+              "in_track_median_km": 37.37411442277538,
+              "in_track_p95_km": 100.2900067719788
+            }
+          },
+          "144": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.5382957940079791,
+              "p68_km": 0.7131528103530111,
+              "p95_km": 2.402031246231614,
+              "max_km": 2.5751890151205146,
+              "median_signed_km": 0.5382957940079791,
+              "inside_1_sigma": 0.8518518518518519,
+              "inside_2_sigma": 0.8888888888888888,
+              "median_sigma_km": 1.0406400334971155
+            },
+            "in_track": {
+              "median_km": 57.53787053072638,
+              "p68_km": 69.29783281328157,
+              "p95_km": 146.20828071938567,
+              "max_km": 157.8334454361937,
+              "median_signed_km": 43.19187094598854,
+              "inside_1_sigma": 0.35185185185185186,
+              "inside_2_sigma": 0.6666666666666666,
+              "median_sigma_km": 39.77200625270253
+            },
+            "cross": {
+              "median_km": 0.07668775236729797,
+              "p68_km": 0.10582826584889717,
+              "p95_km": 0.2901953285478262,
+              "max_km": 0.45472724806765896,
+              "median_signed_km": 0.024603565998362775,
+              "inside_1_sigma": 0.7962962962962963,
+              "inside_2_sigma": 0.9259259259259259,
+              "median_sigma_km": 0.14046080914398199
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 57.53787053072638,
+              "median_abs_corrected_km": 29.69981194991346,
+              "median_abs_shift_km": 84.3654779987442,
+              "improvement": 0.48382149572161937,
+              "share_of_trials_improved": 0.7407407407407407
+            },
+            "through_disturbed": {
+              "n": 54,
+              "in_track_median_km": 57.53787053072638,
+              "in_track_p95_km": 146.20828071938567
+            }
+          },
+          "168": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.474967559423944,
+              "p68_km": 0.6617168665604847,
+              "p95_km": 3.516745686858738,
+              "max_km": 4.41188641811879,
+              "median_signed_km": 0.4178999587196408,
+              "inside_1_sigma": 0.8888888888888888,
+              "inside_2_sigma": 0.8888888888888888,
+              "median_sigma_km": 1.242479801461507
+            },
+            "in_track": {
+              "median_km": 74.56393289912104,
+              "p68_km": 89.25032372920235,
+              "p95_km": 197.4853312712804,
+              "max_km": 214.29962157390852,
+              "median_signed_km": 63.98607633263471,
+              "inside_1_sigma": 0.35185185185185186,
+              "inside_2_sigma": 0.7962962962962963,
+              "median_sigma_km": 52.89675855382557
+            },
+            "cross": {
+              "median_km": 0.22120164229597183,
+              "p68_km": 0.2690566308339231,
+              "p95_km": 0.3497796051282373,
+              "max_km": 0.392868767512482,
+              "median_signed_km": 0.12490795669147658,
+              "inside_1_sigma": 0.2777777777777778,
+              "inside_2_sigma": 0.8518518518518519,
+              "median_sigma_km": 0.1638709440013123
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 74.56393289912104,
+              "median_abs_corrected_km": 43.65951630222013,
+              "median_abs_shift_km": 114.59900695234188,
+              "improvement": 0.4144687035045761,
+              "share_of_trials_improved": 0.7592592592592593
+            },
+            "through_disturbed": {
+              "n": 54,
+              "in_track_median_km": 74.56393289912104,
+              "in_track_p95_km": 197.4853312712804
+            }
+          }
+        },
+        "horizon": {
+          "task": "in-track residual within 25 km, the screening box's half-width, at the 95% of trials",
+          "tolerance_km": 25.0,
+          "quantile": 0.95,
+          "last_lead_h_within": 48.0,
+          "first_lead_h_beyond": 72.0,
+          "quantile_km_there": 35.72803562008008
+        }
+      },
+      "held-out": {
+        "role": "held-out",
+        "n_sets": 61,
+        "n_sets_by_satellite": {
+          "A": 21,
+          "B": 19,
+          "C": 21
+        },
+        "n_trial_leads": 610,
+        "n_excluded_gap": 0,
+        "n_excluded_manoeuvre": 36,
+        "n_excluded_sgp4_error": 0,
+        "manoeuvres": {
+          "source": [
+            "esa-record"
+          ],
+          "n_set_leads_excluded": 36,
+          "n_sets_excluded_any_lead": 15,
+          "n_sets_excluded_all_leads": 0,
+          "n_set_leads_detected": 211,
+          "cross_check": {
+            "both": 36,
+            "record_only": 0,
+            "detection_only": 175,
+            "neither": 399
+          }
+        },
+        "covariance_sources": [
+          "empirical"
+        ],
+        "b_sources": [
+          "history"
+        ],
+        "by_lead_h": {
+          "6": {
+            "n": 61,
+            "n_sets": 61,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.059534301906596046,
+              "p68_km": 0.08860873295017782,
+              "p95_km": 0.19073925210970716,
+              "max_km": 0.23799934931456201,
+              "median_signed_km": 0.017813982911658446,
+              "inside_1_sigma": 0.47540983606557374,
+              "inside_2_sigma": 0.8360655737704918,
+              "median_sigma_km": 0.05355736561833604
+            },
+            "in_track": {
+              "median_km": 0.8548503954584012,
+              "p68_km": 1.0949999162736417,
+              "p95_km": 2.0608249045334306,
+              "max_km": 3.4212863364697492,
+              "median_signed_km": -0.7063239339204639,
+              "inside_1_sigma": 0.3114754098360656,
+              "inside_2_sigma": 0.7540983606557377,
+              "median_sigma_km": 0.5566538054229697
+            },
+            "cross": {
+              "median_km": 0.10424994293372414,
+              "p68_km": 0.1756363338575203,
+              "p95_km": 0.2738915525962526,
+              "max_km": 0.34639121857576277,
+              "median_signed_km": -0.06226436413084113,
+              "inside_1_sigma": 0.03278688524590164,
+              "inside_2_sigma": 0.11475409836065574,
+              "median_sigma_km": 0.012206433476332471
+            },
+            "storm_term": {
+              "n": 61,
+              "median_abs_raw_km": 0.8548503954584012,
+              "median_abs_corrected_km": 0.8154426570110533,
+              "median_abs_shift_km": 0.07027421952075155,
+              "improvement": 0.04609898838055293,
+              "share_of_trials_improved": 0.4918032786885246
+            },
+            "through_disturbed": {
+              "n": 18,
+              "in_track_median_km": 1.1323724437436713,
+              "in_track_p95_km": 3.4123994301136853
+            }
+          },
+          "12": {
+            "n": 61,
+            "n_sets": 61,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.14775359931798976,
+              "p68_km": 0.18588518020511174,
+              "p95_km": 0.2576320186198659,
+              "max_km": 0.32083970212722823,
+              "median_signed_km": 0.020039245633176016,
+              "inside_1_sigma": 0.21311475409836064,
+              "inside_2_sigma": 0.32786885245901637,
+              "median_sigma_km": 0.05355736561833604
+            },
+            "in_track": {
+              "median_km": 0.9139772248579364,
+              "p68_km": 1.3898310530842009,
+              "p95_km": 6.0154379349355,
+              "max_km": 8.793390214667262,
+              "median_signed_km": 0.09559677674166184,
+              "inside_1_sigma": 0.32786885245901637,
+              "inside_2_sigma": 0.6229508196721312,
+              "median_sigma_km": 0.5566538054229697
+            },
+            "cross": {
+              "median_km": 0.15193484770553023,
+              "p68_km": 0.18592536231648576,
+              "p95_km": 0.3152785679674783,
+              "max_km": 0.32207230748915006,
+              "median_signed_km": -0.00859448793093133,
+              "inside_1_sigma": 0.04918032786885246,
+              "inside_2_sigma": 0.09836065573770492,
+              "median_sigma_km": 0.012206433476332471
+            },
+            "storm_term": {
+              "n": 61,
+              "median_abs_raw_km": 0.9139772248579364,
+              "median_abs_corrected_km": 0.7296729521979075,
+              "median_abs_shift_km": 0.2669159401697519,
+              "improvement": 0.20165083729375877,
+              "share_of_trials_improved": 0.7377049180327869
+            },
+            "through_disturbed": {
+              "n": 18,
+              "in_track_median_km": 1.5414060624742607,
+              "in_track_p95_km": 8.763962357185477
+            }
+          },
+          "24": {
+            "n": 61,
+            "n_sets": 61,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.11507601118173483,
+              "p68_km": 0.14830599805294795,
+              "p95_km": 0.25147446454121425,
+              "max_km": 0.2888317286798756,
+              "median_signed_km": 0.012712329056526084,
+              "inside_1_sigma": 0.6229508196721312,
+              "inside_2_sigma": 0.9508196721311475,
+              "median_sigma_km": 0.13187370294897102
+            },
+            "in_track": {
+              "median_km": 1.7697783882602112,
+              "p68_km": 3.661518854682129,
+              "p95_km": 18.27940724696065,
+              "max_km": 27.490415229920284,
+              "median_signed_km": -0.9401802266616454,
+              "inside_1_sigma": 0.5081967213114754,
+              "inside_2_sigma": 0.6885245901639344,
+              "median_sigma_km": 2.0775054612965653
+            },
+            "cross": {
+              "median_km": 0.15330908235740373,
+              "p68_km": 0.2021534871262558,
+              "p95_km": 0.3071310813955027,
+              "max_km": 0.32159890075673814,
+              "median_signed_km": 0.028792315373687538,
+              "inside_1_sigma": 0.11475409836065574,
+              "inside_2_sigma": 0.18032786885245902,
+              "median_sigma_km": 0.01915394719513002
+            },
+            "storm_term": {
+              "n": 61,
+              "median_abs_raw_km": 1.7697783882602112,
+              "median_abs_corrected_km": 1.557667418819515,
+              "median_abs_shift_km": 1.2643158319790044,
+              "improvement": 0.11985171185710597,
+              "share_of_trials_improved": 0.639344262295082
+            },
+            "through_disturbed": {
+              "n": 24,
+              "in_track_median_km": 3.7694739776176553,
+              "in_track_p95_km": 24.76244370108991
+            }
+          },
+          "36": {
+            "n": 61,
+            "n_sets": 61,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.2833236330780396,
+              "p68_km": 0.3641743592832006,
+              "p95_km": 0.5536511714922527,
+              "max_km": 0.8522185059209324,
+              "median_signed_km": 0.2833236330780396,
+              "inside_1_sigma": 0.32786885245901637,
+              "inside_2_sigma": 0.7868852459016393,
+              "median_sigma_km": 0.22437927214643855
+            },
+            "in_track": {
+              "median_km": 4.221490477957217,
+              "p68_km": 8.575830394433375,
+              "p95_km": 37.53673441510714,
+              "max_km": 57.42918840230717,
+              "median_signed_km": -1.7558369293639604,
+              "inside_1_sigma": 0.4918032786885246,
+              "inside_2_sigma": 0.6229508196721312,
+              "median_sigma_km": 4.446406213384542
+            },
+            "cross": {
+              "median_km": 0.15005440054044472,
+              "p68_km": 0.20254304001775314,
+              "p95_km": 0.2604006533713582,
+              "max_km": 0.27822058352067436,
+              "median_signed_km": -0.084789409356411,
+              "inside_1_sigma": 0.18032786885245902,
+              "inside_2_sigma": 0.26229508196721313,
+              "median_sigma_km": 0.024929731679152176
+            },
+            "storm_term": {
+              "n": 61,
+              "median_abs_raw_km": 4.221490477957217,
+              "median_abs_corrected_km": 2.668901352349489,
+              "median_abs_shift_km": 2.8783479929723623,
+              "improvement": 0.36778221666368116,
+              "share_of_trials_improved": 0.6721311475409836
+            },
+            "through_disturbed": {
+              "n": 25,
+              "in_track_median_km": 8.777346169042783,
+              "in_track_p95_km": 49.5061948957728
+            }
+          },
+          "48": {
+            "n": 61,
+            "n_sets": 61,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.16772839330876943,
+              "p68_km": 0.23287617523195306,
+              "p95_km": 0.6655842248351291,
+              "max_km": 1.2957626314645694,
+              "median_signed_km": -0.1206168367119822,
+              "inside_1_sigma": 0.8360655737704918,
+              "inside_2_sigma": 0.9344262295081968,
+              "median_sigma_km": 0.3274313710222276
+            },
+            "in_track": {
+              "median_km": 6.951033691418326,
+              "p68_km": 15.871201617048056,
+              "p95_km": 64.38068681979033,
+              "max_km": 98.91122276273396,
+              "median_signed_km": -3.964312441713586,
+              "inside_1_sigma": 0.47540983606557374,
+              "inside_2_sigma": 0.6721311475409836,
+              "median_sigma_km": 7.251118266082295
+            },
+            "cross": {
+              "median_km": 0.1684382842442178,
+              "p68_km": 0.21233913258744563,
+              "p95_km": 0.265560935901477,
+              "max_km": 0.32784406469225336,
+              "median_signed_km": 0.10305750747506925,
+              "inside_1_sigma": 0.19672131147540983,
+              "inside_2_sigma": 0.2459016393442623,
+              "median_sigma_km": 0.030055764762506175
+            },
+            "storm_term": {
+              "n": 61,
+              "median_abs_raw_km": 6.951033691418326,
+              "median_abs_corrected_km": 4.918923279140138,
+              "median_abs_shift_km": 6.053894826758907,
+              "improvement": 0.2923465059286089,
+              "share_of_trials_improved": 0.7704918032786885
+            },
+            "through_disturbed": {
+              "n": 33,
+              "in_track_median_km": 15.483298013807463,
+              "in_track_p95_km": 60.52689897689726
+            }
+          },
+          "72": {
+            "n": 61,
+            "n_sets": 61,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.4296912942710174,
+              "p68_km": 0.5240690128984904,
+              "p95_km": 2.5839093006410074,
+              "max_km": 5.171765311883597,
+              "median_signed_km": 0.424188995992361,
+              "inside_1_sigma": 0.7049180327868853,
+              "inside_2_sigma": 0.8524590163934426,
+              "median_sigma_km": 0.5500673052891195
+            },
+            "in_track": {
+              "median_km": 15.138195622175283,
+              "p68_km": 35.581196361091386,
+              "p95_km": 141.5341964388643,
+              "max_km": 219.71989369538977,
+              "median_signed_km": -7.859127064040793,
+              "inside_1_sigma": 0.4426229508196721,
+              "inside_2_sigma": 0.6557377049180327,
+              "median_sigma_km": 14.446416407979395
+            },
+            "cross": {
+              "median_km": 0.07320846078748455,
+              "p68_km": 0.13380437743406753,
+              "p95_km": 0.21764120348229088,
+              "max_km": 0.2306547411023192,
+              "median_signed_km": 0.03393829012801275,
+              "inside_1_sigma": 0.39344262295081966,
+              "inside_2_sigma": 0.639344262295082,
+              "median_sigma_km": 0.03911894208059132
+            },
+            "storm_term": {
+              "n": 61,
+              "median_abs_raw_km": 15.138195622175283,
+              "median_abs_corrected_km": 8.562486024381013,
+              "median_abs_shift_km": 15.726479813166318,
+              "improvement": 0.4343786909558627,
+              "share_of_trials_improved": 0.7213114754098361
+            },
+            "through_disturbed": {
+              "n": 42,
+              "in_track_median_km": 29.849091265518776,
+              "in_track_p95_km": 142.02536655908978
+            }
+          },
+          "96": {
+            "n": 58,
+            "n_sets": 58,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.511762321526249,
+              "p68_km": 0.6862897141750621,
+              "p95_km": 4.187909538380488,
+              "max_km": 11.27157217074307,
+              "median_signed_km": 0.31523879952754164,
+              "inside_1_sigma": 0.7413793103448276,
+              "inside_2_sigma": 0.9310344827586207,
+              "median_sigma_km": 0.7995326249873062
+            },
+            "in_track": {
+              "median_km": 19.68621279918218,
+              "p68_km": 64.71562238888087,
+              "p95_km": 239.51031865520554,
+              "max_km": 388.3134888098019,
+              "median_signed_km": -9.653124547403987,
+              "inside_1_sigma": 0.5517241379310345,
+              "inside_2_sigma": 0.6379310344827587,
+              "median_sigma_km": 23.55895275155126
+            },
+            "cross": {
+              "median_km": 0.18360965974244986,
+              "p68_km": 0.23854218416056705,
+              "p95_km": 0.32357399155626454,
+              "max_km": 0.3582432865690288,
+              "median_signed_km": -0.12005623080391281,
+              "inside_1_sigma": 0.1206896551724138,
+              "inside_2_sigma": 0.29310344827586204,
+              "median_sigma_km": 0.04716255016557571
+            },
+            "storm_term": {
+              "n": 58,
+              "median_abs_raw_km": 19.68621279918218,
+              "median_abs_corrected_km": 14.623874700116218,
+              "median_abs_shift_km": 27.2560348432312,
+              "improvement": 0.2571514465837871,
+              "share_of_trials_improved": 0.6896551724137931
+            },
+            "through_disturbed": {
+              "n": 50,
+              "in_track_median_km": 23.180813655892294,
+              "in_track_p95_km": 239.7718695224527
+            }
+          },
+          "120": {
+            "n": 54,
+            "n_sets": 54,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.5868421583638647,
+              "p68_km": 0.8799341655405765,
+              "p95_km": 6.234987299369935,
+              "max_km": 27.839032703003397,
+              "median_signed_km": 0.5868421583638647,
+              "inside_1_sigma": 0.7037037037037037,
+              "inside_2_sigma": 0.7222222222222222,
+              "median_sigma_km": 1.0686099330727585
+            },
+            "in_track": {
+              "median_km": 27.06942685195218,
+              "p68_km": 61.5670078952651,
+              "p95_km": 265.9210816728109,
+              "max_km": 598.8077880651604,
+              "median_signed_km": -11.380116809625335,
+              "inside_1_sigma": 0.6296296296296297,
+              "inside_2_sigma": 0.6851851851851852,
+              "median_sigma_km": 34.427303114398114
+            },
+            "cross": {
+              "median_km": 0.155895018586083,
+              "p68_km": 0.20730224623450288,
+              "p95_km": 0.3828452673171385,
+              "max_km": 0.41016944011599676,
+              "median_signed_km": -0.03284521863939065,
+              "inside_1_sigma": 0.35185185185185186,
+              "inside_2_sigma": 0.48148148148148145,
+              "median_sigma_km": 0.05452413552559956
+            },
+            "storm_term": {
+              "n": 54,
+              "median_abs_raw_km": 27.06942685195218,
+              "median_abs_corrected_km": 24.569032232699286,
+              "median_abs_shift_km": 37.68442629254983,
+              "improvement": 0.09236969193799427,
+              "share_of_trials_improved": 0.6111111111111112
+            },
+            "through_disturbed": {
+              "n": 49,
+              "in_track_median_km": 26.53801204456801,
+              "in_track_p95_km": 303.9577312282498
+            }
+          },
+          "144": {
+            "n": 50,
+            "n_sets": 50,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.914930528339879,
+              "p68_km": 1.533610824008738,
+              "p95_km": 16.978977792253282,
+              "max_km": 58.727862761903395,
+              "median_signed_km": 0.914930528339879,
+              "inside_1_sigma": 0.66,
+              "inside_2_sigma": 0.72,
+              "median_sigma_km": 1.3544245797407841
+            },
+            "in_track": {
+              "median_km": 38.753249010568155,
+              "p68_km": 104.40950691074393,
+              "p95_km": 432.7253077602106,
+              "max_km": 863.1055865139908,
+              "median_signed_km": -26.82323615904356,
+              "inside_1_sigma": 0.62,
+              "inside_2_sigma": 0.68,
+              "median_sigma_km": 46.936545384565214
+            },
+            "cross": {
+              "median_km": 0.061767199123616834,
+              "p68_km": 0.12016359824511938,
+              "p95_km": 0.23429384953256366,
+              "max_km": 0.300398559467149,
+              "median_signed_km": 0.01574429999461635,
+              "inside_1_sigma": 0.58,
+              "inside_2_sigma": 0.82,
+              "median_sigma_km": 0.06138419976595196
+            },
+            "storm_term": {
+              "n": 50,
+              "median_abs_raw_km": 38.753249010568155,
+              "median_abs_corrected_km": 40.0049100918839,
+              "median_abs_shift_km": 54.046192531709494,
+              "improvement": -0.03229822307219754,
+              "share_of_trials_improved": 0.58
+            },
+            "through_disturbed": {
+              "n": 47,
+              "in_track_median_km": 37.408469133035425,
+              "in_track_p95_km": 465.21901706481276
+            }
+          },
+          "168": {
+            "n": 46,
+            "n_sets": 46,
+            "n_satellites": 3,
+            "radial": {
+              "median_km": 0.9342669088708158,
+              "p68_km": 1.06138677879484,
+              "p95_km": 31.578582460009706,
+              "max_km": 99.93225922780329,
+              "median_signed_km": -0.6664429518972685,
+              "inside_1_sigma": 0.717391304347826,
+              "inside_2_sigma": 0.717391304347826,
+              "median_sigma_km": 1.6549529567717363
+            },
+            "in_track": {
+              "median_km": 49.05865504822576,
+              "p68_km": 99.84859319156521,
+              "p95_km": 651.9244335709782,
+              "max_km": 1168.8153817517425,
+              "median_signed_km": -46.32630613972471,
+              "inside_1_sigma": 0.6086956521739131,
+              "inside_2_sigma": 0.6956521739130435,
+              "median_sigma_km": 60.998711866757645
+            },
+            "cross": {
+              "median_km": 0.1896649793976078,
+              "p68_km": 0.23913648784160912,
+              "p95_km": 0.3337552077853285,
+              "max_km": 0.34824303263632483,
+              "median_signed_km": 0.0377692496561324,
+              "inside_1_sigma": 0.2391304347826087,
+              "inside_2_sigma": 0.5869565217391305,
+              "median_sigma_km": 0.06825028260204812
+            },
+            "storm_term": {
+              "n": 46,
+              "median_abs_raw_km": 49.05865504822576,
+              "median_abs_corrected_km": 55.14454986324387,
+              "median_abs_shift_km": 60.09659407457673,
+              "improvement": -0.12405343784976441,
+              "share_of_trials_improved": 0.5434782608695652
+            },
+            "through_disturbed": {
+              "n": 43,
+              "in_track_median_km": 48.04729033207208,
+              "in_track_p95_km": 696.5703095265934
+            }
+          }
+        },
+        "horizon": {
+          "task": "in-track residual within 25 km, the screening box's half-width, at the 95% of trials",
+          "tolerance_km": 25.0,
+          "quantile": 0.95,
+          "last_lead_h_within": 24.0,
+          "first_lead_h_beyond": 36.0,
+          "quantile_km_there": 37.53673441510714
+        }
+      }
+    }
+  },
+  "sources": [
+    {
+      "source": "ESA Swarm precise science orbits",
+      "origin": "https://swarm-diss.eo.esa.int/#swarm/Level2daily/Entire_mission_data/POD/RD/Sat_x \u2014 product SW_OPER_SP3xCOM_2_, reduced-dynamic, centre of mass, IGS20 (ITRF2020) frame, ten-second states with velocities, produced by TU Delft (SPC_DUT); SP3-d files, one a day, in zips with an Earth Explorer header",
+      "retrieved_at": "2026-09-05T02:52:52.970216+00:00",
+      "files": {
+        "A (quiet)": {
+          "n": 16,
+          "first": "SW_OPER_SP3ACOM_2__20240418T235942_20240419T235942_0203.ZIP",
+          "last": "SW_OPER_SP3ACOM_2__20240503T235942_20240504T235942_0203.ZIP",
+          "days_missing": []
+        },
+        "B (quiet)": {
+          "n": 16,
+          "first": "SW_OPER_SP3BCOM_2__20240418T235942_20240419T235942_0203.ZIP",
+          "last": "SW_OPER_SP3BCOM_2__20240503T235942_20240504T235942_0203.ZIP",
+          "days_missing": []
+        },
+        "C (quiet)": {
+          "n": 16,
+          "first": "SW_OPER_SP3CCOM_2__20240418T235942_20240419T235942_0203.ZIP",
+          "last": "SW_OPER_SP3CCOM_2__20240503T235942_20240504T235942_0203.ZIP",
+          "days_missing": []
+        },
+        "A (storm)": {
+          "n": 16,
+          "first": "SW_OPER_SP3ACOM_2__20240504T235942_20240505T235942_0203.ZIP",
+          "last": "SW_OPER_SP3ACOM_2__20240519T235942_20240520T235942_0203.ZIP",
+          "days_missing": []
+        },
+        "B (storm)": {
+          "n": 16,
+          "first": "SW_OPER_SP3BCOM_2__20240504T235942_20240505T235942_0203.ZIP",
+          "last": "SW_OPER_SP3BCOM_2__20240519T235942_20240520T235942_0203.ZIP",
+          "days_missing": []
+        },
+        "C (storm)": {
+          "n": 16,
+          "first": "SW_OPER_SP3CCOM_2__20240504T235942_20240505T235942_0203.ZIP",
+          "last": "SW_OPER_SP3CCOM_2__20240519T235942_20240520T235942_0203.ZIP",
+          "days_missing": []
+        },
+        "A (held-out)": {
+          "n": 16,
+          "first": "SW_OPER_SP3ACOM_2__20241004T235942_20241005T235942_0203.ZIP",
+          "last": "SW_OPER_SP3ACOM_2__20241019T235942_20241020T235942_0203.ZIP",
+          "days_missing": []
+        },
+        "B (held-out)": {
+          "n": 16,
+          "first": "SW_OPER_SP3BCOM_2__20241004T235942_20241005T235942_0203.ZIP",
+          "last": "SW_OPER_SP3BCOM_2__20241019T235942_20241020T235942_0203.ZIP",
+          "days_missing": []
+        },
+        "C (held-out)": {
+          "n": 16,
+          "first": "SW_OPER_SP3CCOM_2__20241004T235942_20241005T235942_0203.ZIP",
+          "last": "SW_OPER_SP3CCOM_2__20241019T235942_20241020T235942_0203.ZIP",
+          "days_missing": []
+        }
+      },
+      "derivation": "epochs converted from the files' GPS time to UTC (19 s to TAI, then astropy's leap-second table; 18 s in 2024); positions interpolated in the Earth-fixed frame by cubic Hermite on the product's own velocities, rotated to TEME with astropy (IERS Earth-orientation tables as bundled or cached by astropy); the inertial velocity for the RIC frame is the central difference of the rotated positions five seconds either side"
+    },
+    {
+      "source": "Public element sets",
+      "origin": "Space-Track gp_history for NORAD 39452 (Swarm A), 39451 (Swarm B), 39453 (Swarm C), through driftwatch's history backfill (data/cache/spacetrack/gp_history, data/history)",
+      "retrieved_at": "2026-09-05T02:52:52.970216+00:00",
+      "derivation": "each set propagated with sgp4 2.27 (WGS72, mode i) to leads [6.0, 12.0, 24.0, 36.0, 48.0, 72.0, 96.0, 120.0, 144.0, 168.0] hours from its own epoch; the empirical covariance fitted per satellite from the 45 days of sets before each window (driftwatch.risk.covariance, the model the screening uses); the ballistic coefficient fitted from the 36 days before each window (driftwatch.drag.ballistic)"
+    },
+    {
+      "source": "Observed geomagnetic activity",
+      "origin": "CelesTrak SW-All.csv (observed ap and Kp, F10.7), through driftwatch.weather; nothing forecast enters the benchmark",
+      "retrieved_at": "2026-09-05T02:52:52.970216+00:00",
+      "derivation": "the storm term (driftwatch.storm.term.object_shift via driftwatch.storm.validation.predicted_shifts) driven by NRLMSIS 2.1 with the observed ap over each trial's lead, from the trial set's own epoch, with the pre-window coefficient",
+      "weather_sources": {
+        "celestrak": {
+          "n_intervals": 203200,
+          "range": [
+            "1957-10-01 00:00:00+00:00",
+            "2041-10-01 21:00:00+00:00"
+          ],
+          "kp_observed_to": "2026-10-18 21:00:00+00:00",
+          "n_kp_observed": 201760,
+          "by_data_type": {
+            "INT": 480,
+            "OBS": 200928,
+            "PRD": 352,
+            "PRM": 1440
+          },
+          "max_kp": 9.0,
+          "max_ap": 400.0
+        },
+        "kp-forecast": {
+          "file": "kp-forecast_20260902T123000Z.json",
+          "issued_at": "2026-09-02T12:30:00+00:00",
+          "from": "companion"
+        },
+        "outlook-27day": {
+          "file": "outlook-27day_20260831T015500Z.txt",
+          "issued_at": "2026-08-31T01:55:00+00:00",
+          "from": "product"
+        }
+      }
+    },
+    {
+      "source": "Manoeuvre intervals",
+      "origin": "ESA Swarm Level 1b spacecraft dynamics, SW_OPER_SC_xDYN_1B (Level 1b spacecraft dynamics, daily CDF; swarm/Level1b/Entire_mission_data/SC_xDYN), retrieved from https://swarm-diss.eo.esa.int/: per-second on-times of the twelve thrusters (dt_thr) and the nominal force of the orbit-control thrusters that fired (f_thr); each day's header Maneuver_Information ids are kept beside it",
+      "retrieved_at": "2026-09-05T02:52:52.970216+00:00",
+      "derivation": "an orbit manoeuvre is a run of seconds with non-zero orbit-control force, merged across gaps under 600 s; a trial is excluded when one falls between 24 h before its element set's epoch and the lead's time; thruster on-time with no orbit-control force is attitude control, counted and not excluded. Cross-check, deciding nothing: the project's own detection -- a step in the orbit-mean semi-major axis of the precise orbit beyond 20 m and 6 robust sigmas between consecutive orbits, and driftwatch.drag.ballistic.manoeuvre_intervals on the element sets",
+      "files": {
+        "A (quiet)": {
+          "n": 16,
+          "first": "SW_OPER_SC_ADYN_1B_20240419T000000_20240419T235959_0601.CDF.ZIP",
+          "last": "SW_OPER_SC_ADYN_1B_20240504T000000_20240504T235959_0601.CDF.ZIP",
+          "days_missing": [],
+          "n_manoeuvres": 0,
+          "manoeuvres": [],
+          "orbit_thrust_s": 0.0,
+          "n_attitude_pulses": 105,
+          "header_manoeuvre_ids": [
+            "004"
+          ]
+        },
+        "B (quiet)": {
+          "n": 16,
+          "first": "SW_OPER_SC_BDYN_1B_20240419T000000_20240419T235959_0601.CDF.ZIP",
+          "last": "SW_OPER_SC_BDYN_1B_20240504T000000_20240504T235959_0601.CDF.ZIP",
+          "days_missing": [],
+          "n_manoeuvres": 0,
+          "manoeuvres": [],
+          "orbit_thrust_s": 0.0,
+          "n_attitude_pulses": 105,
+          "header_manoeuvre_ids": [
+            "004"
+          ]
+        },
+        "C (quiet)": {
+          "n": 16,
+          "first": "SW_OPER_SC_CDYN_1B_20240419T000000_20240419T235959_0601.CDF.ZIP",
+          "last": "SW_OPER_SC_CDYN_1B_20240504T000000_20240504T235959_0601.CDF.ZIP",
+          "days_missing": [],
+          "n_manoeuvres": 0,
+          "manoeuvres": [],
+          "orbit_thrust_s": 0.0,
+          "n_attitude_pulses": 133,
+          "header_manoeuvre_ids": [
+            "004"
+          ]
+        },
+        "A (storm)": {
+          "n": 16,
+          "first": "SW_OPER_SC_ADYN_1B_20240505T000000_20240505T235959_0601.CDF.ZIP",
+          "last": "SW_OPER_SC_ADYN_1B_20240520T000000_20240520T235959_0601.CDF.ZIP",
+          "days_missing": [],
+          "n_manoeuvres": 0,
+          "manoeuvres": [],
+          "orbit_thrust_s": 0.0,
+          "n_attitude_pulses": 121,
+          "header_manoeuvre_ids": [
+            "004"
+          ]
+        },
+        "B (storm)": {
+          "n": 16,
+          "first": "SW_OPER_SC_BDYN_1B_20240505T000000_20240505T235959_0601.CDF.ZIP",
+          "last": "SW_OPER_SC_BDYN_1B_20240520T000000_20240520T235959_0601.CDF.ZIP",
+          "days_missing": [],
+          "n_manoeuvres": 0,
+          "manoeuvres": [],
+          "orbit_thrust_s": 0.0,
+          "n_attitude_pulses": 61,
+          "header_manoeuvre_ids": [
+            "004"
+          ]
+        },
+        "C (storm)": {
+          "n": 16,
+          "first": "SW_OPER_SC_CDYN_1B_20240505T000000_20240505T235959_0601.CDF.ZIP",
+          "last": "SW_OPER_SC_CDYN_1B_20240520T000000_20240520T235959_0601.CDF.ZIP",
+          "days_missing": [],
+          "n_manoeuvres": 0,
+          "manoeuvres": [],
+          "orbit_thrust_s": 0.0,
+          "n_attitude_pulses": 124,
+          "header_manoeuvre_ids": [
+            "004"
+          ]
+        },
+        "A (held-out)": {
+          "n": 16,
+          "first": "SW_OPER_SC_ADYN_1B_20241005T000000_20241005T235959_0601.CDF.ZIP",
+          "last": "SW_OPER_SC_ADYN_1B_20241020T000000_20241020T235959_0601.CDF.ZIP",
+          "days_missing": [],
+          "n_manoeuvres": 2,
+          "manoeuvres": [
+            [
+              "2024-10-15T21:07:21.757000",
+              "2024-10-15T21:08:33.757000"
+            ],
+            [
+              "2024-10-15T21:54:17.757000",
+              "2024-10-15T21:54:42.756000"
+            ]
+          ],
+          "orbit_thrust_s": 198.0,
+          "n_attitude_pulses": 98,
+          "header_manoeuvre_ids": [
+            "002",
+            "004"
+          ]
+        },
+        "B (held-out)": {
+          "n": 16,
+          "first": "SW_OPER_SC_BDYN_1B_20241005T000000_20241005T235959_0601.CDF.ZIP",
+          "last": "SW_OPER_SC_BDYN_1B_20241020T000000_20241020T235959_0601.CDF.ZIP",
+          "days_missing": [],
+          "n_manoeuvres": 1,
+          "manoeuvres": [
+            [
+              "2024-10-17T22:58:23.756000",
+              "2024-10-17T23:23:19.757000"
+            ]
+          ],
+          "orbit_thrust_s": 260.4,
+          "n_attitude_pulses": 89,
+          "header_manoeuvre_ids": [
+            "002",
+            "004"
+          ]
+        },
+        "C (held-out)": {
+          "n": 16,
+          "first": "SW_OPER_SC_CDYN_1B_20241005T000000_20241005T235959_0601.CDF.ZIP",
+          "last": "SW_OPER_SC_CDYN_1B_20241020T000000_20241020T235959_0601.CDF.ZIP",
+          "days_missing": [],
+          "n_manoeuvres": 0,
+          "manoeuvres": [],
+          "orbit_thrust_s": 0.0,
+          "n_attitude_pulses": 106,
+          "header_manoeuvre_ids": [
+            "004"
+          ]
+        }
+      },
+      "missing_for": []
+    },
+    {
+      "source": "Not used, noted for later",
+      "origin": "Swarm thermospheric density from POD and accelerometer, SW_OPER_DNSxPOD_2_ (TU Delft thermospheric density from POD; swarm/Level2daily/Entire_mission_data/DNS): would separate the atmosphere's error from the object's response in the storm-term comparison; not part of this week"
+    },
+    {
+      "source": "Software",
+      "origin": "driftwatch (this repository), sgp4 2.27, astropy 8.0.1, numpy 2.5.2, pandas 3.0.5"
+    }
+  ]
+}

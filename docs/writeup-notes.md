@@ -32,7 +32,7 @@ corrected in place with the date, in the same style as the phase plans.
 **Name this event in the write-up, region first.** It is the demonstration Step 1 existed to
 produce.
 
-A South African satellite in the demo fleet — **EOS SAT-1 (55053)**, built by Dragonfly Aerospace in
+A South African satellite in the demo fleet — **EOS SAT-1 (55053)**, built by a manufacturer in
 Stellenbosch for EOS Data Analytics and owned by SAFR — gains a **dilution-region, low-confidence
 red flag at a fifteen-hour lead** purely from screening on the operator's own published states
 rather than on a third party's fit to them. Nothing else changed: same catalogue snapshot, same
@@ -61,7 +61,7 @@ The red threshold is 10⁻⁴, the one NASA applies to the ISS.
   ten matched events change flag, one of them into red, and nine more flagged events appear or
   disappear entirely. Phase 2's "it moves no flag" was a true measurement of a term that was far
   too small to stand for the thing it was patching. That is a better story than a clean result.
-- **It is the tool's own audience.** The write-up goes to SANSA, the SKA Observatory and a
+- **It is the tool's own audience.** The write-up goes to a national space agency, a large observatory and a
   university satellite group, and the worked example is a South African satellite whose answer
   changes. It is also the honest form of the claim the landing page makes: this is indicative,
   not operational — and here is a case where the indicative answer is different depending on
@@ -354,7 +354,7 @@ date:
 4. **TraCSS** is in pilot evaluation, with 52 users in 21 countries as of June 2026, not in
    production. The Office of Space Commerce dataset entry above now says so.
 5. **Africa.** The statement that the continent has no independent tracking capability is
-   replaced, wherever it stood, with the absence of a comprehensive sovereign catalogue; SANSA and
+   replaced, wherever it stood, with the absence of a comprehensive sovereign catalogue; a national space agency and
    DLR operate a debris-tracking telescope at Sutherland. `ROADMAP.md`, twice.
 
 ---

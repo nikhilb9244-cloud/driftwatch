@@ -97,3 +97,29 @@ def test_a_missing_directory_is_an_error_not_a_pass(tmp_path):
     findings, summary = audit_bundle(tmp_path / "nothing-here", environ={})
     assert summary["n_files"] == 0
     assert len(findings) == 1 and "does not exist" in findings[0].what
+
+
+def test_constructed_demonstration_inputs_cannot_be_published(tmp_path):
+    """The synthetic examples were removed on 2026-09-07; this stops them coming back by accident.
+
+    Narrow on purpose. A bundle legitimately contains the word "synthetic" -- the storm scenarios
+    are synthetic scenarios built from the real May 2024 record -- so the check matches the retired
+    generator's own identities and labels rather than the word.
+    """
+    (tmp_path / "swarm.oem").write_text("OBJECT_NAME = SWARM A\nCOMMENT synthetic G5 scenario\n", encoding="utf-8")
+    clean, summary = audit_bundle(tmp_path, environ={})
+    assert not summary.get("n_errors"), [str(f) for f in clean]
+
+    for name, body in (
+        ("old.oem", "OBJECT_NAME = SYNTHETIC-1\n"),
+        ("old.cdm", "COLLISION_PROBABILITY_METHOD = ILLUSTRATIVE\n"),
+        ("old.csv", "contact_id,satellite\nLONG-A,Training satellite A\n"),
+        ("old.json", '{"demonstration": "Synthetic demonstration. Not an operator case"}'),
+        ("fixture.oem", "ORIGINATOR = DRIFTWATCH TEST FIXTURE\n"),
+    ):
+        path = tmp_path / name
+        path.write_text(body, encoding="utf-8")
+        findings, summary = audit_bundle(tmp_path, environ={})
+        assert summary["n_errors"], f"{name} was not caught"
+        assert any(name in f.path and "constructed inputs are not published" in f.what for f in findings)
+        path.unlink()

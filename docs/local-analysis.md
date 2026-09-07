@@ -1,5 +1,12 @@
 # Local analysis: an operator's own files, on the operator's own machine
 
+**Update, 6 September 2026:** a visual interface is now available in the
+[local workspace](workspace.md). The CLI also accepts `--reference-kind prediction`,
+`reconstructed` or `navigation`, defaulting to prediction. A supplied operator OEM is
+not automatically independent truth. The supported-client network guard described below
+is an application guard, not OS-level isolation. OEM metadata segments are interpolated
+separately; overlapping versions are refused.
+
 Built 2026-09-05, beside the calibration benchmark (`docs/calibration-benchmark.md`). The code is
 `src/driftwatch/local.py`; the command is `driftwatch local`.
 

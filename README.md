@@ -1,11 +1,27 @@
 # driftwatch
 
-Conjunction screening for low Earth orbit that shows how geomagnetic storms change
-collision risk. A storm heats the upper atmosphere, drag rises, predicted positions
-drift along-track, and screening built on the public catalogue quietly gets worse at
-the moment it matters most. driftwatch screens a chosen fleet against the whole
-catalogue every day and shows how miss distances and probabilities move under quiet and
-stormy conditions, live and in replay of past storms.
+A visual workspace for comparing orbit products, evaluating storm models and testing
+ground-contact timing. The existing interactive Earth and public conjunction screener
+remain available. Its contribution is evidence about the limits of orbit data; agreement
+between predictions is not proof of their accuracy.
+
+**New, 6 September 2026:** test OEM/OMM files, CDMs, contact logs and model-trial CSVs on
+your own PC. Start with `uv sync`, then `npm ci` and `npm run build` inside `web`, followed
+by `uv run --offline python -m driftwatch.workbench` from the repository root. Open
+`http://127.0.0.1:8765`. Windows users can then use `start-workspace.cmd`.
+
+The browser includes downloadable synthetic examples and the separate measured Swarm
+benchmark. Private input files are processed by the local Python service, not a cloud
+upload endpoint. See [workspace instructions and limits](docs/workspace.md),
+and the
+[active roadmap](ROADMAP.md). These are research tools, not an operational collision service.
+
+The visual rework adds adjustable rendering detail and trace visibility. Orbit imports now
+include OEM/OMM XML and KVN, GP JSON/CSV, legacy TLE and explicitly mapped state tables;
+ground contacts include a single-antenna request planner. See [supported formats](docs/input-formats.md)
+and the [design research](docs/experience-design.md). **6 September clarification:** the new
+case-analysis workspace opens on the labelled May storm hindcast; the existing catalogue
+and screening scenario defaults remain quiet.
 
 ## Findings and corrections
 
@@ -23,9 +39,11 @@ on this page, in the report and in the viewer is read after that number, not bef
 probability computed from a set propagated past its horizon is arithmetic on a position the set no
 longer predicts. The quiet scenario is the default everywhere. A storm scenario is chosen
 explicitly, and every storm number carries the benchmark's calibration beside it: the covariance
-under-covers in a storm, the storm term hurts inside three days and in a quiet week (its excess is
-not zero without a storm), and at seven days of lead its shift over-corrects, about 1.5 times the
-actual in May.
+under-covers in a storm. **Clarification, 6 September 2026:** correction performance depends on
+the period: it hurts May's 12–72 hour sample but helps October's 6–120 hour sample, and hurts
+the quiet 1–6 day sample. The earlier summary that it always hurts inside three days was too
+broad. At seven days it over-corrects in May. The sampled Swarm tolerance results do not
+establish universal operating horizons for other spacecraft.
 
 ### 1. The public catalogue's fit to an operator's ephemeris drifts from it by kilometres inside a day
 
@@ -215,7 +233,7 @@ free-flying event's probability, or the covariance driftwatch puts around any ev
 Kelvins reproduction does not calibrate either. The sample is drawn from today's catalogue, so the
 3,891 objects that decayed since May 2024 are absent from it.
 
-### 6. Against an independent truth, the public element set is worse than its own consistency says in a storm, and the storm term helps only beyond three days (2026-09-05)
+### 6. Against an independent reference, storm-period error exceeds consistency estimates; correction skill depends on period and lead (2026-09-05; heading clarified 2026-09-06)
 
 The first comparison in this project of a public element set with something that is not another
 fit by the same network. ESA's Swarm A, B and C carry GPS receivers and ESA publishes a

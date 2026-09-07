@@ -989,7 +989,7 @@ def summarise(
                 }
             by_lead[f"{lead:g}"] = entry
             p = entry["in_track"]["p95_km"] if quantile == 0.95 else _q(g["in_track_km"].abs(), quantile)
-            if p is not None and p <= tolerance_km:
+            if p is not None and p <= tolerance_km and horizon["first_lead_h_beyond"] is None:
                 horizon["last_lead_h_within"] = float(lead)
             elif p is not None and horizon["first_lead_h_beyond"] is None:
                 horizon["first_lead_h_beyond"] = float(lead)

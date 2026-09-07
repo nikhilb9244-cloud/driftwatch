@@ -392,7 +392,7 @@ project has done and it should be told as what it is: a result that survived los
 The **RIPE Atlas Starlink latency overlay** as context, plotted against the Kp bar, with the probe
 ids cited. Pulled once for the paper, never wired into the pipeline.
 
-Then publish it, and send it to people at SANSA, the SKA Observatory, a university satellite group
+Then publish it, and send it to people at a national space agency, a large observatory, a university satellite group
 and two space situational awareness companies — **asking for criticism rather than praise**, and
 recording what comes back.
 

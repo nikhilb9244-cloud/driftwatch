@@ -1,5 +1,13 @@
 # Design brief: the Phase 4 visual pass on the viewer
 
+**Update, 6 September 2026:** the user has reopened the visual work. The new workspace
+uses the existing interactive Earth as its main visual surface, real Swarm reference
+tracks, paired orbit tracks and a selected ground station. It exposes four local case
+workflows with nearby charts and expandable tables. See [workspace.md](workspace.md)
+and the active [roadmap](../ROADMAP.md). The implemented colour, hierarchy and usability
+research is in [experience-design.md](experience-design.md). The parked catalogue-specific proposals below
+remain historical; they are not all implied by this implementation.
+
 A parked design document. Nothing here is built yet and nothing in `web/src` changes on
 account of it. It exists so that when Phase 4 opens, the visual decisions have already been
 argued and the reading of four other projects has already been done.

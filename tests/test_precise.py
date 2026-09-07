@@ -223,6 +223,15 @@ def test_summarise_counts_one_trial_per_set_excludes_gaps_and_burns_and_states_t
     assert w["by_lead_h"]["72"]["through_disturbed"]["n"] == 3
 
 
+def test_horizon_does_not_resume_after_an_earlier_tolerance_breach():
+    trials = designed_trials()
+    trials.loc[trials["lead_h"] == 24.0, "in_track_km"] = 40.0
+    trials.loc[trials["lead_h"] == 72.0, "in_track_km"] = 2.0
+    horizon = precise.summarise(trials)["windows"]["storm"]["horizon"]
+    assert horizon["last_lead_h_within"] == 6.0
+    assert horizon["first_lead_h_beyond"] == 24.0
+
+
 def test_the_manoeuvre_detector_flags_a_step_in_the_orbit_mean_semi_major_axis(monkeypatch):
     monkeypatch.setattr(precise, "itrs_to_teme", lambda r, v, t: (r, v))
     t0 = pd.Timestamp("2024-05-10T00:00:00")

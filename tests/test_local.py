@@ -182,7 +182,8 @@ def test_the_command_runs_an_ephemeris_through_the_benchmark_with_nothing_leavin
     trials = pd.read_parquet(out / "ephemeris_trials.parquet")
     assert len(trials) == 2 and (trials["manoeuvre_source"] == "operator-record").all()
     text = (out / "local_analysis.md").read_text(encoding="utf-8")
-    assert "Nothing left this machine" in text and "operator-record" in text
+    assert "supported HTTP clients" in text and "operator-record" in text
+    assert eph["reference_kind"] == "prediction"
     assert {s["source"] for s in report["sources"]} >= {"Operator ephemeris", "Public element sets", "Manoeuvre record"}
 
     # A burn inside the arc before the set excludes every lead, and the report says so rather than printing numbers.

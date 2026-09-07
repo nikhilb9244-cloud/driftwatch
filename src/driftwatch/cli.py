@@ -2409,6 +2409,7 @@ def cmd_local(args: argparse.Namespace) -> int:
                     published=published,
                     grid=grid,
                     tolerance_km=args.tolerance_km,
+                    reference_kind=args.reference_kind,
                 )
                 out.mkdir(parents=True, exist_ok=True)
                 bench.trials.to_parquet(out / "ephemeris_trials.parquet", index=False)
@@ -2417,6 +2418,7 @@ def cmd_local(args: argparse.Namespace) -> int:
                     "norad_id": int(args.norad),
                     "label": label,
                     "frame": orbit.frame,
+                    "reference_kind": args.reference_kind,
                     "time_systems": sorted({seg.time_system for seg in segments}),
                     "span": [span[0].isoformat(), span[1].isoformat()],
                     "n_states": int(len(orbit.table)),
@@ -3632,6 +3634,12 @@ def build_parser() -> argparse.ArgumentParser:
         help=f"TCA tolerance for a match in seconds (default {cdm_match.DEFAULT_TOLERANCE_S:g})",
     )
     local.add_argument("--ephemeris", help="the operator's CCSDS OEM (KVN) file, or a directory of them")
+    local.add_argument(
+        "--reference-kind",
+        choices=("prediction", "reconstructed", "navigation"),
+        default="prediction",
+        help="what the supplied ephemeris represents; default prediction does not establish realised accuracy",
+    )
     local.add_argument("--norad", type=int, help="the public catalogue id the ephemeris describes")
     local.add_argument("--label", help="a name for the object in the report (default: the OEM's OBJECT_NAME)")
     local.add_argument(

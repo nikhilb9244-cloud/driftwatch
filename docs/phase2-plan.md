@@ -217,8 +217,8 @@ repeated runs hit the same cached requests.
 | 62261 | Sentinel-1C (ESA) | sentinel | 13 | yes | 692 x 694 km, sun-synchronous |
 | 27848 | CubeSat XI-IV (University of Tokyo) | university_cubesat | 0.4 | no | 804 x 817 km, sun-synchronous |
 | 39446 | UWE-3 (University of Würzburg) | university_cubesat | 0.25 | no | 537 x 606 km, sun-synchronous |
-| 39417 | ZACube-1 / TshepisoSat (CPUT) | safr | 5.1 | no | 530 x 587 km, sun-synchronous |
-| 55053 | EOS SAT-1 (Dragonfly Aerospace) | safr | 1.5 | yes | 454 x 466 km, sun-synchronous |
+| 39417 | ZACube-1 / TshepisoSat (a South African university) | safr | 5.1 | no | 530 x 587 km, sun-synchronous |
+| 55053 | EOS SAT-1 (a South African manufacturer) | safr | 1.5 | yes | 454 x 466 km, sun-synchronous |
 
 "Active SAFR object" is read as SATCAT operational status `+` plus membership of
 CelesTrak's `active` group. On the 2026-09-01 SATCAT that is exactly ZACube-1 and
