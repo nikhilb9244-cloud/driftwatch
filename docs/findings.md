@@ -304,6 +304,24 @@ orbit class and two storms, and any scale must be fitted on May 2024 and validat
 held out as the benchmark held it, or it is a tuning on the number it is meant to predict. Both are
 in `ROADMAP.md`.
 
+### 7. On the sky, the horizon is two quantities, and only one of them moves
+
+The radio lane (`docs/radio-lane.md`) converts item 6's residuals into angles at the MeerKAT array
+centre and tests them against a third of the primary beam's half-power width. Two horizons result,
+and they answer different questions. The **crossing horizon**, governed by the cross-track error,
+answers whether an object crossed the beam during an observation: the cross-track residual stays
+under 3.6 arcmin at the 95th percentile at every lead in every window, so for the measured
+population it holds for the benchmark's full seven days in every window at every receiver, with the
+crossing's time known to the along-track shift (0.2 s at the 95th percentile at six hours; 8, 26 and
+85 s at seven days in the quiet, May and October windows). The **position horizon**, governed by the
+along-track error, answers where an object is at an instant to within a third of the beam, and it is
+the one a storm moves: at the L-band centre **24 hours in the quiet week, 12 hours in the May 2024
+storm and 6 hours in the October 2024 storm**; at the UHF centre 36, 24 and 6 hours. **S-band
+position prediction from public element sets is not possible at any element-set age**: at the top
+of the band the position horizon is under six hours, the benchmark's shortest lead, in every window.
+Both rest on three Swarm-class satellites at 460 to 506 km, not manoeuvring in the trials kept; every
+other object carries *no measured horizon* for both (`docs/radio-horizon.md`).
+
 Everything above is indicative, not operational: the covariances come from the consistency of
 public element sets, which measures how much successive fits by one network disagree and bounds
 their accuracy in neither direction, because successive sets share observations and assumptions;

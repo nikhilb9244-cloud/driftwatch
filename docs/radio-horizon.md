@@ -1,6 +1,8 @@
 # The radio horizon: the benchmark's residuals as angles on the sky
 
-The calibration benchmark measured how far a public element set puts Swarm A, B and C from ESA's precise orbit at leads from six hours to seven days, in the satellite's radial, in-track, cross-track frame (`docs/calibration-benchmark.md`). Here each residual is the angle it subtends from the MeerKAT array centre with the satellite overhead: the residual divided by the altitude, which is the largest angle the residual can subtend from the site. Lower in the sky the same residual subtends less, by the ratio of altitude to range and by the projection onto the sky; the per-crossing figures in the period reports use the actual geometry. Cross-track error decides whether a beam crossing happens; along-track error shifts when it happens, and is given as a time shift at the orbital speed as well as an angle.
+The calibration benchmark measured how far a public element set puts Swarm A, B and C from ESA's precise orbit at leads from six hours to seven days, in the satellite's radial, in-track, cross-track frame (`docs/calibration-benchmark.md`). Here each residual is the angle it subtends from the MeerKAT array centre with the satellite overhead: the residual divided by the altitude, which is the largest angle the residual can subtend from the site. Lower in the sky the same residual subtends less, by the ratio of altitude to range and by the projection onto the sky; the per-crossing figures in the period reports use the actual geometry.
+
+Two horizons are reported, and they answer different questions. The **crossing horizon** is governed by the cross-track error, which moves an object's path sideways: it is the longest lead through which the cross-track angular error stays under a third of the beam width for 95 per cent of trials, and it answers whether an object crossed the beam during an observation, with the crossing's time known to the along-track time shift tabulated below. The **position horizon** is governed by the along-track error, which moves the object along its path: the same coverage applied to the along-track angular error, and it answers where an object is at an instant to within a third of the beam.
 
 **Population and limits.** Three sun-synchronous satellites, Swarm A at 456 to 468 km, Swarm B at 496 to 503 km, Swarm C at 456 to 468 km; 57 sets in the quiet window, 54 sets in the May 2024 window, 61 sets in the October 2024 window; one trial per element set per lead, manoeuvre arcs excluded from ESA's thruster record. A measured horizon is attached only to objects between 400 and 600 km; every other object carries *no measured horizon* and the reason. Nothing here describes a station-kept object's error through a burn. The beam width is measured at L-band and scaled by wavelength to UHF and S (below).
 
@@ -17,11 +19,11 @@ Half-power width from Mauch et al. 2020, ApJ 888, 61, section 2.2, equation 4 (c
 
 ## The table
 
-For each window and lead: the number of trials, the angular error overhead at the median and the 95th percentile (arcmin), and the fraction of trials whose angular error is under a third of the beam width, per receiver and frequency. The first block of each window is the cross-track error, which decides whether a crossing happens; the second is the along-track error, which decides when, and whose time shift at the orbital speed is in the last table.
+For each window and lead: the number of trials, the angular error overhead at the median and the 95th percentile (arcmin), and the fraction of trials whose angular error is under a third of the beam width, per receiver and frequency. The first block of each window is the cross-track error, the crossing horizon's test; the second is the along-track error, the position horizon's test, whose time shift at the orbital speed is in the last table.
 
 ### quiet week, 20 to 27 April 2024
 
-Cross-track:
+Cross-track (the crossing horizon's test):
 
 | Lead | n | cross-track median | cross-track p95 | UHF 816 MHz | L 1284 MHz | L 1712 MHz | S0 2187.5 MHz | S4 3500 MHz |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -36,7 +38,7 @@ Cross-track:
 | 6 d | 57 | 1.1' | 3.6' | 100% | 100% | 100% | 100% | 100% |
 | 7 d | 57 | 1.6' | 2.5' | 100% | 100% | 100% | 100% | 100% |
 
-Along-track:
+Along-track (the position horizon's test):
 
 | Lead | n | along-track median | along-track p95 | UHF 816 MHz | L 1284 MHz | L 1712 MHz | S0 2187.5 MHz | S4 3500 MHz |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -53,7 +55,7 @@ Along-track:
 
 ### May 2024 storm, sets issued 6 to 13 May
 
-Cross-track:
+Cross-track (the crossing horizon's test):
 
 | Lead | n | cross-track median | cross-track p95 | UHF 816 MHz | L 1284 MHz | L 1712 MHz | S0 2187.5 MHz | S4 3500 MHz |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -68,7 +70,7 @@ Cross-track:
 | 6 d | 54 | 0.6' | 2.1' | 100% | 100% | 100% | 100% | 100% |
 | 7 d | 54 | 1.6' | 2.6' | 100% | 100% | 100% | 100% | 100% |
 
-Along-track:
+Along-track (the position horizon's test):
 
 | Lead | n | along-track median | along-track p95 | UHF 816 MHz | L 1284 MHz | L 1712 MHz | S0 2187.5 MHz | S4 3500 MHz |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -85,7 +87,7 @@ Along-track:
 
 ### October 2024 storm, sets issued 6 to 13 October (held out)
 
-Cross-track:
+Cross-track (the crossing horizon's test):
 
 | Lead | n | cross-track median | cross-track p95 | UHF 816 MHz | L 1284 MHz | L 1712 MHz | S0 2187.5 MHz | S4 3500 MHz |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -100,7 +102,7 @@ Cross-track:
 | 6 d | 50 | 0.4' | 1.8' | 100% | 100% | 100% | 100% | 100% |
 | 7 d | 46 | 1.3' | 2.5' | 100% | 100% | 100% | 100% | 100% |
 
-Along-track:
+Along-track (the position horizon's test):
 
 | Lead | n | along-track median | along-track p95 | UHF 816 MHz | L 1284 MHz | L 1712 MHz | S0 2187.5 MHz | S4 3500 MHz |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
@@ -117,7 +119,7 @@ Along-track:
 
 ### The along-track error as a time shift
 
-The along-track residual divided by the orbital speed: how early or late the satellite is at a crossing, whatever the range.
+The along-track residual divided by the orbital speed: how early or late the satellite is at a crossing, whatever the range. This is the timing figure the crossing horizon carries with it.
 
 | Lead | quiet median / p95 | May 2024 median / p95 | October 2024 median / p95 |
 | ---: | ---: | ---: | ---: |
@@ -132,29 +134,33 @@ The along-track residual divided by the orbital speed: how early or late the sat
 | 6 d | 1.89 s / 5.20 s | 7.55 s / 19.21 s | 5.07 s / 56.66 s |
 | 7 d | 3.15 s / 8.15 s | 9.80 s / 25.95 s | 6.42 s / 85.37 s |
 
-## The horizon
+## The two horizons
 
-The longest lead through which at least 95 per cent of trials keep their angular error under a third of the beam width, every shorter lead bin included. *Under 6 h* means the first lead bin already fails the coverage; *7 d* means no lead in the benchmark failed it.
+Each is the longest lead through which at least 95 per cent of trials keep the named angular error under a third of the beam width, every shorter lead bin included. *Under 6 h* means the first lead bin already fails the coverage; *7 d* means no lead in the benchmark failed it.
 
-| Receiver, frequency | Error | quiet | May 2024 | October 2024 |
-| --- | --- | --- | --- | --- |
-| UHF 816 MHz (FWHM 1.76 deg) | cross-track | 7 d | 7 d | 7 d |
-| UHF 816 MHz (FWHM 1.76 deg) | along-track | 36 h | 24 h | 6 h |
-| L 1284 MHz (FWHM 1.12 deg) | cross-track | 7 d | 7 d | 7 d |
-| L 1284 MHz (FWHM 1.12 deg) | along-track | 24 h | 12 h | 6 h |
-| L 1712 MHz (FWHM 0.84 deg) | cross-track | 7 d | 7 d | 7 d |
-| L 1712 MHz (FWHM 0.84 deg) | along-track | 24 h | 12 h | 6 h |
-| S0 2187.5 MHz (FWHM 0.66 deg) | cross-track | 7 d | 7 d | 7 d |
-| S0 2187.5 MHz (FWHM 0.66 deg) | along-track | 24 h | 12 h | under 6 h |
-| S4 3500 MHz (FWHM 0.41 deg) | cross-track | 7 d | 7 d | 7 d |
-| S4 3500 MHz (FWHM 0.41 deg) | along-track | under 6 h | under 6 h | under 6 h |
+- **Crossing horizon**, governed by the cross-track error: whether an object crossed the beam during an observation. The time of the crossing is known to the along-track shift in the table above.
+- **Position horizon**, governed by the along-track error: where an object is at an instant, to within a third of the beam.
+
+| Receiver, frequency | Crossing horizon, quiet | Crossing horizon, May 2024 | Crossing horizon, October 2024 | Position horizon, quiet | Position horizon, May 2024 | Position horizon, October 2024 |
+| --- | --- | --- | --- | --- | --- | --- |
+| UHF 816 MHz (FWHM 1.76 deg) | 7 d | 7 d | 7 d | 36 h | 24 h | 6 h |
+| L 1284 MHz (FWHM 1.12 deg) | 7 d | 7 d | 7 d | 24 h | 12 h | 6 h |
+| L 1712 MHz (FWHM 0.84 deg) | 7 d | 7 d | 7 d | 24 h | 12 h | 6 h |
+| S0 2187.5 MHz (FWHM 0.66 deg) | 7 d | 7 d | 7 d | 24 h | 12 h | under 6 h |
+| S4 3500 MHz (FWHM 0.41 deg) | 7 d | 7 d | 7 d | under 6 h | under 6 h | under 6 h |
+
+**The crossing horizon holds for the full 7 d in every window** for the measured population, at every receiver and frequency in the table: whether an object crossed the beam during an observation is answered through the benchmark's longest lead, and the time of the crossing is known to the along-track shift tabulated above.
+
+**The position horizon at the L-band centre is 24 h in the quiet window, 12 h in the May 2024 window, 6 h in the October 2024 window**: where an object is at an instant, to within a third of the beam, is answered only that far ahead.
+
+**S-band position prediction from public element sets is not possible at any element-set age**: at the top of the band (S4 3500 MHz) the position horizon is under 6 h in every window, the benchmark's shortest lead; at S0 2187.5 MHz the position horizon is 24 h (quiet), 12 h (May 2024), under 6 h (October 2024).
 
 ## What this does not show
 
 - The angles are for the satellite overhead, the worst case; a crossing at 30 degrees of elevation sees a residual at roughly twice the range and half the angle.
 - Three satellites in one orbit class, three windows, one week of sets each. Nothing here is measured for debris, for the GNSS or mobile-satellite orbits, for station-kept constellations, or for objects the network tracks less often, and every such object is labelled *no measured horizon* in the reports.
 - The beam width is a measurement at L-band scaled by wavelength; the holography paper reports the width proportional to lambda/D over most of each band, with departures at the top of each band.
-- The cross-track residual stays under half a kilometre at every lead in every window, so on this population the cross-track fraction is one everywhere and the along-track error is the number that moves. Whether a crossing predicted days ahead happens inside a given observation is an along-track question, of timing, before it is a cross-track question, of geometry.
+- The cross-track residual stays under half a kilometre at every lead in every window, so on this population the crossing horizon is the benchmark's full seven days everywhere and the position horizon is the number that moves. Whether a crossing predicted days ahead happens inside a given observation is a position question, of timing, before it is a crossing question, of geometry.
 
 Source of the trials: `data/validation/swarm_benchmark.parquet`; the usable trials are exported beside this page as `data/radio/swarm_trials.csv` so the table recomputes from the repository.
 

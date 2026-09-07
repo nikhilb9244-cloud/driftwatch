@@ -1,5 +1,5 @@
 {
- "built_at": "2026-09-07T16:59:03.206093+00:00",
+ "built_at": "2026-09-07T18:22:34.441023+00:00",
  "period": {
   "name": "storm-2024-05",
   "label": "the May 2024 storm, 10 to 12 May",
@@ -18,7 +18,7 @@
  },
  "elevation_cutoff_deg": 10.0,
  "catalogue": {
-  "n_sets": 507254,
+  "n_sets": 507302,
   "n_objects": 25658,
   "epoch_min": "2024-04-30T00:00:00.999648+00:00",
   "epoch_max": "2024-05-12T23:59:56.373792+00:00",
@@ -197,7 +197,7 @@
     "mean_simultaneous": 121.1011574074,
     "max_simultaneous": 158,
     "status": "declared in-band",
-    "detail": "direct-to-cell downlink, outside the United States 1475-1518 MHz (subject to the administration's authority; direct-to-cell capability is not established per object from public data); unintended emission inside 544-3500 MHz: no published measurement inside the MeerKAT bands; treated as unknown, not as absent"
+    "detail": "direct-to-cell downlink, outside the United States 1475-1518 MHz (declared and subject to each administration; direct-to-cell capability is not established per object from public data); unintended emission inside 544-3500 MHz: no published measurement inside the MeerKAT bands; treated as unknown, not as absent"
    },
    {
     "constellation": "OneWeb",

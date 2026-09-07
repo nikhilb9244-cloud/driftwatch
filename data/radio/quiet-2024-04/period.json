@@ -1,5 +1,5 @@
 {
- "built_at": "2026-09-07T17:00:43.566469+00:00",
+ "built_at": "2026-09-07T18:21:09.943545+00:00",
  "period": {
   "name": "quiet-2024-04",
   "label": "quiet week, 20 to 27 April 2024",
@@ -18,9 +18,9 @@
  },
  "elevation_cutoff_deg": 10.0,
  "catalogue": {
-  "n_sets": 642886,
+  "n_sets": 643047,
   "n_objects": 25617,
-  "epoch_min": "2024-04-10T04:53:55.699296+00:00",
+  "epoch_min": "2024-04-10T01:25:10.817472+00:00",
   "epoch_max": "2024-04-27T23:59:59.376192+00:00",
   "history_dir": "data/history",
   "source": "Space-Track gp_history through driftwatch's history store; each object's newest set at or before the observation start, none later",
@@ -133,7 +133,7 @@
      "mean_simultaneous": 122.140625,
      "max_simultaneous": 135,
      "status": "declared in-band",
-     "detail": "direct-to-cell downlink, outside the United States 2620-2690 MHz (subject to the administration's authority; direct-to-cell capability is not established per object from public data); unintended emission inside 544-3500 MHz: no published measurement inside the MeerKAT bands; treated as unknown, not as absent"
+     "detail": "direct-to-cell downlink, outside the United States 2620-2690 MHz (declared and subject to each administration; direct-to-cell capability is not established per object from public data); unintended emission inside 544-3500 MHz: no published measurement inside the MeerKAT bands; treated as unknown, not as absent"
     },
     {
      "constellation": "OneWeb",
@@ -168,8 +168,10 @@
      "projection_along": 0.9916482972869147,
      "population": "no measured horizon",
      "population_reason": "mean altitude 878 km is outside the 400 to 600 km benchmark population",
-     "horizon": "no measured horizon",
-     "fraction_inside": null,
+     "crossing_horizon": "no measured horizon",
+     "position_horizon": "no measured horizon",
+     "crossing_fraction_inside": null,
+     "position_fraction_inside": null,
      "cross_track_uncertainty_deg": null,
      "along_track_uncertainty_deg": null,
      "along_track_shift_s": null,
@@ -201,8 +203,10 @@
      "projection_along": 0.9514439469351353,
      "population": "no measured horizon",
      "population_reason": "mean altitude 840 km is outside the 400 to 600 km benchmark population",
-     "horizon": "no measured horizon",
-     "fraction_inside": null,
+     "crossing_horizon": "no measured horizon",
+     "position_horizon": "no measured horizon",
+     "crossing_fraction_inside": null,
+     "position_fraction_inside": null,
      "cross_track_uncertainty_deg": null,
      "along_track_uncertainty_deg": null,
      "along_track_shift_s": null,
@@ -385,7 +389,7 @@
     "mean_simultaneous": 119.2080729167,
     "max_simultaneous": 155,
     "status": "declared in-band",
-    "detail": "direct-to-cell downlink, outside the United States 1475-1518 MHz (subject to the administration's authority; direct-to-cell capability is not established per object from public data); unintended emission inside 544-3500 MHz: no published measurement inside the MeerKAT bands; treated as unknown, not as absent"
+    "detail": "direct-to-cell downlink, outside the United States 1475-1518 MHz (declared and subject to each administration; direct-to-cell capability is not established per object from public data); unintended emission inside 544-3500 MHz: no published measurement inside the MeerKAT bands; treated as unknown, not as absent"
    },
    {
     "constellation": "OneWeb",

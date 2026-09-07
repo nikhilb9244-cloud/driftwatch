@@ -8,10 +8,12 @@ above the horizon at once is the size of that problem. It is a count, not a powe
 
 **Product two: what crosses the beam.** Every catalogued object whose predicted track passes
 inside the primary beam's half-power radius, with its closest approach to the boresight, the
-time, the element set's age at that time, the cross-track angular uncertainty the calibration
-benchmark gives that age and geometry, and whether the crossing is inside or outside the
-measured horizon. Objects outside the benchmark's population carry *no measured horizon* and
-the reason.
+time, the element set's age at that time, the cross-track angular uncertainty and along-track
+time shift the calibration benchmark gives that age and geometry, and the two horizons: the
+*crossing horizon*, governed by the cross-track error (whether the crossing happens), and the
+*position horizon*, governed by the along-track error (where the object is at an instant), each
+inside or outside. Objects outside the benchmark's population carry *no measured horizon* and
+the reason for both.
 
 Both are geometry from public element sets. Nothing here is a received power, an occupancy or
 a sensitivity loss.
@@ -319,8 +321,10 @@ class Crossing:
     projection_along: float
     population: str
     population_reason: str
-    horizon: str
-    fraction_inside: float | None
+    crossing_horizon: str  # cross-track: whether the crossing happens; inside, outside or no measured horizon
+    position_horizon: str  # along-track: where the object is at an instant; the same three values
+    crossing_fraction_inside: float | None
+    position_fraction_inside: float | None
     cross_track_uncertainty_deg: float | None
     along_track_uncertainty_deg: float | None
     along_track_shift_s: float | None
@@ -544,7 +548,7 @@ def _describe(
     ecc = float(row["eccentricity"])
     population, reason = population_label(mean_alt, ecc, age_days)
     unc: CrossingUncertainty | None = None
-    horizon = "no measured horizon"
+    crossing_horizon = position_horizon = "no measured horizon"
     if population == "measured":
         unc = horizon_mod.crossing_uncertainty(
             trials, period.benchmark_window, age_days * 24.0, range_km, g_c, g_i, obs.fwhm_deg
@@ -555,7 +559,8 @@ def _describe(
                 f"element set {age_days:.1f} days old, beyond the benchmark's leads",
             )
         else:
-            horizon = "inside" if unc.fraction_inside >= COVERAGE else "outside"
+            crossing_horizon = "inside" if unc.crossing_fraction_inside >= COVERAGE else "outside"
+            position_horizon = "inside" if unc.position_fraction_inside >= COVERAGE else "outside"
     else:
         # The geometry is still reported against the matching window, for the reader's scale, but no label rests on it.
         unc = None
@@ -584,8 +589,10 @@ def _describe(
         projection_along=g_i,
         population=population,
         population_reason=reason,
-        horizon=horizon,
-        fraction_inside=unc.fraction_inside if unc else None,
+        crossing_horizon=crossing_horizon,
+        position_horizon=position_horizon,
+        crossing_fraction_inside=unc.crossing_fraction_inside if unc else None,
+        position_fraction_inside=unc.position_fraction_inside if unc else None,
         cross_track_uncertainty_deg=unc.cross_p95_deg if unc else None,
         along_track_uncertainty_deg=unc.along_p95_deg if unc else None,
         along_track_shift_s=unc.along_shift_p95_s if unc else None,

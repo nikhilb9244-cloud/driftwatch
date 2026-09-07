@@ -3244,7 +3244,12 @@ def cmd_radio_horizon(args: argparse.Namespace) -> int:
         log.info("Wrote %s", args.json)
     log.info("Trials exported to %s (%d usable trials from %s)", csv_path, len(trials), source)
     for c in radio_horizon.table_columns():
-        log.info("Horizon %s: %s", c.key, radio_horizon.horizon_hours(table, c))
+        log.info(
+            "Horizons %s: crossing %s; position %s",
+            c.key,
+            radio_horizon.horizon_hours(table, c, which="crossing"),
+            radio_horizon.horizon_hours(table, c, which="position"),
+        )
     return 0
 
 

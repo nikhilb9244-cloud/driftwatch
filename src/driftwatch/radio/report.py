@@ -6,9 +6,12 @@ satchecker.readthedocs.io): a list holding one object with ``data.satellites`` k
 ``"NAME (NORAD)"``, each with ``name``, ``norad_id`` and ``positions`` carrying ``altitude``,
 ``angle``, ``azimuth``, ``date_time``, ``dec``, ``julian_date``, ``ra``, ``tle_epoch`` and
 ``range_km``, plus ``total_position_results`` and ``total_satellites``, ``source`` and
-``version``. Two fields are added to every position, ``cross_track_uncertainty_deg`` and
-``horizon``, which is the whole of what this lane would offer upstream; everything else
-driftwatch adds sits under its own keys beside ``data`` and can be ignored by a SatChecker reader.
+``version``. Four fields are added to every position: ``cross_track_uncertainty_deg`` and
+``crossing_horizon`` (the cross-track uncertainty at the set's age, and whether the crossing is
+inside the crossing horizon), ``along_track_shift_s`` and ``position_horizon`` (the along-track
+time shift, and whether the position at an instant is inside the position horizon). Those four
+are the whole of what this lane would offer upstream; everything else driftwatch adds sits under
+its own keys beside ``data`` and can be ignored by a SatChecker reader.
 """
 
 from __future__ import annotations
@@ -34,7 +37,7 @@ from driftwatch.radio.crossings import (
 )
 from driftwatch.radio.site import MEERKAT, RECEIVERS, Site, beam_fwhm_deg
 
-ADDED_FIELDS = ("cross_track_uncertainty_deg", "horizon")
+ADDED_FIELDS = ("cross_track_uncertainty_deg", "crossing_horizon", "along_track_shift_s", "position_horizon")
 SATCHECKER_FORMAT = (
     "IAU CPS SatChecker /fov/satellite-passes/ synchronous response "
     "(satchecker.readthedocs.io, Field of View endpoints)"
@@ -45,8 +48,13 @@ EXPORT_SOURCE = (
 EXPORT_LIMITS = [
     "Positions come from public element sets propagated with SGP4; no tracking, no orbit determination.",
     "cross_track_uncertainty_deg is the 95th percentile of the calibration benchmark's cross-track residual at "
-    "the element set's age, projected on the sky at the crossing's range; it applies only where horizon is "
-    "inside or outside, and is null where the object is outside the benchmark's population.",
+    "the element set's age, projected on the sky at the crossing's range, and crossing_horizon says whether "
+    "95 per cent of the benchmark's trials at that age keep it under a third of the beam (inside) or not "
+    "(outside): whether the object crossed the beam.",
+    "along_track_shift_s is the 95th percentile of the benchmark's along-track residual at that age as a time "
+    "shift at the orbital speed, and position_horizon says whether the along-track angular error keeps the "
+    "same coverage (inside) or not (outside): where the object is at an instant. Both horizons are null where "
+    "the object is outside the benchmark's population, and both say so.",
     "Nothing here is a received power, an occupancy fraction or a sensitivity loss.",
 ]
 
@@ -78,7 +86,9 @@ def satchecker_export(
                     "tle_epoch": c.set_epoch_utc,
                     "range_km": s.range_km,
                     "cross_track_uncertainty_deg": c.cross_track_uncertainty_deg,
-                    "horizon": c.horizon,
+                    "crossing_horizon": c.crossing_horizon,
+                    "along_track_shift_s": c.along_track_shift_s,
+                    "position_horizon": c.position_horizon,
                 }
             )
             n_positions += 1
@@ -166,22 +176,30 @@ def _crossings_table(crossings: list[Crossing]) -> list[str]:
         return ["No catalogued object's predicted track passed inside the half-power radius during this observation."]
     lines = [
         "| Object | Type | Closest approach (UTC) | Angle from boresight | Elevation | Range | Set age "
-        "| Cross-track uncertainty (p95) | Along-track shift (p95) | Trials inside beam/3 | Horizon "
-        "| Emission in this band |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- |",
+        "| Cross-track uncertainty (p95) | Along-track shift (p95) | Trials inside beam/3, crossing / position "
+        "| Crossing horizon | Position horizon | Emission in this band |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
     ]
     kinds = {"DEB": "debris", "R/B": "rocket body", "PAY": "payload"}
     for c in crossings:
         kind = c.constellation or kinds.get(c.object_type, c.object_type)
-        frac = "-" if c.fraction_inside is None else f"{100 * c.fraction_inside:.0f}%"
+        frac = (
+            "-"
+            if c.crossing_fraction_inside is None or c.position_fraction_inside is None
+            else f"{100 * c.crossing_fraction_inside:.0f}% / {100 * c.position_fraction_inside:.0f}%"
+        )
         unc = "-" if c.cross_track_uncertainty_deg is None else f"{60 * c.cross_track_uncertainty_deg:.1f}'"
         shift = "-" if c.along_track_shift_s is None else f"{c.along_track_shift_s:.1f} s"
-        horizon = c.horizon if c.population == "measured" else f"no measured horizon ({c.population_reason})"
+        if c.population == "measured":
+            crossing_h, position_h = c.crossing_horizon, c.position_horizon
+        else:
+            crossing_h = f"no measured horizon ({c.population_reason})"
+            position_h = "no measured horizon"
         partial = " (in progress at the edge)" if c.partial else ""
         when = c.t_ca_utc[:19].replace("T", " ") + partial
         lines.append(
             f"| {c.name} ({c.norad_id}) | {kind} | {when} | {60 * c.separation_deg:.1f}' | {c.elevation_deg:.1f} deg "
-            f"| {c.range_km:.0f} km | {c.set_age_days:.2f} d | {unc} | {shift} | {frac} | {horizon} "
+            f"| {c.range_km:.0f} km | {c.set_age_days:.2f} d | {unc} | {shift} | {frac} | {crossing_h} | {position_h} "
             f"| {c.emission_status}: {c.emission_detail} |"
         )
     return lines
@@ -235,9 +253,9 @@ LIMITS = [
     "- No received power, occupancy fraction or sensitivity loss: those need a measurement at the site, and the "
     "statistics of satellite interference have been modelled elsewhere.",
     "- Constellation counts include retired members still catalogued; the catalogue does not say who is transmitting.",
-    "- The measured horizon is three non-manoeuvring satellites at 460 to 506 km in three windows; a station-kept "
-    "constellation satellite at the same altitude carries the label by altitude, not by a measurement of its "
-    "own error.",
+    "- The measured horizons, crossing and position, rest on three non-manoeuvring satellites at 460 to 506 km in "
+    "three windows; a station-kept constellation satellite at the same altitude carries the label by altitude, "
+    "not by a measurement of its own error.",
     "- Where the archive's phase centre is not public, the target position stands in for it and the report says "
     "so per observation.",
     "- Scan boundaries inside an observation are not public; a crossing is reported against the whole "
@@ -272,8 +290,8 @@ def period_report(
         "retired members, because the catalogue does not carry transmit status. Emissions are declarations from "
         "public filings, dated in `docs/radio-emissions.md`; a declaration made after these observations "
         "(Starlink direct-to-cell, November 2024) is still listed, as a capability, and says so. The measured "
-        f"horizon applies only to {MEASURED_POPULATION}; every other object carries *no measured horizon* and the "
-        "reason.",
+        f"horizons, crossing and position, apply only to {MEASURED_POPULATION}; every other object carries *no "
+        "measured horizon* for both and the reason.",
         "",
         "## Observations",
         "",
@@ -313,15 +331,33 @@ def period_report(
                 f"| {s['constellation']} | {int(s['n_catalogued'])} | {s['mean_simultaneous']:.1f} "
                 f"| {int(s['max_simultaneous'])} | {s['status']}: {s['detail']} |"
             )
-    lines += ["", f"## The radio horizon for this period's window ({period.benchmark_window})", ""]
+    lines += ["", f"## The two horizons for this period's window ({period.benchmark_window})", ""]
     w = horizon_table[horizon_table["window"] == period.benchmark_window]
     cols = [c for c in horizon_mod.table_columns() if c.receiver in ("UHF", "L", "S0")]
     if w.empty:
         lines.append("No benchmark trials for this window.")
     else:
+        crossing = {c.key: horizon_mod.horizon_hours(horizon_table, c, which="crossing") for c in cols}
+        position = {c.key: horizon_mod.horizon_hours(horizon_table, c, which="position") for c in cols}
         lines += [
+            "The **crossing horizon** is governed by the cross-track error and answers whether an object crossed the "
+            "beam during an observation, with the crossing's time known to the along-track shift beside it; the "
+            "**position horizon** is governed by the along-track error and answers where an object is at an instant, "
+            "to within a third of the beam. Each is the longest lead through which 95 per cent of this window's "
+            "benchmark trials keep the named angular error under a third of the beam width.",
+            "",
+            "| Receiver, frequency | Crossing horizon | Position horizon |",
+            "| --- | --- | --- |",
+        ]
+        for c in cols:
+            lines.append(
+                f"| {c.label} | {horizon_mod.format_lead(crossing[c.key][period.benchmark_window])} "
+                f"| {horizon_mod.format_lead(position[c.key][period.benchmark_window])} |"
+            )
+        lines += [
+            "",
             "| Lead | n | cross-track p95 (overhead) | along-track p95 (overhead) | along-track shift p95 | "
-            + " | ".join(f"{c.label}, cross / along" for c in cols)
+            + " | ".join(f"{c.label}, crossing / position" for c in cols)
             + " |",
             "| ---: | ---: | ---: | ---: | ---: | " + " | ".join("---:" for _ in cols) + " |",
         ]
@@ -330,14 +366,15 @@ def period_report(
             lines.append(
                 f"| {lead} | {int(r['n'])} | {r['cross_p95_arcmin']:.1f}' | {r['along_p95_arcmin']:.1f}' "
                 f"| {r['along_shift_p95_s']:.2f} s | "
-                + " | ".join(f"{100 * r[c.key]:.0f}% / {100 * r[c.along_key]:.0f}%" for c in cols)
+                + " | ".join(f"{100 * r[c.crossing_key]:.0f}% / {100 * r[c.position_key]:.0f}%" for c in cols)
                 + " |"
             )
         lines += [
             "",
             "Fractions are the share of benchmark trials whose angular error, with the satellite overhead, is under "
-            "a third of the beam width, cross-track then along-track; the full table with every receiver is "
-            "`docs/radio-horizon.md`.",
+            "a third of the beam width: the crossing horizon's test (cross-track) then the position horizon's test "
+            "(along-track). The full table with every receiver, and the statement on S-band position prediction, "
+            "are in `docs/radio-horizon.md`.",
         ]
     lines += ["", "## What this does not show", "", *LIMITS, "", f"_Last updated {datetime.now(UTC):%d %B %Y}._"]
     return "\n".join(lines).rstrip() + "\n"
@@ -366,6 +403,8 @@ def emissions_page() -> str:
         emissions.to_markdown(),
         "",
         f"Cross-check: [{emissions.SARAO_RFI[0]}]({emissions.SARAO_RFI[1]}).",
+        "",
+        *emissions.starlink_l_band_record(),
         "",
         f"_Last updated {datetime.now(UTC):%d %B %Y}._",
     ]

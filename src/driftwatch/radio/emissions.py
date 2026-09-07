@@ -92,9 +92,56 @@ _INM = (
     "1526-1554 MHz as Inmarsat at the site",
     "https://www.itu.int/pub/R-REG-RR",
 )
+# The order, quoted. The reference is the document's own: an Order and Authorization of the Space
+# Bureau, adopted and released on the same day; the wording is paragraph 39 of the discussion and
+# condition ww of ordering paragraph 89, verbatim, with the sentences on the authority of other
+# administrations from paragraphs 39 and 40. The range 1475-1518 MHz lies inside MeerKAT's L band.
+STARLINK_DTC_ORDER: dict[str, str] = {
+    "reference": "FCC DA 24-1193, Order and Authorization, Federal Communications Commission, Space Bureau, "
+    "adopted and released 26 November 2024; In the Matter of Space Exploration Holdings, LLC, Application for "
+    "Authority for Modification of the SpaceX NGSO Satellite System to Add a Direct to Cellular System, ICFS File "
+    "Nos. SAT-MOD-20230207-00021 and SAT-AMD-20240322-00061, call sign S3069, with GN Docket No. 23-135",
+    "url": "https://docs.fcc.gov/public/attachments/DA-24-1193A1.pdf",
+    "paragraph_39": "In particular, outside the United States, SpaceX is authorized to transmit in the 1475-1518 "
+    "MHz, 1805-1880 MHz, 1930-2000 MHz, 2110-2180 MHz, 2180-2200 MHz, 2345-2360 MHz, and 2620-2690 MHz "
+    "(space-to-Earth) bands and to receive in the 1429-1470 MHz, 1710-1785 MHz, 1850-1920 MHz, 1920-1980 MHz, "
+    "2000-2020 MHz, 2305-2320 MHz, and 2500-2570 MHz (Earth-to-space) bands.",
+    "paragraph_39_administrations": "We also require that any direct-to-cell operations outside the United States "
+    "be duly authorized by the relevant administrations and will be subject to the laws, regulations, and "
+    "requirements applicable to such operations in the territories of the authorizing administrations.",
+    "paragraph_40": "Furthermore, we emphasize that SpaceX, prior to initiation of communications with earth "
+    "stations in a particular country, must inform the Commission that it has obtained all necessary "
+    "authorizations from the relevant country and demonstrate that such operations will not cause harmful "
+    "interference to operations in conformity with the ITU Radio Regulations before the initiation of service "
+    "in that country.",
+    "condition_ww": "SpaceX is authorized to operate in the MSS for the purpose of direct-to-cell operations "
+    "within the 1429-2690 MHz band (space-to-Earth and Earth-to-space) in the following sub-bands bands: "
+    "1475-1518 MHz, 1805-1880 MHz, 1930-2000 MHz, 2110-2180 MHz, 2180-2200 MHz, 2345-2360 MHz, and 2620-2690 "
+    "MHz (space-to-Earth) (outside the United States only); and 1429-1470 MHz, 1710-1785 MHz, 1850-1920 MHz, "
+    "1920-1980 MHz, 2000-2020 MHz, 2305-2320 MHz, and 2500-2570 MHz (Earth-to-space) (outside the United States "
+    "only).",
+    "condition_aaa": "When conducting SCS operations outside the United States in the 1429-2690 MHz band, "
+    "SpaceX shall operate in accordance with the cooperative arrangements with local terrestrial providers to "
+    "protect services allocated under Safety-of-Life, Radio Astronomy, Space Research, Radionavigation "
+    "Satellite, Aeronautical Radionavigation, Earth-Exploration Satellite, and Space Operations.",
+    "status": "declared; subject to each administration",
+}
+STARLINK_L_BAND_NOTE = (
+    "The range 1475-1518 MHz lies inside the L-band receiver's digitised band, 856-1712 MHz, and inside its feed's "
+    "design range, 900-1670 MHz. The declaration is a capability, not an operation over the site: the order "
+    "authorises the transmission outside the United States only where the relevant administration has "
+    "authorised it, and no public record read for this work shows such an authorisation in South Africa. If the "
+    "downlink were licensed in South Africa, an intentional space-to-Earth transmission would sit inside the "
+    "L-band receiver's band from satellites the period reports count at about 120 above ten degrees at once, so "
+    "1475-1518 MHz would join the GNSS, Iridium and Inmarsat ranges the receiver already sees as declared "
+    "in-band emitters, at a level no public measurement gives; whether such a licence will be granted is not "
+    "predicted here."
+)
 _STL_DTC = (
-    "FCC DA 24-1193 (26 November 2024), SpaceX direct-to-cell: within the United States 1990-1995 MHz "
-    "(space-to-Earth) and 1910-1915 MHz (Earth-to-space); outside the United States, subject to each "
+    "FCC DA 24-1193 (Order and Authorization, Space Bureau, adopted and released 26 November 2024; ICFS File Nos. "
+    "SAT-MOD-20230207-00021 and SAT-AMD-20240322-00061, call sign S3069; GN Docket No. 23-135), paragraph 39 and "
+    "ordering paragraph 89 condition ww, SpaceX direct-to-cell: within the United States 1990-1995 MHz "
+    "(space-to-Earth) and 1910-1915 MHz (Earth-to-space); outside the United States only, and subject to each "
     "administration, transmit in 1475-1518, 1805-1880, 1930-2000, 2110-2180, 2180-2200, 2345-2360 and "
     "2620-2690 MHz",
     "https://docs.fcc.gov/public/attachments/DA-24-1193A1.pdf",
@@ -121,7 +168,7 @@ SARAO_RFI = (
 )
 
 _NOT_PER_OBJECT = "direct-to-cell capability is not established per object from public data"
-_OUTSIDE_US = "subject to the administration's authority; " + _NOT_PER_OBJECT
+_OUTSIDE_US = "declared and subject to each administration; " + _NOT_PER_OBJECT
 _RECEIVES = "the satellite receives here; not an emission"
 
 
@@ -368,6 +415,27 @@ def constellation_of(
     ):
         return "GLONASS"
     return None
+
+
+def starlink_l_band_record() -> list[str]:
+    """The direct-to-cell L-band authorisation as a page section: the order's reference and wording, quoted."""
+    o = STARLINK_DTC_ORDER
+    return [
+        "## The direct-to-cell authorisation inside the L band, as declared",
+        "",
+        f"**Reference.** {o['reference']} ([the order]({o['url']})). **Status: {o['status']}.**",
+        "",
+        f'**Paragraph 39, verbatim.** "{o["paragraph_39"]}" And, on the authority of other administrations: '
+        f'"{o["paragraph_39_administrations"]}"',
+        "",
+        f'**Paragraph 40, verbatim.** "{o["paragraph_40"]}"',
+        "",
+        f'**Ordering paragraph 89, condition ww, verbatim.** "{o["condition_ww"]}"',
+        "",
+        f'**Ordering paragraph 89, condition aaa, verbatim.** "{o["condition_aaa"]}"',
+        "",
+        f"**What it means for the L-band receiver.** {STARLINK_L_BAND_NOTE}",
+    ]
 
 
 def to_markdown() -> str:

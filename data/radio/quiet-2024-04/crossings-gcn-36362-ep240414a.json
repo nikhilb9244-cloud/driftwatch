@@ -17,7 +17,9 @@
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.1615940081754,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 66.91662344245493,
@@ -30,7 +32,9 @@
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.2129889290368,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 66.9034128989463,
@@ -43,7 +47,9 @@
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.2647525314223,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 66.89015619869767,
@@ -56,7 +62,9 @@
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.3168847681804,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 66.87685344318687,
@@ -69,7 +77,9 @@
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.3693855915876,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 66.86350473402906,
@@ -82,7 +92,9 @@
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.4222549537849,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 66.85011017303904,
@@ -95,7 +107,9 @@
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.4754928063387,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 66.83666986216474,
@@ -108,7 +122,9 @@
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.5290991006766,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       }
      ]
     },
@@ -127,7 +143,9 @@
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 731.1392352750801,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 69.14246693485933,
@@ -140,7 +158,9 @@
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 731.3617864570066,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 69.08866972861112,
@@ -153,7 +173,9 @@
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 731.5849984411024,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 69.03488432177357,
@@ -166,7 +188,9 @@
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 731.8088706224015,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 68.98111095858735,
@@ -179,7 +203,9 @@
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 732.0334023964656,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 68.92734988138577,
@@ -192,7 +218,9 @@
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 732.2585931566067,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 68.87360133033441,
@@ -205,7 +233,9 @@
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 732.4844422950639,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       },
       {
        "altitude": 68.81986554315496,
@@ -218,7 +248,9 @@
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 732.7109492042686,
        "cross_track_uncertainty_deg": null,
-       "horizon": "no measured horizon"
+       "crossing_horizon": "no measured horizon",
+       "along_track_shift_s": null,
+       "position_horizon": "no measured horizon"
       }
      ]
     }
@@ -231,7 +263,9 @@
   "format": "IAU CPS SatChecker /fov/satellite-passes/ synchronous response (satchecker.readthedocs.io, Field of View endpoints)",
   "added_fields": [
    "cross_track_uncertainty_deg",
-   "horizon"
+   "crossing_horizon",
+   "along_track_shift_s",
+   "position_horizon"
   ],
   "fov": {
    "ra_deg": 191.50695833333336,
@@ -363,7 +397,7 @@
     "mean_simultaneous": 122.140625,
     "max_simultaneous": 135,
     "status": "declared in-band",
-    "detail": "direct-to-cell downlink, outside the United States 2620-2690 MHz (subject to the administration's authority; direct-to-cell capability is not established per object from public data); unintended emission inside 544-3500 MHz: no published measurement inside the MeerKAT bands; treated as unknown, not as absent"
+    "detail": "direct-to-cell downlink, outside the United States 2620-2690 MHz (declared and subject to each administration; direct-to-cell capability is not established per object from public data); unintended emission inside 544-3500 MHz: no published measurement inside the MeerKAT bands; treated as unknown, not as absent"
    },
    {
     "constellation": "OneWeb",
@@ -398,8 +432,10 @@
     "projection_along": 0.9916482972869147,
     "population": "no measured horizon",
     "population_reason": "mean altitude 878 km is outside the 400 to 600 km benchmark population",
-    "horizon": "no measured horizon",
-    "fraction_inside": null,
+    "crossing_horizon": "no measured horizon",
+    "position_horizon": "no measured horizon",
+    "crossing_fraction_inside": null,
+    "position_fraction_inside": null,
     "cross_track_uncertainty_deg": null,
     "along_track_uncertainty_deg": null,
     "along_track_shift_s": null,
@@ -431,8 +467,10 @@
     "projection_along": 0.9514439469351353,
     "population": "no measured horizon",
     "population_reason": "mean altitude 840 km is outside the 400 to 600 km benchmark population",
-    "horizon": "no measured horizon",
-    "fraction_inside": null,
+    "crossing_horizon": "no measured horizon",
+    "position_horizon": "no measured horizon",
+    "crossing_fraction_inside": null,
+    "position_fraction_inside": null,
     "cross_track_uncertainty_deg": null,
     "along_track_uncertainty_deg": null,
     "along_track_shift_s": null,
@@ -445,7 +483,8 @@
   ],
   "limits": [
    "Positions come from public element sets propagated with SGP4; no tracking, no orbit determination.",
-   "cross_track_uncertainty_deg is the 95th percentile of the calibration benchmark's cross-track residual at the element set's age, projected on the sky at the crossing's range; it applies only where horizon is inside or outside, and is null where the object is outside the benchmark's population.",
+   "cross_track_uncertainty_deg is the 95th percentile of the calibration benchmark's cross-track residual at the element set's age, projected on the sky at the crossing's range, and crossing_horizon says whether 95 per cent of the benchmark's trials at that age keep it under a third of the beam (inside) or not (outside): whether the object crossed the beam.",
+   "along_track_shift_s is the 95th percentile of the benchmark's along-track residual at that age as a time shift at the orbital speed, and position_horizon says whether the along-track angular error keeps the same coverage (inside) or not (outside): where the object is at an instant. Both horizons are null where the object is outside the benchmark's population, and both say so.",
    "Nothing here is a received power, an occupancy fraction or a sensitivity loss."
   ]
  }
