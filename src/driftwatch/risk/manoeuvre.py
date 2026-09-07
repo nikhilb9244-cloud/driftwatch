@@ -3,8 +3,8 @@
 SGP4 cannot predict a burn. An element set fitted before a manoeuvre is wrong after it
 by the size of the burn, and nothing in a screening against public element sets can see
 the burn coming. What the pipeline can do is say, for each object, how likely a burn is
-and whether its recent history shows one. The flag has three prior values, decided at
-the Step 2 review, and one value the history can promote to:
+and whether its recent history shows one. The flag has three prior values, and one
+value the history can promote to:
 
 ``known``
     Operated constellations and crewed stations (the ``starlink``, ``oneweb``,

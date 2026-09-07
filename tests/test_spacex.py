@@ -680,7 +680,7 @@ def inclined_copy(base, norad_id: int, *, d_inclination_deg: float):
 def test_one_object_carries_the_fit_residual_on_some_events_and_not_others_end_to_end():
     """Their covariance present, the trajectory still CelesTrak's fit: the partial residual path.
 
-    Added at the Step 1 review, because production has not produced this case and might not
+    Added because production has not produced this case and might not
     for a while. Measured on the 2026-09-03 demo run **no event took it**: 646 events were
     served by the published states, 16 objects had events both ways, and every unserved event
     on those objects fell past the covariance's own horizon too, so it went to the base model

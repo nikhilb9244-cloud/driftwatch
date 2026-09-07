@@ -124,7 +124,7 @@ def test_a_missing_driver_gives_no_density_rather_than_a_quiet_day():
 
 
 def test_quiet_density_is_within_the_published_range_and_falls_with_altitude():
-    """The sanity check the prompt asks for: 300, 400, 500 and 600 km against published values.
+    """The sanity check: 300, 400, 500 and 600 km against published values.
 
     The bands are wide because the real spread is wide: density at 400 km runs from about
     5e-13 kg/m^3 at solar minimum to 8e-12 at solar maximum, and the published tables
@@ -355,13 +355,13 @@ def test_an_object_whose_decay_says_nothing_falls_back_and_says_so():
 
 
 # --------------------------------------------------------------------------------------
-# What the Step 2 review asked for: the acceptance rule, the bands, the uncertainty, the cache
+# The acceptance rule, the bands, the uncertainty, the cache
 
 
 def test_a_fit_is_accepted_against_the_objects_own_scatter_not_a_fixed_number_of_metres(monkeypatch):
     """The same decay is a measurement on quiet elements and noise on scattered ones.
 
-    The review's threshold: the drop in mean semi-major axis has to exceed the uncertainty
+    The threshold: the drop in mean semi-major axis has to exceed the uncertainty
     the element-set scatter puts on it by about three. Both objects here decay by the same
     designed amount; they differ only in how much their element sets bounce, and that alone
     decides whether a coefficient comes back.
@@ -417,7 +417,7 @@ def test_every_accepted_coefficient_carries_an_uncertainty_step_3_can_propagate(
 
 
 def test_the_typical_value_is_taken_by_category_and_drag_altitude_band():
-    """The review's instruction: medians by category *and* altitude band, not category alone.
+    """Medians by category *and* altitude band, not category alone.
 
     Two bands of the same category with coefficients an order of magnitude apart. An object
     falling back in one of them must take its own band's median, because what its coefficient
@@ -582,7 +582,7 @@ def test_the_seven_element_ap_mode_is_the_one_that_answers_a_storm():
 
 
 def test_a_satellite_falling_faster_than_its_own_geometry_allows_is_thrust_not_drag(monkeypatch):
-    """The Step 3 review correction: an object under continuous low thrust is not a drag measurement.
+    """The correction: an object under continuous low thrust is not a drag measurement.
 
     A continuous thrust is a *ramp*, not a jump, so the manoeuvre detector cannot see it and the
     fit reads the whole fall as atmosphere. What gives it away is the size of the answer: a

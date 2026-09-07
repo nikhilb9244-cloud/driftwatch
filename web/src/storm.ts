@@ -1,8 +1,8 @@
 /**
  * The storm control, the storm summary and the unscoreable section.
  *
- * Built to the console specification in `docs/design-brief.md` §3.1 and §5, so that the Phase 4
- * console inherits this rather than replacing it:
+ * Built to the console specification set out below, so that the Phase 4 console inherits this
+ * rather than replacing it:
  *
  * - **A segmented control of five on desktop** — `quiet · forecast · G3 · G4 · G5` — and a
  *   dropdown below 900 px. Replay is not a sixth segment; it is a mode, with its own control,
@@ -157,7 +157,9 @@ export function buildStormControl(
       row("Median pc / variance only", (f) => fmtRatio(f.median_pc_over_variance_only).replace("×", "")) +
       row("Lowered by the shift", (f) => f.n_lowered_by_shift.toLocaleString()) +
       row("Raised by the shift", (f) => f.n_raised_by_shift.toLocaleString()) +
-      row("Red / yellow", (f) => `${f.n_red} / ${f.n_yellow}`) +
+      row("Robust-region flags", (f) => f.n_robust_flagged === undefined ? "not recorded" : String(f.n_robust_flagged)) +
+      row("Dilution · low confidence / all flags", (f) => f.n_dilution_flagged === undefined ? "not recorded" : `${f.n_dilution_flagged}/${f.n_red + f.n_yellow} (${f.n_red + f.n_yellow ? (100 * f.n_dilution_flagged / (f.n_red + f.n_yellow)).toFixed(1) : '0.0'}%)`) +
+      row("Red / yellow", (f) => `${f.n_red} / ${f.n_yellow} · dilution: ${f.n_dilution_flagged === undefined ? 'not recorded' : f.n_dilution_flagged + '/' + (f.n_red + f.n_yellow)}`) +
       row("Not scored", (f) => String(f.n_unscoreable)) +
       `</tbody></table>` +
       // Folded away rather than dropped: it is needed once, and the queue is what is being read.

@@ -44,9 +44,9 @@ needed because either alone leaks.
 :data:`driftwatch.config.BALLISTIC_MAX_MANOEUVRE_FRACTION` of its intervals is under continuous
 control and is refused whatever it fitted.
 
-*On the coefficient, for objects that can thrust* (``thrust = True``, added at the Step 3
-review). A satellite's area-to-mass is bounded by its own geometry: the largest operated low
-Earth orbit satellites reach A/m near 0.05 m^2/kg broadside, so ``B = C_D A/m`` tops out near
+*On the coefficient, for objects that can thrust* (``thrust = True``). A satellite's area-to-mass
+is bounded by its own geometry: the largest operated low Earth orbit satellites reach A/m near
+0.05 m^2/kg broadside, so ``B = C_D A/m`` tops out near
 0.11. A **manoeuvring** object coming out above
 :data:`driftwatch.config.BALLISTIC_THRUST_M2_KG` is therefore not being measured for drag, and
 takes the run's typical value for its class instead.

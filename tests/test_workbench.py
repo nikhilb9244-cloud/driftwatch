@@ -11,12 +11,12 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from driftwatch import local, workbench
-
 # Built here, not read out of web/public/examples/. The shipped examples became measured data
 # on 2026-09-07; these stay constructed because a displacement the test chooses is the only way to
 # assert that the engine measures the displacement it was given. See tests/workspace_fixtures.py.
-from tests.workspace_fixtures import RECORD, request  # noqa: E402
+from workspace_fixtures import RECORD, request  # noqa: E402
+
+from driftwatch import local, workbench
 
 
 def test_same_ephemeris_and_known_displacement_are_distinguished():

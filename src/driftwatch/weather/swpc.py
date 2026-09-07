@@ -18,7 +18,7 @@ forecast it was, and SWPC reissues these several times a day.
 ``solar-wind``
     ``propagated-solar-wind.json``: speed, density, temperature and the interplanetary
     magnetic field at L1 propagated to the bow shock, a week of it at one-minute cadence.
-    Both the "magnetic field" and the "plasma" the prompt asks for, in one series.
+    Both the "magnetic field" and the "plasma" quantities, in one series.
 
 **Where the issue time comes from.** The text products carry their own ``:Issued:`` line and
 that is used. The JSON products carry none, and their HTTP ``Last-Modified`` is the time the

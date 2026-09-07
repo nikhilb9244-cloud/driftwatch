@@ -33,7 +33,7 @@ how much the satellite manoeuvred between fits, not how well it is tracked, so i
 nothing about the set actually used. :func:`fit_supplemental_covariance` fits those
 objects from the consistency of successive stored supplemental versions instead, and
 :class:`SupplementalCovariance` wraps a base model to serve them. That fit differs from
-the GP one in four ways, all taken at the Phase 3 Step 0 review:
+the GP one in four ways:
 
 * Its pairs are binned by lead time, so that the thousands of pairs a few hours apart do
   not outweigh the few days apart, and a bin is used only when it holds enough pairs for
@@ -158,7 +158,7 @@ RIC = ("r", "i", "c")
 
 @dataclass(frozen=True)
 class ObjectRef:
-    """Identity of an object as the covariance model sees it (the Step 0 review's interface)."""
+    """Identity of an object as the covariance model sees it."""
 
     norad_id: int
     category: str  # snapshot category

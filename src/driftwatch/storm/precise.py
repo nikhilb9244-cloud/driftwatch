@@ -1154,7 +1154,7 @@ def to_markdown(
     lines = [
         "# Calibration against precise orbits: Swarm A, B and C",
         "",
-        f"Written by `driftwatch validate swarm` on {built_at.date().isoformat()}. Every number here is computed "
+        f"_Last updated {built_at.date().isoformat()}._\n\nEvery number here is computed "
         "from the per-trial file beside `swarm_benchmark.json`; the reasoning and the caveats are in "
         '`docs/methods.md`, "Uncertainty and probability", and on the findings page.',
         "",

@@ -1,4 +1,4 @@
-# Element sets, SGP4 and what the public catalogue can and cannot tell you
+# Element sets, SGP4 and the limits of the public catalogue
 
 This page is the background a developer needs before trusting a number that comes out
 of driftwatch. It is deliberately short; the references at the end go deeper.
@@ -40,7 +40,7 @@ A TLE holds *mean* elements: the orbit with those periodic wobbles averaged out
 according to one specific analytical theory, SGP4. The elements are fitted to tracking
 data by running SGP4 backwards, so they only reproduce the observations when they are
 fed through SGP4 again. Put the same numbers into a plain Keplerian propagator, or a
-numerical integrator with a better gravity model, and you get a *worse* orbit, typically
+numerical integrator with a better gravity model, produces a *worse* orbit, typically
 off by kilometres, because the periodic terms SGP4 would have restored are missing.
 
 This is also why two element sets for the same object a day apart disagree by hundreds
@@ -111,3 +111,5 @@ Consequences for later phases:
 - Kelso, T. S., CelesTrak documentation on GP data formats,
   https://celestrak.org/NORAD/documentation/gp-data-formats.php.
 - Rhodes, B., the `sgp4` package documentation, https://pypi.org/project/sgp4/.
+
+_Last updated 7 September 2026._

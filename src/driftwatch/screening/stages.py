@@ -33,7 +33,7 @@ is any consecutive pair of samples where the range rate changes sign from approa
 to receding while either sample is below the threshold; a sampled local minimum with no
 sign change beside it is kept as a fallback candidate.
 
-**Attached and co-orbiting objects (Phase 4 Step 2 review).** A docked visiting vehicle,
+**Attached and co-orbiting objects.** A docked visiting vehicle,
 a station module and a payload still mated to its upper stage are separate catalogue
 objects at the same place, and they are usually carried on the *same* element set, so the
 screening finds a closest approach of a fraction of a metre once an orbit for the whole
@@ -245,8 +245,8 @@ def stage_a(
     """Apogee/perigee overlap filter with a pad; drop decaying objects; flag stale element sets.
 
     Uses only ``perigee_km``, ``apogee_km``, ``semi_major_axis_km`` and ``epoch``. The
-    ``category`` and ``altitude_band`` labels play no part, by design (see
-    ``docs/phase2-plan.md``), and a test permutes them to prove it.
+    ``category`` and ``altitude_band`` labels play no part, by design, and a test permutes
+    them to prove it.
 
     ``reach`` describes the published states that will actually serve an object:
     ``{norad id: (lowest km, highest km, fastest km/s)}``, from
@@ -1150,7 +1150,7 @@ def state_columns(r_p: np.ndarray, v_p: np.ndarray, r_s: np.ndarray, v_s: np.nda
 def event_ids(primary: np.ndarray, secondary: np.ndarray, tca: np.ndarray, snapshot_stamp: str) -> np.ndarray:
     """Stable event identities: ``<snapshot stamp>:<primary>:<secondary>:<TCA to the minute>``.
 
-    The Step 0 review's rule, so that the same event carries the same id in every
+    The rule, so that the same event carries the same id in every
     scenario and across reruns of the same snapshot. Two distinct minima of one pair
     inside one minute (a shallow double approach) get ``#2``, ``#3`` suffixes in time order.
     """

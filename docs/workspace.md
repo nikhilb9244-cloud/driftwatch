@@ -68,8 +68,7 @@ differ by about a second, although at the first acquisition the two predicted po
 about this object over this day, not a general claim about refresh policy.
 
 **Two tools ship no example.** The conjunction-message tool needs two CCSDS CDMs, KVN or XML,
-describing the same conjunction, supplied by the reader from their own conjunction-assessment
-provider; it has not been exercised on real conjunction messages. The contact planner needs a week
+describing the same conjunction, supplied by a conjunction-assessment provider; it has not been exercised on real conjunction messages. The contact planner needs a week
 of real requests as CSV or TSV; it has not been exercised against a real request week. Neither
 gets an invented substitute, because an invented input would show the software running rather than
 working.

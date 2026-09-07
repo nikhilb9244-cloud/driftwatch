@@ -51,7 +51,7 @@ provenance. `--images` adds the Sun frames.
 
 ### Every forecast is stored with the time it was issued
 
-A forecast is only reproducible if you know **which** forecast it was, and SWPC reissues
+A forecast is only reproducible with **which** forecast it was, and SWPC reissues
 these several times a day. Each fetch is written to `data/weather/swpc/` under the product
 name and the issue time and is never overwritten, with a sidecar recording the URL, the fetch
 time, the issue time and where the issue time came from. `swpc.stored_before(product, when)`
@@ -129,14 +129,13 @@ storms this project exists for. So every layer also carries a `skill`:
 | — | `synthetic:<name>` | `designed` | A scenario. Not a prediction at all. |
 | — | (a gap) | `none` | No source in any layer. |
 
-**Days four to seven keep their forecast rather than being blanked.** The Step 1 review asked
-whether to treat them as having no usable geomagnetic forecast and let the scenarios carry
-that part of the window instead. They are not blanked: a recurrence guess is weak information
+**Days four to seven keep their forecast rather than being blanked.** They could be treated as having no
+usable geomagnetic forecast, letting the scenarios carry that part of the window instead. They are not blanked: a recurrence guess is weak information
 but it is not no information, deleting it would put a hole in the middle of the density
 computation that Step 2 would then have to fill with something, and the honest way to say
 "this is nearly worthless" is to label it and widen its uncertainty — which is exactly what
 `skill` and `ap_sigma` now do. The scenario machinery answers a different question: what if
-the storm were this bad, rather than what do we expect.
+the storm were this bad, rather than the expected conditions.
 
 ### How uncertain the index is
 
@@ -229,3 +228,5 @@ showing none.
   the International Geophysical Year* 4, 215–226 (1957), for the K-to-a conversion.
 - GFZ Potsdam, the Kp index definition and its history, https://www.gfz-potsdam.de/kp-index/.
 - Helioviewer Project API, https://api.helioviewer.org/docs/v2/, read 2026-09-02.
+
+_Last updated 7 September 2026._

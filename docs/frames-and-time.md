@@ -46,7 +46,7 @@ it returns is relative to the rotating Earth, i.e. it includes the omega-cross-r
 
 | Scale | Used for | Notes |
 | --- | --- | --- |
-| UTC | Everything the user sees, element-set epochs, SGP4 evaluation | TLE epochs are UTC by convention (AIAA 2006-6753). |
+| UTC | Everything displayed, element-set epochs, SGP4 evaluation | TLE epochs are UTC by convention (AIAA 2006-6753). |
 | UT1 | GMST | UT1 minus UTC (DUT1) is published by the IERS, within plus or minus 0.9 s. |
 | TT, TDB | Not needed in Phase 1 | Astropy handles them internally where a transformation needs them. |
 
@@ -81,3 +81,5 @@ scene as `(Y, Z, X) * 100 / 6371`, which the viewer verifies against globe.gl's 
 `getCoords` at start-up. The 6371 km mean radius means an object's drawn height above
 the sphere differs from its WGS84 height by up to about 20 km near the poles, because
 the real Earth is flattened; the hover panel shows the WGS84 value.
+
+_Last updated 7 September 2026._

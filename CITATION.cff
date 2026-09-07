@@ -3,14 +3,13 @@ title: >-
   driftwatch: conjunction screening on public element sets, with a measured
   storm-term calibration
 message: >-
-  If you use this software or its calibration benchmark, please cite it. The
-  benchmark is the measured comparison against ESA's Swarm precise orbits; cite
-  the release that produced the numbers you used, not the moving branch.
+  Citation metadata for driftwatch and the tagged Swarm calibration benchmark.
+  The benchmark compares public element sets with ESA's precise science orbits.
+  The release identifies the frozen measurements and their bounded population.
 type: software
 authors:
   - family-names: Pather
     given-names: Nikhil
-    orcid: null
 repository-code: "https://github.com/nikhilb9244-cloud/driftwatch"
 abstract: >-
   driftwatch screens a fleet against the public catalogue, estimates collision
@@ -19,8 +18,8 @@ abstract: >-
   widens their covariance under a geomagnetic scenario. Its storm term and its
   covariance are calibrated against ESA's reduced-dynamic precise science orbits
   for Swarm A, B and C over three windows: a quiet control, the May 2024 Gannon
-  storm, and a held-out October 2024 window. All positions come from public
-  element sets; the project performs no orbit determination of its own, and every
+  storm, and a held-out October 2024 window. Positions come from public element
+  sets, published predictions or supplied orbit products; the project performs no orbit determination of its own, and every
   probability it reports is indicative rather than operational.
 keywords:
   - conjunction assessment

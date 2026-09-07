@@ -1,7 +1,6 @@
-# SpaceX Starlink ephemerides: may we use them, and how?
+# SpaceX Starlink ephemerides: sources, use and limits
 
-A Phase 3 Step 0 question. Everything below was checked on 2026-09-02; the endpoints and the
-terms both move, so re-check before relying on this.
+The endpoints and terms can change. The source pages govern access and reuse; unauthenticated access alone grants no redistribution rights.
 
 ## What they are
 
@@ -19,7 +18,7 @@ fetched 2026-09-02:
 | --- | --- |
 | Size | 2.0 MB per satellite per version |
 | Header | `created`, `ephemeris_start`, `ephemeris_stop`, `step_size`, `ephemeris_source`, frame |
-| Span | 72 hours from creation, at a 60-second step (4,321 states) |
+| Span | 72 hthe estimate from creation, at a 60-second step (4,321 states) |
 | Frame | `UVW`, which is the RTN/RIC frame |
 | Per state | position and velocity in km and km/s, then the lower triangle of the 6×6 covariance (21 numbers) |
 | Source label | `blend` on this file: a blend of the fitted past and the planned future |
@@ -28,7 +27,7 @@ fetched 2026-09-02:
 
 **They are no longer on Space-Track.** Space-Track announced that from 28 July 2025 it would
 stop hosting SpaceX ephemerides on its Public Files page and through the `/publicfiles/` API,
-and directed users to SpaceX. Checked directly on 2026-09-02 with our own account: the
+and directed users to SpaceX. Checked directly on 2026-09-02 with an authenticated account: the
 directory listing at `/publicfiles/query/class/dirs` still names
 `public-data-files-552-spacex-prod`, but `loadpublicdata` returns the NASA-JSC ISS ephemeris
 entries whatever directory is asked for, and no Starlink ephemeris is retrievable there.
@@ -45,7 +44,7 @@ have helped if it did. USSPACECOM's blanket approval to redistribute covers *bas
 surveillance data — element sets and OMMs, the SATCAT, decay and reentry data — and the
 agreement otherwise has the user agree "not to transfer any data or technical information
 received from this website … to any other entity without prior express approval". An
-owner/operator ephemeris is not basic space surveillance data, so had we taken these files
+owner/operator ephemeris is not basic space surveillance data, so had these files been taken
 from Space-Track, redistributing them or products built from them would have needed express
 approval. Taken from SpaceX directly, none of that applies.
 
@@ -56,8 +55,7 @@ operators screen against Starlink.
 
 ## The finding
 
-**We may use them.** They are published without restriction for exactly this purpose, and no
-agreement we are party to limits it. The rule we adopt is the one already applied to CelesTrak's
+**Analysis-only use.** The service states no licence granting redistribution. The project therefore applies the same analysis-only policy as for CelesTrak's
 supplemental data:
 
 - Read them, compute with them, and publish the results, crediting SpaceX for the source.
@@ -85,14 +83,14 @@ for the last twelve hours. Past ten hours this is a stated envelope, not a fitte
 plausibly the satellite's stationkeeping control box, which is a real and meaningful bound but
 is not the same quantity as a covariance. Any use of it has to say so.
 
-It is also far tighter than our own measurement of the same thing. The consistency of two
+It is also far tighter than driftwatch's measurement of the same thing. The consistency of two
 successive CelesTrak supplemental versions gives an in-track disagreement of about 710 m at a
-lead of 2.9 hours (`docs/screening.md`); SpaceX's published sigma at 3 hours is 62 m, eleven
-times smaller. The two are not measuring the same thing — ours includes the revision of the
+lead of 2.9 hours (`docs/screening.md`); SpaceX's published sigma at 3 hthe empirical estimate is 62 m, eleven
+times smaller. The two are not measuring the same thing — the consistency estimate includes the revision of the
 plan between versions, theirs is the uncertainty within one plan — and the difference is
 roughly the size of that revision. For screening, the revision is the part that matters.
 
-## As built (Step 0 revision, 2026-09-02)
+## As built 
 
 `ephemeris/spacex.py` and `driftwatch spacex`.
 
@@ -105,9 +103,9 @@ roughly the size of that revision. For screening, the revision is the part that 
    stored at all.
 2. **Their covariance is used as published**, for the Starlink object, inside the file's
    72-hour validity, labelled `spacex-ephemeris`. The 21 published numbers are the lower
-   triangle of the 6x6, row-major, in their UVW frame, which is our RIC, so no rotation is
+   triangle of the 6x6, row-major, in their UVW frame, which is driftwatch's RIC, so no rotation is
    needed; the position block is interpolated linearly between the stored samples.
-   Nothing inflates it. In particular the version-to-version revision measured from our
+   Nothing inflates it. In particular the version-to-version revision measured from driftwatch's
    stored supplemental versions is **not** added: the supplemental-consistency fit is kept
    as a cross-check instead (`spacex.cross_check`), because the two are different quantities
    and merging them would hide that.
@@ -123,10 +121,10 @@ roughly the size of that revision. For screening, the revision is the part that 
 
 ### The cross-check, measured
 
-`driftwatch spacex` prints their sigma beside ours at matched leads. Measured on 120
+`driftwatch spacex` prints their sigma beside the empirical estimate at matched leads. Measured on 120
 satellites of the demo run on 2026-09-02:
 
-| Lead | SpaceX in-track | driftwatch in-track | Ratio | Which model of ours |
+| Lead | SpaceX in-track | driftwatch in-track | Ratio | Empirical model |
 | ---: | ---: | ---: | ---: | --- |
 | 1 h | 6.7 m | 489 m | 73 | supplemental consistency |
 | 3 h | 24 m | 700 m | 29 | supplemental consistency |
@@ -135,13 +133,13 @@ satellites of the demo run on 2026-09-02:
 | 48 h | 2.51 km | 15.8 km | 6.3 | GP |
 | 72 h | 3.80 km | 22.8 km | 6.0 | GP |
 
-Ours is three to seventy times larger, and the sign is the expected one throughout: theirs
-is the uncertainty *within* one published plan, ours is the uncertainty *of the plan being
+The empirical estimate is three to seventy times larger, and the sign is the expected one throughout: theirs
+is the uncertainty *within* one published plan, the empirical estimate is the uncertainty *of the plan being
 revised*. The gap is widest at the short leads, where a published plan is nearly exact and a
-revision is the whole error. Past eight hours ours is not even the supplemental fit any more
+revision is the whole error. Past eight hours the empirical estimate is not even the supplemental fit any more
 but the GP element sets, which measure the manoeuvring itself, and the ratio settles around
 six. The number to watch is that ratio: if it ever fell to one, either the plans had stopped
-being revised or our fit had stopped measuring the revision.
+being revised or driftwatch's fit had stopped measuring the revision.
 
 Two things the table shows about their own numbers. The in-track sigma is **not monotonic**
 across the constellation — the median is 2.81 km at 24 hours and 2.51 km at 48 — which is
@@ -151,16 +149,16 @@ propagated covariance. And the envelope is not the same for every satellite: the
 measured for the terms question sat at 1,000 m in-track from 12 to 48 hours, well below the
 constellation median here.
 
-### The residual of the fit we actually propagate, added in quadrature
+### The residual of the propagated fit, added in quadrature
 
 The geometry driftwatch propagates is CelesTrak's SGP4 **fit** to this ephemeris, not the
 ephemeris itself, and CelesTrak publishes that fit's residual as a median of about 0.2 km.
 SpaceX's own in-track sigma is 62 m at three hours and 576 m at eight. So for roughly the
 first eight hours their covariance, used as published, is tighter than the disagreement
-between the trajectory we are propagating and the trajectory the covariance describes.
+between the propagated trajectory and the trajectory the covariance describes.
 
 Those are two different errors and they are independent: theirs is how well SpaceX knows
-where the satellite will be, the residual is how far the element set we propagate sits from
+where the satellite will be, the residual is how far the propagated element set sits from
 the ephemeris they published. So the residual is added in quadrature rather than used as a
 floor, on the diagonal only, which keeps the matrix positive definite and dilutes the
 published correlations the way an added error should:
@@ -235,10 +233,9 @@ file, states compared every 30 minutes across the whole 72 hours.
 Almost all of it in-track, which is what a timing error looks like. The worst cases are
 satellites under orbit-raising thrust, which an SGP4 element set cannot represent at all.
 
-### Lineage, checked (2026-09-05)
+### Lineage qualification
 
-A second external review asked for the table above to be qualified, and for the lineage of each
-pair to be verified before the difference is attributed to the fit's extrapolation. The
+The table requires a lineage qualification before the difference can be attributed to the fit's extrapolation. The
 qualification first: it is **one fetch on one date**, nineteen satellites, and the comparison is
 against SpaceX's *published prediction* — a 72-hour file that carries planned burns and the
 operator's drag model — not against the realised orbit. Whether the fit or the file is nearer to
@@ -285,8 +282,8 @@ from `ephemeris_start`.
    "it bites at short lead and nowhere else" — was true of *the term*. Whether the term was the
    whole of the error it stood for was never checked. It was not.
 2. Serving SpaceX's covariance on top of the SGP4 trajectory made days two and three **worse**.
-   Their in-track sigma at 72 hours is 3.80 km, a control box for the trajectory they published;
-   ours from the supplemental-consistency fit is 22.8 km, far closer to the 83 km the propagated
+   Their in-track sigma at 72 hthe empirical estimate is 3.80 km, a control box for the trajectory they published;
+   the estimate from the supplemental-consistency fit is 22.8 km, far closer to the 83 km the propagated
    element set is actually out by. The tighter number was being served for a trajectory it did
    not describe, on exactly the events furthest out in the window.
 
@@ -394,3 +391,5 @@ version `spacex-ephemeris/3`.
   by direct query of the `/publicfiles/` API on 2026-09-02.
 - Space-Track user agreement and API documentation, https://www.space-track.org/documentation,
   read 2026-09-02, for the blanket approval and its limits.
+
+_Last updated 7 September 2026._

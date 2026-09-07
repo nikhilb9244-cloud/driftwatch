@@ -185,17 +185,17 @@ From mean-element apogee and perigee:
 - `meo`: perigee at or above 2,000 km and apogee below 35,586 km.
 - `other`: everything else (graveyard orbits, LEO-to-MEO ellipses, cislunar).
 
-Both labels describe; neither selects. Screening (Phase 2) picks candidates from
+Both labels describe; neither selects. Screening  picks candidates from
 `perigee_km` and `apogee_km` alone, so an object in `unknown` or `other` is screened like
 any other. On the 2026-09-01 snapshot `unknown` (618) was 568 uncatalogued
 `TBA - TO BE ASSIGNED` analyst objects with no SATCAT row and 50 recently launched pieces
 that SATCAT still types `UNK`; `other` (1,258) was 429 orbits straddling the 2,000 km LEO
 ceiling (mostly debris) and 829 orbits near or above GEO but outside the 200 km ring (514
-of them graveyard orbits). The breakdown is in `docs/phase2-plan.md`.
+of them graveyard orbits).
 
 ## Fleet definitions: `fleets/<name>.yaml`
 
-The primaries for screening. These are committed to the repository, not generated. One
+The primaries for screening. These are stored in the repository, not generated. One
 YAML document per fleet:
 
 | Key | Type | Meaning |
@@ -233,7 +233,7 @@ and epoch and written in row groups of 50,000 rows so that a read filtered on
 `norad_id` skips most of a large file. A re-issued element set with the same epoch
 replaces the earlier one.
 
-`index.parquet` is the consolidated index decided at the Step 0 review: one row per
+`index.parquet` is the consolidated index: one row per
 element set in every history file, `norad_id` (int64), `epoch` (timestamp[us, UTC])
 and `file` (the history file's name). It is derived data: updated after every history
 write, rebuilt from the files whenever it is missing or does not list every file
@@ -260,7 +260,7 @@ events. `driftwatch risk <run> --scenario <name>` adds a scenario without rescre
 | `objects.parquet` | One row per object that takes part in any event, plus every fleet member (below). |
 | `covariance.parquet` | The fitted covariance model: one row per object analysed (every Stage A survivor), per (category, band) pool and per default band (below). Rebuilding the model from this table gives the same covariances. |
 | `risk_<scenario>.parquet` | One row per event for that scenario: the sigmas, their sources, the hard-body radius, the encounter-plane covariance, the probabilities, the flag (below). A `replay:may2024` scenario is `risk_replay-may2024.parquet`; the metadata carries the exact name. |
-| `conjunctions.parquet` | The export decided at the Step 0 review: `events` joined with the manoeuvre levels and every risk file, one row per event per scenario (below). Rebuilt whenever a risk file is written. |
+| `conjunctions.parquet` | The export: `events` joined with the manoeuvre levels and every risk file, one row per event per scenario (below). Rebuilt whenever a risk file is written. |
 | `report.md` | The weekly report for one scenario: the flagged pairs split by region, the top twenty by probability and by closest approach, a table per fleet member, and how to read the numbers. Repeated encounters of a pair are collapsed to one row with the events underneath. |
 
 An event is kept when its miss vector lies inside the RIC box or its miss distance is
@@ -336,7 +336,7 @@ run id.
 
 ### `ballistic.parquet`
 
-One row per object, written by `driftwatch ballistic` (Phase 3 Step 2). Fitted once per run
+One row per object, written by `driftwatch ballistic` . Fitted once per run
 and reused by every scenario; see `docs/density-and-drag.md`.
 
 | Column | Type | Meaning |
@@ -356,7 +356,7 @@ The parquet metadata records the run id and the NRLMSIS version.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
-| `run_id`, `snapshot`, `model_version`, `scenario` | string | The Step 0 review's run identity: the UTC stamp of the screening run plus a suffix; the snapshot file; `<driftwatch version>+<covariance model version>`; the scenario name (`quiet` in Phase 2). |
+| `run_id`, `snapshot`, `model_version`, `scenario` | string | Run identity: the UTC stamp of the screening run plus a suffix; the snapshot file; `<driftwatch version>+<covariance model version>`; the scenario name (`quiet` in Phase 2). |
 | `event_id` | string | Joins to `events.parquet`. |
 | `sigma_r_primary_km`, `sigma_i_primary_km`, `sigma_c_primary_km` | float64 | The primary's RIC standard deviations at `tca` under this scenario's model. |
 | `sigma_r_secondary_km`, `sigma_i_secondary_km`, `sigma_c_secondary_km` | float64 | The same for the secondary. |
@@ -392,7 +392,7 @@ flags, `secondary_ephemeris`, `refine_method` and the encounter-plane covariance
 row per event per scenario; (`event_id`, `scenario`) is unique. With no risk file
 present the geometry rows are exported with the risk columns empty.
 
-The storm columns were added to this join at the Step 4 review (2026-09-03). Before
+The earlier join omitted storm columns. Before
 that the join carried `pc` alone out of the scenario's five probability-and-shift
 columns, so the report and the viewer — which both read this file rather than the risk
 parquets — could show a storm probability with nothing beside it to say what had moved
@@ -405,7 +405,7 @@ One narrow file per indexed run, written by `driftwatch stability <run>` after t
 published and read by `driftwatch stability --pair A,B` or `--series <id>`. It is the read path
 for how a warning evolved: following one encounter across a month costs these files rather than a
 month of 4.8 MB run archives. It lives on the `pipeline-store` branch with the other accumulating
-state, never in the release-asset archive it exists to save you from opening.
+state, never in the release-asset archive it exists to avoid repeatedly opening.
 
 **Identity is the whole design.** `event_id` cannot join runs — it carries the snapshot stamp and
 the time of closest approach to the minute, both of which change daily by construction — so a
@@ -510,7 +510,7 @@ GMST of that sample's own time, the same way the propagation worker does.
 ### The scenario overlays: `scenarios.json`
 
 Written beside `conjunctions.json` by `driftwatch report` whenever a run has more than one
-scored scenario (Phase 3, Step 5). It carries **only what a scenario changes**, in columns
+scored scenario . It carries **only what a scenario changes**, in columns
 parallel to `conjunctions.json`'s `events` and `pairs` arrays and in the same order, so the
 browser indexes into them and joins nothing. Fetched on an idle callback after first paint,
 never on the critical path: the base bundle is the size it was before storm mode existed.
@@ -560,3 +560,5 @@ new.
 | `density` | `altitudes_km` (400 and 500), `t`, and one `ratio_<n>km` array per altitude. Each ratio is NRLMSIS at that height averaged over 24 local solar times, over the same average across the **Gannon quiet control window** — the denominator Step 4's measured enhancement used, recorded in `quiet_window` and `quiet_baseline_kg_m3` so it can be checked. Uncorrected for the 22 per cent over-prediction `docs/storm-validation.md` §1 records. |
 | `sun` | One entry per frame: the time **asked for**, the time the image actually is, the lag in minutes, the path and the size of the full image, a `thumb` data URI, and an `eager` flag. Helioviewer returns the nearest image it holds, which during a data gap is hours away, so the lag travels to the viewer and is shown above 15 minutes. `thumb` is a 32 px PNG of the same disc inlined as `data:image/png;base64,…` — about 3 kB, against 360 kB for the full frame — so the viewer has a placeholder for every scrub position the instant the file parses; the full image is fetched when the playhead comes near it. `eager` marks the three worth requesting up front (the first, the frame nearest peak Kp, and the last). The block also carries `thumb_px`, `n_eager` and `n_with_thumb`. |
 | `notes` | The three sentences above, in the file, for anybody reading it without the docs. |
+
+_Last updated 7 September 2026._

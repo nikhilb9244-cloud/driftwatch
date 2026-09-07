@@ -1,14 +1,11 @@
 # Local analysis: an operator's own files, on the operator's own machine
 
-**Update, 6 September 2026:** a visual interface is now available in the
+**Correction:** a visual interface is now available in the
 [local workspace](workspace.md). The CLI also accepts `--reference-kind prediction`,
 `reconstructed` or `navigation`, defaulting to prediction. A supplied operator OEM is
 not automatically independent truth. The supported-client network guard described below
 is an application guard, not OS-level isolation. OEM metadata segments are interpolated
 separately; overlapping versions are refused.
-
-Built 2026-09-05, beside the calibration benchmark (`docs/calibration-benchmark.md`). The code is
-`src/driftwatch/local.py`; the command is `driftwatch local`.
 
 ## Why this exists
 
@@ -114,3 +111,5 @@ GPS-time segment moved 18 s, an unsupported frame refused by name); the manoeuvr
 command end to end on a designed element set whose own SGP4 path is written out as the operator's
 ephemeris, so the residual is the interpolation error alone, with a manoeuvre record outside the
 tracking arc that excludes nothing and one inside it that excludes every lead.
+
+_Last updated 7 September 2026._

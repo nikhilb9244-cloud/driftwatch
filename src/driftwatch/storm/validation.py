@@ -505,7 +505,7 @@ def lead_time_table(frame: pd.DataFrame, *, min_rows: int = 5) -> dict[int, dict
 
 
 def residual_summary(frame: pd.DataFrame, *, by_altitude: pd.Series | None = None) -> dict[str, Any]:
-    """The distribution the review asks for, and its dependence on lead time and altitude."""
+    """The distribution, and its dependence on lead time and altitude."""
     if not len(frame):
         return {"n": 0}
     usable = frame[np.isfinite(frame["residual_km"]) & frame.get("scoreable", True)]

@@ -1,7 +1,7 @@
 /**
  * Replay mode: May 2024, scrubbed, without leaving the application.
  *
- * Phase 3 Step 5, revised at the Step 5 review. The Kp bar, the density ratio at 400 and 500 km,
+ * The Kp bar, the density ratio at 400 and 500 km,
  * the Sun image nearest the selected time and the conjunction list all move together, because
  * they are all driven by the one simulation clock the viewer already has. There is no second
  * timeline: the replay scrubber *is* the clock, drawn with the Kp bar as its background.
@@ -122,8 +122,9 @@ function gLevel(kp: number | null): string {
 }
 
 /**
- * The one place in the viewer the G ramp appears, as `docs/design-brief.md` §5 reserves it.
- * Below Kp 5 the bar is the neutral panel colour: a quiet interval is not a small storm.
+ * The one place in the viewer the G ramp appears. It is reserved for this bar so that the
+ * colour means a geomagnetic level and nothing else. Below Kp 5 the bar is the neutral panel
+ * colour: a quiet interval is not a small storm.
  */
 function kpColour(kp: number | null): string {
   if (kp == null || !Number.isFinite(kp)) return "rgba(255,255,255,0.10)";
@@ -418,7 +419,7 @@ export function bindReplayControl(onToggle: (replay: boolean) => void): (replay:
     button.title = replay
       ? "Return to the current catalogue snapshot and its screening window"
       : "Load the historical catalogue for 9 May 2024 and scrub through the Gannon storm. " +
-        "The Sun imagery and the historical positions are fetched only when you do this.";
+        "The Sun imagery and the historical positions are fetched only when replay is selected.";
     if (!busy && heldFocus) {
       heldFocus = false;
       // Only when focus is still where the disable dropped it. A reader who clicked the button

@@ -75,14 +75,14 @@ still have produced plausible conjunctions. They would simply all have been in t
 - The frame the file declared is stored beside the states (`state_frame`), so a stored run
   records what it believed rather than what the code assumes today.
 
-## If you are using these files yourself
+## Frame interpretation limits
 
-Three things, in order of how much they will cost you:
+Three frame interpretation limits apply:
 
-1. **The states are MEME/J2000. The header does not tell you.** Read the filename prefix, and
+1. **The states are MEME/J2000. The header omits the state frame.** Read the filename prefix, and
    check it — do not trust either it or this note. Propagate any published element set for the
-   same satellite to the ephemeris start and compare. Sub-kilometre means you have it right;
-   tens of kilometres means you have a frame error, whatever the arithmetic says.
+   same satellite to the ephemeris start and compare. Sub-kilometre agreement is consistent with the intended frame;
+   tens of kilometres indicates a possible frame error despite internally consistent arithmetic.
 2. **MEME J2000 and the ICRF differ by the frame bias**, about 23 milliarcseconds, which is
    0.8 m at this radius. Below every other error in the chain and safely ignored — but it is
    the reason a very careful check will not close to exactly zero.
@@ -100,4 +100,6 @@ Three things, in order of how much they will cost you:
 - CelesTrak supplemental Starlink element sets and their published per-object fit `RMS`, read
   2026-09-03, used as the independent trajectory in the measurement above.
 - `docs/spacex-ephemerides.md` for the terms these files are used under and what their
-  covariance is; `docs/phase4-plan.md` for the step this came out of.
+  covariance is.
+
+_Last updated 7 September 2026._

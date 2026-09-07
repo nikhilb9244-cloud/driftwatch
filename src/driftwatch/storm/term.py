@@ -26,7 +26,7 @@ and multiplying by ``a`` to get a distance, with ``a n = v``:
 
     s(t) = (3/2) B v^2 integral_0^t (t - tau) drho(tau) dtau                  (4)
 
-which for a constant excess collapses to the closed form the prompt asks for:
+which for a constant excess collapses to the closed form:
 
     **s(t) = (3/4) B drho v^2 t^2**                                           (5)
 
@@ -238,7 +238,7 @@ def integrate_test_orbit(
 ) -> dict[str, Any]:
     """Integrate a circular orbit under drag twice and difference the along-track angles.
 
-    The verification the prompt asks for: a test orbit with a **step** density change, done
+    The verification: a test orbit with a **step** density change, done
     numerically from equation (1) and ``dtheta/dt = n(a)`` with no appeal to the closed form,
     and compared with :func:`in_track_shift_m`. Fourth-order Runge-Kutta on the two-state
     system ``(a, theta)``; the step is small against the timescale over which ``a`` changes by
@@ -314,7 +314,7 @@ class ShiftSeries:
     def scoreable(self) -> bool:
         """Whether a probability may be reported for an event this object takes part in.
 
-        The cut set at the Step 3 review, and it is the *displacement* one alone: past
+        The cut is the *displacement* one alone: past
         :data:`driftwatch.config.STORM_MAX_SHIFT_REVOLUTIONS` of the orbit's circumference the
         term has stopped being a small perturbation of a known position and has become a
         statement about where in its orbit the object is, which nothing here can support. An

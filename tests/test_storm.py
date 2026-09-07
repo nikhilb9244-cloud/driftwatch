@@ -57,7 +57,7 @@ def designed_conjunction():
 def test_the_closed_form_matches_a_numerical_integration_of_the_same_orbit():
     """``s = (3/4) B drho v^2 t^2`` against an independent integration, to well under a per cent.
 
-    The verification the prompt asks for. :func:`term.integrate_test_orbit` integrates the
+    The verification. :func:`term.integrate_test_orbit` integrates the
     decay and the along-track angle directly, with a step density change and no appeal to the
     closed form; the two are then differenced. The agreement is best where the orbit barely
     decays and worst at 300 km over a week, where the orbit has dropped far enough that the
@@ -375,13 +375,13 @@ def test_an_object_with_no_coefficient_is_not_moved_and_the_label_says_so(monkey
 
 
 # --------------------------------------------------------------------------------------
-# The Step 3 review corrections
+# The Step 3 corrections
 
 
 def test_an_extrapolated_object_makes_its_events_unscoreable_rather_than_wrong(designed_conjunction):
     """Past a quarter of a revolution of shift the term is outside its own derivation.
 
-    The review's instruction, and the reason for it: a probability computed from a position
+    The rule, and the reason for it: a probability computed from a position
     the linear theory cannot support is arithmetic with no claim behind it. So it is not
     reported at all. What must survive is everything that is still true -- the geometry, the
     covariance, the shift itself and a reason a reader can act on.

@@ -3,8 +3,8 @@
 The headline result of Phase 3 was counter-intuitive and therefore had to be attacked before it
 was published: **a storm lowers the probability on most events.** The explanation first attached
 to it did not survive, and this module is what falsified it. The result itself did not survive
-either, but not because of anything here: on 2026-09-05 an external review found that the storm
-term was displacing operator-controlled objects (`docs/storm-term.md`, "Corrected 2026-09-05"),
+either, but not because of anything here: on 2026-09-05 the storm term was found to be
+displacing operator-controlled objects (`docs/storm-term.md`, "Corrected 2026-09-05"),
 and the lowering lived entirely in those events. This module now leaves events with an
 operator-controlled side out of the ratio, where one displacement is zero by rule, and reports how
 many it left out. The splits below could not have found that error, because they split along the
@@ -12,11 +12,11 @@ axes a *physical* cancellation would show on and not along the one a *category* 
 
 .. note::
 
-   **Corrected at the Step 4 review (2026-09-03).** This module was written to test a claim of
+   **Correction.** This module was written to test a claim of
    *common-mode cancellation*: that a storm displaces both objects of a pair in the same
    direction by a similar amount, so that what reaches the miss vector is a *relative* shift far
-   smaller than either absolute shift. The splits below excluded the artefact the review asked
-   about and then refuted the claim itself. The measured relative-to-absolute ratio is **1.91**
+   smaller than either absolute shift. The splits below excluded the artefact in
+   question and then refuted the claim itself. The measured relative-to-absolute ratio is **1.91**
    out of a possible 2 -- the two displacements are nearly independent, not a common mode --
    flat in both splits, with the two in-track shifts uncorrelated (r = 0.08) and the median
    angle between the two objects' in-track directions at the encounter **120°**. A screener
@@ -25,8 +25,8 @@ axes a *physical* cancellation would show on and not along the one a *category* 
 
    The result needs no cancellation to explain it: a displacement of tens of kilometres applied
    to a miss of a few separates more pairs than it creates, and the tighter the miss the more
-   surely it does. ``cancellation_ratio`` keeps its name because it is the quantity the review
-   asked for and the name is how the two runs already on disk are keyed; read it as the
+   surely it does. ``cancellation_ratio`` keeps its name because that name is how the two runs
+   already on disk are keyed; read it as the
    relative-to-absolute shift ratio, and read a value near 2 as the *absence* of cancellation.
    ``docs/storm-term.md`` carries the full account.
 
@@ -407,7 +407,7 @@ def unscoreable_objects(
 ) -> pd.DataFrame:
     """The objects that made events unscoreable, with enough about each to say what they are.
 
-    The review asked for this by name: a count of objects outside the linear theory is not a
+    A count of objects outside the linear theory is not a
     finding until somebody can say whether they are a physical class or a bug.
     """
     if "scoreable" not in risk.columns:

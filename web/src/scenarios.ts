@@ -78,6 +78,8 @@ export interface PairOverlay {
 
 /** One population's figures. `null` where the population has none of that kind of event. */
 export interface ScenarioFigures {
+  n_robust_flagged?: number;
+  n_dilution_flagged?: number;
   n_events: number;
   n_moved: number;
   median_relative_shift_km: number | null;

@@ -1,8 +1,5 @@
 # Conjunction Data Messages: parsing them and matching them to a run
 
-Built 2026-09-05, as one of the two items that replaced Steps 3 to 7 of Phase 4 (`ROADMAP.md`).
-The code is `src/driftwatch/cdm/`; the command is `driftwatch cdm`.
-
 ## Why this exists
 
 A public-data screening has no ground truth of its own. The Kelvins reproduction
@@ -129,3 +126,5 @@ unwarned flags) and, with `--out`, writes the three tables and the summary as on
 - **Coverage.** A provider screens against its own catalogue, which is larger than the public one
   and includes analyst objects the public catalogue has not yet correlated. Unmatched messages
   whose `OBJECT2` is not in the run are the measurement of that gap.
+
+_Last updated 7 September 2026._

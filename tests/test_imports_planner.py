@@ -8,14 +8,14 @@ import numpy as np
 import pandas as pd
 import pytest
 from sgp4.exporter import export_tle
+from workspace_fixtures import RECORD  # noqa: E402
+from workspace_fixtures import text as fixture_text
 
 from driftwatch import local, workbench
 from driftwatch.catalogue.history import frame_from_records
 from driftwatch.contact_planner import schedule_contacts
 from driftwatch.imports import CONVENTIONS, STATE_KEYS, decode_orbit
 from driftwatch.orbit.propagator import build_satrecs
-from tests.workspace_fixtures import RECORD  # noqa: E402
-from tests.workspace_fixtures import text as fixture_text
 
 
 def record():
@@ -190,11 +190,8 @@ def test_scheduler_refuses_ambiguous_time_and_multiple_antennas():
 
 
 def test_oem_usable_times_constrain_the_comparison_and_keep_gaps():
-    text = (
-        fixture_text("reference.oem")
-        .replace(
-            "META_STOP", "USEABLE_START_TIME = 2024-05-10T01:00:00\nUSEABLE_STOP_TIME = 2024-05-10T02:00:00\nMETA_STOP"
-        )
+    text = fixture_text("reference.oem").replace(
+        "META_STOP", "USEABLE_START_TIME = 2024-05-10T01:00:00\nUSEABLE_STOP_TIME = 2024-05-10T02:00:00\nMETA_STOP"
     )
     orbit = workbench.trajectory(("reference.oem", text), 90001)
     assert orbit.start == pd.Timestamp("2024-05-10T01:00:00")

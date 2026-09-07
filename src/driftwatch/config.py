@@ -30,7 +30,7 @@ SUPPLEMENTAL_DIR = DATA_DIR / "supplemental"
 SPACEX_DIR = DATA_DIR / "spacex"
 WEATHER_DIR = DATA_DIR / "weather"
 CONJUNCTION_DIR = DATA_DIR / "conjunctions"
-# The warning-stability index (Phase 4, after the Step 2 review): one narrow file per run,
+# The warning-stability index (Phase 4): one narrow file per run,
 # accumulating, and small enough to live on the store branch beside the snapshots rather than in
 # the release-asset archive it exists to save you from reading. See driftwatch/stability.py.
 STABILITY_DIR = DATA_DIR / "stability"
@@ -180,7 +180,7 @@ CELESTRAK_SW_MAX_AGE = timedelta(hours=12)
 # fetches to roughly the rate at which each product is actually reissued.
 SWPC_BASE_URL = "https://services.swpc.noaa.gov"
 # Three-hourly Kp: the last week observed and estimated, then three days predicted, in one
-# feed. This is the three-day Kp forecast the prompt asks for; the JSON carries no issue
+# feed. This is the three-day Kp forecast; the JSON carries no issue
 # time of its own, so the HTTP Last-Modified header is used (see weather/swpc.py).
 SWPC_KP_FORECAST_URL = f"{SWPC_BASE_URL}/products/noaa-planetary-k-index-forecast.json"
 # The real-time planetary K index, estimated once a minute from the ground magnetometers.
@@ -262,7 +262,7 @@ DENSITY_MAX_STEP_S = 600.0
 # A window this long, with at least this many element sets, or the fit is refused.
 BALLISTIC_MIN_SPAN_DAYS = 10.0
 BALLISTIC_MIN_SETS = 6
-# And the decay has to be *measurably* larger than that scatter, which is the Step 2 review's
+# And the decay has to be *measurably* larger than that scatter, which is the
 # threshold: the drop in mean semi-major axis over the clean intervals must exceed the
 # uncertainty the element-set scatter puts on it by this factor. The scatter is measured on
 # the object's own series -- the root-mean-square residual of a quadratic through its mean
@@ -303,7 +303,7 @@ BALLISTIC_FIT_DAYS = 45.0
 # not from a satellite, and is refused with its label.
 BALLISTIC_MIN_M2_KG = 1e-4
 BALLISTIC_MAX_M2_KG = 1.0
-# Continuous thrust, added at the Step 3 review. An object that can fire an engine and whose
+# Continuous thrust. An object that can fire an engine and whose
 # decay history fits a coefficient above this is not being fitted for drag: a satellite's
 # area-to-mass is bounded by its own geometry, and the largest operated low Earth orbit
 # satellites reach A/m of about 0.05 m^2/kg even broadside, so B = C_D A/m tops out near
@@ -327,7 +327,7 @@ BALLISTIC_TYPICAL_MIN_OBJECTS = 5
 # And when a run has fitted almost nothing, this stands in: the middle of the range a mixed
 # catalogue actually shows, which is where the fitted values in docs/density-and-drag.md sit.
 BALLISTIC_TYPICAL_M2_KG = 0.01
-# The median is taken by category *and* altitude band (the Step 2 review's instruction). The
+# The median is taken by category *and* altitude band. The
 # bands are drag bands, not the screening bands: what a coefficient has in common with
 # another object's is the regime its decay was measured in, and between 400 and 800 km the
 # density falls by three orders of magnitude. `leo` is one band to the screener and six here.
@@ -521,7 +521,7 @@ SPACETRACK_PASS_ENV = "SPACETRACK_PASS"
 # else using the same account.
 SPACETRACK_MAX_PER_MINUTE = 20
 SPACETRACK_MAX_PER_HOUR = 250
-# Space-Track allows the GP catalogue once an hour; the prompt asks for the CelesTrak floor of two
+# Space-Track allows the GP catalogue once an hour; this keeps to the CelesTrak floor of two
 # hours and "a few times a day" at most. Both are enforced by the cache.
 MIN_SPACETRACK_GP_INTERVAL = timedelta(hours=2)
 MAX_SPACETRACK_GP_PULLS_PER_DAY = 4
@@ -532,7 +532,7 @@ SPACETRACK_GP_MAX_EPOCH_AGE_DAYS = 30
 SPACETRACK_HISTORY_CHUNK = 200
 # The Step 3 backfill batches ids into as many as fit a request URL of this many characters
 # (about 450 six-digit ids), so the fleet and the Stage A survivors take about fifty requests
-# rather than a few hundred. The Step 0 review's figure was 8,000 characters; measured on
+# rather than a few hundred. An earlier figure was 8,000 characters; measured on
 # 2026-09-02, Space-Track serves a 3,602-character gp_history URL and answers a generic
 # 403 Forbidden to one of 5,365, so the limit sits near 4 KB and 3,500 keeps clear of it. A
 # 403, 413 or 414 on a long URL splits the chunk and retries anyway.

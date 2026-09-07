@@ -464,7 +464,7 @@ def test_sun_frames_are_spaced_evenly_and_a_few_a_day():
 def test_a_thumbnails_size_is_part_of_its_cache_name(tmp_path):
     """Otherwise changing the size goes on serving the old one for ever.
 
-    Found the hard way at the Step 5 review: `HELIOVIEWER_THUMB_PX` was changed from 64 to 32,
+    Found the hard way: `HELIOVIEWER_THUMB_PX` was changed from 64 to 32,
     the bundle was rebuilt, and `storm.json` came out exactly the same size because every
     thumbnail was still the cached 64 px one. A config value that cannot change anything is
     worse than no config value.

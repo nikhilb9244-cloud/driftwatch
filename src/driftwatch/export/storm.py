@@ -11,8 +11,8 @@ columns parallel to the base bundle's ``events`` and ``pairs`` arrays. The brows
 them; it joins nothing and computes no screening result, exactly as in Phase 2.
 
 It is **fetched lazily**, after the first paint, and never on the critical path. The base
-bundle is unchanged in size, so Phase 1's performance and the console's paint budget
-(`docs/design-brief.md` §8) are untouched by storm mode existing.
+bundle is unchanged in size, so Phase 1's performance and the console's paint budget are
+untouched by storm mode existing.
 
 **The miss under a scenario is `miss_shifted_km`, not the event's `miss_km`.** The geometry's
 miss is what the two element sets predicted; the scenario moved the objects, and the number the
@@ -294,6 +294,8 @@ def scenario_summary(rows: pd.DataFrame) -> dict[str, Any]:
             else None,
             "n_lowered_by_shift": int(np.nansum(ratio[comparable] < 1.0)),
             "n_raised_by_shift": int(np.nansum(ratio[comparable] > 1.0)),
+            "n_robust_flagged": int((frame["flag"].isin(["red", "yellow"]) & (frame["region"] == "robust")).sum()),
+            "n_dilution_flagged": int((frame["flag"].isin(["red", "yellow"]) & (frame["region"] == "dilution")).sum()),
             "n_red": int((frame["flag"] == "red").sum()) if "flag" in frame.columns else 0,
             "n_yellow": int((frame["flag"] == "yellow").sum()) if "flag" in frame.columns else 0,
             "n_unscoreable": int((frame["flag"] == "unscoreable").sum()) if "flag" in frame.columns else 0,
@@ -306,7 +308,7 @@ def unscoreable_rows(rows: pd.DataFrame) -> list[dict[str, Any]]:
     """The events this scenario refused to score, for the queue's own section below it.
 
     They cannot be ranked by a number they do not have, and a blank in a probability column
-    would read as "safe" (`docs/design-brief.md` §5), so they are listed separately with the
+    would read as "safe", so they are listed separately with the
     reason and everything except a probability.
     """
     if "flag" not in rows.columns:

@@ -39,7 +39,7 @@ from driftwatch.export.audit import audit_bundle
 from driftwatch.export.conjunctions import RunDirectory
 from driftwatch.export.report import build_bundle, default_scenario, write_bundle, write_report
 from driftwatch.export.viewer import export_viewer_bundle
-from driftwatch.fleet import Fleet, FleetError, load_fleet, resolve_fleet
+from driftwatch.fleet import Fleet, FleetError, FleetMember, load_fleet, resolve_fleet
 from driftwatch.orbit import frames, propagator
 from driftwatch.orbit.time import parse_utc, stamp
 from driftwatch.risk import kelvins as kelvins_mod
@@ -660,8 +660,8 @@ def check_run(
 ) -> RunCheck:
     """Is this run's recorded provenance true, and is its snapshot fresh enough to publish?
 
-    Added at the Phase 4 Step 2 review, because the failure it guards against had already
-    happened once and nothing noticed. A run records its snapshot by file name; ``cmd_screen``
+    Added because the failure it guards against had already happened once and nothing
+    noticed. A run records its snapshot by file name; ``cmd_screen``
     shadowed the variable holding that name with the stored supplemental file's, so two runs
     recorded a supplemental element-set file as their snapshot. `driftwatch report` could not
     rebuild them, every exported row carried a false provenance, and the whole test suite was
@@ -822,7 +822,7 @@ def cmd_stability(args: argparse.Namespace) -> int:
     return 0
 
 
-def elements_for_run(info: dict[str, Any]) -> pd.DataFrame:
+def elements_for_run(info: dict[str, Any], *, strict: bool = False) -> pd.DataFrame:
     """Rebuild the element sets a stored run screened from: its snapshot plus the supplemental versions it used.
 
     This is what makes a run reproducible from what it records. The catalogue snapshot is
@@ -834,6 +834,8 @@ def elements_for_run(info: dict[str, Any]) -> pd.DataFrame:
     for entry in info.get("supplemental") or []:
         path = Path(config.SUPPLEMENTAL_DIR) / str(entry["file"])
         if not path.exists():
+            if strict:
+                raise FileNotFoundError(f"Recorded supplemental version is missing: {path}")
             log.warning("Supplemental version %s is not stored; tracks fall back to the GP element sets", entry["file"])
             continue
         sup = supplemental_mod.read_supplemental(path)
@@ -841,6 +843,8 @@ def elements_for_run(info: dict[str, Any]) -> pd.DataFrame:
             df, sup, name=str(entry["name"]), version=str(entry["version"])
         )
         if match.n_applied != entry.get("n_applied"):
+            if strict:
+                raise ValueError(f"Supplemental {path.name}: applied count differs from the archived run")
             log.warning(
                 "Supplemental %s version %s applied to %d objects now against %s at the time of the run",
                 entry["name"],
@@ -849,6 +853,84 @@ def elements_for_run(info: dict[str, Any]) -> pd.DataFrame:
                 entry.get("n_applied"),
             )
     return df
+
+
+def replay_screen(args: argparse.Namespace) -> int:
+    """Rescreen recorded elements and rescore quiet with the archived uncertainty inputs."""
+    try:
+        if not args.offline or not args.out_dir:
+            raise ValueError("--replay requires --offline and a separate --out-dir")
+        if args.fleet or args.snapshot or args.start or args.no_supplemental or args.scenario != "quiet":
+            raise ValueError("Replay uses the recorded fleet, snapshot, window and supplemental inputs; quiet only")
+        source = resolve_run(args.replay)
+        info = source.read_run()
+        if info["summary"].get("served_trajectory", {}).get("objects", 0):
+            raise ValueError("This archive used published states that are not retained; exact replay is unavailable")
+        destination = RunDirectory.for_run(info["fleet_name"], parse_utc(info["start"]), Path(args.out_dir))
+        if destination.path.resolve() == source.path.resolve() or destination.path.exists():
+            raise ValueError("Replay destination must be new and separate from the archive")
+        elements = elements_for_run(info, strict=True)
+        objects = source.read_objects()
+        primaries = objects.loc[objects["is_primary"]]
+        # The object table retains every fleet member, including those with no events,
+        # its radius, name and manoeuvre prior. No current fleet file enters a replay.
+        fleet = Fleet(
+            name=info["fleet_name"],
+            description="Fleet reconstructed from archived objects",
+            members=tuple(
+                FleetMember(
+                    int(r.norad_id),
+                    str(r.name),
+                    float(r.hbr_m),
+                    "archived objects.parquet",
+                    str(r.manoeuvre_prior) == "known",
+                )
+                for r in primaries.itertuples()
+            ),
+        )
+        cfg = ScreeningConfig(**{k: v for k, v in info["config"].items() if k != "screening_radius_km"})
+        table = source.read_covariance()
+        model = EmpiricalCovariance.from_frame(table)
+        if (table["kind"] == "supplemental").any():
+            model = SupplementalCovariance.from_frame(model, table)
+        original_risk = source.read_risk("quiet")
+        if (
+            original_risk["model_version"].nunique()
+            and not original_risk["model_version"].eq(model_version_string(model)).all()
+        ):
+            raise ValueError("Quiet archive uses a covariance layer not retained in covariance.parquet")
+        result = screen_fleet(elements, fleet, config=cfg, start=info["start"])
+        risk = run_risk(
+            result.events,
+            objects,
+            model,
+            scenario="quiet",
+            run_id=info["run_id"],
+            snapshot=info["snapshot"],
+            supplemental_version=supplemental_version_string(info),
+            sweep=bool(original_risk["pc_max"].notna().any()),
+            now=parse_utc(info["written_at"]),
+        )
+        destination.write_events(result.events, snapshot=info["snapshot"])
+        destination.write_objects(objects)
+        destination.write_covariance(table)
+        destination.write_risk(risk, "quiet")
+        destination.write_run(
+            {
+                **info,
+                "replayed_from": str(source.path),
+                "summary": result.summary(),
+                "attached_excluded": attached_record(result, elements, fleet),
+                "scenarios": ["quiet"],
+                "risk_runs": [risk_run_record(risk, "quiet", model, datetime.now(UTC))],
+            }
+        )
+        destination.rebuild_conjunctions()
+        print(destination.path)
+        return 0
+    except (ValueError, OSError, ScreeningError) as exc:
+        log.error("Cannot replay archive: %s", exc)
+        return 2
 
 
 def write_outputs(
@@ -888,7 +970,7 @@ def survivor_labels(df: pd.DataFrame, fleet: Fleet, result: ScreeningResult) -> 
 def print_scenario_comparison(run_dir: RunDirectory, scenario: str, show: int) -> None:
     """What the scenario did to the quiet numbers, event by event, for the events it moved most.
 
-    The comparison the prompt asks for: the probability under shift plus variance is the
+    The comparison: the probability under shift plus variance is the
     primary number, the probability under variance alone is beside it, and the quiet run --
     when one is stored -- is the baseline both are read against.
     """
@@ -967,6 +1049,11 @@ def print_fleet_sigmas(model: CovarianceModel, objects: pd.DataFrame) -> None:
 
 def cmd_screen(args: argparse.Namespace) -> int:
     """Screen a fleet against the latest (or given) snapshot, fit the covariance, score the quiet scenario."""
+    if getattr(args, "replay", None):
+        return replay_screen(args)
+    if not args.fleet:
+        log.error("screen requires --fleet or --replay")
+        return 2
     try:
         fleet = load_fleet(args.fleet)
     except FleetError as exc:
@@ -2722,7 +2809,7 @@ def cmd_density(args: argparse.Namespace) -> int:
 def rank_by_probability(run_dir: RunDirectory, elements: pd.DataFrame) -> pd.DataFrame:
     """The objects that appear in the run's events, in descending order of their worst probability.
 
-    The Step 2 review's instruction: do not fit the catalogue. An object that appears in no
+    The rule: do not fit the catalogue. An object that appears in no
     event has no conjunction to score and no coefficient is needed for it; among those that
     do, the fit budget should be spent where it changes an answer, which is the top of the
     probability list. Ties, and a run with no scored scenario yet, fall back to the closest
@@ -3238,7 +3325,8 @@ def build_parser() -> argparse.ArgumentParser:
     screen = sub.add_parser(
         "screen", help="screen a fleet against the latest snapshot, fit the covariance and write data/conjunctions/"
     )
-    screen.add_argument("--fleet", required=True, help="fleet file, e.g. fleets/demo.yaml")
+    screen.add_argument("--fleet", help="fleet file, e.g. fleets/demo.yaml (required unless --replay)")
+    screen.add_argument("--replay", help="archived run to rescreen and score under quiet from recorded inputs")
     screen.add_argument("--snapshot", help="snapshot parquet path (default: latest)")
     screen.add_argument("--days", type=float, default=7.0, help="window length in days from the start (default: 7)")
     screen.add_argument("--start", help="window start, UTC ISO 8601 (default: the snapshot's fetch time)")
@@ -3248,7 +3336,9 @@ def build_parser() -> argparse.ArgumentParser:
     screen.add_argument(
         "--no-supplemental", action="store_true", help="do not use CelesTrak's supplemental Starlink sets"
     )
-    screen.add_argument("--offline", action="store_true", help="use only cached supplemental and history data")
+    screen.add_argument(
+        "--offline", action="store_true", help="no fetches; with --replay use recorded supplemental parquet"
+    )
     screen.add_argument(
         "--no-spacex",
         action="store_true",

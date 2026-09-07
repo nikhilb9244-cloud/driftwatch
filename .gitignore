@@ -25,6 +25,7 @@ data/validation/
 .vercel/
 .env*.local
 data/external/
+data/reproduction/
 web/public/data/*
 !web/public/data/.gitkeep
 
@@ -37,3 +38,8 @@ web/dist/
 .idea/
 .DS_Store
 Thumbs.db
+
+# session scratch (kept out of the repository)
+.tmp/
+# the working record; it lives in the private folder alongside the commercial material
+docs/development-log.md

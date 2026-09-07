@@ -41,7 +41,7 @@ def rotated(sx: float, sy: float, angle_deg: float) -> np.ndarray:
 
 
 def test_zero_miss_isotropic_is_one_minus_exp():
-    """Zero miss, isotropic sigma: Pc = 1 - exp(-R^2 / 2 sigma^2), the prompt's first check."""
+    """Zero miss, isotropic sigma: Pc = 1 - exp(-R^2 / 2 sigma^2), the first check."""
     sigma = np.array([0.05, 0.1, 0.5, 2.0])
     radius = 0.02
     expected = 1.0 - np.exp(-(radius**2) / (2.0 * sigma**2))

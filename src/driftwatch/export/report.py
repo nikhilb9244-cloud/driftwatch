@@ -6,7 +6,7 @@ Starlink satellite came back 130 times in a week, and a list of 130 near-identic
 buries the twenty pairs a reader should look at. So the report and the viewer show one
 row per pair, with the number of events, the closest miss, the highest probability and
 the first time of closest approach, and the individual events underneath on demand. The
-parquet and the JSON keep every event, as decided at the Step 2 review.
+parquet and the JSON keep every event.
 
 A pair also gets a cumulative probability, one minus the product of the complements over
 its events. It is an upper bound rather than a probability: the events of one pair are
@@ -63,11 +63,10 @@ TOP_N = 20
 # orbits, and the report and the viewer carry it beside every storm number so that none is read
 # without it. Plain text, so the same strings go into the bundle's caveats.
 HORIZON_HEADLINE = (
-    "Against ESA's precise orbits for Swarm A, B and C, a public element set keeps the satellite inside "
-    "the 25 km in-track half-width of the screening box, at the 95th percentile of trials, for five days "
-    "in a quiet week, two days in the May 2024 storm and one day in the October 2024 storm. Read every "
-    "probability after that number: a set propagated past its horizon no longer predicts the position "
-    "the probability is computed from (docs/calibration-benchmark.md)."
+    "In the Swarm A/B/C sample, the last tested leads before the 95th-percentile along-track error "
+    "exceeds 25 km are five days in the quiet window, two in May 2024 and one in October 2024. "
+    "These are results for three related spacecraft, not validated horizons for the demo fleet. "
+    "Probabilities remain indicative (docs/calibration-benchmark.md)."
 )
 STORM_CALIBRATION_NOTE = (
     "Read every storm number here against the benchmark's calibration (2026-09-05; Swarm A, B and C "
@@ -609,7 +608,7 @@ def _fmt_flag(flag: str, confidence: str, region: str) -> str:
     A red in the dilution region is a statement about the size of the covariance, not about the
     encounter, and a reader who sees "red" first has already drawn the wrong conclusion by the
     time the qualifier arrives. So the region and the confidence come first everywhere a flag is
-    rendered (corrected 2026-09-05, after an external review found the write-up quoting a
+    rendered (corrected 2026-09-05, after the write-up was found quoting a
     dilution-region red as a plain red).
     """
     if flag == "none":
@@ -624,7 +623,7 @@ def _fmt_flag(flag: str, confidence: str, region: str) -> str:
 def _verdicts(flagged: pd.DataFrame) -> list[str]:
     """One plain sentence per flagged pair, leading with the region and the confidence.
 
-    The Phase 3 Step 0 review asked for this: the tables carry `region` and `confidence`
+    The tables carry `region` and `confidence`
     in every row, but a reader should not have to decode a column to learn whether the
     week's red is a real geometry or an artefact of the uncertainty. The order was fixed at
     the 2026-09-05 correction: region and confidence first, then the flag and its numbers.
@@ -678,7 +677,7 @@ def _pair_rows(pairs: pd.DataFrame) -> list[str]:
 
 
 def _event_details(rows: pd.DataFrame, pairs: pd.DataFrame, limit: int = 10) -> list[str]:
-    """One collapsible block per pair listing its individual events (the "expand on demand" of the review)."""
+    """One collapsible block per pair listing its individual events (expand on demand)."""
     lines: list[str] = []
     for _, p in pairs.iterrows():
         events = rows[
@@ -952,6 +951,9 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         "",
         "| | |",
         "| --- | ---: |",
+        f"| Robust region, standard confidence: flagged pairs | {len(actionable)} |",
+        f"| Dilution region, low confidence: share of flagged pairs | {len(low)}/{len(flagged)} "
+        f"({100 * len(low) / len(flagged) if len(flagged) else 0:.1f}%) |",
         f"| Events | {len(rows)} |",
         f"| Distinct pairs | {len(pairs)} |",
         f"| Events inside the notification box | {int(rows['in_box'].sum())} |",

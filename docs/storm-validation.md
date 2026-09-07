@@ -97,7 +97,6 @@ at or under 4 across 25 to 28 April, so the denominator is a genuinely quieter a
 the numerator, but it is not a solar-minimum baseline and the ratio is correspondingly
 conservative.
 
-
 ### The bias, recorded: sign, size, altitude dependence, and what the literature says
 
 Recorded here so the next storm has something to disagree with. **Nothing is tuned to it**, and
@@ -154,7 +153,7 @@ inside it that this measurement cannot isolate.** Three things follow from the t
 how much they explain:
 
 1. **Peak against integral.** A storm's density response is a sharp main-phase spike on a
-   two-day recovery shoulder. The published error is in the spike; ours is in the area under the
+   two-day recovery shoulder. The published error is in the spike; the empirical estimate is in the area under the
    whole thing, where the shoulder dominates simply because it is longer. A model that
    undershoots the spike and overshoots the recovery — which is exactly the shape the NRLMSIS 2.1
    assessments describe, "under-estimation of the main-phase peak, over-estimation in the initial
@@ -163,16 +162,16 @@ how much they explain:
    has no time resolution inside it. Resolving it needs a shorter window, which needs element
    sets more often than the catalogue issues them.
 2. **Point against path, and fixed height against a decaying orbit.** Their `rho` is at a place;
-   ours is what an object *flew through*, weighted by the drag integral and therefore by
+   the empirical estimate is what an object *flew through*, weighted by the drag integral and therefore by
    perigee, over an orbit that was itself falling as the storm acted. The two are the same number
    only for a circular orbit at a constant altitude, which is the case their satellites nearly
-   are and ours are not.
-3. **Different altitudes.** Their 450–510 km sits at the bottom of our range; half our binned
+   are and the project’s are not.
+3. **Different altitudes.** Their 450–510 km sits at the bottom of driftwatch's range; half driftwatch's binned
    objects are above 650 km, where the storm response is set by a different mixture of species.
-   Our own altitude split resolves no trend across 1,550 km, which argues this is the smallest
+   Driftwatch's altitude split resolves no trend across 1,550 km, which argues this is the smallest
    of the three, but it is not nothing.
 
-**And two known biases in our measurement push in one direction — the direction that would shrink
+**And two known biases in driftwatch's measurement push in one direction — the direction that would shrink
 the disagreement.** The quiet control window had Kp at or below 4 rather than being a
 solar-minimum baseline, so the *observed* ratio is conservative and the true enhancement was
 larger than 1.68; and the 3,891 objects in orbit on 9 May 2024 that have since decayed are
@@ -191,7 +190,7 @@ against a comparison that never justified a correction.
 
 ---
 
-## 2. May 2024: did it move the objects where we say it did?
+## 2. May 2024: object displacement against the model
 
 The test that matters for screening, and it is a **forecast** test, run the way an operator
 would have run it on the day.
@@ -304,7 +303,7 @@ coefficients and to the linearisation.
 
 ### By lead time: the skill is at three to four days and near zero inside two
 
-> **Recomputed 2026-09-05**, after an external review asked where in the window the r = 0.88
+> **Correction:** the earlier pooled r = 0.88
 > comes from. On the free-flying measured-coefficient population (422 comparisons, 81 objects),
 > by whole day of lead, with the sign agreement and the typical residual beside the slope pair
 > and the correlation. `driftwatch validate gannon` now writes this table as
@@ -372,7 +371,7 @@ is not a mis-tuned coefficient; it is a population that is almost entirely activ
 Starlink, where the along-track disagreement between two element sets is the operator's doing
 and not the atmosphere's. The manoeuvre detector removes the burns it can see, and a continuous
 low thrust is a ramp it cannot. This is the same failure mode the ballistic fit's thrust ceiling
-was added for at this review (`docs/density-and-drag.md`), seen from the other end.
+was added for (`docs/density-and-drag.md`), seen from the other end.
 
 **A `B*`-derived coefficient does not predict the storm shift.** Split by coefficient source,
 the least-squares slope is 1.30 for `history`, −1.39 for `bstar` and −0.06 for `typical`. The
@@ -635,7 +634,7 @@ something external to disagree with, and so a reader can see where they do.
   enhancement over the whole LEO catalogue. Reports up to a sixfold density increase at 400 km
   at the peak against a baseline twelve hours earlier, and a fourfold rise in decay rate on a
   single object (38 to 180 m/day). A peak against a short baseline is a different quantity from
-  our three-day window ratio and the two are not directly comparable. What §2 adds to their
+  driftwatch's three-day window ratio and the two are not directly comparable. What §2 adds to their
   method is set out in `docs/methods.md`, "Precedent, and what this adds".
 - Flohrer, T., Krag, H. and Klinkrad, H. (2008), *Assessment and Categorisation of TLE Orbit
   Errors for the US SSN Catalogue*, Proceedings of the Advanced Maui Optical and Space
@@ -668,3 +667,5 @@ here come from the abstract, the open preprint or a secondary summary rather tha
 figures. Every number attributed above is one stated in prose, not read off a plot, and none of
 them is used in any computation. Where the exact figure matters to a conclusion — it does not,
 in either section — the paper should be read in full first.
+
+_Last updated 7 September 2026._

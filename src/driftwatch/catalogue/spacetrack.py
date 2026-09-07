@@ -17,7 +17,7 @@ stricter rules than CelesTrak (documentation read 2026-09-01). This module enfor
 
 Redistribution: the user agreement grants blanket approval to redistribute basic SSA
 data (TLEs and OMMs, SATCAT, decay data) with citation; the text is quoted in
-``docs/phase2-plan.md``. Conjunction Data Messages are excluded from that approval and
+``docs/data-sources.md``. Conjunction Data Messages are excluded from that approval and
 are never fetched by driftwatch.
 """
 
@@ -154,7 +154,7 @@ def chunk_ids_by_url(
 ) -> list[list[int]]:
     """Split sorted ids into consecutive chunks whose request URL stays within ``url_budget`` characters.
 
-    The decision at the Step 0 review: as many ids per request as fit a URL of about
+    The decision: as many ids per request as fit a URL of about
     8,000 characters, sorted so that a repeated run with the same ids builds the same
     chunks and hits the same cached requests.
     """

@@ -5,7 +5,7 @@
  * probabilities, the covariances and the tracks all come out of `conjunctions.json`,
  * `scenarios.json` and `conjunction-tracks.bin`, written by `driftwatch report`. The viewer's
  * job is to put them somewhere a reader can see them: a list of pairs (repeated encounters
- * collapsed, as the Step 2 review asked), the events of a pair on demand, and, when an event is
+ * collapsed), the events of a pair on demand, and, when an event is
  * selected, the clock jumped to the time of closest approach, both objects highlighted, ten
  * minutes of each track drawn either side, and the encounter plane in an inset.
  *
@@ -24,8 +24,8 @@
  *   scenario's probability was computed from. The quiet miss is still shown, beside it, in the
  *   detail view — they answer different questions and the difference is the storm's whole effect
  *   on the geometry.
- * - The **Δ against quiet** is on every row rather than only the interesting ones
- *   (`docs/design-brief.md` §5), because a reader who sees `×0.7` twenty times and `×340` once
+ * - The **Δ against quiet** is on every row rather than only the interesting ones,
+ *   because a reader who sees `×0.7` twenty times and `×340` once
  *   has learnt the phase's headline result from the screen rather than from the documentation.
  */
 
@@ -179,7 +179,7 @@ const missOf = (event: ConjunctionEvent): number =>
  * mass inside that disc is the probability of collision.
  *
  * Under a storm scenario, `quiet` is drawn behind it as a faint outline with an arrow from the
- * quiet miss to the scenario's — `docs/design-brief.md` §6.1. The arrow is the storm's effect on
+ * quiet miss to the scenario's. The arrow is the storm's effect on
  * the geometry, drawn to the same scale as everything else, so a reader can see at a glance
  * whether the displacement was large against the uncertainty or lost inside it.
  */
@@ -301,7 +301,7 @@ function deltaTitle(pc: number | null | undefined, quietPc: number | null | unde
  *
  * A red in the dilution region is a statement about the size of the covariance, not about the
  * encounter, and a reader who sees "red" first has drawn the wrong conclusion before the qualifier
- * arrives. Corrected 2026-09-05, after an external review found the write-up quoting a
+ * arrives. Corrected 2026-09-05, after the write-up was found quoting a
  * dilution-region red as a plain red.
  */
 function flagChip(flag: string, confidence: string, region: string): string {
@@ -407,14 +407,17 @@ export function buildConjunctionPanel(
     const flagged = rows.filter((p) => p.flag === "red" || p.flag === "yellow");
     const red = flagged.filter((p) => p.flag === "red").length;
     const yellow = flagged.filter((p) => p.flag === "yellow").length;
-    const lowConfidence = flagged.filter((p) => p.confidence === "low").length;
+    const robust = flagged.filter((p) => p.region === "robust").length;
+    const dilution = flagged.filter((p) => p.region === "dilution").length;
+    const dilutionShare = flagged.length ? (100 * dilution / flagged.length).toFixed(1) : "0.0";
     const label = labelOf(state.current);
     // Limitations precede the list; the exact benchmark is available on demand.
     header.innerHTML =
-      `<div class="run-summary"><div><strong>${data.n_pairs.toLocaleString()}</strong><span>object pairs</span></div><div><strong>${data.n_events_total.toLocaleString()}</strong><span>close approaches</span></div></div>` +
+      `<p class="caveat horizon-result">${escapeHtml(HORIZON_HEADLINE)}</p>` +
+      `<div class="run-summary"><div><strong>${robust}</strong><span>robust-region flagged pairs</span></div><div><strong>${dilution} / ${flagged.length} (${dilutionShare}%)</strong><span>flagged pairs in dilution · low confidence</span></div></div>` +
       `<p class="caveat">${escapeHtml(data.window.start.slice(0, 10))} to ${escapeHtml(data.window.end.slice(0, 10))} · ${escapeHtml(label)} scenario. Ranked by estimated collision probability.</p>` +
-      `<p class="caveat"><b>${lowConfidence} of ${flagged.length} flagged pairs have low confidence.</b> Their uncertainty is too large to interpret a small probability as safety (the dilution region).</p>` +
-      `<details><summary>How to interpret these results</summary><p class="caveat">Flags: ${red} red, ${yellow} yellow. ${flagged.length - lowConfidence} flagged pairs are in the robust region of the model, which does not certify accurate positions. All probabilities here remain indicative.</p><p class="caveat">${escapeHtml(HORIZON_HEADLINE)}</p></details>` +
+      `<p class="caveat">Robust is a covariance-region label, not a certification of accurate positions. In dilution, uncertainty is too large to interpret a small probability as safety. All probabilities remain indicative.</p>` +
+      `<details><summary>Counts and interpretation</summary><p class="caveat">${data.n_pairs.toLocaleString()} object pairs; ${data.n_events_total.toLocaleString()} close approaches. Flags: ${red} red, ${yellow} yellow; ${dilution}/${flagged.length} (${dilutionShare}%) in dilution at low confidence.</p></details>` +
       (state.current === "quiet" ? "" : `<p class="inline-note">Storm corrections have limited validation and can make predictions worse at some lead times. ${escapeHtml(STORM_CALIBRATION_SHORT)}</p>`);
   };
 

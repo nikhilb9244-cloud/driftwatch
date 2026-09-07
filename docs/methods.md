@@ -73,13 +73,13 @@ and provenance rather than about new physics, and it is meant to be read as one.
   initialisation (Brouwer mean semi-major axis). They differ from osculating values by
   up to several kilometres. Used only for filtering and the altitude bands.
 - **Category and altitude band are labels, not filters.** Screening candidates are
-  chosen from mean-element apogee and perigee alone (Phase 2, Stage A). `unknown`
+  chosen from mean-element apogee and perigee alone . `unknown`
   (objects with no SATCAT type, mostly analyst objects Space-Track has not yet correlated
   to a launch) and `other` (orbits that straddle the 2,000 km LEO ceiling or sit near or
   above GEO) stay in the pool. The labels colour the viewer, group the report and choose
   the pooled covariance fallback.
 
-## Screening (Phase 2)
+## Screening 
 
 - **Hard-body radius.** Each fleet member carries the radius of the sphere that encloses
   its deployed envelope, half the diagonal of the bounding box, rounded up (the
@@ -112,7 +112,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   silent. `driftwatch spacex` re-runs that comparison on every fetch and refuses to write the
   store if it fails, because the risk being guarded against is a change at the source rather
   than a mistake in the code. `docs/ephemeris-frame.md` is the standalone note.
-- **Where an operator publishes states, those are the trajectory (Phase 4 Step 1).** For a
+- **Where an operator publishes states, those are the trajectory .** For a
   Starlink object inside the 72-hour horizon of SpaceX's published ephemeris, both Stage B and
   Stage C use the published states, interpolated by cubic Hermite on a 120-second grid, rather
   than CelesTrak's SGP4 fit to them. `primary_trajectory` and `secondary_trajectory` say which
@@ -157,7 +157,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   produced differently and joined at a fixed offset from the file's start, with no attempt to
   match derivatives across the join. Consequences: an interpolant must not span it (driftwatch
   splits the stored history into segments and lets the base propagator serve the 60-second gap),
-  and any use of these files that assumes a single smooth arc over 72 hours is wrong by a few
+  and any use of these files that assumes a single smooth arc over 72 hthe empirical estimate is wrong by a few
   hundred metres for part of it. A planned manoeuvre would look the same to any detector and is
   handled the same way. A break in a file's very first or very last interval cannot be detected
   at all, because the test needs a node on both sides. `docs/spacex-ephemerides.md`.
@@ -168,8 +168,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   kilometres from its file within a day ("How big that residual actually is", below) — and the
   ephemeris itself is a prediction revised as plans change. Used for 10,728 of the 11,094 Starlink objects on the first run (2026-09-02, on the snapshot of 2026-09-01 20:48 UTC); the coverage moves with what CelesTrak has fitted on the day — a later run over the same snapshot applied 10,727, at a median epoch lag of +0.70 days rather than +0.40 — and it has not been tracked beyond those runs;
   `secondary_ephemeris` says which set an event used.
-- **Attached and co-orbiting objects are excluded structurally, not by name (Phase 4 Step 2
-  review).** A docked visiting vehicle, a station module and a payload still mated to its
+- **Attached and co-orbiting objects are excluded structurally, not by name .** A docked visiting vehicle, a station module and a payload still mated to its
   upper stage are separate catalogue objects on essentially one element set, and screening them
   against their host produces a closest approach of a fraction of a metre once an orbit for the
   whole window. Ten such objects sit on the ISS; before this they were 2,170 of the demo run's
@@ -188,10 +187,10 @@ and provenance rather than about new physics, and it is meant to be read as one.
   (quiet now; storm and replay in Phase 3) rescored over those rows changes the
   uncertainty and the probability and nothing else.
 
-## Uncertainty and probability (Phase 2, Step 3)
+## Uncertainty and probability 
 
 - **The covariance is a consistency measure, not an accuracy, and it bounds the accuracy in
-  neither direction** (reworded 2026-09-05 after a second external review; the earlier text called
+  neither direction** (the earlier text called
   it a floor on the error). It is fitted from the disagreement between an object's own element
   sets after propagation (`docs/screening.md`, "Uncertainty"). Successive sets are fits by the same
   network to overlapping observations with the same force model, so they share whatever error is
@@ -319,10 +318,10 @@ and provenance rather than about new physics, and it is meant to be read as one.
   of -0.0003 in log10 (0.07 % in the probability), 87 % of the tail within a factor of
   two. What disagreement remains is one-sided: the 5th percentile of the residual is
   -0.66 against a 95th of +0.13, so where it disagrees it reads the encounter as *safer*
-  than ESA did, and payloads are over-represented in that tail. Our covariance-scale sweep
+  than ESA did, and payloads are over-represented in that tail. Driftwatch's covariance-scale sweep
   matches ESA's `max_risk_scaling` exactly as a factor on the covariance (median ratio
   0.9999). What the reproduction validates is the probability arithmetic on ESA's inputs — their
-  geometry and their covariances through our integral; it does not calibrate driftwatch's own
+  geometry and their covariances through driftwatch's integral; it does not calibrate driftwatch's own
   covariance, which never enters it. See `docs/screening.md` and `docs/kelvins-reproduction.md`.
 - **A secondary's hard-body radius is a population median, not a measurement.** Nobody
   publishes the size of most catalogue objects. `sqrt(RCS / pi)`, which driftwatch used to
@@ -374,7 +373,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   labelled `supplemental:beyond-horizon`. The horizon moves out as the scheduled fetch
   accumulates versions.
 - **SpaceX's published covariance is used as published plus the fit residual, and it is not
-  the same quantity as ours.** Inside a file's 72-hour validity a Starlink secondary's covariance is SpaceX's own,
+  the same quantity as the empirical estimate.** Inside a file's 72-hour validity a Starlink secondary's covariance is SpaceX's own,
   interpolated on a ten-minute grid and labelled `spacex-ephemeris`; outside it the base
   model serves and reports its own label. Three things to hold on to. Past about ten hours
   their numbers are a stated envelope on round figures (100 m radial, 1,000 m in-track, 10 m
@@ -389,7 +388,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   (`spacex-ephemeris+sgp4-fit`); where Stage C refined on the published states the two share a
   source and nothing is added (`spacex-ephemeris`). `SPACEX_SGP4_FIT_RMS_KM`;
   `spacex-ephemeris/3` in the model version says the rule is per event.
-- **How big that residual actually is, corrected (Phase 4 Step 1).** Phase 2 sized the gap
+- **How big that residual actually is, corrected .** Phase 2 sized the gap
   between the propagated element set and the published ephemeris at CelesTrak's published fit
   RMS, a median 0.20 km. Measured directly on nineteen matched files on 2026-09-03, that holds
   only for the first eight to twelve hours: the median distance is 0.30 km inside 12 hours,
@@ -415,7 +414,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   (one of them `none` to red), and added or removed nine more flagged events outright. Phase 2's
   measurement that the 0.2 km patch moved no flag was true of the patch and not of the error.
 
-## Density and drag (Phase 3, Step 2)
+## Density and drag 
 
 - **NRLMSIS 2.1 through pymsis, and its own uncertainty is the dominant term.** Tens of per
   cent in quiet conditions, worse in a storm and worse again in the days after one. Nothing
@@ -495,9 +494,9 @@ and provenance rather than about new physics, and it is meant to be read as one.
   applies to the B\* route as well as to the decay fit, because B\* is fitted by the
   element-set producer to the same thrust-driven fall. Debris fitting near the 1 m²/kg
   plausibility cap is high area-to-mass, which is real and common for a fragmentation cloud,
-  and is kept. (Added at the Step 3 review; `docs/density-and-drag.md` carries the evidence.)
+  and is kept. (`docs/density-and-drag.md` carries the evidence.)
 
-## The storm term (Phase 3, Step 3)
+## The storm term 
 
 - **The displacement is derived for a near-circular orbit.** Equation (2) of
   `docs/storm-term.md` linearises the relation between the energy loss and the mean motion,
@@ -528,7 +527,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   every aggregate. The geometry, the covariance and the shift stay; only the number a reader
   could act on is withheld. The decay-fraction test, one part in a thousand, is the wider one
   and still labels the covariance source `!extrapolated` without withdrawing the event.
-  (Changed at the Step 3 review: it was a label on a reported number.)
+  (Earlier it was a label on a reported number.)
 - **The density model's uncertainty is entered as a *storm-response* error, not an absolute
   one.** The absolute part cancels against a coefficient fitted through the same model, so
   30 % of the scenario density is carried for a fitted coefficient and that in quadrature with
@@ -547,8 +546,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   is correct and is worth knowing when comparing two runs.
 - **No coefficient means no shift**, labelled `storm:none`. That is a statement that the
   displacement is unknown, not that it is zero, and the two must not be read alike.
-- **An operator-controlled object gets no mean shift** (corrected 2026-09-05, after an external
-  review). The excess is measured against SGP4's own atmosphere through the element set's B\*.
+- **An operator-controlled object gets no mean shift** (corrected 2026-09-05). The excess is measured against SGP4's own atmosphere through the element set's B\*.
   For a trajectory that was never SGP4's — SpaceX's published states served by Stage C, or
   CelesTrak's supplemental fit to those states — the trajectory already carries the operator's
   drag model and planned burns, so there is **no excess to measure**, and no term is applied at
@@ -582,7 +580,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   storm *lowers* the probability on most events is measured and stands; the reason is that a
   displacement of tens of kilometres applied to a miss of a few separates more pairs than it
   creates, and the tighter the miss the more surely it does.
-  > **Corrected at the Step 4 review (2026-09-03).** Step 3 explained the same result by
+  > **Correction.** Step 3 explained the same result by
   > *common-mode cancellation* — both objects displaced alike, so only a small relative shift
   > reaching the miss. `driftwatch storm-check` was built to test that claim and refuted it. The
   > wording is withdrawn wherever it appeared; the result is not. `docs/storm-term.md` carries
@@ -643,8 +641,8 @@ and provenance rather than about new physics, and it is meant to be read as one.
 - **`indicative` is not a smaller number, it is an unmeasured one.** Nothing is downweighted,
   widened or withheld on the strength of the label — the sigma an `indicative` object carries is
   the one Step 3 derived, unchanged. The label says the validation does not reach it. Whether a
-  B\*-only object should instead take a wider storm sigma is a Step 4 review question and is
-  deliberately unanswered here.
+  B\*-only object should instead take a wider storm sigma is an open question, and is not
+  answered here.
 - **The skill is concentrated at three to four days of lead and is near zero inside two** (added
   2026-09-05). On the validated population the observed sign agrees with the predicted one on 39
   and 41 per cent of comparisons at one and two days — chance is 50 — and on 91 and 96 per cent
@@ -659,7 +657,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   were both given no mean shift (the storm term bullet above): no displacement was applied and the
   validation has nothing to reach. Every aggregate is reported over it as a third population.
 
-## Validation against the record (Phase 3, Step 4)
+## Validation against the record 
 
 Full account in `docs/storm-validation.md`. What is approximate about the *measurements*:
 
@@ -701,7 +699,7 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   overshoots the recovery gives both answers with no contradiction, and this method cannot
   separate them because it has no time resolution inside its window. Two further biases here — a
   control window that was not solar-minimum quiet, and survivorship against the objects that
-  decayed — both inflate our figure, so 22 per cent is an upper bound on this quantity's error
+  decayed — both inflate driftwatch's figure, so 22 per cent is an upper bound on this quantity's error
   rather than a best estimate. `DENSITY_STORM_RATIO_SIGMA_REL` stays a symmetric 0.30 and a test
   pins it, so the record cannot quietly become a calibration.
   `docs/storm-validation.md` §1 sets the two quantities out side by side, with the citations.
@@ -786,7 +784,7 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   globe is a sphere. Objects are drawn as fixed-size points regardless of their real
   size or distance.
 
-### Storm mode and replay (Phase 3, Step 5)
+### Storm mode and replay 
 
 - **The scenario control changes numbers in the panel and nothing else.** The point cloud, the
   propagation worker and the drawn tracks are geometry, and geometry does not depend on the
@@ -818,7 +816,7 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   `web/public/data/replay/` or `web/public/data/`. Nothing of the replay bundle is fetched until
   a reader enters it, and `?replay` still goes into the address bar through `pushState`, so a
   replay is a link somebody can send and the Back button leaves it.
-  (Changed at the Step 5 review, 2026-09-03: the first build entered replay by reloading the
+  (The earlier behaviour was: the first build entered replay by reloading the
   page, which was simpler and cost the reader their camera, selection and scenario every time
   they crossed the boundary.)
 - **What carries across a mode switch, and what does not.** Carried: the camera, the *position
@@ -863,7 +861,7 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   the three the exporter marks `eager` — the first, the peak and the last — are requested up
   front. The placeholder is blurred **and captioned as a preview**, because a 32 px disc
   presented as the Sun at a stated minute would be a small lie.
-  (Measured at the Step 5 review: a 64 px thumbnail came out at 9.8 kB, because Helioviewer
+  (Measured: a 64 px thumbnail came out at 9.8 kB, because Helioviewer
   renders a 24-bit PNG of a noisy image, so 29 of them inline was 280 kB of JSON. The thumbnail's
   size is now part of its cache filename, because without that a change to
   `HELIOVIEWER_THUMB_PX` went on serving the old size for ever.)
@@ -880,3 +878,5 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
 - Thermospheric winds, attitude changes, radiation pressure, and any density model other
   than NRLMSIS.
 - Velocity covariance, cross-terms between RIC components, long-encounter corrections.
+
+_Last updated 7 September 2026._

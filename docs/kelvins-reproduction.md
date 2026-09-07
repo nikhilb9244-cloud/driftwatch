@@ -4,7 +4,7 @@ Dataset: `train_data.csv`, 10183 rows in the high-risk tail (risk >= -6).
 
 It is in the data. The combined radius is half of each object's `span`, added: `(t_span + c_span) / 2`, and with it the reconstruction stops being an approximation: over the tail the median residual is **-0.0003** in log10, which is 0.07% in the probability, with quartiles -0.012 to +0.008. 87% of rows agree within a factor of two and 96% within a factor of ten. The multiplier on the span is one, and no parameter is fitted on the rows this is scored on -- but the convention was recovered from these same rows, so it is confirmed on rows it never saw below, and only on that basis is it described as unfitted.
 
-That settles the question the Phase 2 review left open. The probability code agrees with ESA's to a fraction of a percent for most conjunctions; what disagreement remains is not in the integration but in the rows described below. **What that validates is the arithmetic on ESA's inputs** -- their geometry and their covariances, through our integral -- and nothing about driftwatch's own covariance, which is fitted from element-set consistency and is not measured here at all. Agreement with ESA's column says the integral is right; it says nothing about whether the uncertainty driftwatch puts into it is.
+That settles the open question. The probability code agrees with ESA's to a fraction of a percent for most conjunctions; what disagreement remains is not in the integration but in the rows described below. **What that validates is the arithmetic on ESA's inputs** -- their geometry and their covariances, through driftwatch's integral -- and nothing about driftwatch's own covariance, which is fitted from element-set consistency and is not measured here at all. Agreement with ESA's column says the integral is right; it says nothing about whether the uncertainty driftwatch puts into it is.
 
 **Restricted to the tail that matters** (risk above 1e-5, the yellow-flag threshold): 3382 rows, median residual **+0.0005**, 92% within a factor of two and 98% within a factor of ten, quartiles -0.003 to +0.005.
 
@@ -113,7 +113,7 @@ Read these as a population median, not a measurement of any one object, and note
 ## Maximum probability and its scaling, against ESA's own columns
 
 - 2000 rows compared; the residual of the maximum has median +0.218 and 43% within a factor of two.
-- Our scale factor over ESA's `max_risk_scaling`: median 0.9999 read as a factor on the covariance, 0.8249 read as a factor on the standard deviation. The first is one, so ESA's scaling is a factor on the covariance, as ours is.
+- Driftwatch's scale factor over ESA's `max_risk_scaling`: median 0.9999 read as a factor on the covariance, 0.8249 read as a factor on the standard deviation. The first is one, so ESA's scaling is a factor on the covariance, as the empirical estimate is.
 
 Both are computed at the fitted single radius, so they carry that reconstruction's bias.
 
@@ -122,3 +122,5 @@ Both are computed at the fitted single radius, so they carry that reconstruction
 - The chaser's RTN frame is built from the target's and the relative velocity, with the target's velocity taken as circular. The data do not carry the target's velocity vector.
 - Both covariances are used as position-only 3x3 matrices; the velocity terms play no part in the two-dimensional method.
 - Rows at the risk floor of -30 are excluded from every figure here.
+
+_Last updated 7 September 2026._

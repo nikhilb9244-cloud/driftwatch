@@ -1,6 +1,6 @@
 """A run's recorded snapshot has to be a snapshot, and it has to be fresh enough to publish.
 
-Written at the Phase 4 Step 2 review, against a failure that had already happened. ``cmd_screen``
+Written against a failure that had already happened. ``cmd_screen``
 shadowed the variable holding the catalogue snapshot's path with the stored supplemental file's,
 so two runs recorded a supplemental element-set file as their snapshot. ``driftwatch report``
 could not rebuild them and every exported row carried a false provenance -- and the whole test

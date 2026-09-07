@@ -47,7 +47,7 @@ s(t) = (3/4) B drho v^2 t^2                                            (5)
 ```
 
 Quadratic in time, linear in the ballistic coefficient, linear in the excess, quadratic in
-the orbital speed — which is what the prompt predicted before any of it was written.
+the orbital speed.
 
 ### The sign
 
@@ -73,12 +73,11 @@ linearises the relation between energy loss and mean motion, which is a near-cir
 statement. The term is therefore reported as it stands for near-circular orbits and is an
 approximation for eccentric ones; it is in the approximations list.
 
-## Verified against a numerical integration
+## Comparison with a numerical integration
 
 `term.integrate_test_orbit` integrates (1) together with `dtheta/dt = n(a)` by fourth-order
 Runge–Kutta, twice — once at `rho` and once at `rho + drho` — and differences the along-track
-angles. No appeal to the closed form anywhere in it. A **step** density change, as the prompt
-asked, with `drho = rho` (a doubling) and `B = 0.01`:
+angles. No appeal to the closed form anywhere in it. A **step** density change, with `drho = rho` (a doubling) and `B = 0.01`:
 
 | Altitude | Days | Numerical | Closed form (5) | Error |
 | ---: | ---: | ---: | ---: | ---: |
@@ -92,8 +91,7 @@ asked, with `drho = rho` (a doubling) and `B = 0.01`:
 | 550 km | 3 | 11.596 km | 11.596 km | −0.002 % |
 | 550 km | 7 | 63.137 km | 63.134 km | −0.004 % |
 
-Better than a quarter of a per cent in the worst case, against the "few per cent" the prompt
-asked for. The error is always the same sign and grows with the decay, which is the
+The largest measured discrepancy is below a quarter of a per cent in these reference cases. The error is always the same sign and grows with the decay, which is the
 approximation being measured: the closed form holds `v` fixed, and by day seven at 300 km the
 orbit has genuinely dropped far enough that it is not.
 
@@ -116,9 +114,7 @@ exactly what displaces it.
 
 ## Why `quiet` applies nothing at all
 
-The prompt calls for a `quiet` scenario "using observed conditions" and also for the Phase 2
-quiet scenario to be **bit-for-bit unchanged as the regression baseline**. These are the same
-requirement, not two:
+The `quiet` scenario retains the empirical baseline, already fitted to element sets under observed conditions:
 
 - The Phase 2 empirical covariance was fitted on real element sets that flew through whatever
   weather actually happened. It is already an observed-conditions model.
@@ -127,13 +123,12 @@ requirement, not two:
 
 So `quiet` carries no weather table and applies no storm layer, and the protocol makes that
 free: `RicCovariance.mean_shift_ric_km` defaults to `None`, every Phase 2 model returns
-`None`, and `run_risk` adds zero. The Step 2 tests that pin the Phase 2 numbers still pass
-untouched.
+`None`, and `run_risk` adds zero. No storm term is added to the quiet baseline.
 
-This is a decision and it is flagged for the review. The alternative reading — that `quiet`
-should apply the storm term under observed conditions, and would then be non-zero wherever an
-object's own `B*` disagrees with NRLMSIS — would make the baseline move whenever the density
-model changed, which is precisely what a regression baseline must not do.
+This is a deliberate decision, and the alternative is worth stating. Applying the storm term
+to `quiet` under observed conditions would make it non-zero wherever an object's own `B*`
+disagrees with NRLMSIS, and would then make the baseline move whenever the density model
+changed — which is precisely what a regression baseline must not do.
 
 ## The five scenarios
 
@@ -250,7 +245,7 @@ all three are computed rather than one being inferred from the other two. Under 
 storm layer the three are the same array, which is what keeps the Phase 2 `quiet` scenario
 unchanged.
 
-(`pc_shift_only` was added at the Step 3 review. The step shipped with `pc` and
+(`pc_shift_only` was added later. The step shipped with `pc` and
 `pc_variance_only`, which separates the two effects only if one is willing to read the shift's
 contribution as a residual.)
 
@@ -304,9 +299,9 @@ out of their own RIC frames and differenced in TEME. The scalar difference of th
 components, which is the obvious thing to write, is **not** a displacement, because the two
 frames are different — for a crossing geometry they can be nearly perpendicular.
 
-## Attacking the result: is the relative shift what we think it is?
+## Relative-shift diagnostics and withdrawn interpretation
 
-> **Correction, propagated 2026-09-03 (Phase 3 Step 4 review).** Until the Step 3 review this
+> **Correction.** The earlier version of this
 > page, the plan, the design brief and two docstrings all explained the headline result by
 > **common-mode cancellation**. That explanation is withdrawn. The result — a storm lowers the
 > probability on most events — stands unchanged and is measured three ways below; the mechanism
@@ -316,7 +311,7 @@ frames are different — for a crossing geometry they can be nearly perpendicula
 > section is the working that produced the correction and is left standing.
 
 The result above is the project's headline and it is counter-intuitive, so before it is
-published it has to survive being attacked. It was attacked at the Step 3 review, and it
+published it has to survive being attacked. It was attacked, and it
 survived — while the *explanation* attached to it did not. This section is that in full,
 because a result whose stated mechanism turned out to be wrong is exactly the kind of thing a
 reader is entitled to see worked through rather than quietly corrected.
@@ -439,7 +434,7 @@ separates the pair. Nothing about that requires the two shifts to be alike. It a
 band structure above — the bigger the event, the tighter the miss, the more surely a large
 displacement moves the pair apart.
 
-So the two splits the review asked for did their job twice over. They excluded the artefact:
+So the two splits did their job twice over. They excluded the artefact:
 independently measured pairs behave exactly like pairs sharing a stand-in, so the ratio is not
 coming from shared inputs. And they falsified the mechanism the result had been attributed to,
 which the aggregate number alone would have gone on hiding.
@@ -453,7 +448,7 @@ which the aggregate number alone would have gone on hiding.
 > below. These splits could not have found the error: they cut along the axes a physical
 > cancellation would show on, and not along whether the objects were under control.
 
-### A third split, added at the Step 4 review: how far the validation reaches
+### A third split: how far the validation reaches
 
 Step 4 measured the storm term against the May 2024 record and found it skilful — the right sign
 on about nine comparisons in ten at three to four days of lead, none inside two — for objects
@@ -507,7 +502,7 @@ kilometres under a G5 gives a high area-to-mass fragment at 300 km a hundred tho
 faithful evaluation of a formula outside its domain.
 
 Step 3 shipped with that flagged: the number was reported with an `!extrapolated` marker on the
-covariance source. **At the Step 3 review that was changed to a refusal.** Past
+covariance source. **That was later changed to a refusal.** Past
 `STORM_MAX_SHIFT_REVOLUTIONS` — a quarter of the orbit's circumference — the term has stopped
 being a correction to a known position and has become a claim about *where in its orbit* the
 object is, and a probability computed from such a position is arithmetic with nothing behind it.
@@ -526,11 +521,10 @@ So every event involving such an object is reported unscoreable:
 Nothing is dropped. The event keeps its geometry, its covariance, both shifts and their sigmas.
 What is withheld is only the number a reader could act on.
 
-The **cut is the displacement test alone**, which is what the review specified. The decay
+The **cut is the displacement test alone**. The decay
 fraction — one part in a thousand of `a` over the window — is the wider test, and it still marks
 the covariance source `!extrapolated` without withdrawing the event, because "this object's
-implied decay was large" is a caveat a reader can weigh while "we do not know where in its orbit
-it is" is not.
+implied decay was large" is a caveat a reader can weigh while "its along-orbit position is unresolved" is not.
 
 ### What the 42 objects are
 
@@ -541,10 +535,7 @@ it is" is not.
 > seeing: a faithful evaluation of a formula outside its domain was the right diagnosis of the
 > symptom and the wrong diagnosis of the cause.
 
-On the demo run's G5 scenario, **42 objects over 113 of the 5,704 events**. (Step 3 reported 53
-under the wider test and the coefficients it had then; the thrust ceiling removed some of them
-by taking a thrusting satellite's implausible coefficient away, and the cut is now the
-displacement test alone.)
+On the demo run's G5 scenario, **42 objects over 113 of the 5,704 events**. 
 
 They are one population, which is the thing worth knowing:
 
@@ -567,9 +558,9 @@ On the May 2024 replay, run against the observed record rather than a synthetic 
 object crosses the line: STARLINK-30105, 0.67 of a revolution. The count is a property of the
 scenario's severity, not of the code.
 
-## Corrected 2026-09-05: operator-controlled objects are not displaced
+## Correction: operator-controlled objects are not displaced
 
-> An external review found the correctness error this section records. Everything above it is
+> The correctness error this section records was found after publication. Everything above it is
 > left as written, with this section as the correction, in the same manner as the cancellation
 > withdrawal above.
 
@@ -667,9 +658,11 @@ objects in the run are all under operator control.
   model **over-predicts** the enhancement by about 22 per cent, consistently across altitude;
   the 30 per cent carried here is the right magnitude and symmetric where the truth is biased.
   Nothing is tuned to that — see `docs/storm-validation.md`.
-- **No coefficient means no shift**, which is a statement that we do not know rather than that
+- **No coefficient means no shift**, which is a statement that the response is unknown rather than that
   there is none. The label says `storm:none` and the count is in the run record.
 - **The shift is zero at the element set's own epoch** by construction. An object screened
   from a fresh element set is displaced less than one screened from a week-old set — which is
   correct, and is also why a run whose objects have very recent epochs will show a smaller
   storm effect than one whose objects do not.
+
+_Last updated 7 September 2026._

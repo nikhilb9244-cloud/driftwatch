@@ -20,7 +20,7 @@ That convention was recovered from the same rows it is scored on, which makes it
 choice however few parameters it has, so :func:`held_out_check` confirms it the way a fitted
 parameter is confirmed: the multiplier on the span is chosen on one set of events and scored
 on events it never saw -- the training rows split in half by event, and the training rows
-against the challenge's separate test file (added 2026-09-05, after a second external review).
+against the challenge's separate test file (added 2026-09-05).
 Only with that check passed is the reconstruction described as having nothing fitted on the
 rows it is scored on. And what the reproduction validates is the probability *arithmetic* on
 ESA's inputs -- their geometry and their covariances through our integral -- not driftwatch's
@@ -781,7 +781,7 @@ def to_markdown(
             "from these same rows, so it is confirmed on rows it never saw below, and only on that basis is "
             "it described as unfitted.",
             "",
-            "That settles the question the Phase 2 review left open. The probability code agrees with ESA's "
+            "That settles the open question. The probability code agrees with ESA's "
             "to a fraction of a percent for most conjunctions; what disagreement remains is not in the "
             "integration but in the rows described below. **What that validates is the arithmetic on ESA's "
             "inputs** -- their geometry and their covariances, through our integral -- and nothing about "
@@ -878,7 +878,7 @@ def to_markdown(
             "multiplier is chosen on one set of events (smallest median absolute residual over their tail) "
             "and then scored, held fixed, on events it never saw. Halves are split by event, so no "
             "conjunction has messages on both sides. The last column is the multiplier the held-out rows "
-            "would have chosen on their own (added 2026-09-05, after a second external review).",
+            "would have chosen on their own (added 2026-09-05).",
             "",
             "| Split | Fitted on | Multiplier chosen | Scored on | Median residual | Within x2 | Within x10 "
             "| Held-out rows' own choice |",

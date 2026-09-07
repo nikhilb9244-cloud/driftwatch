@@ -7,7 +7,7 @@ probability of collision is computed on the encounter plane, what the maximum
 probability and the flags mean, and how the probability layer is kept separate from
 the geometry so that a scenario can be rescored without rescreening (the second half,
 Step 3); then what the weekly report and the viewer's conjunctions panel show, and why
-they collapse repeated encounters (Step 4).
+they collapse repeated encounters .
 
 ## The problem
 
@@ -95,7 +95,7 @@ with a bounded derivative; it does not assume the encounter is short, straight, 
 ### The numbers
 
 For two circular orbits at 400 km, `v_perigee` is 7.67 km/s each, so `v_bound` is
-15.6 km/s with the margin; the prompt's "about 15 km/s" is this figure. The bound is
+15.6 km/s with the margin; the approximate 15 km/s figure refers to this bound. The bound is
 larger for eccentric secondaries that dip through LEO: a transfer-orbit rocket body with
 a 200 km perigee and a 36,000 km apogee moves at 10.2 km/s at perigee, so its pairs
 get a bound near 18.3 km/s and a correspondingly larger threshold. That is why the
@@ -149,7 +149,7 @@ so the guarantee has to be re-derived rather than assumed to carry over.
 **Why the trajectory changed.** Where SpaceX has published states for a Starlink object,
 Stage B and Stage C both use those states rather than CelesTrak's SGP4 fit to them
 (`ephemeris/spacex.py`, `docs/spacex-ephemerides.md`). The first design considered was the
-one the Phase 4 prompt proposed — screen on element sets, refine on the published states,
+an earlier proposed combination — screen on element sets, refine on the published states,
 and widen the Stage A pad to cover the difference. Measured on nineteen matched files on
 2026-09-03, that difference is a median 0.30 km inside 12 hours but **28 km at 36 to 48
 hours and 83 km at 60 to 72**, with a 90th percentile of 211 km. There is no pad for that,
@@ -338,7 +338,7 @@ pair of sets between half a day and seven days apart and the scatter, as a funct
 the propagation time, is a model of how fast the position error grows.
 
 **Why that is a consistency measure, not an accuracy, and bounds the accuracy in neither
-direction** (reworded 2026-09-05 after a second external review; the earlier text called it a
+direction** (the earlier text called it a
 floor on the error). Both sets are fits by the same tracking network with the same force model
 to overlapping observations, so they share whatever error the network and the model have in
 common: a biased drag model during a geomagnetic storm, a sparse tracking geometry, a
@@ -511,17 +511,9 @@ per cent of their kilometre-scale envelope past a day, and a tripling of the pro
 inside one, where the covariance would otherwise be tighter than the gap between the two
 trajectories. The version-to-version revision the supplemental fit measures is a different
 matter and is deliberately **not** added: it is a different quantity, and `driftwatch spacex`
-Replace docs/screening.md:514
-
-  prints the two side by side instead:
-
-with (wrapped to the file's line width, replacing that single line):
-
-  prints the two side by side instead — measured on 120 Starlink satellites of the demo run on
-  2026-09-02, the closest-approach-ranked subset that was fetched, and constellation medians at
-  each lead rather than any one satellite's envelope:
-
-Nothing else in the section changes. Lines 524-529 keep the "Theirs is the uncertainty *within* one published plan" framing, the "past about ten hours it is a stated envelope on round figures rather than a propagated covariance" caveat, and the existing pointer to `docs/spacex-ephemerides.md`, which is why the corrected wording does not repeat that pointer.
+prints the two side by side instead — measured on 120 Starlink satellites of the demo run on
+2026-09-02, the closest-approach-ranked subset that was fetched, and constellation medians at
+each lead rather than any one satellite's envelope:
 
 | Lead | SpaceX in-track | driftwatch in-track | Ratio |
 | ---: | ---: | ---: | ---: |
@@ -531,7 +523,7 @@ Nothing else in the section changes. Lines 524-529 keep the "Theirs is the uncer
 | 24 h | 2.81 km | 8.47 km | 3.0 |
 | 72 h | 3.80 km | 22.8 km | 6.0 |
 
-Theirs is the uncertainty *within* one published plan; ours is the uncertainty *of the plan
+Theirs is the uncertainty *within* one published plan; the empirical estimate is the uncertainty *of the plan
 being revised*, and past eight hours it is the GP element sets, which measure the manoeuvring
 itself. Both numbers are real and they answer different questions. One caveat still travels
 with theirs: past about ten hours it is a stated envelope on round figures rather than a
@@ -547,7 +539,7 @@ drops from red to yellow while moving *out* of the dilution region.
 
 ### The exponent is a prior, and the fit has a horizon
 
-Taken at the Phase 3 Step 0 review, and the most consequential correction in it.
+This is the most consequential correction on this page.
 
 The first two stored versions were two hours apart. Their consistency pairs span lead
 times of 0.02 to 0.24 days, and a free power-law fit over them returned an in-track
@@ -576,7 +568,7 @@ carrying the model across the whole window. With the two versions in hand the ho
 0.16 days, so almost the whole seven-day window falls back to the GP fit for Starlink
 secondaries. That is the honest position: two versions two hours apart say
 nothing about a week ahead, and the GP element sets, whose disagreement at seven days is
-dominated by exactly the manoeuvring we cannot predict, are the better estimate at that
+dominated by exactly the manoeuvring SGP4 cannot predict, are the better estimate at that
 range even though they are the wrong instrument at short range.
 
 The horizon moves out on its own. `driftwatch supplemental` fetches and stores a version
@@ -598,8 +590,8 @@ zero by construction.
 **History for the fit.** `driftwatch screen` backfills 45 days of `gp_history` before
 the window start for every fleet member and every Stage A survivor, batched into as
 many NORAD ids as fit a 3,500-character request URL (about 450; Space-Track's front end
-refuses URLs much beyond 4 KB with a bare 403, measured 2026-09-02, and the Step 0
-review's 8,000 was cut to fit), asking only for the element-set fields, and skipping
+refuses URLs much beyond 4 KB with a bare 403, measured 2026-09-02, and an earlier
+figure of 8,000 was cut to fit), asking only for the element-set fields, and skipping
 every id and day a cached request already covers. A
 consolidated index, `data/history/index.parquet`, records which history file holds each
 (NORAD id, epoch) so that a lookup opens only the files it needs. The fit reads only the
@@ -622,7 +614,7 @@ a previous request already covered it.
 
 SGP4 cannot predict a burn, and an element set fitted before one is wrong afterwards by
 the size of the burn. What the pipeline can say is, for every object, how likely a burn
-is and whether the history shows one. Decided at the Step 2 review, the flag has three
+is and whether the history shows one. The flag has three
 prior values and one the history can promote to:
 
 - `known`: operated constellations and crewed stations (the `starlink`, `oneweb`,
@@ -744,7 +736,7 @@ three so the reader can see where they agree.
 - **Alfano (`pc_alfano`).** The disc integral reduced to one dimension along a
   principal axis of the covariance, the other dimension in closed form with error
   functions; with the substitution `x = R sin(phi)` the integrand is smooth and a few
-  dozen nodes give ten digits. The prompt's cross-check: it must agree with Foster
+  dozen nodes give ten digits. The arithmetic cross-check: it must agree with Foster
   within one percent, and a test asserts that over aspect ratios up to 100, misses up
   to six sigma and discs up to twice the smaller sigma (they agree to about 1e-8).
 - **Chan (`pc_chan`).** Chan's analytical series after replacing the ellipse of equal
@@ -850,7 +842,7 @@ the confidence above.
 
 ## Scenarios: geometry once, probability per scenario
 
-The design rule for Phase 3, taken at the Step 2 review: Stages A to C run once per
+The design rule for Phase 3: Stages A to C run once per
 snapshot and write the events; each scenario reruns only the covariance and the
 probability over those stored events. `driftwatch screen` writes the run directory
 (`events.parquet`, `objects.parquet`, `covariance.parquet`, `risk_quiet.parquet`,
@@ -860,8 +852,7 @@ scores the same events again with another covariance model and adds a
 scenario. Every risk row carries the scenario, the run id, the snapshot and the model
 version, and the event id is the same across scenarios, so a quiet row and a storm row
 for one event are directly comparable. A covariance model is anything with a `version`
-and a `covariance_ric(obj, epoch, at)` method (the protocol decided at the Step 0
-review); `--scale` wraps the fitted model in a factor as a stand-in until Phase 3's
+and a `covariance_ric(obj, epoch, at)` method; `--scale` wraps the fitted model in a factor as a stand-in until Phase 3's
 storm model exists.
 
 ## The Kelvins check
@@ -904,7 +895,7 @@ being called unfitted (`docs/kelvins-reproduction.md`, "Confirmed on a held-out 
 
 Which settles the Phase 2 question: the probability integration agrees with ESA's to a
 fraction of a percent, and the earlier spread was entirely the radius. That validates the
-arithmetic on ESA's inputs — their geometry and their covariances through our integral — and
+arithmetic on ESA's inputs — their geometry and their covariances through driftwatch's integral — and
 calibrates nothing about driftwatch's own covariance, which never enters it.
 
 **The direction of the residual still matters.** The median is zero but the distribution
@@ -916,7 +907,7 @@ chaser-frame approximation is worst. Five of the eight rows above a risk of 1e-2
 two orders of magnitude low: at that risk the miss is comparable to the hard-body radius
 and the two-dimensional method is at the edge of its assumptions.
 
-### The radar cross-section is a poor size proxy, and we rely on it
+### The radar cross-section is a poor size proxy, and the model relies on it
 
 The dataset's other size column is the radar cross-section, and scoring it the same way —
 one free multiplier, fitted like the single radius — it needs a multiplier of nearly five
@@ -960,10 +951,10 @@ change does not touch. The events it did move were three or more orders of magni
 the yellow threshold. So the correction is real and it is in the safe direction, and this
 week's headline numbers do not depend on it.
 
-One more result comes out exactly. Comparing our covariance-scale sweep with ESA's own
+One more result comes out exactly. Comparing driftwatch's covariance-scale sweep with ESA's own
 `max_risk_scaling` column, the ratio of the two has a median of 0.9999 when ESA's is
 read as a factor on the covariance, and 0.82 when read as a factor on the standard
-deviation. ESA's scaling is a factor on the covariance, as ours is, and the maximum
+deviation. ESA's scaling is a factor on the covariance, as the empirical estimate is, and the maximum
 probabilities agree to a median of +0.22 in log10 — the same offset as the probabilities
 themselves, because that comparison is still computed at the single fitted radius.
 
@@ -979,7 +970,7 @@ Starlink satellite came back 130 times in a week. Listing all 130 buries the pai
 reader should look at, so the report and the panel show one row per pair with the number
 of events, the closest miss, the highest probability and the first time of closest
 approach, and the individual events underneath on demand. The parquet and the JSON keep
-every event, as decided at the Step 2 review.
+every event.
 
 **A pair also gets a cumulative probability**, one minus the product of the complements
 over its events. It is an upper bound, not a probability: the events of one pair are
@@ -1042,3 +1033,5 @@ directory holds the rest.
 - T. Uriot et al., "Spacecraft collision avoidance challenge: design and results of a
   machine learning competition", Astrodynamics 6, 121-140 (2022); data at
   https://kelvins.esa.int/collision-avoidance-challenge/.
+
+_Last updated 7 September 2026._

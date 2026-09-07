@@ -22,7 +22,7 @@ finding and ``docs/data-sources.md`` the standing rule.
 
 What their covariance is, and is not. It grows smoothly for about ten hours, which is a
 propagated covariance, and then sits on round numbers -- exactly 100 m radial, 1,000 m
-in-track, 10 m cross-track on the file measured for the Step 0 review -- until it steps to
+in-track, 10 m cross-track on the file measured -- until it steps to
 another set of round numbers for the last twelve hours. Past ten hours it is a stated
 envelope, plausibly the stationkeeping control box, not a fitted uncertainty. It is also
 about eleven times tighter than driftwatch's own measurement of the version-to-version

@@ -429,7 +429,7 @@ def mean_density(track: pd.DataFrame) -> dict[str, float]:
 
 
 # --------------------------------------------------------------------------------------
-# The sanity checks the prompt asks for
+# The sanity checks
 
 
 def quiet_density_profile(

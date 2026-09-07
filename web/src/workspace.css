@@ -212,3 +212,6 @@ code { font: .85em Consolas, monospace; background: #243647; padding: 3px 5px; o
 .import-preview > small { display: block; margin-top: 8px; }
 .earth-caption { margin: -90px 14px 0; padding: 8px 10px; background: #061019e8; border-radius: 4px; color: #d4e5f1; }
 @media print { .export-dialog { display: none !important; } }
+ .public-result-summary { margin-bottom: 20px; padding: 16px 20px; border: 1px solid #31414b; border-radius: 12px; background: #111a23; font-size: 14px; line-height: 1.6; }
+ .public-result-summary p { margin: 0; }
+ .public-result-summary p + p { margin-top: 8px; color: #c7d3dd; }

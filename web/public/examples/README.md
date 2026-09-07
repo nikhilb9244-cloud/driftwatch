@@ -54,3 +54,5 @@ The conjunction-message (CDM) tool and the contact planner ship no example, beca
 for either exists here. Each says on screen what file it needs and that it has not been exercised
 on real data. An invented CDM probability or an invented request week would demonstrate the
 software running, not the software working.
+
+_Last updated 7 September 2026._

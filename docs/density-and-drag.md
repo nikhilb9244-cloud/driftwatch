@@ -43,7 +43,7 @@ of the answer is a different number.
 A sample whose 57 hours of history the table does not cover comes back **NaN**, not zero. A
 quiet zero would turn a missing record into a calm day. Every caller counts them.
 
-## The sanity check the prompt asks for
+## Density reference conditions
 
 `driftwatch density`. Quiet-condition density at four altitudes, averaged over 24 local solar
 times because the day-night contrast at these heights is a factor of two to six and a single
@@ -72,7 +72,7 @@ that range, as it should be at this point in the cycle.
 ### Against published NRLMSIS values, which is the stronger check
 
 The 1976 comparison above measures the 1976 profile's known bias about as much as it measures
-anything of ours. The check that tests **our own plumbing** is against NRLMSIS output somebody
+driftwatch. The check that tests **driftwatch's input conversion** is against NRLMSIS output somebody
 else published at stated drivers, because everything between the space weather table and the
 number — the previous day's flux, the 81-day centred average, the seven-element ap vector, the
 units, the pymsis call — has to be right to reproduce it, and anything wrong shows up as tens
@@ -238,7 +238,7 @@ a decay under an absolute 20 m floor (below which the difference of two mean sem
 systematics rather than noise), an answer outside 1e-4 to 1 m²/kg, and — see below — more than a
 quarter of the intervals excluded as manoeuvres.
 
-#### The thrust ceiling, added at the Phase 3 Step 3 review
+#### The thrust ceiling
 
 A continuous low thrust is a **ramp**, not a jump. The manoeuvre detector compares consecutive
 element sets and finds a step; a satellite lowering itself a few hundred metres a day produces
@@ -319,7 +319,8 @@ on B would throw the fragments away to catch the satellites.
 It is a proxy and it does not catch everything. STARLINK-65196 has 12 per cent of its intervals
 excluded and still fits at 0.69 m²/kg off 43 km of decay; it survives the rule and it is
 certainly a deorbit. It is left in and named here rather than chased with a tighter threshold
-that would start refusing the fragments, and it is a question for the review.
+that would start refusing the fragments. Whether a rule can separate a deorbiting
+satellite from a high-area fragment without discarding the fragments is open.
 
 #### Every coefficient carries an uncertainty
 
@@ -412,7 +413,7 @@ fragments, coefficient uncertain by a factor rather than a per cent".
 
 A history fit is one density evaluation per element-set interval, about a hundred an object.
 The demo run has 2,993 objects appearing in events. Fitting them all at the full sampling step
-would take hours, so the Step 2 review set four rules and they are all measured rather than
+would take hours, so four rules bound the fit, and they are all measured rather than
 asserted.
 
 ### Profiled first
@@ -554,3 +555,5 @@ be read as one.
   include the May 2024 event.
 - **The coefficient is fitted once per run** and held constant across the screening window. A
   seven-day window is short enough that this is the least of the approximations above.
+
+_Last updated 7 September 2026._

@@ -112,7 +112,7 @@ RCS_RADIUS_MAX_M = 20.0
 # Why this replaced ``sqrt(RCS / pi)``. That formula gives the radius of the disc that would
 # return the same radar echo, which is not the size of the object: it understates anything
 # much larger than the radar wavelength and anything with a low-return geometry. Tested
-# against these same rows at the Phase 3 Step 0 review it needed a free multiplier of nearly
+# against these same rows it needed a free multiplier of nearly
 # five and still did no better than one radius for everything, while ESA's spans reproduced
 # their risk column exactly. The cross-section survives here only as a *class* -- small,
 # medium, large -- which is the part of it that does carry size information.

@@ -26,7 +26,7 @@ version, keeping the published RMS of each fit. Two things need that. A run is o
 reproducible if the supplemental sets it used are still on disk: CelesTrak's cache holds
 one version and overwrites it, and the sets change several times a day, so two runs
 against the same catalogue snapshot but different supplemental versions give different
-events (see ``docs/phase2-plan.md``). And the covariance of an object screened on a
+events. And the covariance of an object screened on a
 supplemental set has to come from the consistency of successive supplemental sets, not
 from its GP history, which measures its manoeuvring rather than its tracking.
 """

@@ -24,6 +24,7 @@ import { type GlobeInstance } from "globe.gl";
 import { createEarth } from "./earth";
 import { buildCatalogueShell, catalogueHomeAltitude } from "./catalogue-shell";
 import * as THREE from "three";
+import { mountPublicSummary } from './public-summary';
 import { SimClock } from "./clock";
 import { buildConjunctionPanel, ConjunctionTracks, type ConjunctionSelection } from "./conjunctions";
 import { loadBundle, type Bundle } from "./data";
@@ -228,7 +229,7 @@ async function main(): Promise<void> {
       el("stat-visible").textContent = points.visibleCount().toLocaleString();
       if (selected >= 0) {
         el("selected-visibility").textContent = filters.categories.has(bundle.objects.category[selected]) && filters.bands.has(bundle.objects.band[selected])
-          ? "" : "This object is hidden by your globe filters.";
+          ? "" : "This object is hidden by the globe filters.";
       }
     };
     const visibleTimer = window.setInterval(updateVisible, 1000);
@@ -259,7 +260,7 @@ async function main(): Promise<void> {
       results.replaceChildren();
       if (!q) { feedback.textContent = "Search the whole loaded catalogue, including hidden categories."; return; }
       const matches = findObjects(bundle, q);
-      feedback.textContent = matches.length ? `${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"}${matches.length > 8 ? " · showing the first 8; refine your search" : ""}.` : "No matching object. Try a shorter name or an exact catalogue number.";
+      feedback.textContent = matches.length ? `${matches.length.toLocaleString()} match${matches.length === 1 ? "" : "es"}${matches.length > 8 ? " · showing the first 8; refine the search" : ""}.` : "No matching object. Try a shorter name or an exact catalogue number.";
       for (const i of matches.slice(0, 8)) {
         const button = document.createElement("button");
         button.type = "button";
@@ -558,6 +559,7 @@ function checkAgainstReference(worker: Worker, bundle: Bundle): void {
   worker.postMessage({ type: "eci", tMs: bundle.t0Ms });
 }
 
+void mountPublicSummary(el("scene-intro"));
 main().catch((err) => {
   console.error(err);
   const loading = el<HTMLDivElement>("loading");

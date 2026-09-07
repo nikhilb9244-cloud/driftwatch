@@ -9,7 +9,7 @@ run holds:
                            radius, manoeuvre level, history counts, covariance source;
 ``covariance.parquet``     the fitted covariance model (per object, per pool, defaults);
 ``risk_<scenario>.parquet`` one row per event for that scenario: sigmas, sources, probabilities, flags;
-``conjunctions.parquet``   the joined export decided at the Step 0 review: one row per event per
+``conjunctions.parquet``   the joined export: one row per event per
                            scenario with every column, rebuilt from the files above.
 
 A scenario rerun writes its ``risk_*`` file and rebuilds the join; it never touches the
@@ -70,7 +70,7 @@ EXPORT_COLUMNS: tuple[str, ...] = (
     "pc_chan",
     "pc_max",
     "pc_max_scale",
-    # Phase 3 Step 3's storm columns, carried through the join at the Step 4 review. Without
+    # Phase 3 Step 3's storm columns, carried through the join. Without
     # them the report and the viewer read a storm scenario's `pc` with nothing beside it to say
     # what moved it, which is the one number this phase asks a reader not to take alone.
     "miss_shifted_km",
@@ -230,7 +230,7 @@ class RunDirectory:
         df = _read(self.risk_path(scenario))
         df["computed_at"] = pd.to_datetime(df["computed_at"], utc=True)
         if "storm_validity" not in df.columns and {"storm_source_primary", "storm_source_secondary"} <= set(df):
-            # Added at the Step 4 review (2026-09-03). It is a pure function of the two
+            # It is a pure function of the two
             # coefficient-source columns, which every stored table already carries, so a run
             # scored before the column existed gets it on read rather than needing a rescore --
             # and reads identically to one scored after. `driftwatch risk` writes it directly.
@@ -260,7 +260,7 @@ class RunDirectory:
 
 
 def join_conjunctions(events: pd.DataFrame, objects: pd.DataFrame, risks: list[pd.DataFrame]) -> pd.DataFrame:
-    """The export decided at the Step 0 review: events joined with the manoeuvre levels and each scenario's risk rows.
+    """The export: events joined with the manoeuvre levels and each scenario's risk rows.
 
     With no risk files the geometry rows are returned with the risk columns empty and
     ``scenario`` null, so a geometry-only run still exports.
