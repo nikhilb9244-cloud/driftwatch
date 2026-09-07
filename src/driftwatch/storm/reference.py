@@ -471,10 +471,13 @@ def load_s1_orbit(
             except FileNotFoundError:
                 names = []
             name = s1_file_for_day(names, day)
-            if name is None and not offline:
+            if name is None:
                 # The file for the first of a month sits in the previous month's folder by validity.
                 prev = day - timedelta(days=1)
-                names = s1_listing(prev.year, prev.month, cache_dir=cache_dir, offline=offline, client=c)
+                try:
+                    names = s1_listing(prev.year, prev.month, cache_dir=cache_dir, offline=offline, client=c)
+                except FileNotFoundError:
+                    names = []
                 name = s1_file_for_day(names, day)
             if name is None:
                 missing.append(day)

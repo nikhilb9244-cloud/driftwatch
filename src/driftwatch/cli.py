@@ -2380,6 +2380,26 @@ def cmd_validate_reference(args: argparse.Namespace) -> int:
         log.error("no such mission(s) %s; choose from %s", unknown, ", ".join(reference.MISSIONS))
         return 2
     missions = [reference.MISSIONS[k] for k in keys]
+    out = Path(args.out or config.DATA_DIR / "validation")
+    if args.render_only:
+        stored = json.loads((out / "reference_benchmark.json").read_text(encoding="utf-8"))
+        trials_path = out / "reference_benchmark.parquet"
+        slr_path = out / "reference_slr.parquet"
+        trials = pd.read_parquet(trials_path) if trials_path.exists() else pd.DataFrame()
+        sgp4_vs_slr = pd.read_parquet(slr_path) if slr_path.exists() else pd.DataFrame()
+        summary = reference_run.rebuild_summary(stored["summary"], trials, sgp4_vs_slr, missions, windows)
+        stored["summary"] = summary
+        (out / "reference_benchmark.json").write_text(json.dumps(stored, indent=2, default=str), encoding="utf-8")
+        result = reference_run.ReferenceResult(
+            trials, sgp4_vs_slr, [], summary, datetime.fromisoformat(stored["built_at"])
+        )
+        page = args.page
+        if page == "docs/calibration-benchmark.md":
+            page = "docs/reference-benchmark.md"
+        if page:
+            Path(page).write_text(reference_run.to_markdown(result, windows, missions), encoding="utf-8")
+            log.info("Re-rendered %s from %s", page, out)
+        return 0
     grid = None
     weather_used = None
     if not args.no_storm_term:
@@ -2392,7 +2412,6 @@ def cmd_validate_reference(args: argparse.Namespace) -> int:
         grid = density_mod.weather_grid(table)
         weather_used = table.attrs.get("sources_used")
     result = reference_run.run_reference(missions, windows, grid=grid, offline=args.offline, with_slr=not args.no_slr)
-    out = Path(args.out or config.DATA_DIR / "validation")
     out.mkdir(parents=True, exist_ok=True)
     if len(result.trials):
         result.trials.to_parquet(out / "reference_benchmark.parquet", index=False)
@@ -3858,6 +3877,9 @@ def build_parser() -> argparse.ArgumentParser:
     )
     validate.add_argument("--missions", default="all", help="reference: comma-separated mission keys (default: all)")
     validate.add_argument("--no-slr", action="store_true", help="reference: skip the laser-ranging comparison")
+    validate.add_argument(
+        "--render-only", action="store_true", help="reference: re-render the page from the stored per-trial files"
+    )
     validate.add_argument("--hidden-size", type=int, default=35, help="dsgp4: hidden layer width (default 35)")
     validate.add_argument("--epochs", type=int, default=40, help="dsgp4: training epochs (default 40)")
     validate.add_argument("--batch-size", type=int, default=4096, help="dsgp4: training batch (default 4096)")

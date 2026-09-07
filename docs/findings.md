@@ -322,6 +322,90 @@ of the band the position horizon is under six hours, the benchmark's shortest le
 Both rest on three Swarm-class satellites at 460 to 506 km, not manoeuvring in the trials kept; every
 other object carries *no measured horizon* for both (`docs/radio-horizon.md`).
 
+### 8. Fifteen more spacecraft in five altitude bands: the storm's reach in the horizon ends near 700 km
+
+The reference expansion (`docs/reference-benchmark.md`) extends item 6 from three Swarm satellites
+to every mission whose reconstructed orbit an anonymous server hands out: GRACE-FO 1 and 2 (JPL
+Level-1B navigation through GFZ's ISDC, with the THR1B thruster record as the published manoeuvre
+record), Sentinel-1A (Copernicus precise orbits through ESA's STEP mirror), and the DORIS satellites
+CryoSat-2, SARAL, Sentinel-3A and 3B, SWOT, HY-2C and 2D, Jason-3 and Sentinel-6A (CNES precise
+orbits through the IDS data centre at IGN). ILRS laser-ranging normal points are a second,
+independent truth for every mission with a retroreflector and the only truth for TerraSAR-X,
+TanDEM-X and ICESat-2, whose 2024 orbits sit behind accounts. Sentinel-2, GOCE and CHAMP are not
+covered, and the page says why rather than substituting. The same four windows for every mission,
+with the 12 August 2024 storm (Kp 8-) added and held out like October; the same rule that the
+covariance and the coefficient are fitted from history that ends where the window's sets begin.
+1,228 element sets over fifteen spacecraft with a reconstructed orbit, 460 to 1,338 km.
+
+**The horizon by altitude band** (25 km in-track at the 95th percentile of trials), quiet / May /
+October / August:
+
+| Band (mean altitude of the sets) | Spacecraft | quiet | May 2024 | October 2024 | August 2024 |
+| --- | --- | --- | --- | --- | --- |
+| 460 to 507 km | Swarm A, B, C; GRACE-FO 1, 2 | 5 d | 2 d | 24 h | 2 d |
+| 696 to 719 km | Sentinel-1A, CryoSat-2 | 5 d | 5 d | 7 d | 6 d |
+| 783 to 803 km | SARAL, Sentinel-3A, 3B | 7 d | 7 d | 3 d | 7 d |
+| 893 to 952 km | SWOT, HY-2C, 2D | 7 d | 7 d | 7 d | 7 d |
+| 1,338 km | Jason-3, Sentinel-6A | 7 d | 7 d | 7 d | 7 d |
+
+GRACE-FO, at 490 km, agrees with Swarm window for window (6 d, 2 to 3 d, 24 to 36 h, 2 d), which
+is the first reproduction of item 6 on a different spacecraft with a different producer's orbit and
+a different published thruster record. At 700 km a storm no longer shortens the horizon below the
+quiet week's five days; at 800 km and above the horizon is the benchmark's full seven days in every
+window, with one exception: the October figure at 800 km is carried by Sentinel-3B (3 d) and SARAL
+(4 d) while Sentinel-3A, in the same orbit as 3B, holds 7 d, and the difference is not explained
+here. The 7-day in-track median at 1,338 km is 0.4 to 0.8 km in three windows and 4.4 km in May.
+
+**Coverage of the empirical covariance** (in-track, inside two sigma, 95 per cent claimed). At 460
+to 507 km on five spacecraft item 6 repeats: 98 to 100 per cent in the quiet week from one to seven
+days, 65 to 84 per cent in the storms, and 33 per cent at seven days in August. Above 600 km the
+storms still under-cover at a day (67 to 85 per cent). At 1,338 km the covariance under-covers **in
+every window**, 51 per cent at a day in the quiet week and 6 per cent in May: the residual there is
+small, 0.3 to 0.5 km at a day, but the consistency of the sets is smaller still, so the model's
+floor sits below the error. The sixth-hour under-coverage of item 6 (the half-day floor) is general:
+17 to 57 per cent at six hours in every band.
+
+**The storm term** on five spacecraft at 460 to 507 km repeats item 6: it hurts in the quiet week
+(−56 per cent at a day, −137 at three), hurts inside a day or two of a storm and helps from three
+days (May +14 and +35 per cent at three and seven days; October +41 at three; August +14 and +12).
+Above 700 km its effect is within about 30 per cent either way with no consistent sign, and at
+1,338 km it is nil at a day, because the coefficient it needs is fitted from decay that is not
+measurable there.
+
+**How the two references disagree.** Reconstructed orbit against laser ranging, above 20 degrees of
+elevation, Marini-Murray troposphere from the station's own meteorology, SLRF2020 stations with the
+ILRS site eccentricities, no centre-of-mass correction: the median one-way range residual is
+between −0.1 and −0.6 m for every mission but SWOT, and the 95th percentile of the absolute residual
+is under 1.0 m for Swarm, GRACE-FO, SARAL, Sentinel-3, Jason-3 and Sentinel-6A, 1.4 to 1.5 m for
+HY-2C and 2D, and 2.7 to 2.8 m for SWOT, whose residual is a constant −2.0 m in every window: the
+retroreflector's distance from the centre of mass on a large spacecraft, uncorrected. A few outlying
+normal points inflate the RMS to between 2 and 38 m in seven of the sixty mission-windows without
+moving the median or the 95th percentile. The two references therefore agree at the metre level,
+three orders of magnitude below the element-set residuals, and neither validates the other at its
+own centimetre level. One construction lesson, recorded because an independent truth is again what
+made it visible: before the site eccentricities were applied, the trailer-mounted NASA stations
+(Yarragadee, Greenbelt, Monument Peak, Hartebeesthoek) showed −1 to −3.5 m residuals growing with
+elevation on every satellite, the signature of a telescope 3 m above its marker; the coordinate
+file refers to the marker and the offset lives in a separate ILRS file.
+
+**The element set against the laser**, median absolute range residual at a day and at seven days:
+0.3 to 0.4 km and 7 to 20 km at 460 to 507 km, 0.2 and 1 to 5 km at 700 km, 0.2 to 0.3 and 0.5 to
+2.5 km at 800 km, 0.2 and 0.3 to 3.5 km at 900 to 950 km, 0.1 to 0.2 and 0.3 to 0.6 km at 1,338 km:
+the same picture in one dimension. For the laser-only missions, TerraSAR-X and TanDEM-X at 514 km
+are at 1.5 and 0.6 km after a day and 44 and 49 km after seven in the quiet week, and ICESat-2 at
+496 km at 0.7 km after a day; with three to thirteen sets in a storm window, no storm horizon is
+stated for them.
+
+**Population, for every downstream page.** Fifteen spacecraft with a reconstructed orbit in five
+bands from 460 to 1,338 km, near-circular, free-flying between manoeuvres, one week of element sets
+per window in four windows, with manoeuvre arcs excluded from a published record (Swarm, GRACE-FO:
+one GRACE-FO 2 burn on 15 May 2024 took 38 set-lead pairs out) and from detection otherwise, which
+took up to half the pairs out of some Sentinel-1A and Sentinel-3 windows. Nothing is measured for
+debris, for eccentric orbits, for station-kept constellations, for objects the network tracks less
+often, or above 1,340 km, and a detection that reads storm drag as a burn removes trials from
+exactly the intervals a storm benchmark needs; that failure mode is counted for Swarm in item 6 and
+not measured for the detection-only missions.
+
 Everything above is indicative, not operational: the covariances come from the consistency of
 public element sets, which measures how much successive fits by one network disagree and bounds
 their accuracy in neither direction, because successive sets share observations and assumptions;

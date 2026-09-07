@@ -304,6 +304,42 @@ def summarise_sgp4_vs_slr(frame: pd.DataFrame, missions: dict[str, Mission]) -> 
     return out
 
 
+def summarise_sgp4_vs_slr_by_mission(frame: pd.DataFrame) -> dict[str, Any]:
+    """By mission, window and lead bin: the absolute range residual of the element set against the laser, km."""
+    out: dict[str, dict[str, dict[str, Any]]] = {}
+    if not len(frame):
+        return out
+    for (m, w), g in frame.groupby(["mission", "window"], sort=False):
+        entry: dict[str, Any] = {"n_sets": int(g["set_epoch"].nunique()), "n_stations": int(g["station"].nunique())}
+        for lead, gl in g.groupby("lead_bin_h", sort=True):
+            a = np.abs(gl["residual_m"].to_numpy(dtype=float)) / 1000.0
+            entry[f"{lead:g}"] = {
+                "n": int(len(gl)),
+                "n_sets": int(gl["set_epoch"].nunique()),
+                "median_km": _q(a, 0.5),
+                "p95_km": _q(a, 0.95),
+            }
+        out.setdefault(str(m), {})[str(w)] = entry
+    return out
+
+
+def rebuild_summary(
+    summary: dict[str, Any],
+    trials: pd.DataFrame,
+    sgp4_vs_slr: pd.DataFrame,
+    missions: list[Mission],
+    windows: list[BenchmarkWindow],
+) -> dict[str, Any]:
+    """The parts of a stored summary that derive from the per-trial files, recomputed from them."""
+    mission_map = {m.key: m for m in missions}
+    out = dict(summary)
+    out["results"] = summarise_trials(trials) if len(trials) else {"by_band": {}, "by_mission": {}}
+    out["sgp4_vs_slr"] = summarise_sgp4_vs_slr(sgp4_vs_slr, mission_map)
+    out["sgp4_vs_slr_by_mission"] = summarise_sgp4_vs_slr_by_mission(sgp4_vs_slr)
+    out["population"] = population_statement(missions, windows, trials)
+    return out
+
+
 # --------------------------------------------------------------------------------------
 # The run
 
@@ -393,6 +429,7 @@ def run_reference(
         },
         "results": summarise_trials(trials) if len(trials) else {"by_band": {}, "by_mission": {}},
         "sgp4_vs_slr": summarise_sgp4_vs_slr(sgp4_vs_slr, mission_map),
+        "sgp4_vs_slr_by_mission": summarise_sgp4_vs_slr_by_mission(sgp4_vs_slr),
         "population": population_statement(missions, windows, trials),
     }
     return ReferenceResult(trials, sgp4_vs_slr, runs, summary, now)
@@ -644,6 +681,30 @@ def to_markdown(result: ReferenceResult, windows: list[BenchmarkWindow], mission
                 )
             ms = ", ".join(names.get(k, k) for k in e["missions"])
             lines.append(f"| {b} | {w} | {ms} | " + " | ".join(cells) + " |")
+    laser_only = [m for m in missions if m.truth == reference.TRUTH_NONE and m.slr]
+    by_mission = s.get("sgp4_vs_slr_by_mission", {})
+    if laser_only and by_mission:
+        lines += [
+            "",
+            "### The missions whose only truth is the laser",
+            "",
+            "The same range residual per mission and window for the missions with no reconstructed orbit on an "
+            "anonymous server: this is all that is measured for them, and the per-mission rows for every other "
+            "mission are in the JSON beside this page.",
+            "",
+            "| Mission | Window | Sets, stations | 6 h | 24 h | 72 h | 168 h |",
+            "| --- | --- | --- | --- | --- | --- | --- |",
+        ]
+        for m in laser_only:
+            for w in order:
+                e = by_mission.get(m.key, {}).get(w)
+                if e is None:
+                    continue
+                cells = []
+                for lead in ("6", "24", "72", "168"):
+                    x = e.get(lead)
+                    cells.append("-" if x is None else f"{x['median_km']:.2f} / {x['p95_km']:.1f} ({x['n']})")
+                lines.append(f"| {m.name} | {w} | {e['n_sets']}, {e['n_stations']} | " + " | ".join(cells) + " |")
     lines += [
         "",
         "## Sources, with origin and derivation",

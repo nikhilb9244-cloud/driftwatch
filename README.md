@@ -18,9 +18,17 @@ element set keeps the satellite inside the 25 km in-track half-width of the scre
 May 2024 Gannon storm** (6–13 May) and **one day in a held-out October 2024 storm** (6–13 October).
 Those three windows are the whole of the evidence. A probability computed from an element set
 propagated past its horizon is arithmetic on a position the set no longer predicts, so the quiet
-scenario is the default everywhere and a storm scenario is an explicit choice. The measured
-tolerance for three Swarm-class satellites does not establish an operating horizon for any other
-spacecraft. Detail: [docs/calibration-benchmark.md](docs/calibration-benchmark.md).
+scenario is the default everywhere and a storm scenario is an explicit choice. Detail:
+[docs/calibration-benchmark.md](docs/calibration-benchmark.md).
+
+The same horizon measured on fifteen spacecraft with a public reconstructed orbit, in five altitude
+bands from 460 to 1,338 km and in four windows with August 2024 added and held out
+([docs/reference-benchmark.md](docs/reference-benchmark.md)): **5 d / 2 d / 24 h / 2 d** at 460 to
+507 km (Swarm and GRACE-FO agree), **5 to 7 days** at 700 km in every window, and **7 days** at 800 km
+and above except Sentinel-3B and SARAL in October. Laser ranging puts the reconstructed orbits and
+the element sets on the same page: the two references agree at the metre level; the element sets
+do not. Nothing is measured for debris, eccentric orbits, station-kept constellations or above
+1,340 km.
 
 ## Provenance findings
 
@@ -127,6 +135,10 @@ The production gate remains in place. [Pipeline and retention limits](docs/pipel
 
 - [Findings and corrections](docs/findings.md): the bounded measurements and withdrawn claims.
 - [Calibration benchmark](docs/calibration-benchmark.md): all three windows, populations and lead bins.
+- [Reference benchmark](docs/reference-benchmark.md): fifteen spacecraft in five altitude bands, four windows,
+  laser ranging as the second truth, and what was not obtainable without an account.
+- [dSGP4 evaluation](docs/dsgp4-evaluation.md): ESA's differentiable SGP4 and its ML-dSGP4 hybrid on the same
+  trials, trained on the tuning-visible windows only.
 - [Radio lane](docs/radio-lane.md): the benchmark's residuals as angles on the sky for a 13.5 m dish over the
   Karoo, the [radio horizon](docs/radio-horizon.md) by receiver as two quantities (a crossing horizon and a
   position horizon), the [declared-emission table](docs/radio-emissions.md),
