@@ -694,11 +694,18 @@ def load_truth(
     *,
     cache_dir: Path = config.CACHE_DIR,
     offline: bool = False,
+    records: bool = True,
 ) -> tuple[PreciseOrbit | None, ThrusterRecord | None]:
-    """The mission's reconstructed orbit over ``[start, end]`` and its published thruster record, where each exists."""
+    """The mission's reconstructed orbit over ``[start, end]`` and its published thruster record, where each exists.
+
+    ``records=False`` skips ESA's thruster record for Swarm (a slow CDF read per day) for callers that
+    only need the orbit, such as the dSGP4 evaluation, which takes its exclusions from the benchmark's trials.
+    """
     if mission.truth == TRUTH_SWARM:
         orbit = precise.load_precise_orbit(mission.truth_code, start, end, cache_dir=cache_dir, offline=offline)
-        record = precise.load_thruster_record(mission.truth_code, start, end, cache_dir=cache_dir, offline=offline)
+        record = None
+        if records:
+            record = precise.load_thruster_record(mission.truth_code, start, end, cache_dir=cache_dir, offline=offline)
         return orbit, record
     if mission.truth == TRUTH_GRACEFO:
         return load_gracefo_orbit(mission, start, end, cache_dir=cache_dir, offline=offline)

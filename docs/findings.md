@@ -406,6 +406,34 @@ often, or above 1,340 km, and a detection that reads storm drag as a burn remove
 exactly the intervals a storm benchmark needs; that failure mode is counted for Swarm in item 6 and
 not measured for the detection-only missions.
 
+### 9. ESA's dSGP4 reproduces SGP4 to the metre; its ML-dSGP4 hybrid, trained as published, is worse than SGP4 on both held-out storms
+
+ESA's dsgp4 (Acciarini, Baydin and Izzo 2025, Acta Astronautica 226; version 1.3.0), run on the
+reference benchmark's 1,228 usable trial sets (`docs/dsgp4-evaluation.md`): with WGS72 constants
+it reproduces the sgp4 library's in-track residual to the metre at every lead in every window, and
+with its default WGS-84 constants it differs by up to five per cent of the median, decametres at
+seven days. Its ML-dSGP4 hybrid wraps the propagator in two small networks that perturb the mean
+elements before the propagation and the state after it, and is trained against a higher-precision
+reference by the mean squared error of the normalised state. The published training used an
+operator's predictions in a quiet week, SpaceX's Starlink ephemerides, so the storm result is new.
+Two hybrids were trained here on the quiet and May windows only, with the corrections starting at
+zero so that the untrained model is exactly SGP4 and the epoch of lowest training loss kept: one on
+Swarm (111 sets, 18,648 hourly truth states to seven days) and one on every mission with a
+reconstructed orbit (639 sets, 107,352). A sweep of the learning rate over 10⁻³, 10⁻⁴ and 10⁻⁵ on
+the Swarm set gave losses of 6.66, 6.73 and 6.77 × 10⁻⁶ against 6.80 at the zero start, so the
+training does lower the published objective. It raises the residual. On the training windows the
+Swarm hybrid's median in-track residual is 7 to 46 km against SGP4's 0.4 to 7 km and the
+all-mission hybrid's 1.5 to 6 km; on the held-out storms neither improves one of the ten leads
+(October at a day: 15 and 6 km against 0.65; August: 13 and 3 km against 0.45). **The rule fixed
+before the numbers were seen, adopt only if the held-out storms improve, says do not adopt.** The
+mechanism is in the numbers: the objective is a mean of squared errors over every hour to seven
+days, which the seven-day tail of tens to hundreds of kilometres dominates, so its optimum trades
+the short leads for a small change at the tail, and a loss that fell by two per cent moved the
+day-one residual by an order of magnitude. This does not say the hybrid cannot be made to help; it
+says the published recipe, on public element sets against reconstructed orbits, did not, and the
+storm term with the observed ap remains the only correction with demonstrated held-out skill, at
+three days and beyond in a storm.
+
 Everything above is indicative, not operational: the covariances come from the consistency of
 public element sets, which measures how much successive fits by one network disagree and bounds
 their accuracy in neither direction, because successive sets share observations and assumptions;

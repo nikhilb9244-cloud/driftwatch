@@ -2472,7 +2472,7 @@ def cmd_validate_dsgp4(args: argparse.Namespace) -> int:
             continue
         for w in windows:
             day_from = (w.sets_from - timedelta(days=1)).date()
-            orbit, _ = reference.load_truth(m, day_from, w.truth_to.date(), offline=True)
+            orbit, _ = reference.load_truth(m, day_from, w.truth_to.date(), offline=True, records=False)
             if orbit is not None and len(orbit.table):
                 orbits[(m.key, w.name)] = orbit
     items = dsgp4_eval.trial_sets(trials[trials["mission"].isin([m.key for m in missions])], sets, orbits)
