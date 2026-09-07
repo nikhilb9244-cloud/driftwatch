@@ -228,6 +228,8 @@ class TrainingRecord:
     learning_rate: float
     losses: list[float]
     seconds: float
+    initial_loss: float = float("nan")  # the loss at the zero start, before any step
+    kept_zero_start: bool = False  # true when no epoch beat the zero start and it was restored
 
 
 def train_hybrid(
@@ -254,7 +256,20 @@ def train_hybrid(
     # held-out windows play no part in either.
     scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=max(epochs, 1), eta_min=learning_rate / 100)
     losses: list[float] = []
-    best = (float("inf"), None)
+    # The zero start is itself a candidate: it is scored first and restored if nothing beats it.
+    model.eval()
+    with torch.no_grad():
+        initial = 0.0
+        for k in range(0, n, batch_size):
+            batch = omms[k : k + batch_size]
+            x = (
+                model(batch, ts_all[k : k + batch_size])
+                if len(batch) > 1
+                else model(batch[0], ts_all[k : k + batch_size])
+            )
+            initial += float(torch.mean((x - target_t[k : k + batch_size]) ** 2)) * len(batch)
+        initial /= max(n, 1)
+    best = (initial, {k: v.detach().clone() for k, v in model.state_dict().items()})
     t0 = time.time()
     model.train()
     for epoch in range(epochs):
@@ -274,15 +289,27 @@ def train_hybrid(
         if losses[-1] < best[0]:
             best = (losses[-1], {k: v.detach().clone() for k, v in model.state_dict().items()})
         log.info("ML-dSGP4 epoch %d/%d: loss %.3e (%.0f s)", epoch + 1, epochs, losses[-1], time.time() - t0)
+    kept_zero = bool(losses) and min(losses) >= initial
     if best[1] is not None:
         model.load_state_dict(best[1])
     model.eval()
     n_sets = len({id(o) for o in omms})
-    return TrainingRecord(n, n_sets, epochs, batch_size, learning_rate, losses, time.time() - t0)
+    return TrainingRecord(n, n_sets, epochs, batch_size, learning_rate, losses, time.time() - t0, initial, kept_zero)
 
 
 # --------------------------------------------------------------------------------------
 # Evaluation
+
+
+def usable_pairs(trials: pd.DataFrame) -> set[tuple[str, str, pd.Timestamp, float]]:
+    """The (mission, window, set epoch, lead) pairs the benchmark scored: truth present, converged, no manoeuvre."""
+    usable = trials[~trials["gap"] & ~trials["manoeuvre"] & (trials["sgp4_error"] == 0)]
+    ep = pd.to_datetime(usable["set_epoch"])
+    ep = ep.dt.tz_convert(None) if getattr(ep.dt, "tz", None) is not None else ep
+    return {
+        (str(m), str(w), pd.Timestamp(e), float(lead))
+        for m, w, e, lead in zip(usable["mission"], usable["window"], ep, usable["lead_h"], strict=True)
+    }
 
 
 def residuals_at_leads(
@@ -291,10 +318,14 @@ def residuals_at_leads(
     *,
     leads_hours: tuple[float, ...] = precise.LEADS_HOURS,
     method: str = "",
+    keep: set[tuple[str, str, pd.Timestamp, float]] | None = None,
 ) -> pd.DataFrame:
     """RIC residuals (truth minus prediction) at the benchmark's leads for every set, for one predictor.
 
-    ``predict(omms, tsince_min)`` returns ``(n, 6)`` states in TEME.
+    ``predict(omms, tsince_min)`` returns ``(n, 6)`` states in TEME. With ``keep`` (from
+    :func:`usable_pairs`) only the set-lead pairs the benchmark itself scored are kept, so every
+    method is compared on one population: a lead the benchmark excluded for a manoeuvre or a gap
+    is excluded here too.
     """
     leads = np.asarray(leads_hours, dtype=float) * 60.0
     omms = [item.omm for item in items for _ in leads]
@@ -311,6 +342,8 @@ def residuals_at_leads(
         delta = to_ric(basis, r_true[good] - pred[good, :3])
         for k, lead in zip(np.flatnonzero(good), leads[good], strict=True):
             m = int(np.flatnonzero(np.flatnonzero(good) == k)[0])
+            if keep is not None and (item.mission, item.window, item.epoch, float(lead / 60.0)) not in keep:
+                continue
             rows.append(
                 {
                     "mission": item.mission,
@@ -422,8 +455,10 @@ def to_markdown(record: dict[str, Any], built_at: datetime) -> str:
         "**Training.** "
         + "; ".join(
             f"{name}: {t['n_samples']} samples from {t['n_sets']} sets, {t['epochs']} epochs of {t['batch_size']} "
-            f"at learning rate {t['learning_rate']:g}, loss {t['losses'][0]:.2e} to {t['losses'][-1]:.2e}, "
+            f"at learning rate {t['learning_rate']:g}, loss {t.get('initial_loss', float('nan')):.2e} at the zero "
+            f"start, {t['losses'][0]:.2e} after the first epoch, {min(t['losses']):.2e} at the best, "
             f"{t['seconds']:.0f} s"
+            + (" (no epoch beat the zero start, which was kept)" if t.get("kept_zero_start") else "")
             for name, t in record["training"].items()
         )
         + ".",

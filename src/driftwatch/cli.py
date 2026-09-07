@@ -2482,15 +2482,16 @@ def cmd_validate_dsgp4(args: argparse.Namespace) -> int:
     if any(i.mission not in swarm_keys for i in training):
         populations["ML-dSGP4 (all missions)"] = training
     log.info("dSGP4: %d trial sets, %d in the training windows", len(items), len(training))
+    keep = dsgp4_eval.usable_pairs(trials)
     frames = [dsgp4_eval.storm_term_residuals(trials, items)]
     frames.append(
         dsgp4_eval.residuals_at_leads(
-            items, lambda o, t: dsgp4_eval.dsgp4_states(o, t, gravity="wgs-72"), method="dsgp4 (WGS72)"
+            items, lambda o, t: dsgp4_eval.dsgp4_states(o, t, gravity="wgs-72"), method="dsgp4 (WGS72)", keep=keep
         )
     )
     frames.append(
         dsgp4_eval.residuals_at_leads(
-            items, lambda o, t: dsgp4_eval.dsgp4_states(o, t, gravity="wgs-84"), method="dsgp4 (WGS-84)"
+            items, lambda o, t: dsgp4_eval.dsgp4_states(o, t, gravity="wgs-84"), method="dsgp4 (WGS-84)", keep=keep
         )
     )
     training_records = {}
@@ -2511,7 +2512,9 @@ def cmd_validate_dsgp4(args: argparse.Namespace) -> int:
         )
         training_records[name] = rec.__dict__
         frames.append(
-            dsgp4_eval.residuals_at_leads(items, lambda o, t, _m=model: dsgp4_eval.hybrid_states(_m, o, t), method=name)
+            dsgp4_eval.residuals_at_leads(
+                items, lambda o, t, _m=model: dsgp4_eval.hybrid_states(_m, o, t), method=name, keep=keep
+            )
         )
     residuals = pd.concat(frames, ignore_index=True)
     summary = dsgp4_eval.summarise(residuals)
