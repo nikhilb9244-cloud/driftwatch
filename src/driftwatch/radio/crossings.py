@@ -56,12 +56,13 @@ from driftwatch.screening.ric import ric_basis
 
 log = logging.getLogger(__name__)
 
-# The population the calibration benchmark measured: three near-circular satellites at 460 to
-# 506 km. Objects outside this band carry no measured horizon.
-MEASURED_ALTITUDE_KM = (400.0, 600.0)
+# The population the reference benchmark measured: near-circular, free-flying spacecraft in the
+# altitude bands of ``storm/reference.py``. An object is scored against its own band's trials;
+# outside every band it carries no measured horizon. The bands with trials are read from the
+# trials themselves at run time; this tuple is the full set the benchmark defines.
+MEASURED_BANDS: tuple[str, ...] = horizon_mod.BAND_ORDER
 MEASURED_MAX_ECCENTRICITY = 0.02
 MEASURED_MAX_AGE_DAYS = 7.0
-MEASURED_POPULATION = "Swarm A, B and C at 460 to 506 km, near-circular, not manoeuvring in the trials kept"
 
 # The elevation above which an object counts as in the sky for product one. MeerKAT observes
 # above 15 degrees; a sidelobe has no such limit, and the local horizon is a degree or two.
@@ -342,13 +343,17 @@ class Crossing:
         return d
 
 
-def population_label(mean_altitude_km: float, eccentricity: float, age_days: float) -> tuple[str, str]:
-    """Whether the benchmark's measured horizon applies to an object, and why not when it does not."""
-    lo, hi = MEASURED_ALTITUDE_KM
-    if not (lo <= mean_altitude_km <= hi):
+def population_label(
+    mean_altitude_km: float, eccentricity: float, age_days: float, bands: Iterable[str] = MEASURED_BANDS
+) -> tuple[str, str]:
+    """Whether a measured horizon applies to an object and, if so, which altitude band's; if not, why not."""
+    measured = list(bands)
+    band = horizon_mod.band_of(mean_altitude_km)
+    if band is None or band not in measured:
         return (
             "no measured horizon",
-            f"mean altitude {mean_altitude_km:.0f} km is outside the {lo:.0f} to {hi:.0f} km benchmark population",
+            f"mean altitude {mean_altitude_km:.0f} km is outside the measured altitude bands "
+            f"({', '.join(measured) or 'none'})",
         )
     if eccentricity > MEASURED_MAX_ECCENTRICITY:
         return (
@@ -360,7 +365,7 @@ def population_label(mean_altitude_km: float, eccentricity: float, age_days: flo
             "no measured horizon",
             f"element set {age_days:.1f} days old, beyond the benchmark's {MEASURED_MAX_AGE_DAYS:.0f}-day range",
         )
-    return "measured", MEASURED_POPULATION
+    return "measured", band
 
 
 def _object_emission(object_type: str, constellation: str | None, rx: site_mod.Receiver) -> tuple[str, str]:
@@ -412,6 +417,7 @@ def beam_crossings(
 ) -> list[Crossing]:
     """Product two for one observation: every object whose track passes inside the half-power radius."""
     radius = obs.fwhm_deg / 2.0
+    bands = tuple(horizon_mod.bands_present(trials))
     coarse = time_grid(obs.start, obs.duration_s, coarse_step_s)
     fine = time_grid(obs.start, obs.duration_s, fine_step_s)
     fine_s = (fine - fine[0]).astype("timedelta64[us]").astype("int64") / 1e6
@@ -471,7 +477,9 @@ def beam_crossings(
                     continue
                 partial = bool(k == 0 or k == len(s_filled) - 1)
                 crossings.append(
-                    _describe(row, refiner, t_ca_s, closest, partial, obs, trials, period, site, float(fine_s[-1]))
+                    _describe(
+                        row, refiner, t_ca_s, closest, partial, obs, trials, period, site, float(fine_s[-1]), bands
+                    )
                 )
     crossings.sort(key=lambda c: c.t_ca_utc)
     log.info("%s: %d crossing(s) inside the %.2f deg half-power radius", obs.observation_id, len(crossings), radius)
@@ -533,6 +541,7 @@ def _describe(
     period: Period,
     site: Site,
     t_end_s: float,
+    bands: tuple[str, ...] | None = None,
 ) -> Crossing:
     r_pef, v_rot, _, t_ca = refiner.state(t_ca_s)
     lk = look_from(site, r_pef[None, :])
@@ -546,12 +555,14 @@ def _describe(
     age_days = (t_ca_dt - epoch).total_seconds() / 86400.0
     mean_alt = float(row["mean_altitude_km"])
     ecc = float(row["eccentricity"])
-    population, reason = population_label(mean_alt, ecc, age_days)
+    measured_bands = bands if bands is not None else tuple(horizon_mod.bands_present(trials))
+    population, reason = population_label(mean_alt, ecc, age_days, measured_bands)
     unc: CrossingUncertainty | None = None
     crossing_horizon = position_horizon = "no measured horizon"
     if population == "measured":
+        # The object's own band's trials, projected onto this crossing's line of sight.
         unc = horizon_mod.crossing_uncertainty(
-            trials, period.benchmark_window, age_days * 24.0, range_km, g_c, g_i, obs.fwhm_deg
+            trials, period.benchmark_window, age_days * 24.0, range_km, g_c, g_i, obs.fwhm_deg, band=reason
         )
         if unc is None:
             population, reason = (

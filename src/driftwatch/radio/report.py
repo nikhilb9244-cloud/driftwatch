@@ -30,7 +30,6 @@ from driftwatch.radio import horizon as horizon_mod
 from driftwatch.radio.crossings import (
     CATALOGUE_MAX_AGE_DAYS,
     ELEVATION_CUTOFF_DEG,
-    MEASURED_POPULATION,
     Crossing,
     ObservationResult,
     Period,
@@ -54,7 +53,10 @@ EXPORT_LIMITS = [
     "along_track_shift_s is the 95th percentile of the benchmark's along-track residual at that age as a time "
     "shift at the orbital speed, and position_horizon says whether the along-track angular error keeps the "
     "same coverage (inside) or not (outside): where the object is at an instant. Both horizons are null where "
-    "the object is outside the benchmark's population, and both say so.",
+    "the object is outside the benchmark's population, and both say so. The population is the altitude-band "
+    "table of docs/radio-horizon.md: near-circular, free-flying spacecraft with a public reconstructed orbit, "
+    "in bands from 400 to 1400 km, each object scored against its own band's trials; nothing is measured for "
+    "debris, eccentric orbits or station-kept objects through a burn.",
     "Nothing here is a received power, an occupancy fraction or a sensitivity loss.",
 ]
 
@@ -254,9 +256,10 @@ LIMITS = [
     "- No received power, occupancy fraction or sensitivity loss: those need a measurement at the site, and the "
     "statistics of satellite interference have been modelled elsewhere.",
     "- Constellation counts include retired members still catalogued; the catalogue does not say who is transmitting.",
-    "- The measured horizons, crossing and position, rest on three non-manoeuvring satellites at 460 to 506 km in "
-    "three windows; a station-kept constellation satellite at the same altitude carries the label by altitude, "
-    "not by a measurement of its own error.",
+    "- The measured horizons, crossing and position, rest on the reference benchmark's free-flying spacecraft, "
+    "by altitude band and window (the band table on `docs/radio-horizon.md`); a station-kept constellation "
+    "satellite or a piece of debris in a measured band carries the label by altitude, not by a measurement of "
+    "its own error.",
     "- Where the archive's phase centre is not public, the target position stands in for it and the report says "
     "so per observation.",
     "- Scan boundaries inside an observation are not public; a crossing is reported against the whole "
@@ -273,8 +276,13 @@ def period_report(
     horizon_table: pd.DataFrame,
     elevation_deg: float = ELEVATION_CUTOFF_DEG,
     observation_sources: str = "",
+    population: str = "",
 ) -> str:
-    """The short report for one period: the two products per observation, the weekly aggregate, the horizon rows."""
+    """The short report for one period: the two products per observation, the weekly aggregate, the horizon rows.
+
+    ``population`` is the measured population as one sentence (``horizon.population_sentence``);
+    left empty, the report points at the band table on the horizon page.
+    """
     lines = [
         f"# Satellite crossings over the Karoo: {period.label}",
         "",
@@ -291,8 +299,10 @@ def period_report(
         "retired members, because the catalogue does not carry transmit status. Emissions are declarations from "
         "public filings, dated in `docs/radio-emissions.md`; a declaration made after these observations "
         "(Starlink direct-to-cell, November 2024) is still listed, as a capability, and says so. The measured "
-        f"horizons, crossing and position, apply only to {MEASURED_POPULATION}; every other object carries *no "
-        "measured horizon* for both and the reason.",
+        "horizons, crossing and position, apply only to objects in the benchmark's measured altitude bands, each "
+        "scored against its own band's trials: "
+        + (population or "the band table on `docs/radio-horizon.md`")
+        + "; every other object carries *no measured horizon* for both and the reason.",
         "",
         "## Observations",
         "",
@@ -338,44 +348,49 @@ def period_report(
     if w.empty:
         lines.append("No benchmark trials for this window.")
     else:
-        crossing = {c.key: horizon_mod.horizon_hours(horizon_table, c, which="crossing") for c in cols}
-        position = {c.key: horizon_mod.horizon_hours(horizon_table, c, which="position") for c in cols}
+        bands = horizon_mod.bands_present(w)
         lines += [
             "The **crossing horizon** is governed by the cross-track error and answers whether an object crossed the "
             "beam during an observation, with the crossing's time known to the along-track shift beside it; the "
             "**position horizon** is governed by the along-track error and answers where an object is at an instant, "
             "to within a third of the beam. Each is the longest lead through which 95 per cent of this window's "
-            "benchmark trials keep the named angular error under a third of the beam width.",
+            "benchmark trials in the object's altitude band keep the named angular error under a third of the beam "
+            "width.",
             "",
-            "| Receiver, frequency | Crossing horizon | Position horizon |",
-            "| --- | --- | --- |",
+            "| Altitude band | Receiver, frequency | Crossing horizon | Position horizon |",
+            "| --- | --- | --- | --- |",
         ]
-        for c in cols:
-            lines.append(
-                f"| {c.label} | {horizon_mod.format_lead(crossing[c.key][period.benchmark_window])} "
-                f"| {horizon_mod.format_lead(position[c.key][period.benchmark_window])} |"
-            )
+        for band in bands:
+            for c in cols:
+                crossing = horizon_mod.horizon_hours(w, c, which="crossing", band=band)
+                position = horizon_mod.horizon_hours(w, c, which="position", band=band)
+                lines.append(
+                    f"| {band} | {c.label} | {horizon_mod.format_lead(crossing.get(period.benchmark_window))} "
+                    f"| {horizon_mod.format_lead(position.get(period.benchmark_window))} |"
+                )
+        for band in bands:
+            lines += [
+                "",
+                f"{band}, per lead:",
+                "",
+                "| Lead | n | cross-track p95 (overhead) | along-track p95 (overhead) | along-track shift p95 | "
+                + " | ".join(f"{c.label}, crossing / position" for c in cols)
+                + " |",
+                "| ---: | ---: | ---: | ---: | ---: | " + " | ".join("---:" for _ in cols) + " |",
+            ]
+            for _, r in w[w["band"] == band].iterrows():
+                lines.append(
+                    f"| {horizon_mod.format_lead(float(r['lead_h']))} | {int(r['n'])} | {r['cross_p95_arcmin']:.1f}' "
+                    f"| {r['along_p95_arcmin']:.1f}' | {r['along_shift_p95_s']:.2f} s | "
+                    + " | ".join(f"{100 * r[c.crossing_key]:.0f}% / {100 * r[c.position_key]:.0f}%" for c in cols)
+                    + " |"
+                )
         lines += [
             "",
-            "| Lead | n | cross-track p95 (overhead) | along-track p95 (overhead) | along-track shift p95 | "
-            + " | ".join(f"{c.label}, crossing / position" for c in cols)
-            + " |",
-            "| ---: | ---: | ---: | ---: | ---: | " + " | ".join("---:" for _ in cols) + " |",
-        ]
-        for _, r in w.iterrows():
-            lead = f"{r['lead_h']:g} h" if r["lead_h"] < 48 else f"{r['lead_h'] / 24:g} d"
-            lines.append(
-                f"| {lead} | {int(r['n'])} | {r['cross_p95_arcmin']:.1f}' | {r['along_p95_arcmin']:.1f}' "
-                f"| {r['along_shift_p95_s']:.2f} s | "
-                + " | ".join(f"{100 * r[c.crossing_key]:.0f}% / {100 * r[c.position_key]:.0f}%" for c in cols)
-                + " |"
-            )
-        lines += [
-            "",
-            "Fractions are the share of benchmark trials whose angular error, with the satellite overhead, is under "
-            "a third of the beam width: the crossing horizon's test (cross-track) then the position horizon's test "
-            "(along-track). The full table with every receiver, and the statement on S-band position prediction, "
-            "are in `docs/radio-horizon.md`.",
+            "Fractions are the share of the band's benchmark trials whose angular error, with the satellite overhead, "
+            "is under a third of the beam width: the crossing horizon's test (cross-track) then the position "
+            "horizon's test (along-track). The full table with every receiver, and the statements per band on "
+            "S-band position prediction, are in `docs/radio-horizon.md`.",
         ]
     lines += ["", "## What this does not show", "", *LIMITS, "", f"_Last updated {datetime.now(UTC):%d %B %Y}._"]
     return "\n".join(lines).rstrip() + "\n"

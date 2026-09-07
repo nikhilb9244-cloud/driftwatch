@@ -813,8 +813,10 @@ def satellite_trials(
     Manoeuvres. With a published record (``record``, ESA's product; or ``published``, intervals
     from an operator's own file) a trial is excluded when a manoeuvre falls between ``arc_hours``
     before its set's epoch and the lead's time. The project's own detection is computed either
-    way and kept in ``manoeuvre_detected`` as a cross-check; without a record it is what
-    excludes. ``manoeuvre_source`` says which on every row.
+    way over the same span, from ``arc_hours`` before the epoch, and kept in ``manoeuvre_detected``
+    as a cross-check; without a record it is what excludes. ``manoeuvre_source`` says which on
+    every row. (Until 2026-09-07 the detection looked only from the epoch onwards, so a set whose
+    tracking arc spanned a burn was kept on the detection-only missions; Sentinel-3B showed it.)
     """
     detected = manoeuvre_intervals_from_orbit(orbit) + manoeuvre_intervals_from_sets(inputs.sets)
     if record is not None:
@@ -860,7 +862,9 @@ def satellite_trials(
             t_k = pd.Timestamp(at[k])
             usable = bool(covered[k]) and int(err[k]) == 0
             through = bool(disturbed and epoch < disturbed[1] and t_k > disturbed[0])
-            det = _overlaps(detected, epoch, t_k)
+            # The tracking arc before the epoch counts for detection as it does for a record: a set fitted
+            # across a burn is wrong from its epoch, whichever way the burn was found.
+            det = _overlaps(detected, epoch - arc, t_k)
             pub = _overlaps(published_intervals, epoch - arc, t_k) if published_intervals is not None else None
             rows.append(
                 {

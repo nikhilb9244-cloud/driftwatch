@@ -29,31 +29,42 @@ half-power width is the measured L-band relation, 57.5 arcmin at 1.5 GHz scaling
 S receivers by the wavelength scaling the holography paper reports over most of each band
 (de Villiers 2023, AJ 165, 78).
 
-Two horizons come out of it, and they answer different questions. The **crossing horizon**,
-governed by the cross-track error, answers whether an object crossed the beam during an
-observation: for the population it was measured on, the cross-track residual stays under
-3.6 arcmin at the 95th percentile at every lead in every window, against thresholds of 8 to
-35 arcmin, so the crossing horizon holds for the full seven days in every window at every
-receiver, and the time of the crossing is known to the along-track shift: 0.2 s at the 95th
-percentile at 6 hours in every window and, at seven days, 8 s in the quiet week, 26 s in May and
-85 s in October. The **position horizon**, governed by the along-track error, answers where an
-object is at an instant to within a third of the beam, and it is the number that moves: at the
-L-band centre **24 hours in the quiet week, 12 hours in the May 2024 storm and 6 hours in the
-October 2024 storm**; at the UHF centre 36, 24 and 6 hours. **S-band position prediction from
-public element sets is not possible at any element-set age**: at the top of the band the position
-horizon is under 6 hours, the benchmark's shortest lead, in every window, and at the S0 band
-centre it is 24 hours, 12 hours and under 6 hours in the three windows. Whether a crossing
-predicted days ahead happens inside a given observation is a position question, of timing, before
-it is a crossing question, of geometry.
+Two horizons come out of it, and they answer different questions; both are computed per altitude
+band of the reference benchmark, and an object is scored against its own band's trials
+(`docs/radio-horizon.md`, the band table). The **crossing horizon**, governed by the cross-track
+error, answers whether an object crossed the beam during an observation: the cross-track residual
+stays under 3.4 arcmin at the 95th percentile at every lead in every window in every band, against
+thresholds of 8 to 35 arcmin, so the crossing horizon is the benchmark's full seven days in every
+band and window at every receiver, with one exception, 5 days at 600 to 750 km in the August 2024
+window; the time of the crossing is known to the along-track shift, at 400 to 600 km 0.2 s at the
+95th percentile at 6 hours in every window and, at seven days, 8 s in the quiet week, 25 s in May,
+72 s in October and 29 s in August. The **position horizon**, governed by the along-track error,
+answers where an object is at an instant to within a third of the beam, and it is the number that
+moves, with the storm and with altitude: at the L-band centre **24, 12, 6 and 12 hours at 400 to
+600 km in the quiet, May, October and August windows**; 24, 24, 12 and 36 hours at 600 to 750 km;
+6 days, 2 days, 6 hours and 3 days at 750 to 850 km; 7, 7, 3 and 7 days at 850 to 1,000 km; 7, 3, 7
+and 7 days at 1,338 km. **S-band position prediction from public element sets is not possible at
+any element-set age at 400 to 600 km**: at the top of the band the position horizon is under
+6 hours, the benchmark's shortest lead, in every window. Higher it is possible: at the top of S band
+12 hours in the quiet and May windows at 600 to 750 km, 3 days in the quiet week at 750 to 850 km,
+the full seven days in the quiet week at 850 to 1,000 km with 12 hours to 4 days in the storms, and
+seven days in every window but May at 1,338 km. Whether a crossing predicted days ahead happens
+inside a given observation is a position question, of timing, before it is a crossing question, of
+geometry.
 
-**Population.** The benchmark covers three near-circular satellites at 460 to 506 km that did not
-manoeuvre inside the trials kept. The two measured horizons are attached only to objects between
-400 and 600 km with an eccentricity under 0.02 and an element set no older than the benchmark's
-seven days; every other object, which includes all of GNSS, Iridium, Globalstar, Inmarsat and
-OneWeb, carries *no measured horizon* for both and the reason. A Starlink satellite at 550 km carries the label by
-altitude; it is station-kept, and nothing in the benchmark measured a station-kept object's error
-through a burn, which the reports say. SpaceX's published ephemerides are not archived, so a
-retrospective on 2024 has none to use and every Starlink falls to the catalogue.
+**Population.** The band table on `docs/radio-horizon.md`: fifteen spacecraft with a public
+reconstructed orbit, near-circular and free-flying between manoeuvres, in five altitude bands, 460
+to 507 km (Swarm A, B, C; GRACE-FO 1, 2), 696 to 719 km (Sentinel-1A, CryoSat-2), 783 to 803 km
+(SARAL, Sentinel-3A, 3B), 893 to 952 km (SWOT, HY-2C, 2D) and 1,338 km (Jason-3, Sentinel-6A), one
+week of element sets in each of four windows. The two measured horizons are attached only to
+objects whose mean altitude falls in one of the bands, 400 to 1,400 km, with an eccentricity under
+0.02 and an element set no older than the benchmark's seven days, each scored against its own
+band's trials; every other object, which includes all of GNSS, Globalstar at 1,414 km and Inmarsat,
+carries *no measured horizon* for both and the reason. A Starlink satellite at 550 km, an Iridium
+at 780 km or a OneWeb at 1,200 km carries the label by altitude; they are station-kept, and nothing
+in the benchmark measured a station-kept object's error through a burn, which the reports say.
+SpaceX's published ephemerides are not archived, so a retrospective on 2024 has none to use and
+every Starlink falls to the catalogue.
 
 **Real observations, and where they come from.** The SARAO archive carries the pointing, start,
 duration and band of every released MeerKAT observation, and its documented route for reading
@@ -105,7 +116,9 @@ Read from the archive's own help page (archive.sarao.ac.za/help) and terms of us
   the materials on this website for personal, non-commercial use only, provided you do not modify
   the materials and that you retain all copyright and other proprietary notices contained in the
   materials", and forbid mirroring. The export is a metadata table of public observations with the
-  archive's own identifiers in every row; no data product is copied. The archive's acknowledgement
+  archive's own identifiers in every row; no data product is copied; the table stays outside the
+  repository (`data/archive/` is ignored), and a period report cites a record by its capture block and
+  proposal identifiers and reproduces none of the archive's descriptive text. The archive's acknowledgement
   statement for publications using MeerKAT data is: "The MeerKAT telescope is operated by the
   South African Radio Astronomy Observatory, which is a facility of the National Research
   Foundation, an agency of the Department of Science and Innovation."
@@ -202,17 +215,18 @@ predictor with orbit-source provenance, not a radio tool, and carries no per-obj
 ```powershell
 uv run driftwatch radio horizon      # docs/radio-horizon.md, data/radio/horizon.json, data/radio/swarm_trials.csv
 uv run driftwatch radio emissions    # docs/radio-emissions.md
-uv run driftwatch radio archive quiet-2024-04   # needs SARAO_ARCHIVE_TOKEN; writes data/radio/observations/quiet-2024-04.csv
+uv run driftwatch radio archive quiet-2024-04   # needs SARAO_ARCHIVE_TOKEN; writes data/archive/sarao/quiet-2024-04.csv (ignored)
 uv run driftwatch radio archive storm-2024-05
-uv run driftwatch radio period quiet-2024-04 --observations data/radio/observations/quiet-2024-04.csv
-uv run driftwatch radio period storm-2024-05 --observations data/radio/observations/storm-2024-05.csv
+uv run driftwatch radio period quiet-2024-04 --observations data/archive/sarao/quiet-2024-04.csv
+uv run driftwatch radio period storm-2024-05 --observations data/archive/sarao/storm-2024-05.csv
 ```
 
 `radio horizon` reads the benchmark's per-trial file where it exists and otherwise the exported
 CSV beside the page, so the table recomputes from the repository. `radio archive` reads the
 period's observations from the SARAO archive's documented GraphQL API with the token in
 `SARAO_ARCHIVE_TOKEN` (read-only, paced, metadata only, public records past the proprietary period
-only) into that CSV, keeping rows from other sources. `radio period` needs the element-set history
+only) into a CSV under `data/archive/sarao/`, which the repository ignores, with the public-record rows
+of `data/radio/observations/` kept above the export. `radio period` needs the element-set history
 for the period in the local store (`data/history/`), which the Space-Track backfill writes, and an
 observation CSV with the columns `observation_id, target, ra, dec, start_utc, duration_s, band,
 centre_mhz, source, note`.

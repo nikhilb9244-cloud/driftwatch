@@ -113,8 +113,10 @@ def _trials(cross_km: float, in_track_km: float, altitude_km: float = 500.0, win
         for k in range(10):
             rows.append(
                 {
+                    "mission": "swarm-a",
                     "satellite": "A",
                     "norad_id": 39452,
+                    "altitude_band": horizon.band_of(altitude_km),
                     "window": window,
                     "set_epoch": pd.Timestamp("2024-04-20T00:00:00"),
                     "lead_h": lead,
@@ -134,7 +136,7 @@ def test_horizon_table_fraction_is_one_when_cross_track_is_inside_a_third_of_the
     table = horizon.horizon_table(t)
     col = horizon.receiver_column(RECEIVERS["L"])
     assert (table[col.crossing_key] == 1.0).all()
-    assert horizon.horizon_hours(table, col) == {"quiet": 24.0, "storm": None, "held-out": None}
+    assert horizon.horizon_hours(table, col) == {"quiet": 24.0}, "only the windows present are reported"
     assert horizon.crossing_horizon_hours(table, col) == horizon.horizon_hours(table, col, which="crossing")
     # 0.1 km at 500 km is 0.69 arcmin; the table carries the median and p95 in arcmin.
     assert table["cross_median_arcmin"].iloc[0] == pytest.approx(60 * np.degrees(0.1 / 500), rel=1e-3)
@@ -159,16 +161,19 @@ def test_the_two_horizons_are_separate_quantities():
     assert horizon.horizon_hours(table, col, which="crossing")["quiet"] == 24.0
     assert horizon.horizon_hours(table, col, which="position")["quiet"] is None
     both = horizon.horizons(table, [col])
-    assert both["crossing"][col.key]["quiet"] == 24.0 and both["position"][col.key]["quiet"] is None
+    band = "400-600 km"
+    assert both["crossing"][band][col.key]["quiet"] == 24.0 and both["position"][band][col.key]["quiet"] is None
     u = horizon.crossing_uncertainty(t, "quiet", 3.0, 500.0, 1.0, 1.0, col.fwhm_deg)
     assert u is not None and u.crossing_fraction_inside == 1.0 and u.position_fraction_inside == 0.0
-    payload = horizon.to_json(table, [col])
-    assert payload["crossing_horizon_hours"][col.key]["quiet"] == 24.0
-    assert payload["position_horizon_hours"][col.key]["quiet"] is None
+    payload = horizon.to_json(table, [col], trials=t)
+    assert payload["crossing_horizon_hours"][band][col.key]["quiet"] == 24.0
+    assert payload["position_horizon_hours"][band][col.key]["quiet"] is None
     assert {"crossing_horizon", "position_horizon"} <= set(payload["definitions"])
-    statements = horizon.horizon_statements(table, horizon.table_columns())
-    assert any("crossing horizon holds for the full 24 h in every window" in s for s in statements)
-    assert any("S-band position prediction from public element sets is not possible" in s for s in statements)
+    assert payload["population"][band]["spacecraft"] == ["Swarm A"] and payload["bands"] == [band]
+    statements = horizon.horizon_statements(table, horizon.table_columns(), band=band)
+    assert any("crossing horizon at 400-600 km holds for the full 24 h in every window" in s for s in statements)
+    assert any("is not possible at any element-set age" in s for s in statements)
+    assert horizon.population_sentence(t) == "400-600 km (500 to 500 km): Swarm A; sets 1 quiet"
     assert horizon.format_lead(None) == "under 6 h" and horizon.format_lead(168.0) == "7 d"
 
 
@@ -193,10 +198,12 @@ def test_crossing_uncertainty_projects_the_residual_onto_the_sky():
     assert horizon.crossing_uncertainty(t, "storm", 3.0, 1000.0, 1.0, 1.0, 1.12) is None
 
 
-def test_population_label_states_the_reason():
-    assert crossings.population_label(500.0, 0.001, 1.0) == ("measured", crossings.MEASURED_POPULATION)
+def test_population_label_states_the_band_or_the_reason():
+    assert crossings.population_label(500.0, 0.001, 1.0) == ("measured", "400-600 km")
+    assert crossings.population_label(800.0, 0.001, 1.0) == ("measured", "750-850 km")
     assert crossings.population_label(20000.0, 0.001, 1.0)[0] == "no measured horizon"
-    assert "outside the 400 to 600 km" in crossings.population_label(800.0, 0.001, 1.0)[1]
+    outside = crossings.population_label(800.0, 0.001, 1.0, bands=["400-600 km"])[1]
+    assert "outside the measured altitude bands (400-600 km)" in outside
     assert "eccentricity" in crossings.population_label(500.0, 0.1, 1.0)[1]
     assert "days old" in crossings.population_label(500.0, 0.001, 9.0)[1]
 
@@ -326,7 +333,7 @@ def test_an_object_outside_the_benchmark_population_carries_no_measured_horizon(
     obs = _observation(sat, t, "test-high")
     cat = _catalogue_for(sat, "HIGH OBJECT", t, obs.start)
     (c,) = crossings.beam_crossings(cat, MEERKAT, obs, _trials(0.2, 1.0), crossings.PERIODS["quiet-2024-04"])
-    assert c.population == "no measured horizon" and "outside the 400 to 600 km" in c.population_reason
+    assert c.population == "no measured horizon" and "outside the measured altitude bands" in c.population_reason
     assert c.crossing_horizon == "no measured horizon" and c.position_horizon == "no measured horizon"
     assert c.cross_track_uncertainty_deg is None and c.along_track_shift_s is None
 

@@ -4,9 +4,9 @@ Acciarini, G., Baydin, A. G., Izzo, D. (2025), Closing the gap between SGP4 and 
 
 The published hybrid was trained on an operator's predictions in a quiet week: SpaceX's published Starlink ephemerides, the operator's own propagation, over about a week without a storm. The storm result here is new.
 
-**What was done.** 1228 trial sets from 15 mission(s) over 4 windows; the hybrids trained on the 639 sets of the quiet and May windows only, with the reconstructed orbit sampled hourly to seven days, corrections starting at zero, hidden size 35; scored at the benchmark's leads in the truth's radial, in-track, cross-track frame against plain SGP4, dsgp4 with both gravity constants, and the storm term with the observed ap.
+**What was done.** 1201 trial sets from 15 mission(s) over 4 windows; the hybrids trained on the 625 sets of the quiet and May windows only, with the reconstructed orbit sampled hourly to seven days, corrections starting at zero, hidden size 35; scored at the benchmark's leads in the truth's radial, in-track, cross-track frame against plain SGP4, dsgp4 with both gravity constants, and the storm term with the observed ap.
 
-**Training.** ML-dSGP4 (Swarm): 18648 samples from 111 sets, 40 epochs of 4096 at learning rate 0.001, loss 6.80e-06 at the zero start, 7.24e-06 after the first epoch, 6.66e-06 at the best, 22 s; ML-dSGP4 (all missions): 107352 samples from 639 sets, 40 epochs of 4096 at learning rate 0.001, loss 1.81e-06 at the zero start, 2.10e-06 after the first epoch, 1.61e-06 at the best, 141 s.
+**Training.** ML-dSGP4 (Swarm): 18648 samples from 111 sets, 40 epochs of 4096 at learning rate 0.001, loss 6.80e-06 at the zero start, 7.24e-06 after the first epoch, 6.66e-06 at the best, 23 s; ML-dSGP4 (all missions): 105000 samples from 625 sets, 40 epochs of 4096 at learning rate 0.001, loss 1.84e-06 at the zero start, 2.05e-06 after the first epoch, 1.63e-06 at the best, 138 s.
 
 ## The in-track residual by window and lead, per method
 
@@ -16,61 +16,61 @@ Median absolute in-track residual, km, against the reconstructed orbit, on the s
 
 | Lead | n | sgp4 (library, WGS72) | dsgp4 (WGS72) | dsgp4 (WGS-84) | ML-dSGP4 (Swarm) | ML-dSGP4 (all missions) | sgp4 + storm term (observed ap) |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 6 h | 297 | 0.50 | 0.50 | 0.50 | 11.50 | 2.87 | 0.50 |
-| 12 h | 293 | 0.40 | 0.40 | 0.42 | 11.06 | 2.38 | 0.42 |
-| 24 h | 285 | 0.45 | 0.45 | 0.47 | 12.78 | 2.96 | 0.52 |
-| 36 h | 276 | 0.60 | 0.60 | 0.61 | 16.32 | 3.32 | 0.59 |
-| 2 d | 266 | 0.73 | 0.73 | 0.79 | 18.13 | 4.40 | 0.83 |
-| 3 d | 248 | 1.49 | 1.49 | 1.51 | 23.46 | 8.29 | 1.95 |
-| 4 d | 230 | 2.01 | 2.01 | 2.04 | 35.53 | 11.32 | 3.01 |
-| 5 d | 211 | 3.06 | 3.06 | 3.22 | 39.60 | 13.46 | 4.75 |
-| 6 d | 196 | 4.02 | 4.02 | 4.03 | 45.29 | 16.69 | 6.36 |
-| 7 d | 185 | 5.88 | 5.88 | 5.79 | 46.90 | 20.88 | 21.31 |
+| 6 h | 292 | 0.50 | 0.50 | 0.50 | 11.59 | 7.14 | 0.50 |
+| 12 h | 288 | 0.40 | 0.40 | 0.42 | 11.52 | 6.94 | 0.41 |
+| 24 h | 280 | 0.45 | 0.45 | 0.47 | 14.16 | 6.99 | 0.52 |
+| 36 h | 271 | 0.60 | 0.60 | 0.61 | 18.00 | 7.90 | 0.58 |
+| 2 d | 261 | 0.72 | 0.72 | 0.78 | 19.62 | 8.39 | 0.82 |
+| 3 d | 243 | 1.45 | 1.45 | 1.46 | 24.07 | 10.59 | 1.74 |
+| 4 d | 225 | 2.00 | 2.00 | 2.03 | 36.30 | 15.28 | 2.98 |
+| 5 d | 206 | 3.04 | 3.04 | 3.06 | 43.06 | 19.58 | 4.37 |
+| 6 d | 192 | 3.83 | 3.83 | 3.80 | 45.41 | 22.90 | 5.83 |
+| 7 d | 185 | 5.88 | 5.88 | 5.79 | 46.90 | 22.41 | 21.31 |
 
 ### held-out (held out)
 
 | Lead | n | sgp4 (library, WGS72) | dsgp4 (WGS72) | dsgp4 (WGS-84) | ML-dSGP4 (Swarm) | ML-dSGP4 (all missions) | sgp4 + storm term (observed ap) |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 6 h | 292 | 0.58 | 0.58 | 0.57 | 12.78 | 6.93 | 0.55 |
-| 12 h | 287 | 0.53 | 0.53 | 0.54 | 12.22 | 6.34 | 0.53 |
-| 24 h | 284 | 0.65 | 0.65 | 0.67 | 14.89 | 6.32 | 0.61 |
-| 36 h | 275 | 0.93 | 0.93 | 0.92 | 16.31 | 7.47 | 0.88 |
-| 2 d | 267 | 1.34 | 1.34 | 1.34 | 23.54 | 7.03 | 0.93 |
-| 3 d | 253 | 2.59 | 2.59 | 2.63 | 35.17 | 8.48 | 2.01 |
-| 4 d | 235 | 3.93 | 3.93 | 3.87 | 50.06 | 11.23 | 6.00 |
-| 5 d | 222 | 5.08 | 5.08 | 5.04 | 81.94 | 11.85 | 7.16 |
-| 6 d | 209 | 6.59 | 6.59 | 6.66 | 83.63 | 13.60 | 8.15 |
-| 7 d | 195 | 11.09 | 11.09 | 11.05 | 87.22 | 17.82 | 10.75 |
+| 6 h | 284 | 0.58 | 0.58 | 0.57 | 13.94 | 5.21 | 0.55 |
+| 12 h | 279 | 0.54 | 0.54 | 0.54 | 13.02 | 4.56 | 0.53 |
+| 24 h | 276 | 0.64 | 0.64 | 0.67 | 15.19 | 4.71 | 0.61 |
+| 36 h | 267 | 0.93 | 0.93 | 0.92 | 16.61 | 6.11 | 0.88 |
+| 2 d | 259 | 1.34 | 1.34 | 1.34 | 25.89 | 7.07 | 0.93 |
+| 3 d | 245 | 2.68 | 2.68 | 2.66 | 38.19 | 8.98 | 2.05 |
+| 4 d | 227 | 4.04 | 4.04 | 3.97 | 66.44 | 11.52 | 6.40 |
+| 5 d | 214 | 5.18 | 5.18 | 5.07 | 82.50 | 13.01 | 7.26 |
+| 6 d | 201 | 6.72 | 6.72 | 6.79 | 85.30 | 13.98 | 8.84 |
+| 7 d | 187 | 11.20 | 11.20 | 11.06 | 91.78 | 15.69 | 11.27 |
 
 ### quiet (training)
 
 | Lead | n | sgp4 (library, WGS72) | dsgp4 (WGS72) | dsgp4 (WGS-84) | ML-dSGP4 (Swarm) | ML-dSGP4 (all missions) | sgp4 + storm term (observed ap) |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 6 h | 318 | 0.46 | 0.46 | 0.47 | 6.87 | 2.28 | 0.46 |
-| 12 h | 315 | 0.42 | 0.42 | 0.43 | 7.60 | 2.29 | 0.41 |
-| 24 h | 311 | 0.43 | 0.43 | 0.42 | 7.57 | 1.72 | 0.45 |
-| 36 h | 305 | 0.56 | 0.56 | 0.56 | 7.78 | 1.56 | 0.63 |
-| 2 d | 303 | 0.58 | 0.58 | 0.58 | 8.34 | 1.64 | 0.67 |
-| 3 d | 293 | 0.72 | 0.72 | 0.74 | 10.34 | 1.45 | 0.89 |
-| 4 d | 284 | 1.07 | 1.07 | 1.06 | 14.23 | 1.35 | 1.13 |
-| 5 d | 281 | 1.15 | 1.15 | 1.18 | 22.73 | 1.36 | 1.51 |
-| 6 d | 280 | 1.34 | 1.34 | 1.41 | 34.97 | 2.01 | 1.78 |
-| 7 d | 280 | 2.20 | 2.20 | 2.15 | 45.84 | 2.68 | 1.85 |
+| 6 h | 312 | 0.46 | 0.46 | 0.46 | 6.97 | 2.48 | 0.45 |
+| 12 h | 309 | 0.42 | 0.42 | 0.43 | 7.60 | 2.58 | 0.41 |
+| 24 h | 305 | 0.42 | 0.42 | 0.42 | 7.57 | 2.12 | 0.45 |
+| 36 h | 299 | 0.56 | 0.56 | 0.56 | 7.55 | 2.02 | 0.63 |
+| 2 d | 297 | 0.58 | 0.58 | 0.58 | 8.34 | 1.83 | 0.67 |
+| 3 d | 287 | 0.71 | 0.71 | 0.73 | 10.34 | 1.59 | 0.87 |
+| 4 d | 278 | 1.06 | 1.06 | 1.03 | 16.56 | 1.51 | 1.13 |
+| 5 d | 275 | 1.15 | 1.15 | 1.14 | 23.51 | 1.64 | 1.50 |
+| 6 d | 274 | 1.22 | 1.22 | 1.30 | 37.64 | 2.08 | 1.74 |
+| 7 d | 274 | 2.04 | 2.04 | 2.13 | 45.98 | 2.91 | 1.84 |
 
 ### storm (training)
 
 | Lead | n | sgp4 (library, WGS72) | dsgp4 (WGS72) | dsgp4 (WGS-84) | ML-dSGP4 (Swarm) | ML-dSGP4 (all missions) | sgp4 + storm term (observed ap) |
 | ---: | ---: | ---: | ---: | ---: | ---: | ---: | ---: |
-| 6 h | 321 | 0.48 | 0.48 | 0.47 | 12.47 | 2.26 | 0.48 |
-| 12 h | 318 | 0.44 | 0.44 | 0.44 | 12.87 | 2.38 | 0.45 |
-| 24 h | 313 | 0.51 | 0.51 | 0.53 | 13.83 | 2.07 | 0.61 |
-| 36 h | 310 | 0.61 | 0.61 | 0.58 | 15.10 | 2.46 | 0.69 |
-| 2 d | 307 | 0.73 | 0.73 | 0.70 | 15.10 | 2.25 | 0.80 |
-| 3 d | 292 | 1.49 | 1.49 | 1.50 | 16.89 | 2.60 | 1.76 |
-| 4 d | 275 | 3.12 | 3.12 | 3.17 | 22.03 | 3.40 | 2.78 |
-| 5 d | 257 | 4.35 | 4.35 | 4.31 | 26.27 | 4.62 | 5.37 |
-| 6 d | 237 | 6.24 | 6.24 | 6.23 | 30.72 | 5.58 | 6.28 |
-| 7 d | 218 | 6.94 | 6.94 | 7.06 | 44.00 | 6.33 | 7.47 |
+| 6 h | 313 | 0.48 | 0.48 | 0.47 | 12.53 | 2.36 | 0.48 |
+| 12 h | 310 | 0.44 | 0.44 | 0.44 | 13.06 | 2.56 | 0.45 |
+| 24 h | 305 | 0.51 | 0.51 | 0.52 | 14.03 | 2.10 | 0.60 |
+| 36 h | 302 | 0.61 | 0.61 | 0.58 | 15.39 | 2.42 | 0.69 |
+| 2 d | 299 | 0.75 | 0.75 | 0.74 | 15.59 | 2.03 | 0.84 |
+| 3 d | 284 | 1.52 | 1.52 | 1.52 | 17.07 | 2.82 | 1.77 |
+| 4 d | 267 | 3.25 | 3.25 | 3.24 | 23.30 | 3.56 | 3.14 |
+| 5 d | 249 | 4.52 | 4.52 | 4.68 | 27.77 | 4.98 | 5.57 |
+| 6 d | 231 | 6.43 | 6.43 | 6.50 | 30.72 | 5.79 | 6.49 |
+| 7 d | 215 | 7.08 | 7.08 | 7.25 | 41.66 | 6.94 | 7.72 |
 
 ## Change against plain SGP4
 
@@ -78,51 +78,51 @@ Each method's change to the median absolute in-track residual, relative to the s
 
 | Window | Lead | dsgp4 (WGS72) | dsgp4 (WGS-84) | ML-dSGP4 (Swarm) | ML-dSGP4 (all missions) | sgp4 + storm term (observed ap) |
 | --- | ---: | ---: | ---: | ---: | ---: | ---: |
-| august | 6 h | -0% | -0% | -2211% | -476% | -1% |
-| august | 12 h | -0% | -4% | -2638% | -490% | -3% |
-| august | 24 h | +0% | -5% | -2735% | -556% | -15% |
-| august | 36 h | -0% | -1% | -2613% | -452% | +2% |
-| august | 2 d | -0% | -9% | -2400% | -507% | -14% |
-| august | 3 d | +0% | -2% | -1478% | -458% | -31% |
-| august | 4 d | -0% | -2% | -1664% | -462% | -49% |
-| august | 5 d | +0% | -5% | -1195% | -340% | -55% |
-| august | 6 d | +0% | -0% | -1027% | -316% | -58% |
-| august | 7 d | -0% | +1% | -698% | -255% | -263% |
-| held-out | 6 h | -0% | +2% | -2100% | -1093% | +5% |
-| held-out | 12 h | -0% | -2% | -2212% | -1099% | +0% |
-| held-out | 24 h | -0% | -5% | -2207% | -880% | +5% |
-| held-out | 36 h | +0% | +1% | -1651% | -703% | +6% |
-| held-out | 2 d | +0% | +0% | -1657% | -425% | +31% |
-| held-out | 3 d | +0% | -2% | -1257% | -227% | +23% |
-| held-out | 4 d | +0% | +2% | -1173% | -186% | -53% |
-| held-out | 5 d | +0% | +1% | -1513% | -133% | -41% |
-| held-out | 6 d | -0% | -1% | -1169% | -106% | -24% |
-| held-out | 7 d | -0% | +0% | -687% | -61% | +3% |
-| quiet | 6 h | -0% | -2% | -1395% | -397% | +1% |
-| quiet | 12 h | -0% | -2% | -1714% | -447% | +2% |
-| quiet | 24 h | +0% | +2% | -1678% | -304% | -7% |
-| quiet | 36 h | +0% | -0% | -1294% | -180% | -13% |
-| quiet | 2 d | -0% | -1% | -1338% | -182% | -16% |
-| quiet | 3 d | -0% | -3% | -1331% | -100% | -24% |
-| quiet | 4 d | +0% | +1% | -1232% | -26% | -6% |
-| quiet | 5 d | +0% | -3% | -1881% | -18% | -32% |
-| quiet | 6 d | -0% | -6% | -2515% | -50% | -33% |
-| quiet | 7 d | +0% | +2% | -1987% | -22% | +16% |
-| storm | 6 h | -0% | +2% | -2513% | -374% | -1% |
-| storm | 12 h | +0% | +2% | -2793% | -434% | -1% |
-| storm | 24 h | -0% | -3% | -2605% | -305% | -19% |
-| storm | 36 h | +0% | +5% | -2388% | -306% | -14% |
-| storm | 2 d | -0% | +4% | -1963% | -207% | -10% |
-| storm | 3 d | +0% | -1% | -1035% | -75% | -18% |
-| storm | 4 d | +0% | -2% | -606% | -9% | +11% |
-| storm | 5 d | +0% | +1% | -503% | -6% | -23% |
-| storm | 6 d | +0% | +0% | -392% | +11% | -1% |
-| storm | 7 d | +0% | -2% | -534% | +9% | -8% |
+| august | 6 h | -0% | -0% | -2222% | -1331% | -1% |
+| august | 12 h | +0% | -4% | -2758% | -1621% | -3% |
+| august | 24 h | +0% | -4% | -3041% | -1452% | -15% |
+| august | 36 h | -0% | -2% | -2905% | -1219% | +2% |
+| august | 2 d | -0% | -8% | -2611% | -1059% | -14% |
+| august | 3 d | -0% | -1% | -1565% | -632% | -21% |
+| august | 4 d | -0% | -1% | -1711% | -662% | -49% |
+| august | 5 d | +0% | -1% | -1317% | -544% | -44% |
+| august | 6 d | +0% | +1% | -1087% | -498% | -52% |
+| august | 7 d | -0% | +1% | -698% | -281% | -263% |
+| held-out | 6 h | -0% | +2% | -2299% | -797% | +5% |
+| held-out | 12 h | +0% | -1% | -2329% | -751% | +1% |
+| held-out | 24 h | -0% | -4% | -2260% | -632% | +5% |
+| held-out | 36 h | -0% | +1% | -1677% | -554% | +6% |
+| held-out | 2 d | +0% | +0% | -1825% | -425% | +31% |
+| held-out | 3 d | +0% | +1% | -1322% | -235% | +24% |
+| held-out | 4 d | +0% | +2% | -1546% | -185% | -59% |
+| held-out | 5 d | +0% | +2% | -1494% | -151% | -40% |
+| held-out | 6 d | -0% | -1% | -1169% | -108% | -31% |
+| held-out | 7 d | +0% | +1% | -720% | -40% | -1% |
+| quiet | 6 h | -0% | -0% | -1419% | -442% | +2% |
+| quiet | 12 h | -0% | -3% | -1721% | -519% | +3% |
+| quiet | 24 h | +0% | +0% | -1707% | -407% | -8% |
+| quiet | 36 h | +0% | +0% | -1255% | -262% | -13% |
+| quiet | 2 d | +0% | +0% | -1341% | -216% | -15% |
+| quiet | 3 d | -0% | -3% | -1360% | -125% | -23% |
+| quiet | 4 d | +0% | +3% | -1461% | -43% | -7% |
+| quiet | 5 d | +0% | +0% | -1951% | -43% | -31% |
+| quiet | 6 d | -0% | -7% | -2984% | -71% | -43% |
+| quiet | 7 d | +0% | -4% | -2150% | -42% | +10% |
+| storm | 6 h | +0% | +2% | -2497% | -389% | -0% |
+| storm | 12 h | +0% | +2% | -2835% | -476% | -1% |
+| storm | 24 h | +0% | -3% | -2661% | -313% | -18% |
+| storm | 36 h | +0% | +5% | -2435% | -299% | -14% |
+| storm | 2 d | +0% | +1% | -1982% | -171% | -12% |
+| storm | 3 d | +0% | +0% | -1021% | -85% | -16% |
+| storm | 4 d | +0% | +0% | -617% | -9% | +3% |
+| storm | 5 d | +0% | -4% | -515% | -10% | -23% |
+| storm | 6 d | -0% | -1% | -378% | +10% | -1% |
+| storm | 7 d | +0% | -2% | -489% | +2% | -9% |
 
 ## The recommendation
 
-- **ML-dSGP4 (Swarm)**: do not adopt (adopt only if the held-out storms improve). Held out: held-out: 0 of 10 leads improved, median change -1582%, worst -2212%; august: 0 of 10 leads improved, median change -1937%, worst -2735%.
-- **ML-dSGP4 (all missions)**: do not adopt (adopt only if the held-out storms improve). Held out: held-out: 0 of 10 leads improved, median change -326%, worst -1099%; august: 0 of 10 leads improved, median change -460%, worst -556%.
+- **ML-dSGP4 (Swarm)**: do not adopt (adopt only if the held-out storms improve). Held out: held-out: 0 of 10 leads improved, median change -1612%, worst -2329%; august: 0 of 10 leads improved, median change -1967%, worst -3041%.
+- **ML-dSGP4 (all missions)**: do not adopt (adopt only if the held-out storms improve). Held out: held-out: 0 of 10 leads improved, median change -330%, worst -797%; august: 0 of 10 leads improved, median change -860%, worst -1621%.
 
 ## What this does not show
 

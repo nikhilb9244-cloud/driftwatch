@@ -3443,17 +3443,21 @@ def cmd_radio_horizon(args: argparse.Namespace) -> int:
     if args.json:
         Path(args.json).parent.mkdir(parents=True, exist_ok=True)
         Path(args.json).write_text(
-            json.dumps(radio_horizon.to_json(table, source=source), indent=1) + "\n", encoding="utf-8"
+            json.dumps(radio_horizon.to_json(table, source=source, trials=trials), indent=1) + "\n",
+            encoding="utf-8",
         )
         log.info("Wrote %s", args.json)
     log.info("Trials exported to %s (%d usable trials from %s)", csv_path, len(trials), source)
-    for c in radio_horizon.table_columns():
-        log.info(
-            "Horizons %s: crossing %s; position %s",
-            c.key,
-            radio_horizon.horizon_hours(table, c, which="crossing"),
-            radio_horizon.horizon_hours(table, c, which="position"),
-        )
+    both = radio_horizon.horizons(table)
+    for band in radio_horizon.bands_present(table):
+        for c in radio_horizon.table_columns():
+            log.info(
+                "Horizons %s %s: crossing %s; position %s",
+                band,
+                c.key,
+                both["crossing"][band][c.key],
+                both["position"][band][c.key],
+            )
     return 0
 
 
@@ -3495,8 +3499,11 @@ def cmd_radio_archive(args: argparse.Namespace) -> int:
         print(f"{len(records)} record(s) listed for {period.label}; nothing written")
         return 0
     export = radio_archive.select_pointings(records, bands=bands, first_day=period.start, last_day=period.end)
-    out = Path(args.out) if args.out else config.DATA_DIR / "radio" / "observations" / f"{period.name}.csv"
-    radio_archive.write_observation_csv(export, out, keep_other_sources=not args.replace)
+    out = Path(args.out) if args.out else radio_archive.EXPORT_DIR / f"{period.name}.csv"
+    base = config.DATA_DIR / "radio" / "observations" / f"{period.name}.csv"
+    radio_archive.write_observation_csv(
+        export, out, keep_other_sources=not args.replace, base=None if args.replace else base
+    )
     log.info(
         "Archive: %d record(s) listed, %d pointing(s) in %d capture block(s) kept, excluded %s; wrote %s",
         export.n_records,
@@ -3604,6 +3611,7 @@ def cmd_radio_period(args: argparse.Namespace) -> int:
         table,
         elevation_deg=args.elevation,
         observation_sources=args.observation_sources or "",
+        population=radio_horizon.population_sentence(trials),
     )
     report_path = Path(args.report) if args.report else Path("docs") / "radio" / f"{period.name}.md"
     report_path.parent.mkdir(parents=True, exist_ok=True)
@@ -4190,9 +4198,11 @@ def build_parser() -> argparse.ArgumentParser:
     )
     ra.add_argument("period", help="quiet-2024-04 or storm-2024-05")
     ra.add_argument("--bands", default="UHF,L", help="receivers to keep (default UHF,L)")
-    ra.add_argument("--out", help="observation CSV (default data/radio/observations/<period>.csv)")
+    ra.add_argument("--out", help="observation CSV (default data/archive/sarao/<period>.csv, outside the repository)")
     ra.add_argument(
-        "--replace", action="store_true", help="drop rows from other sources already in the CSV (default: keep)"
+        "--replace",
+        action="store_true",
+        help="drop the public-record rows (data/radio/observations/<period>.csv) otherwise kept above the export",
     )
     ra.add_argument("--max-records", type=int, help="stop after this many records (default: all)")
     ra.add_argument(

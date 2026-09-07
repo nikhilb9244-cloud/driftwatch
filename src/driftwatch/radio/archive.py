@@ -572,21 +572,28 @@ CSV_COLUMNS = (
 )
 
 
+# The export directory is outside the repository (``data/archive/`` is ignored): the archive's terms permit
+# personal, non-commercial copies and forbid mirroring, so the metadata table stays local and the pages
+# cite the archive's identifiers rather than reproduce its records.
+EXPORT_DIR = config.DATA_DIR / "archive" / "sarao"
+
+
 def source_text(p: ArchivePointing, exported_at: datetime) -> str:
+    """The citation a page carries for the record: the archive and its identifiers, nothing copied from it."""
     return (
         f"SARAO MeerKAT archive ({ARCHIVE_URL}), capture block {p.capture_block_id}, proposal "
-        f"{p.proposal_id or 'not stated'}, observer {p.observer or 'not stated'}; metadata read through the "
-        f"archive's documented GraphQL API on {exported_at:%Y-%m-%d}; marked public by the archive"
+        f"{p.proposal_id or 'not stated'}; metadata read through the archive's documented GraphQL API on "
+        f"{exported_at:%Y-%m-%d}; marked public by the archive"
     )
 
 
 def note_text(p: ArchivePointing) -> str:
+    """What the pointing needs said about it; the archive's own descriptive text is not reproduced."""
     secs = "not stated" if p.integration_s is None else f"{p.integration_s:.0f} s"
     return (
         f"Target {p.target}, one of {p.n_targets} with a sky position in this capture block, integration {secs} of "
         f"the block's {p.duration_s:.0f} s; scan boundaries are not in the archive's metadata, so the whole block is "
         "searched and a crossing during another target's scan or a slew is counted with the rest."
-        + (f" Archive description: {p.description}" if p.description else "")
     )
 
 
@@ -594,20 +601,27 @@ def _fmt_time(t: datetime) -> str:
     return t.astimezone(UTC).strftime("%Y-%m-%dT%H:%M:%SZ")
 
 
-def write_observation_csv(export: Export, path: Path, *, keep_other_sources: bool = True) -> Path:
-    """Write the observation CSV: the archive's pointings, and any existing rows from other sources kept.
+def write_observation_csv(
+    export: Export, path: Path, *, keep_other_sources: bool = True, base: Path | None = None
+) -> Path:
+    """Write the observation CSV: the archive's pointings, and any rows from other sources kept.
 
-    Rows already in the file whose ``observation_id`` starts with ``sarao-`` are replaced by this
-    export; rows from other sources (a published circular, say) are kept above them.
+    Rows whose ``observation_id`` starts with ``sarao-`` are replaced by this export; rows from other
+    sources (a published circular, say) are kept above them, read from ``base`` (the repository's
+    public-record CSV) and from ``path`` itself when it already exists.
     """
     path = Path(path)
     kept: list[dict[str, str]] = []
-    if keep_other_sources and path.exists():
-        with path.open(encoding="utf-8", newline="") as fh:
+    seen: set[str] = set()
+    sources = [p for p in (base, path if keep_other_sources else None) if p is not None and Path(p).exists()]
+    for src in sources:
+        with Path(src).open(encoding="utf-8", newline="") as fh:
             for row in csv.DictReader(fh):
-                if row.get("observation_id", "").startswith("sarao-"):
+                oid = row.get("observation_id", "")
+                if oid.startswith("sarao-") or oid in seen:
                     continue
                 if any((v or "").strip() for v in row.values()):
+                    seen.add(oid)
                     kept.append({c: row.get(c, "") or "" for c in CSV_COLUMNS})
     rows = [
         {

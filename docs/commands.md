@@ -158,9 +158,10 @@ What works today:
   above ten degrees, counted, and every object whose track passes inside the half-power radius,
   with its closest approach, element-set age, cross-track angular uncertainty and horizon label --
   written as a report under `docs/radio/` and an export in the IAU CPS SatChecker field-of-view
-  shape under `data/radio/`. Observations come from a CSV; `driftwatch radio archive <name>` fills
-  it from the SARAO archive's documented GraphQL API with the token in `SARAO_ARCHIVE_TOKEN`
-  (read-only, paced, metadata only, public records past the proprietary period only); the history
+  shape under `data/radio/`. Observations come from a CSV; `driftwatch radio archive <name>` writes
+  one under `data/archive/sarao/` (ignored by the repository) from the SARAO archive's documented
+  GraphQL API with the token in `SARAO_ARCHIVE_TOKEN` (read-only, paced, metadata only, public
+  records past the proprietary period only, identifiers cited rather than records reproduced); the history
   for the period must be in `data/history/`. Geometry only: no received power, occupancy or
   sensitivity loss is computed.
 - `driftwatch local` runs an operator's own files through the provenance check, the CDM matcher

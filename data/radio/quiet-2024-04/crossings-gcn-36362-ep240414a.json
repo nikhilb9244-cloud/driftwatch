@@ -431,7 +431,7 @@
     "projection_cross": 0.9502746992440859,
     "projection_along": 0.9916482972869147,
     "population": "no measured horizon",
-    "population_reason": "mean altitude 878 km is outside the 400 to 600 km benchmark population",
+    "population_reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
     "crossing_horizon": "no measured horizon",
     "position_horizon": "no measured horizon",
     "crossing_fraction_inside": null,
@@ -466,7 +466,7 @@
     "projection_cross": 0.9958265500312503,
     "projection_along": 0.9514439469351353,
     "population": "no measured horizon",
-    "population_reason": "mean altitude 840 km is outside the 400 to 600 km benchmark population",
+    "population_reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
     "crossing_horizon": "no measured horizon",
     "position_horizon": "no measured horizon",
     "crossing_fraction_inside": null,
@@ -484,7 +484,7 @@
   "limits": [
    "Positions come from public element sets propagated with SGP4; no tracking, no orbit determination.",
    "cross_track_uncertainty_deg is the 95th percentile of the calibration benchmark's cross-track residual at the element set's age, projected on the sky at the crossing's range, and crossing_horizon says whether 95 per cent of the benchmark's trials at that age keep it under a third of the beam (inside) or not (outside): whether the object crossed the beam.",
-   "along_track_shift_s is the 95th percentile of the benchmark's along-track residual at that age as a time shift at the orbital speed, and position_horizon says whether the along-track angular error keeps the same coverage (inside) or not (outside): where the object is at an instant. Both horizons are null where the object is outside the benchmark's population, and both say so.",
+   "along_track_shift_s is the 95th percentile of the benchmark's along-track residual at that age as a time shift at the orbital speed, and position_horizon says whether the along-track angular error keeps the same coverage (inside) or not (outside): where the object is at an instant. Both horizons are null where the object is outside the benchmark's population, and both say so. The population is the altitude-band table of docs/radio-horizon.md: near-circular, free-flying spacecraft with a public reconstructed orbit, in bands from 400 to 1400 km, each object scored against its own band's trials; nothing is measured for debris, eccentric orbits or station-kept objects through a burn.",
    "Nothing here is a received power, an occupancy fraction or a sensitivity loss."
   ]
  }

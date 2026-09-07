@@ -206,7 +206,7 @@ Exactly one field. `RicCovariance` grows `mean_shift_ric_km`, an `(n, 3)` array 
 ```python
 @dataclass(frozen=True)
 class RicCovariance:
-    cov_km2: np.ndarray                       # (n, 3, 3)
+    cov_km2: np.ndarray  # (n, 3, 3)
     source: str
     mean_shift_ric_km: np.ndarray | None = None
 ```

@@ -1,5 +1,5 @@
 {
- "built_at": "2026-09-07T18:21:09.943545+00:00",
+ "built_at": "2026-09-07T22:28:17.735053+00:00",
  "period": {
   "name": "quiet-2024-04",
   "label": "quiet week, 20 to 27 April 2024",
@@ -24,7 +24,7 @@
   "epoch_max": "2024-04-27T23:59:59.376192+00:00",
   "history_dir": "data/history",
   "source": "Space-Track gp_history through driftwatch's history store; each object's newest set at or before the observation start, none later",
-  "benchmark_trials": "data/validation/swarm_benchmark.parquet"
+  "benchmark_trials": "data/validation/reference_benchmark.parquet"
  },
  "observations": [
   {
@@ -167,7 +167,7 @@
      "projection_cross": 0.9502746992440859,
      "projection_along": 0.9916482972869147,
      "population": "no measured horizon",
-     "population_reason": "mean altitude 878 km is outside the 400 to 600 km benchmark population",
+     "population_reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
      "crossing_horizon": "no measured horizon",
      "position_horizon": "no measured horizon",
      "crossing_fraction_inside": null,
@@ -202,7 +202,7 @@
      "projection_cross": 0.9958265500312503,
      "projection_along": 0.9514439469351353,
      "population": "no measured horizon",
-     "population_reason": "mean altitude 840 km is outside the 400 to 600 km benchmark population",
+     "population_reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
      "crossing_horizon": "no measured horizon",
      "position_horizon": "no measured horizon",
      "crossing_fraction_inside": null,

@@ -2,7 +2,7 @@
 
 Every number here is computed from the per-trial file beside `reference_benchmark.json`. The method is the Swarm benchmark's (`docs/calibration-benchmark.md`): every public element set issued in a window is one trial, propagated with SGP4 to leads from six hours to seven days and measured against the mission's reconstructed orbit in the satellite's radial, in-track, cross-track frame; the covariance and the ballistic coefficient on a window are fitted from history that ends where the window's sets begin. Two windows are held out from every tuning, October 2024 as before and August 2024 added here. Laser ranging is the second, independent truth where a mission carries a retroreflector: it is compared with the reconstructed orbit first, so that the disagreement between the two references is on the page before either is compared with an element set.
 
-**Population.** The measured population is 400-600 km: GRACE-FO 1 (C), GRACE-FO 2 (D), Swarm A, Swarm B, Swarm C (379 element sets, 460 to 507 km); 600-750 km: CryoSat-2, Sentinel-1A (181 element sets, 696 to 719 km); 750-850 km: SARAL, Sentinel-3A, Sentinel-3B (246 element sets, 783 to 803 km); 850-1000 km: HY-2C, HY-2D, SWOT (285 element sets, 893 to 952 km); 1000-1400 km: Jason-3, Sentinel-6A (137 element sets, 1338 to 1338 km); 4 windows of one week of element sets each; near-circular, free-flying between manoeuvres, with manoeuvre arcs excluded from a published record where one exists and from detection otherwise. Nothing here is measured for debris, for eccentric orbits, for station-kept constellations, for objects the network tracks less often, or above 1,340 km.
+**Population.** The measured population is 400-600 km: GRACE-FO 1 (C), GRACE-FO 2 (D), Swarm A, Swarm B, Swarm C (379 element sets, 460 to 507 km); 600-750 km: CryoSat-2, Sentinel-1A (169 element sets, 696 to 719 km); 750-850 km: SARAL, Sentinel-3A, Sentinel-3B (236 element sets, 783 to 803 km); 850-1000 km: HY-2C, HY-2D, SWOT (280 element sets, 893 to 952 km); 1000-1400 km: Jason-3, Sentinel-6A (137 element sets, 1338 to 1338 km); 4 windows of one week of element sets each; near-circular, free-flying between manoeuvres, with manoeuvre arcs excluded from a published record where one exists and from detection otherwise. Nothing here is measured for debris, for eccentric orbits, for station-kept constellations, for objects the network tracks less often, or above 1,340 km.
 
 ## Windows
 
@@ -51,8 +51,8 @@ Task: in-track residual within 25 km, the screening box's half-width, at the 95%
 | Altitude band | Missions | quiet | storm | held-out | august |
 | --- | --- | --- | --- | --- | --- |
 | 400-600 km | GRACE-FO 1 (C), GRACE-FO 2 (D), Swarm A, Swarm B, Swarm C | 5 d (37 km at 6 d) | 2 d (35 km at 3 d) | 24 h (34 km at 36 h) | 2 d (38 km at 3 d) |
-| 600-750 km | CryoSat-2, Sentinel-1A | 5 d (26 km at 6 d) | 5 d (27 km at 6 d) | 7 d (every lead measured) | 6 d (every lead measured) |
-| 750-850 km | SARAL, Sentinel-3A, Sentinel-3B | 7 d (every lead measured) | 7 d (every lead measured) | 3 d (26 km at 4 d) | 7 d (every lead measured) |
+| 600-750 km | CryoSat-2, Sentinel-1A | 5 d (26 km at 6 d) | 5 d (27 km at 6 d) | 7 d (every lead measured) | 5 d (every lead measured) |
+| 750-850 km | SARAL, Sentinel-3A, Sentinel-3B | 7 d (every lead measured) | 7 d (every lead measured) | 5 d (31 km at 6 d) | 7 d (every lead measured) |
 | 850-1000 km | HY-2C, HY-2D, SWOT | 7 d (every lead measured) | 7 d (every lead measured) | 7 d (every lead measured) | 7 d (every lead measured) |
 | 1000-1400 km | Jason-3, Sentinel-6A | 7 d (every lead measured) | 7 d (every lead measured) | 7 d (every lead measured) | 7 d (every lead measured) |
 
@@ -79,46 +79,46 @@ Median and 95th percentile of the absolute in-track residual, km, with the numbe
 
 | Lead | quiet: n, median, p95 | storm: n, median, p95 | held-out: n, median, p95 | august: n, median, p95 |
 | ---: | --- | --- | --- | --- |
-| 6 h | 48, 0.48, 1.2 | 49, 0.55, 1.1 | 43, 0.62, 2.3 | 41, 0.64, 1.5 |
-| 12 h | 48, 0.47, 1.2 | 48, 0.58, 1.7 | 42, 0.45, 4.3 | 39, 0.40, 1.9 |
-| 24 h | 46, 0.72, 3.2 | 45, 0.77, 2.3 | 41, 0.89, 6.7 | 36, 0.79, 2.3 |
-| 36 h | 45, 0.65, 4.9 | 43, 0.69, 5.0 | 38, 1.30, 9.6 | 31, 0.91, 3.9 |
-| 2 d | 44, 0.81, 7.4 | 40, 1.03, 8.4 | 35, 1.32, 9.7 | 27, 0.88, 6.1 |
-| 3 d | 40, 1.32, 11.3 | 35, 1.52, 13.1 | 29, 3.35, 10.5 | 21, 3.01, 7.2 |
-| 4 d | 38, 3.06, 16.7 | 31, 1.89, 19.4 | 24, 4.63, 11.2 | 14, 5.68, 8.7 |
-| 5 d | 38, 3.93, 20.6 | 26, 4.53, 22.0 | 20, 7.84, 19.2 | 6, 6.43, 7.0 |
-| 6 d | 38, 6.79, 25.8 | 21, 6.03, 26.5 | 15, 10.08, 16.3 | 2, 6.01, 6.3 |
-| 7 d | 38, 9.97, 31.5 | 18, 10.88, 27.4 | 10, 14.05, 21.7 | - |
+| 6 h | 45, 0.48, 1.2 | 44, 0.63, 1.1 | 41, 0.68, 2.3 | 39, 0.64, 1.5 |
+| 12 h | 45, 0.48, 1.2 | 43, 0.56, 1.7 | 40, 0.47, 4.5 | 37, 0.40, 2.0 |
+| 24 h | 43, 0.74, 3.2 | 40, 0.60, 2.4 | 39, 0.91, 6.7 | 34, 0.79, 2.3 |
+| 36 h | 42, 0.64, 5.0 | 38, 0.70, 5.2 | 36, 1.55, 9.6 | 29, 0.91, 3.9 |
+| 2 d | 41, 0.80, 7.6 | 35, 1.12, 8.5 | 33, 1.32, 10.0 | 25, 0.95, 6.2 |
+| 3 d | 37, 1.30, 11.4 | 30, 1.55, 13.4 | 27, 3.35, 11.1 | 19, 3.02, 7.3 |
+| 4 d | 35, 3.01, 16.9 | 26, 2.02, 19.5 | 22, 4.63, 11.3 | 12, 7.36, 8.7 |
+| 5 d | 35, 3.76, 20.9 | 21, 4.65, 22.1 | 18, 8.18, 21.2 | 4, 6.73, 7.1 |
+| 6 d | 35, 6.41, 26.1 | 18, 6.66, 26.6 | 13, 10.82, 16.3 | - |
+| 7 d | 35, 9.93, 32.0 | 18, 10.88, 27.4 | 8, 14.67, 21.8 | - |
 
 **750-850 km.**
 
 | Lead | quiet: n, median, p95 | storm: n, median, p95 | held-out: n, median, p95 | august: n, median, p95 |
 | ---: | --- | --- | --- | --- |
-| 6 h | 60, 0.68, 1.2 | 68, 0.71, 1.5 | 55, 0.85, 4.4 | 63, 0.55, 1.7 |
-| 12 h | 57, 0.26, 0.8 | 68, 0.36, 1.4 | 54, 0.37, 5.7 | 61, 0.37, 1.8 |
-| 24 h | 55, 0.58, 1.0 | 68, 0.49, 2.1 | 54, 0.58, 7.7 | 56, 0.57, 1.6 |
-| 36 h | 50, 0.43, 1.4 | 68, 0.58, 2.6 | 52, 0.58, 11.0 | 53, 0.34, 1.9 |
-| 2 d | 49, 0.70, 1.7 | 68, 0.91, 4.0 | 50, 0.71, 11.6 | 49, 0.71, 1.9 |
-| 3 d | 43, 0.79, 2.2 | 66, 2.11, 6.0 | 49, 1.21, 17.6 | 42, 1.13, 3.4 |
-| 4 d | 36, 0.76, 4.1 | 59, 3.37, 7.0 | 47, 1.68, 26.2 | 35, 1.35, 5.6 |
-| 5 d | 33, 1.14, 6.5 | 53, 5.48, 8.3 | 45, 2.01, 36.7 | 28, 2.74, 7.2 |
-| 6 d | 32, 1.39, 7.7 | 46, 6.40, 10.9 | 42, 2.33, 49.9 | 20, 3.86, 11.6 |
-| 7 d | 32, 1.82, 9.2 | 38, 6.10, 9.5 | 37, 2.74, 31.9 | 18, 4.69, 12.9 |
+| 6 h | 57, 0.68, 1.1 | 68, 0.71, 1.5 | 51, 0.85, 4.6 | 60, 0.55, 1.6 |
+| 12 h | 54, 0.23, 0.8 | 68, 0.36, 1.4 | 50, 0.38, 5.4 | 58, 0.37, 1.7 |
+| 24 h | 52, 0.57, 1.0 | 68, 0.49, 2.1 | 50, 0.58, 6.6 | 53, 0.58, 1.5 |
+| 36 h | 47, 0.42, 1.2 | 68, 0.58, 2.6 | 48, 0.61, 9.1 | 50, 0.35, 1.8 |
+| 2 d | 46, 0.69, 1.5 | 68, 0.91, 4.0 | 46, 0.72, 5.0 | 46, 0.69, 1.8 |
+| 3 d | 40, 0.77, 1.9 | 66, 2.11, 6.0 | 45, 1.39, 7.1 | 39, 1.12, 3.4 |
+| 4 d | 33, 0.76, 3.0 | 59, 3.37, 7.0 | 43, 1.85, 10.9 | 32, 1.40, 4.9 |
+| 5 d | 30, 1.11, 4.8 | 53, 5.48, 8.3 | 41, 2.45, 15.5 | 25, 2.74, 6.4 |
+| 6 d | 29, 1.36, 4.4 | 46, 6.40, 10.9 | 38, 2.33, 31.0 | 18, 3.86, 9.3 |
+| 7 d | 29, 1.81, 6.3 | 38, 6.10, 9.5 | 33, 2.74, 17.1 | 18, 4.69, 12.9 |
 
 **850-1000 km.**
 
 | Lead | quiet: n, median, p95 | storm: n, median, p95 | held-out: n, median, p95 | august: n, median, p95 |
 | ---: | --- | --- | --- | --- |
-| 6 h | 78, 0.45, 0.9 | 80, 0.29, 0.8 | 62, 0.33, 1.3 | 65, 0.44, 0.9 |
-| 12 h | 78, 0.38, 0.8 | 78, 0.35, 1.0 | 59, 0.38, 1.8 | 65, 0.39, 1.0 |
-| 24 h | 78, 0.39, 0.8 | 76, 0.38, 0.8 | 57, 0.36, 2.3 | 65, 0.36, 1.0 |
-| 36 h | 78, 0.35, 0.8 | 75, 0.27, 1.0 | 53, 0.53, 3.6 | 64, 0.43, 1.3 |
-| 2 d | 78, 0.39, 0.8 | 75, 0.31, 0.9 | 50, 0.53, 4.1 | 62, 0.36, 1.3 |
-| 3 d | 78, 0.48, 1.0 | 70, 0.45, 1.5 | 43, 0.66, 6.2 | 57, 0.34, 1.4 |
-| 4 d | 78, 0.63, 1.3 | 66, 1.13, 2.7 | 35, 0.85, 10.7 | 53, 0.78, 1.9 |
-| 5 d | 78, 0.67, 1.3 | 61, 1.78, 3.9 | 32, 1.38, 15.8 | 49, 1.33, 2.4 |
-| 6 d | 78, 0.44, 1.1 | 56, 2.11, 4.4 | 31, 1.28, 20.0 | 46, 1.33, 3.1 |
-| 7 d | 78, 0.94, 2.0 | 51, 2.93, 4.9 | 31, 3.53, 23.8 | 39, 1.31, 4.6 |
+| 6 h | 78, 0.45, 0.9 | 77, 0.30, 0.9 | 60, 0.33, 1.2 | 65, 0.44, 0.9 |
+| 12 h | 78, 0.38, 0.8 | 75, 0.35, 1.1 | 57, 0.37, 1.4 | 65, 0.39, 1.0 |
+| 24 h | 78, 0.39, 0.8 | 73, 0.38, 0.8 | 55, 0.36, 2.2 | 65, 0.36, 1.0 |
+| 36 h | 78, 0.35, 0.8 | 72, 0.27, 1.0 | 51, 0.53, 3.2 | 64, 0.43, 1.3 |
+| 2 d | 78, 0.39, 0.8 | 72, 0.31, 0.9 | 48, 0.53, 3.2 | 62, 0.36, 1.3 |
+| 3 d | 78, 0.48, 1.0 | 67, 0.44, 1.5 | 41, 0.66, 5.9 | 57, 0.34, 1.4 |
+| 4 d | 78, 0.63, 1.3 | 63, 1.14, 2.7 | 33, 0.85, 4.2 | 53, 0.78, 1.9 |
+| 5 d | 78, 0.67, 1.3 | 58, 1.80, 3.9 | 30, 1.38, 7.4 | 49, 1.33, 2.4 |
+| 6 d | 78, 0.44, 1.1 | 53, 2.19, 4.4 | 29, 1.28, 11.1 | 46, 1.33, 3.1 |
+| 7 d | 78, 0.94, 2.0 | 48, 3.00, 4.9 | 29, 3.53, 15.1 | 39, 1.31, 4.6 |
 
 **1000-1400 km.**
 
@@ -145,17 +145,17 @@ The share of in-track residuals inside two sigma of the covariance the screening
 | 400-600 km | storm | 84% / 68% / 83% | -57% / +14% / +35% |
 | 400-600 km | held-out | 71% / 65% / 67% | +14% / +41% / +7% |
 | 400-600 km | august | 81% / 51% / 33% | -32% / +14% / +12% |
-| 600-750 km | quiet | 100% / 95% / 89% | +9% / +7% / -7% |
-| 600-750 km | storm | 96% / 97% / 100% | +21% / -3% / -14% |
-| 600-750 km | held-out | 85% / 93% / 100% | +9% / -62% / +92% |
-| 600-750 km | august | 83% / 95% / - | +0% / -8% / - |
-| 750-850 km | quiet | 87% / 98% / 91% | +7% / -17% / +36% |
+| 600-750 km | quiet | 100% / 95% / 89% | +10% / +7% / -97% |
+| 600-750 km | storm | 95% / 97% / 100% | +6% / +2% / -14% |
+| 600-750 km | held-out | 85% / 93% / 100% | +7% / -63% / +92% |
+| 600-750 km | august | 82% / 95% / - | +1% / -16% / - |
+| 750-850 km | quiet | 88% / 100% / 93% | +7% / -18% / +42% |
 | 750-850 km | storm | 90% / 94% / 74% | +8% / +30% / +22% |
-| 750-850 km | held-out | 80% / 88% / 76% | -2% / +7% / -87% |
-| 750-850 km | august | 71% / 71% / 39% | -0% / -21% / +24% |
+| 750-850 km | held-out | 80% / 89% / 76% | +3% / +28% / -86% |
+| 750-850 km | august | 72% / 72% / 39% | +1% / -18% / +24% |
 | 850-1000 km | quiet | 100% / 100% / 100% | -1% / +17% / -14% |
-| 850-1000 km | storm | 83% / 100% / 100% | -0% / -3% / +58% |
-| 850-1000 km | held-out | 67% / 91% / 87% | +8% / +28% / -13% |
+| 850-1000 km | storm | 85% / 100% / 100% | -1% / -4% / +56% |
+| 850-1000 km | held-out | 67% / 93% / 90% | +8% / +28% / -13% |
 | 850-1000 km | august | 69% / 100% / 100% | -7% / -62% / -55% |
 | 1000-1400 km | quiet | 51% / 59% / 73% | +1% / +5% / -138% |
 | 1000-1400 km | storm | 6% / 27% / 45% | +0% / -6% / +73% |
@@ -171,12 +171,12 @@ The share of in-track residuals inside two sigma of the covariance the screening
 | Swarm C | 400-600 km | 5 d (39 km at 6 d) (19 sets) | 2 d (37 km at 3 d) (17 sets) | 24 h (38 km at 36 h) (21 sets) | 36 h (26 km at 2 d) (19 sets) |
 | GRACE-FO 1 (C) | 400-600 km | 6 d (34 km at 7 d) (19 sets) | 2 d (25 km at 3 d) (18 sets) | 36 h (39 km at 2 d) (19 sets) | 2 d (34 km at 3 d) (18 sets) |
 | GRACE-FO 2 (D) | 400-600 km | 6 d (32 km at 7 d) (19 sets) | 3 d (25 km at 4 d) (19 sets) | 24 h (26 km at 36 h) (20 sets) | 2 d (34 km at 3 d) (18 sets) |
-| Sentinel-1A | 600-750 km | 5 d (27 km at 6 d) (31 sets) | 6 d (every lead measured) (33 sets) | 4 d (27 km at 5 d) (27 sets) | 5 d (every lead measured) (26 sets) |
-| CryoSat-2 | 600-750 km | 7 d (every lead measured) (18 sets) | 5 d (27 km at 6 d) (18 sets) | 7 d (every lead measured) (17 sets) | 6 d (every lead measured) (18 sets) |
+| Sentinel-1A | 600-750 km | 5 d (27 km at 6 d) (31 sets) | 5 d (every lead measured) (33 sets) | 4 d (27 km at 5 d) (27 sets) | 5 d (every lead measured) (26 sets) |
+| CryoSat-2 | 600-750 km | 7 d (every lead measured) (18 sets) | 5 d (27 km at 6 d) (18 sets) | 7 d (every lead measured) (17 sets) | 5 d (every lead measured) (18 sets) |
 | SARAL | 750-850 km | 7 d (every lead measured) (19 sets) | 7 d (every lead measured) (19 sets) | 4 d (25 km at 5 d) (17 sets) | 7 d (every lead measured) (18 sets) |
-| Sentinel-3A | 750-850 km | 7 d (every lead measured) (29 sets) | 7 d (every lead measured) (30 sets) | 7 d (every lead measured) (27 sets) | 5 d (every lead measured) (32 sets) |
-| Sentinel-3B | 750-850 km | 4 d (27 km at 5 d) (15 sets) | 7 d (every lead measured) (19 sets) | 3 d (27 km at 4 d) (13 sets) | 4 d (31 km at 5 d) (17 sets) |
-| SWOT | 850-1000 km | 7 d (every lead measured) (21 sets) | 7 d (every lead measured) (19 sets) | 5 d (25 km at 6 d) (20 sets) | 7 d (every lead measured) (17 sets) |
+| Sentinel-3A | 750-850 km | 7 d (every lead measured) (29 sets) | 7 d (every lead measured) (30 sets) | 5 d (37 km at 6 d) (27 sets) | 5 d (every lead measured) (32 sets) |
+| Sentinel-3B | 750-850 km | 7 d (every lead measured) (15 sets) | 7 d (every lead measured) (19 sets) | 7 d (every lead measured) (13 sets) | 5 d (every lead measured) (17 sets) |
+| SWOT | 850-1000 km | 7 d (every lead measured) (21 sets) | 7 d (every lead measured) (19 sets) | 7 d (every lead measured) (20 sets) | 7 d (every lead measured) (17 sets) |
 | HY-2C | 850-1000 km | 7 d (every lead measured) (30 sets) | 7 d (every lead measured) (34 sets) | 7 d (every lead measured) (26 sets) | 7 d (every lead measured) (25 sets) |
 | HY-2D | 850-1000 km | 7 d (every lead measured) (27 sets) | 7 d (every lead measured) (29 sets) | 7 d (every lead measured) (19 sets) | 6 d (every lead measured) (23 sets) |
 | Jason-3 | 1000-1400 km | 7 d (every lead measured) (19 sets) | 7 d (every lead measured) (18 sets) | 7 d (every lead measured) (17 sets) | 7 d (every lead measured) (17 sets) |

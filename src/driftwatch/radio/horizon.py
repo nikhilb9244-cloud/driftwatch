@@ -1,24 +1,25 @@
-"""The radio horizon: the calibration benchmark's residuals as angles on the sky, by lead and window.
+"""The radio horizon: the benchmark's residuals as angles on the sky, by altitude band, lead and window.
 
-The calibration benchmark (``storm/precise.py``, ``docs/calibration-benchmark.md``) measured, for
-every public element set issued in three windows, how far SGP4 put Swarm A, B and C from ESA's
-precise orbit at leads from six hours to seven days, in the satellite's radial, in-track,
-cross-track frame. Its horizon was stated in kilometres along track, because a screening box is
-a box. A dish's beam is an angle, and the two components matter differently: an along-track
-error moves the satellite along its path, so it changes *when* a crossing happens; a cross-track
-error moves the path sideways, so it decides *whether* the crossing happens at all.
+The calibration benchmark (``storm/precise.py``, ``docs/calibration-benchmark.md``) and its
+reference expansion (``storm/reference_run.py``, ``docs/reference-benchmark.md``) measured, for
+every public element set issued in four windows, how far SGP4 put a spacecraft from its
+reconstructed orbit at leads from six hours to seven days, in the satellite's radial, in-track,
+cross-track frame, for fifteen spacecraft in five altitude bands from 460 to 1,338 km. The
+benchmark's horizon was stated in kilometres along track, because a screening box is a box. A
+dish's beam is an angle, and the two components matter differently: an along-track error moves
+the satellite along its path, so it changes *when* a crossing happens; a cross-track error moves
+the path sideways, so it decides *whether* the crossing happens at all.
 
 This module converts each trial's residual into the angle it would subtend from the site and
-computes, for each lead bin and window, two named quantities. The **crossing horizon** is
-governed by the cross-track error: the longest lead through which at least 95 per cent of trials
-keep their cross-track angular error under a third of the beam's half-power width, per receiver.
-It answers whether an object crossed the beam during an observation, with the crossing's time
-known to the along-track time shift tabulated beside it. The **position horizon** is governed by
-the along-track error: the same coverage applied to the along-track angular error. It answers
-where an object is at an instant to within a third of the beam. On the benchmark's population
-the cross-track fraction is one at every lead, so the crossing horizon holds for the full seven
-days in every window, and the position horizon is the table that moves; the along-track figure
-is also given as a time shift at the orbital speed.
+computes, for each altitude band, lead bin and window, two named quantities. The **crossing
+horizon** is governed by the cross-track error: the longest lead through which at least 95 per
+cent of trials keep their cross-track angular error under a third of the beam's half-power width,
+per receiver. It answers whether an object crossed the beam during an observation, with the
+crossing's time known to the along-track time shift tabulated beside it. The **position horizon**
+is governed by the along-track error: the same coverage applied to the along-track angular error.
+It answers where an object is at an instant to within a third of the beam. The population an
+object is scored against is its own altitude band's; an object outside every measured band, or
+eccentric, or on a set older than the benchmark's leads, carries *no measured horizon*.
 
 The conversion is at zenith range. A residual perpendicular to the line of sight subtends
 ``residual / range``; the range from the site is smallest, and the angle largest, when the
@@ -50,17 +51,27 @@ from driftwatch.catalogue import history
 from driftwatch.orbit.propagator import build_satrecs, mean_orbit_geometry
 from driftwatch.radio import site as site_mod
 from driftwatch.radio.site import RECEIVERS, Receiver, angular_error_deg, beam_fwhm_deg
+from driftwatch.storm import reference
 
-TRIALS_PARQUET = config.DATA_DIR / "validation" / "swarm_benchmark.parquet"
-TRIALS_CSV = config.DATA_DIR / "radio" / "swarm_trials.csv"
+REFERENCE_PARQUET = config.DATA_DIR / "validation" / "reference_benchmark.parquet"
+SWARM_PARQUET = config.DATA_DIR / "validation" / "swarm_benchmark.parquet"
+TRIALS_CSV = config.DATA_DIR / "radio" / "benchmark_trials.csv"
 
 WINDOW_LABELS: dict[str, str] = {
     "quiet": "quiet week, 20 to 27 April 2024",
     "storm": "May 2024 storm, sets issued 6 to 13 May",
     "held-out": "October 2024 storm, sets issued 6 to 13 October (held out)",
+    "august": "August 2024 storm, sets issued 8 to 15 August (held out)",
 }
-WINDOW_SHORT: dict[str, str] = {"quiet": "quiet", "storm": "May 2024", "held-out": "October 2024"}
-WINDOW_ORDER = ("quiet", "storm", "held-out")
+WINDOW_SHORT: dict[str, str] = {
+    "quiet": "quiet",
+    "storm": "May 2024",
+    "held-out": "October 2024",
+    "august": "August 2024",
+}
+WINDOW_ORDER = ("quiet", "storm", "held-out", "august")
+BAND_ORDER: tuple[str, ...] = tuple(label for _, _, label in reference.ALTITUDE_BANDS)
+MISSION_NAMES: dict[str, str] = {k: m.name for k, m in reference.MISSIONS.items()}
 
 # The fraction of trials the horizon asks for, the benchmark's own 95th-percentile rule as a
 # coverage, and the fraction of the beam width the angular error is held to.
@@ -78,8 +89,10 @@ TABLE_FREQUENCIES: tuple[tuple[str, float], ...] = (
 )
 
 TRIAL_COLUMNS = [
+    "mission",
     "satellite",
     "norad_id",
+    "altitude_band",
     "window",
     "set_epoch",
     "lead_h",
@@ -184,23 +197,40 @@ def attach_altitude(trials: pd.DataFrame, history_dir: Path = config.HISTORY_DIR
     return out.drop(columns=["_epoch_us"])
 
 
-def load_trials(
-    parquet: Path = TRIALS_PARQUET, csv: Path = TRIALS_CSV, history_dir: Path = config.HISTORY_DIR
-) -> tuple[pd.DataFrame, str]:
-    """The usable trials with altitude attached, from the benchmark's parquet or the exported CSV.
+def _speed(trials: pd.DataFrame) -> pd.DataFrame:
+    out = trials.copy()
+    out["speed_km_s"] = np.sqrt(_MU_KM3_S2 / (out["altitude_km"].to_numpy(dtype=float) + site_mod.EARTH_RADIUS_KM))
+    return out
 
-    Returns the frame and where it came from. The parquet is the benchmark's own per-trial file
-    (``driftwatch validate swarm``), local and not in the repository; the CSV is the copy this
-    module exports beside its table so the table can be recomputed from the repository alone.
+
+def load_trials(
+    reference_parquet: Path = REFERENCE_PARQUET,
+    swarm_parquet: Path = SWARM_PARQUET,
+    csv: Path = TRIALS_CSV,
+    history_dir: Path = config.HISTORY_DIR,
+) -> tuple[pd.DataFrame, str]:
+    """The usable trials with altitude, speed and band attached, and where they came from.
+
+    The reference benchmark's per-trial file (``driftwatch validate reference``) is preferred;
+    the Swarm benchmark's file is the fallback, labelled by band; and the CSV exported beside the
+    page is the copy that lets the table be recomputed from the repository alone.
     """
-    if Path(parquet).exists():
-        trials = usable(pd.read_parquet(parquet))
+    if Path(reference_parquet).exists():
+        trials = usable(pd.read_parquet(reference_parquet))
+        trials = _speed(trials)
+        return trials[TRIAL_COLUMNS].reset_index(drop=True), repo_relative(reference_parquet)
+    if Path(swarm_parquet).exists():
+        trials = usable(pd.read_parquet(swarm_parquet))
         trials = attach_altitude(trials, history_dir=history_dir)
-        return trials[TRIAL_COLUMNS].reset_index(drop=True), repo_relative(parquet)
+        trials["mission"] = "swarm-" + trials["satellite"].astype(str).str.lower()
+        trials["altitude_band"] = [reference.altitude_band_label(float(a)) for a in trials["altitude_km"]]
+        return trials[TRIAL_COLUMNS].reset_index(drop=True), repo_relative(swarm_parquet)
     if Path(csv).exists():
         trials = pd.read_csv(csv, parse_dates=["set_epoch", "t"])
         return trials[TRIAL_COLUMNS].reset_index(drop=True), repo_relative(csv)
-    raise FileNotFoundError(f"neither {parquet} nor {csv} exists; run `driftwatch validate swarm` first")
+    raise FileNotFoundError(
+        f"none of {reference_parquet}, {swarm_parquet} or {csv} exists; run `driftwatch validate reference` first"
+    )
 
 
 def repo_relative(path: Path) -> str:
@@ -216,6 +246,52 @@ def export_trials(trials: pd.DataFrame, path: Path = TRIALS_CSV) -> Path:
     path.parent.mkdir(parents=True, exist_ok=True)
     trials[TRIAL_COLUMNS].to_csv(path, index=False, date_format="%Y-%m-%dT%H:%M:%S.%fZ")
     return path
+
+
+def windows_present(frame: pd.DataFrame) -> list[str]:
+    """The benchmark windows the frame holds, in the fixed order."""
+    have = set(frame["window"].unique()) if "window" in frame else set()
+    return [w for w in WINDOW_ORDER if w in have]
+
+
+def bands_present(frame: pd.DataFrame) -> list[str]:
+    """The altitude bands the frame holds, lowest first: ``band`` in a horizon table, ``altitude_band`` in trials."""
+    col = "band" if "band" in frame else "altitude_band"
+    have = set(frame[col].unique()) if col in frame else set()
+    return [b for b in BAND_ORDER if b in have]
+
+
+def band_of(altitude_km: float) -> str | None:
+    """The altitude band an object's mean altitude falls in, or None outside every band."""
+    label = reference.altitude_band_label(float(altitude_km))
+    return label if label in BAND_ORDER else None
+
+
+def band_populations(trials: pd.DataFrame) -> dict[str, dict[str, Any]]:
+    """Per band: the spacecraft, the sets per window and the altitude range, from the trials themselves."""
+    out: dict[str, dict[str, Any]] = {}
+    for band in bands_present(trials):
+        b = trials[trials["altitude_band"] == band]
+        names = sorted({MISSION_NAMES.get(str(m), str(m)) for m in b["mission"].unique()})
+        out[band] = {
+            "spacecraft": names,
+            "n_sets": {w: int(b[b["window"] == w]["set_epoch"].nunique()) for w in windows_present(b)},
+            "altitude_min_km": float(b["altitude_km"].min()),
+            "altitude_max_km": float(b["altitude_km"].max()),
+        }
+    return out
+
+
+def population_sentence(trials: pd.DataFrame) -> str:
+    """The measured population as one sentence: every band, its spacecraft, its sets and its altitudes."""
+    parts = []
+    for band, p in band_populations(trials).items():
+        sets = ", ".join(f"{n} {WINDOW_SHORT[w]}" for w, n in p["n_sets"].items())
+        parts.append(
+            f"{band} ({p['altitude_min_km']:.0f} to {p['altitude_max_km']:.0f} km): "
+            f"{', '.join(p['spacecraft'])}; sets {sets}"
+        )
+    return "; ".join(parts) if parts else "no measured population"
 
 
 # --------------------------------------------------------------------------------------
@@ -236,54 +312,74 @@ def _p(x: pd.Series, q: float) -> float:
 
 
 def horizon_table(trials: pd.DataFrame, columns: Iterable[Column] | None = None) -> pd.DataFrame:
-    """One row per window and lead: the angular residual distribution and, per column, the cross-track and
+    """One row per band, window and lead: the angular residual distribution and, per column, the cross-track and
     along-track fractions inside a third of the beam (the crossing and position horizons' tests)."""
     cols = list(columns) if columns is not None else table_columns()
     t = with_angles(trials)
+    if "altitude_band" not in t:
+        t["altitude_band"] = [reference.altitude_band_label(float(a)) for a in t["altitude_km"]]
     rows: list[dict[str, Any]] = []
-    for window in WINDOW_ORDER:
-        w = t[t["window"] == window]
-        for lead in sorted(w["lead_h"].unique()):
-            g = w[w["lead_h"] == lead]
-            row: dict[str, Any] = {
-                "window": window,
-                "lead_h": float(lead),
-                "n": int(len(g)),
-                "cross_median_arcmin": 60.0 * _p(g["cross_deg"], 0.5),
-                "cross_p95_arcmin": 60.0 * _p(g["cross_deg"], 0.95),
-                "along_median_arcmin": 60.0 * _p(g["along_deg"], 0.5),
-                "along_p95_arcmin": 60.0 * _p(g["along_deg"], 0.95),
-                "along_shift_median_s": _p(g["along_shift_s"], 0.5),
-                "along_shift_p95_s": _p(g["along_shift_s"], 0.95),
-            }
-            cross = g["cross_deg"].to_numpy()
-            along = g["along_deg"].to_numpy()
-            for c in cols:
-                limit = BEAM_FRACTION * c.fwhm_deg
-                row[c.crossing_key] = float(np.mean(cross < limit)) if len(g) else float("nan")
-                row[c.position_key] = float(np.mean(along < limit)) if len(g) else float("nan")
-            rows.append(row)
+    for band in bands_present(t):
+        tb = t[t["altitude_band"] == band]
+        for window in windows_present(tb):
+            w = tb[tb["window"] == window]
+            for lead in sorted(w["lead_h"].unique()):
+                g = w[w["lead_h"] == lead]
+                row: dict[str, Any] = {
+                    "band": band,
+                    "window": window,
+                    "lead_h": float(lead),
+                    "n": int(len(g)),
+                    "cross_median_arcmin": 60.0 * _p(g["cross_deg"], 0.5),
+                    "cross_p95_arcmin": 60.0 * _p(g["cross_deg"], 0.95),
+                    "along_median_arcmin": 60.0 * _p(g["along_deg"], 0.5),
+                    "along_p95_arcmin": 60.0 * _p(g["along_deg"], 0.95),
+                    "along_shift_median_s": _p(g["along_shift_s"], 0.5),
+                    "along_shift_p95_s": _p(g["along_shift_s"], 0.95),
+                }
+                cross = g["cross_deg"].to_numpy()
+                along = g["along_deg"].to_numpy()
+                for c in cols:
+                    limit = BEAM_FRACTION * c.fwhm_deg
+                    row[c.crossing_key] = float(np.mean(cross < limit)) if len(g) else float("nan")
+                    row[c.position_key] = float(np.mean(along < limit)) if len(g) else float("nan")
+                rows.append(row)
     return pd.DataFrame(rows)
 
 
 HORIZONS = ("crossing", "position")
 
 
+def _select(table: pd.DataFrame, band: str | None) -> pd.DataFrame:
+    if band is None:
+        return table
+    return table[table["band"] == band]
+
+
 def horizon_hours(
-    table: pd.DataFrame, column: Column, *, which: str = "crossing", coverage: float = COVERAGE
+    table: pd.DataFrame,
+    column: Column,
+    *,
+    which: str = "crossing",
+    coverage: float = COVERAGE,
+    band: str | None = None,
 ) -> dict[str, float | None]:
-    """Per window, the longest lead through which every lead bin keeps the coverage; None if the first fails.
+    """Per window present, the longest lead through which every lead bin keeps the coverage; None if the first fails.
 
     ``which`` is ``"crossing"`` for the crossing horizon (the cross-track test: whether an object
     crossed the beam) or ``"position"`` for the position horizon (the along-track test: where the
-    object is at an instant).
+    object is at an instant). ``band`` selects one altitude band; a table with a ``band`` column
+    and no band asked for must hold one band only.
     """
     if which not in HORIZONS:
         raise ValueError(f"which must be one of {HORIZONS}, not {which!r}")
+    t = _select(table, band)
+    if "band" in t and t["band"].nunique() > 1:
+        raise ValueError("the table holds several altitude bands; say which")
     key = column.crossing_key if which == "crossing" else column.position_key
     out: dict[str, float | None] = {}
-    for window in WINDOW_ORDER:
-        w = table[table["window"] == window].sort_values("lead_h")
+    for window in windows_present(t):
+        w = t[t["window"] == window].sort_values("lead_h")
         last: float | None = None
         for _, r in w.iterrows():
             if r[key] >= coverage:
@@ -295,25 +391,28 @@ def horizon_hours(
 
 
 def crossing_horizon_hours(
-    table: pd.DataFrame, column: Column, *, coverage: float = COVERAGE
+    table: pd.DataFrame, column: Column, *, coverage: float = COVERAGE, band: str | None = None
 ) -> dict[str, float | None]:
     """The crossing horizon per window: the cross-track test (see :func:`horizon_hours`)."""
-    return horizon_hours(table, column, which="crossing", coverage=coverage)
+    return horizon_hours(table, column, which="crossing", coverage=coverage, band=band)
 
 
 def position_horizon_hours(
-    table: pd.DataFrame, column: Column, *, coverage: float = COVERAGE
+    table: pd.DataFrame, column: Column, *, coverage: float = COVERAGE, band: str | None = None
 ) -> dict[str, float | None]:
     """The position horizon per window: the along-track test (see :func:`horizon_hours`)."""
-    return horizon_hours(table, column, which="position", coverage=coverage)
+    return horizon_hours(table, column, which="position", coverage=coverage, band=band)
 
 
 def horizons(
     table: pd.DataFrame, columns: Iterable[Column] | None = None
-) -> dict[str, dict[str, dict[str, float | None]]]:
-    """``{"crossing": {column key: {window: hours}}, "position": {...}}`` for every column."""
+) -> dict[str, dict[str, dict[str, dict[str, float | None]]]]:
+    """``{"crossing": {band: {column key: {window: hours}}}, "position": {...}}`` for every band and column."""
     cols = list(columns) if columns is not None else table_columns()
-    return {which: {c.key: horizon_hours(table, c, which=which) for c in cols} for which in HORIZONS}
+    return {
+        which: {b: {c.key: horizon_hours(table, c, which=which, band=b) for c in cols} for b in bands_present(table)}
+        for which in HORIZONS
+    }
 
 
 def format_lead(h: float | None) -> str:
@@ -326,14 +425,15 @@ def format_lead(h: float | None) -> str:
 _fmt_lead = format_lead
 
 
-def _fraction_block(table: pd.DataFrame, window: str, cols: list[Column], which: str) -> list[str]:
+def _fraction_block(table: pd.DataFrame, band: str, window: str, cols: list[Column], which: str) -> list[str]:
     what = "along-track" if which == "position" else "cross-track"
     lines = [
         f"| Lead | n | {what} median | {what} p95 | " + " | ".join(c.label for c in cols) + " |",
         "| ---: | ---: | ---: | ---: | " + " | ".join("---:" for _ in cols) + " |",
     ]
     prefix = "along" if which == "position" else "cross"
-    for _, r in table[table["window"] == window].iterrows():
+    rows = table[(table["band"] == band) & (table["window"] == window)]
+    for _, r in rows.iterrows():
         cells = [
             _fmt_lead(float(r["lead_h"])),
             str(int(r["n"])),
@@ -344,15 +444,42 @@ def _fraction_block(table: pd.DataFrame, window: str, cols: list[Column], which:
     return lines
 
 
-def horizon_statements(table: pd.DataFrame, columns: Iterable[Column] | None = None) -> list[str]:
-    """The plain statements the two horizons support on this table, computed from it and nothing else."""
+def _compact_block(table: pd.DataFrame, band: str, windows: list[str]) -> list[str]:
+    """Per lead, per window: the 95th-percentile cross-track and along-track angles overhead and the time shift."""
+    lines = [
+        "| Lead | " + " | ".join(f"{WINDOW_SHORT[w]}: n, cross p95, along p95, shift p95" for w in windows) + " |",
+        "| ---: | " + " | ".join("---" for _ in windows) + " |",
+    ]
+    tb = table[table["band"] == band]
+    for lead in sorted(tb["lead_h"].unique()):
+        cells = []
+        for w in windows:
+            r = tb[(tb["window"] == w) & (tb["lead_h"] == lead)]
+            if len(r):
+                x = r.iloc[0]
+                cells.append(
+                    f"{int(x['n'])}, {x['cross_p95_arcmin']:.1f}', {x['along_p95_arcmin']:.1f}', "
+                    f"{x['along_shift_p95_s']:.2f} s"
+                )
+            else:
+                cells.append("-")
+        lines.append(f"| {format_lead(float(lead))} | " + " | ".join(cells) + " |")
+    return lines
+
+
+def horizon_statements(
+    table: pd.DataFrame, columns: Iterable[Column] | None = None, band: str | None = None
+) -> list[str]:
+    """The plain statements the two horizons support on one band's table, computed from it and nothing else."""
     cols = list(columns) if columns is not None else table_columns()
-    windows = [w for w in WINDOW_ORDER if not table[table["window"] == w].empty]
+    t = _select(table, band)
+    windows = windows_present(t)
     if not windows or not cols:
         return []
-    longest = float(table["lead_h"].max())
-    crossing = {c.key: horizon_hours(table, c, which="crossing") for c in cols}
-    position = {c.key: horizon_hours(table, c, which="position") for c in cols}
+    longest = float(t["lead_h"].max())
+    crossing = {c.key: horizon_hours(t, c, which="crossing") for c in cols}
+    position = {c.key: horizon_hours(t, c, which="position") for c in cols}
+    where = f" at {band}" if band else ""
     out: list[str] = []
     short = [
         f"{c.label} in the {WINDOW_SHORT[w]} window ({format_lead(crossing[c.key][w])})"
@@ -362,17 +489,19 @@ def horizon_statements(table: pd.DataFrame, columns: Iterable[Column] | None = N
     ]
     if not short:
         out.append(
-            f"**The crossing horizon holds for the full {format_lead(longest)} in every window** for the measured "
-            "population, at every receiver and frequency in the table: whether an object crossed the beam during "
-            "an observation is answered through the benchmark's longest lead, and the time of the crossing is known "
-            "to the along-track shift tabulated above."
+            f"**The crossing horizon{where} holds for the full {format_lead(longest)} in every window** for the "
+            "measured population, at every receiver and frequency in the table: whether an object crossed the beam "
+            "during an observation is answered through the benchmark's longest lead, and the time of the crossing "
+            "is known to the along-track shift tabulated above."
         )
     else:
-        out.append("**The crossing horizon** falls short of the benchmark's longest lead for " + "; ".join(short) + ".")
+        out.append(
+            f"**The crossing horizon{where}** falls short of the benchmark's longest lead for " + "; ".join(short) + "."
+        )
     l_centre = next((c for c in cols if c.receiver == "L" and c.freq_mhz == RECEIVERS["L"].centre_mhz), None)
     if l_centre is not None:
         out.append(
-            "**The position horizon at the L-band centre is "
+            f"**The position horizon{where} at the L-band centre is "
             + ", ".join(f"{format_lead(position[l_centre.key][w])} in the {WINDOW_SHORT[w]} window" for w in windows)
             + "**: where an object is at an instant, to within a third of the beam, is answered only that far ahead."
         )
@@ -382,13 +511,14 @@ def horizon_statements(table: pd.DataFrame, columns: Iterable[Column] | None = N
         top_none = all(position[top.key][w] is None for w in windows)
         if top_none:
             lead_in = (
-                "**S-band position prediction from public element sets is not possible at any element-set age**: at "
-                f"the top of the band ({top.label}) the position horizon is {format_lead(None)} in every window, "
-                "the benchmark's shortest lead"
+                f"**S-band position prediction from public element sets{where} is not possible at any element-set "
+                f"age**: at the top of the band ({top.label}) the position horizon is {format_lead(None)} in every "
+                "window, the benchmark's shortest lead"
             )
         else:
             lead_in = (
-                f"**S-band position prediction from public element sets** at the top of the band ({top.label}) holds "
+                f"**S-band position prediction from public element sets{where}** at the top of the band ({top.label}) "
+                "holds "
                 + ", ".join(f"{format_lead(position[top.key][w])} in the {WINDOW_SHORT[w]} window" for w in windows)
             )
         for c in s_cols:
@@ -401,23 +531,40 @@ def horizon_statements(table: pd.DataFrame, columns: Iterable[Column] | None = N
     return out
 
 
+def population_table_lines(trials: pd.DataFrame) -> list[str]:
+    """The population as a markdown table: band, spacecraft, altitude range, sets per window."""
+    windows = windows_present(trials)
+    lines = [
+        "| Altitude band | Spacecraft | Mean altitude of the sets | "
+        + " | ".join(f"Sets, {WINDOW_SHORT[w]}" for w in windows)
+        + " |",
+        "| --- | --- | --- | " + " | ".join("---:" for _ in windows) + " |",
+    ]
+    for band, p in band_populations(trials).items():
+        lines.append(
+            f"| {band} | {', '.join(p['spacecraft'])} | {p['altitude_min_km']:.0f} to {p['altitude_max_km']:.0f} km | "
+            + " | ".join(str(p["n_sets"].get(w, 0)) for w in windows)
+            + " |"
+        )
+    return lines
+
+
 def to_markdown(
     table: pd.DataFrame, trials: pd.DataFrame, columns: Iterable[Column] | None = None, source: str = ""
 ) -> str:
-    """The radio horizon page: population, beam widths, the table per window, and the two horizons per receiver."""
+    """The radio horizon page: population by band, beam widths, the tables, the two horizons per band and receiver."""
     cols = list(columns) if columns is not None else table_columns()
-    n_sets = trials.groupby("window")["set_epoch"].nunique()
-    alt = trials.groupby("satellite")["altitude_km"].agg(["min", "max"])
+    windows = windows_present(table)
+    bands = bands_present(table)
     k = site_mod.beam_fwhm_lambda_over_d()
-    sets_by_window = ", ".join(f"{int(n_sets.get(w, 0))} sets in the {WINDOW_SHORT[w]} window" for w in WINDOW_ORDER)
-    altitudes = ", ".join(f"Swarm {s} at {r['min']:.0f} to {r['max']:.0f} km" for s, r in alt.iterrows())
     csv_rel = TRIALS_CSV.relative_to(config.PROJECT_ROOT).as_posix()
     lines = [
         "# The radio horizon: the benchmark's residuals as angles on the sky",
         "",
-        "The calibration benchmark measured how far a public element set puts Swarm A, B and C from ESA's precise "
-        "orbit at leads from six hours to seven days, in the satellite's radial, in-track, cross-track frame "
-        "(`docs/calibration-benchmark.md`). Here each residual is the angle it subtends from the MeerKAT array "
+        "The reference benchmark measured how far a public element set puts a spacecraft from its reconstructed "
+        "orbit at leads from six hours to seven days, in the satellite's radial, in-track, cross-track frame, for "
+        "fifteen spacecraft in five altitude bands (`docs/reference-benchmark.md`, which extends "
+        "`docs/calibration-benchmark.md`). Here each residual is the angle it subtends from the MeerKAT array "
         "centre with the satellite overhead: the residual divided by the altitude, which is the largest angle "
         "the residual can subtend from the site. Lower in the sky the same residual subtends less, by the ratio "
         "of altitude to range and by the projection onto the sky; the per-crossing figures in the period reports "
@@ -429,13 +576,20 @@ def to_markdown(
         "whether an object crossed the beam during an observation, with the crossing's time known to the "
         "along-track time shift tabulated below. The **position horizon** is governed by the along-track error, "
         "which moves the object along its path: the same coverage applied to the along-track angular error, and "
-        "it answers where an object is at an instant to within a third of the beam.",
+        "it answers where an object is at an instant to within a third of the beam. Both are computed per "
+        "altitude band, and an object is scored against its own band's trials.",
         "",
-        f"**Population and limits.** Three sun-synchronous satellites, {altitudes}; {sets_by_window}; one trial per "
-        "element set per lead, manoeuvre arcs excluded from ESA's thruster record. A measured horizon is attached "
-        "only to objects between 400 and 600 km; every other object carries *no measured horizon* and the reason. "
-        "Nothing here describes a station-kept object's error through a burn. The beam width is measured at L-band "
-        "and scaled by wavelength to UHF and S (below).",
+        "## The measured population",
+        "",
+        "One trial per element set per lead; manoeuvre arcs excluded from a published thruster record (Swarm, "
+        "GRACE-FO) and from detection on the reconstructed orbit otherwise; near-circular, free-flying between "
+        "manoeuvres. A measured horizon is attached only to an object whose mean altitude falls in one of these "
+        "bands, with an eccentricity under 0.02 and an element set no older than the benchmark's seven days; "
+        "every other object carries *no measured horizon* and the reason. Nothing here describes a station-kept "
+        "object's error through a burn, debris, or an eccentric orbit. The beam width is measured at L-band and "
+        "scaled by wavelength to UHF and S (below).",
+        "",
+        *population_table_lines(trials),
         "",
         "## The beam",
         "",
@@ -456,35 +610,76 @@ def to_markdown(
         )
     lines += [
         "",
-        "## The table",
+        "## The two horizons, by band and receiver",
         "",
-        "For each window and lead: the number of trials, the angular error overhead at the median and the 95th "
-        "percentile (arcmin), and the fraction of trials whose angular error is under a third of the beam width, "
-        "per receiver and frequency. The first block of each window is the cross-track error, the crossing "
-        "horizon's test; the second is the along-track error, the position horizon's test, whose time shift at "
-        "the orbital speed is in the last table.",
+        f"Each is the longest lead through which at least {100 * COVERAGE:.0f} per cent of a band's trials keep the "
+        "named angular error under a third of the beam width, every shorter lead bin included. *Under 6 h* means "
+        "the first lead bin already fails the coverage; *7 d* means no lead in the benchmark failed it.",
+        "",
+        "- **Crossing horizon**, governed by the cross-track error: whether an object crossed the beam during an "
+        "observation. The time of the crossing is known to the along-track shift in the tables below.",
+        "- **Position horizon**, governed by the along-track error: where an object is at an instant, to within a "
+        "third of the beam.",
+        "",
+        "| Band | Receiver, frequency | "
+        + " | ".join(f"Crossing, {WINDOW_SHORT[w]}" for w in windows)
+        + " | "
+        + " | ".join(f"Position, {WINDOW_SHORT[w]}" for w in windows)
+        + " |",
+        "| --- | --- | " + " | ".join("---" for _ in range(2 * len(windows))) + " |",
     ]
-    for window in WINDOW_ORDER:
-        if table[table["window"] == window].empty:
-            continue
-        lines += ["", f"### {WINDOW_LABELS[window]}", "", "Cross-track (the crossing horizon's test):", ""]
-        lines += _fraction_block(table, window, cols, "crossing")
-        lines += ["", "Along-track (the position horizon's test):", ""]
-        lines += _fraction_block(table, window, cols, "position")
+    for band in bands:
+        for c in cols:
+            crossing = horizon_hours(table, c, which="crossing", band=band)
+            position = horizon_hours(table, c, which="position", band=band)
+            lines.append(
+                f"| {band} | {c.label} (FWHM {c.fwhm_deg:.2f} deg) | "
+                + " | ".join(format_lead(crossing.get(w)) if w in crossing else "-" for w in windows)
+                + " | "
+                + " | ".join(format_lead(position.get(w)) if w in position else "-" for w in windows)
+                + " |"
+            )
+    for band in bands:
+        for statement in horizon_statements(table, cols, band=band):
+            lines += ["", statement]
     lines += [
         "",
-        "### The along-track error as a time shift",
+        "## The tables",
+        "",
+        "For the lowest band, the band the lane began with, every window in full: the number of trials, the "
+        "angular error overhead at the median and the 95th percentile (arcmin), and the fraction of trials whose "
+        "angular error is under a third of the beam width per receiver and frequency; the first block is the "
+        "cross-track error, the crossing horizon's test, the second the along-track error, the position horizon's "
+        "test. For the other bands, the 95th percentiles and the along-track time shift per lead and window; their "
+        "per-receiver fractions are in the JSON beside this page.",
+    ]
+    for band in bands:
+        lines += ["", f"### {band}"]
+        if band == bands[0]:
+            for window in windows_present(table[table["band"] == band]):
+                lines += ["", f"#### {WINDOW_LABELS[window]}", "", "Cross-track (the crossing horizon's test):", ""]
+                lines += _fraction_block(table, band, window, cols, "crossing")
+                lines += ["", "Along-track (the position horizon's test):", ""]
+                lines += _fraction_block(table, band, window, cols, "position")
+        else:
+            lines += [""]
+            lines += _compact_block(table, band, windows_present(table[table["band"] == band]))
+    lines += [
+        "",
+        "### The along-track error as a time shift, lowest band",
         "",
         "The along-track residual divided by the orbital speed: how early or late the satellite is at a crossing, "
-        "whatever the range. This is the timing figure the crossing horizon carries with it.",
+        "whatever the range. This is the timing figure the crossing horizon carries with it; the other bands' "
+        "figures are in their tables above.",
         "",
-        "| Lead | " + " | ".join(f"{WINDOW_SHORT[w]} median / p95" for w in WINDOW_ORDER) + " |",
-        "| ---: | " + " | ".join("---:" for _ in WINDOW_ORDER) + " |",
+        "| Lead | " + " | ".join(f"{WINDOW_SHORT[w]} median / p95" for w in windows) + " |",
+        "| ---: | " + " | ".join("---:" for _ in windows) + " |",
     ]
-    for lead in sorted(table["lead_h"].unique()):
+    first = table[table["band"] == bands[0]] if bands else table
+    for lead in sorted(first["lead_h"].unique()):
         cells = []
-        for w in WINDOW_ORDER:
-            r = table[(table["window"] == w) & (table["lead_h"] == lead)]
+        for w in windows:
+            r = first[(first["window"] == w) & (first["lead_h"] == lead)]
             if len(r):
                 cells.append(f"{r['along_shift_median_s'].iloc[0]:.2f} s / {r['along_shift_p95_s'].iloc[0]:.2f} s")
             else:
@@ -492,54 +687,23 @@ def to_markdown(
         lines.append(f"| {format_lead(float(lead))} | " + " | ".join(cells) + " |")
     lines += [
         "",
-        "## The two horizons",
-        "",
-        f"Each is the longest lead through which at least {100 * COVERAGE:.0f} per cent of trials keep the named "
-        "angular error under a third of the beam width, every shorter lead bin included. *Under 6 h* means the "
-        "first lead bin already fails the coverage; *7 d* means no lead in the benchmark failed it.",
-        "",
-        "- **Crossing horizon**, governed by the cross-track error: whether an object crossed the beam during an "
-        "observation. The time of the crossing is known to the along-track shift in the table above.",
-        "- **Position horizon**, governed by the along-track error: where an object is at an instant, to within a "
-        "third of the beam.",
-        "",
-        "| Receiver, frequency | "
-        + " | ".join(f"Crossing horizon, {WINDOW_SHORT[w]}" for w in WINDOW_ORDER)
-        + " | "
-        + " | ".join(f"Position horizon, {WINDOW_SHORT[w]}" for w in WINDOW_ORDER)
-        + " |",
-        "| --- | " + " | ".join("---" for _ in range(2 * len(WINDOW_ORDER))) + " |",
-    ]
-    for c in cols:
-        crossing = horizon_hours(table, c, which="crossing")
-        position = horizon_hours(table, c, which="position")
-        lines.append(
-            f"| {c.label} (FWHM {c.fwhm_deg:.2f} deg) | "
-            + " | ".join(format_lead(crossing[w]) for w in WINDOW_ORDER)
-            + " | "
-            + " | ".join(format_lead(position[w]) for w in WINDOW_ORDER)
-            + " |"
-        )
-    for statement in horizon_statements(table, cols):
-        lines += ["", statement]
-    lines += [
-        "",
         "## What this does not show",
         "",
         "- The angles are for the satellite overhead, the worst case; a crossing at 30 degrees of elevation "
         "sees a residual at roughly twice the range and half the angle.",
-        "- Three satellites in one orbit class, three windows, one week of sets each. Nothing here is measured "
-        "for debris, for the GNSS or mobile-satellite orbits, for station-kept constellations, or for objects "
-        "the network tracks less often, and every such object is labelled *no measured horizon* in the reports.",
+        "- Fifteen spacecraft in five bands, four windows, one week of sets each. Nothing here is measured "
+        "for debris, for the GNSS or mobile-satellite orbits, for station-kept constellations, for eccentric "
+        "orbits, or for objects the network tracks less often, and every such object is labelled *no measured "
+        "horizon* in the reports.",
         "- The beam width is a measurement at L-band scaled by wavelength; the holography paper reports the "
         "width proportional to lambda/D over most of each band, with departures at the top of each band.",
-        "- The cross-track residual stays under half a kilometre at every lead in every window, so on this "
-        "population the crossing horizon is the benchmark's full seven days everywhere and the position horizon "
-        "is the number that moves. Whether a crossing predicted days ahead happens inside a given observation is "
-        "a position question, of timing, before it is a crossing question, of geometry.",
+        "- In the lowest band the cross-track residual stays under half a kilometre at every lead in every "
+        "window, so the crossing horizon is the benchmark's full seven days and the position horizon is the "
+        "number that moves. Whether a crossing predicted days ahead happens inside a given observation is a "
+        "position question, of timing, before it is a crossing question, of geometry.",
         "",
         f"Source of the trials: `{source}`; the usable trials are exported beside this page as `{csv_rel}` so the "
-        "table recomputes from the repository.",
+        "tables recompute from the repository.",
         "",
         f"_Last updated {datetime.now(UTC):%d %B %Y}._",
     ]
@@ -556,7 +720,9 @@ MEERKAT_RECORD: Mapping[str, Any] = {
 }
 
 
-def to_json(table: pd.DataFrame, columns: Iterable[Column] | None = None, source: str = "") -> dict[str, Any]:
+def to_json(
+    table: pd.DataFrame, columns: Iterable[Column] | None = None, source: str = "", trials: pd.DataFrame | None = None
+) -> dict[str, Any]:
     cols = list(columns) if columns is not None else table_columns()
     return {
         "built_at": datetime.now(UTC).isoformat(),
@@ -581,18 +747,20 @@ def to_json(table: pd.DataFrame, columns: Iterable[Column] | None = None, source
             }
             for c in cols
         ],
-        "windows": {w: WINDOW_LABELS[w] for w in WINDOW_ORDER},
+        "windows": {w: WINDOW_LABELS[w] for w in windows_present(table)},
+        "bands": bands_present(table),
+        "population": band_populations(trials) if trials is not None else None,
         "rows": json.loads(table.to_json(orient="records")),
         "definitions": {
             "crossing_horizon": "governed by the cross-track error: the longest lead through which at least "
-            "`coverage` of trials keep their cross-track angular error under `beam_fraction` of the half-power "
-            "width; whether an object crossed the beam during an observation, its time known to "
+            "`coverage` of a band's trials keep their cross-track angular error under `beam_fraction` of the "
+            "half-power width; whether an object crossed the beam during an observation, its time known to "
             "along_shift_p95_s",
             "position_horizon": "governed by the along-track error: the same coverage applied to the along-track "
             "angular error; where an object is at an instant to within `beam_fraction` of the beam",
         },
-        "crossing_horizon_hours": {c.key: horizon_hours(table, c, which="crossing") for c in cols},
-        "position_horizon_hours": {c.key: horizon_hours(table, c, which="position") for c in cols},
+        "crossing_horizon_hours": horizons(table, cols)["crossing"],
+        "position_horizon_hours": horizons(table, cols)["position"],
     }
 
 
@@ -609,7 +777,7 @@ def lead_bin_hours(age_hours: float, leads: Iterable[float]) -> float | None:
 
 @dataclass(frozen=True)
 class CrossingUncertainty:
-    """What the benchmark says about one crossing's geometry, at its element-set age and window."""
+    """What the benchmark says about one crossing's geometry, at its element-set age, window and band."""
 
     window: str
     lead_h: float
@@ -619,6 +787,7 @@ class CrossingUncertainty:
     along_shift_p95_s: float
     crossing_fraction_inside: float  # the crossing horizon's test at this age and geometry
     position_fraction_inside: float  # the position horizon's test
+    band: str | None = None
 
 
 def crossing_uncertainty(
@@ -629,8 +798,9 @@ def crossing_uncertainty(
     projection_cross: float,
     projection_along: float,
     fwhm_deg: float,
+    band: str | None = None,
 ) -> CrossingUncertainty | None:
-    """Project the window's trials at the age's lead bin onto the crossing's line of sight.
+    """Project the window's trials of one band at the age's lead bin onto the crossing's line of sight.
 
     ``projection_cross`` and ``projection_along`` are the sky-projection factors of the object's
     cross-track and in-track unit vectors at closest approach (1 across the line of sight, 0
@@ -640,6 +810,8 @@ def crossing_uncertainty(
     if lead is None:
         return None
     g = trials[(trials["window"] == window) & (trials["lead_h"] == lead)]
+    if band is not None and "altitude_band" in g:
+        g = g[g["altitude_band"] == band]
     if g.empty:
         return None
     cross = angular_error_deg(g["cross_km"].to_numpy() * projection_cross, range_km)
@@ -655,4 +827,5 @@ def crossing_uncertainty(
         along_shift_p95_s=float(np.quantile(shift, 0.95)),
         crossing_fraction_inside=float(np.mean(cross < limit)),
         position_fraction_inside=float(np.mean(along < limit)),
+        band=band,
     )

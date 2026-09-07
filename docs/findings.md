@@ -93,6 +93,24 @@ in-track sigma fell by a median 47 per cent, because their 2024 rows were from s
 percentile of 0.15 and a ninety-fifth of 2.5. Under the storm scenarios the same: `forecast` 20 flagged events became 12 (10 lost, 2 gained), `storm-g4` 18 became 11 (9 lost, 2 gained), `storm-g5` 18 became 12 (9 lost, 3 gained), the region changing on 277 to 286 events in each, and the median of the probability ratio 0.99 with a fifth percentile of 0.13 to 0.16 and a ninety-fifth of 2.5; the fleet members in-track sigma at the encounter fell by a median 26, 20 and 17 per cent under the three, less than under `quiet` because the storm variance term is added on top and is the same in both fits. The benchmark is unaffected: its
 fits bound their own history to the weeks before each window, and the guard holds on them.
 
+**Corrected 2026-09-07: the laser stations' coordinates locate a marker on the ground, and the
+telescope is not on it.** A fourth error of the same class, in the realisation of a reference
+frame rather than in its name. The laser-ranging comparison of item 8 placed each station at its
+SLRF2020 coordinates, and its first run showed residuals of **−1 to −3.5 m** at four stations,
+Yarragadee, Greenbelt, Monument Peak and Hartebeesthoek, the NASA MOBLAS systems, on every
+satellite in every window, growing with elevation, while the fixed European stations sat at zero.
+SLRF2020 gives the position of a station's ground marker; the telescope's reference point is offset
+from it, by 3.18 m upward at Yarragadee, and the offset is published separately, in the ILRS site
+eccentricity file, which the first reader did not apply. A vertical offset shortens the range by
+its projection on the line of sight, the height times the sine of the elevation, which is why the
+residual grew with elevation and vanished at stations whose telescope stands on its marker. Nothing
+internal could have caught it: the offset is the same for every satellite and every epoch, and per
+mission it looked like a modest centre-of-mass correction. It was exposed by comparing the two
+independent references per station rather than per mission, where the residual turned out to be a
+property of the station and not of the orbit. The eccentricities are now read from the ILRS file
+and applied to every station, a test pins Yarragadee's, and the per-mission medians of item 8 are
+−0.1 to −0.6 m.
+
 ### 3. Every published file has a seam at exactly 48 hours
 
 Ten of ten files, then nineteen of nineteen: the position steps by a few hundred metres at
@@ -306,21 +324,28 @@ in `ROADMAP.md`.
 
 ### 7. On the sky, the horizon is two quantities, and only one of them moves
 
-The radio lane (`docs/radio-lane.md`) converts item 6's residuals into angles at the MeerKAT array
-centre and tests them against a third of the primary beam's half-power width. Two horizons result,
-and they answer different questions. The **crossing horizon**, governed by the cross-track error,
-answers whether an object crossed the beam during an observation: the cross-track residual stays
-under 3.6 arcmin at the 95th percentile at every lead in every window, so for the measured
-population it holds for the benchmark's full seven days in every window at every receiver, with the
-crossing's time known to the along-track shift (0.2 s at the 95th percentile at six hours; 8, 26 and
-85 s at seven days in the quiet, May and October windows). The **position horizon**, governed by the
-along-track error, answers where an object is at an instant to within a third of the beam, and it is
-the one a storm moves: at the L-band centre **24 hours in the quiet week, 12 hours in the May 2024
-storm and 6 hours in the October 2024 storm**; at the UHF centre 36, 24 and 6 hours. **S-band
-position prediction from public element sets is not possible at any element-set age**: at the top
-of the band the position horizon is under six hours, the benchmark's shortest lead, in every window.
-Both rest on three Swarm-class satellites at 460 to 506 km, not manoeuvring in the trials kept; every
-other object carries *no measured horizon* for both (`docs/radio-horizon.md`).
+The radio lane (`docs/radio-lane.md`) converts the benchmark's residuals into angles at the MeerKAT
+array centre and tests them against a third of the primary beam's half-power width, per altitude
+band of item 8, each object scored against its own band's trials. Two horizons result, and they
+answer different questions. The **crossing horizon**, governed by the cross-track error, answers
+whether an object crossed the beam during an observation: the cross-track residual stays under
+3.4 arcmin at the 95th percentile at every lead in every window in every band, so it holds for the
+benchmark's full seven days in every band and window at every receiver, with one exception (5 days
+at 600 to 750 km in the August 2024 window), and the crossing's time is known to the along-track
+shift (at 400 to 600 km, 0.2 s at the 95th percentile at six hours; 8, 25, 72 and 29 s at seven
+days in the quiet, May, October and August windows). The **position horizon**, governed by the
+along-track error, answers where an object is at an instant to within a third of the beam, and it
+is the one a storm moves, and altitude lengthens: at the L-band centre **24, 12, 6 and 12 hours at
+400 to 600 km** in the quiet, May, October and August windows; 24, 24, 12 and 36 hours at 600 to
+750 km; 6 days, 2 days, 6 hours and 3 days at 750 to 850 km; 7, 7, 3 and 7 days at 850 to
+1,000 km; 7, 3, 7 and 7 days at 1,338 km. **S-band position prediction from public element sets is
+not possible at any element-set age at 400 to 600 km**: at the top of the band the position horizon
+is under six hours, the benchmark's shortest lead, in every window. Higher it is possible: at the
+top of S band, 12 hours in the quiet and May windows at 600 to 750 km, 3 days in the quiet week at
+750 to 850 km, the full seven days in the quiet week at 850 to 1,000 km with 12 hours to 4 days in
+the storms, and seven days in every window but May (36 hours) at 1,338 km. Both rest on the
+population of item 8, the band table of `docs/radio-horizon.md`; every object outside it carries
+*no measured horizon* for both.
 
 ### 8. Fifteen more spacecraft in five altitude bands: the storm's reach in the horizon ends near 700 km
 
@@ -335,7 +360,7 @@ TanDEM-X and ICESat-2, whose 2024 orbits sit behind accounts. Sentinel-2, GOCE a
 covered, and the page says why rather than substituting. The same four windows for every mission,
 with the 12 August 2024 storm (Kp 8-) added and held out like October; the same rule that the
 covariance and the coefficient are fitted from history that ends where the window's sets begin.
-1,228 element sets over fifteen spacecraft with a reconstructed orbit, 460 to 1,338 km.
+1,201 element sets over fifteen spacecraft with a reconstructed orbit, 460 to 1,338 km.
 
 **The horizon by altitude band** (25 km in-track at the 95th percentile of trials), quiet / May /
 October / August:
@@ -343,8 +368,8 @@ October / August:
 | Band (mean altitude of the sets) | Spacecraft | quiet | May 2024 | October 2024 | August 2024 |
 | --- | --- | --- | --- | --- | --- |
 | 460 to 507 km | Swarm A, B, C; GRACE-FO 1, 2 | 5 d | 2 d | 24 h | 2 d |
-| 696 to 719 km | Sentinel-1A, CryoSat-2 | 5 d | 5 d | 7 d | 6 d |
-| 783 to 803 km | SARAL, Sentinel-3A, 3B | 7 d | 7 d | 3 d | 7 d |
+| 696 to 719 km | Sentinel-1A, CryoSat-2 | 5 d | 5 d | 7 d | 5 d |
+| 783 to 803 km | SARAL, Sentinel-3A, 3B | 7 d | 7 d | 5 d | 7 d |
 | 893 to 952 km | SWOT, HY-2C, 2D | 7 d | 7 d | 7 d | 7 d |
 | 1,338 km | Jason-3, Sentinel-6A | 7 d | 7 d | 7 d | 7 d |
 
@@ -352,18 +377,42 @@ GRACE-FO, at 490 km, agrees with Swarm window for window (6 d, 2 to 3 d, 24 to 3
 is the first reproduction of item 6 on a different spacecraft with a different producer's orbit and
 a different published thruster record. At 700 km a storm no longer shortens the horizon below the
 quiet week's five days; at 800 km and above the horizon is the benchmark's full seven days in every
-window, with one exception: the October figure at 800 km is carried by Sentinel-3B (3 d) and SARAL
-(4 d) while Sentinel-3A, in the same orbit as 3B, holds 7 d, and the difference is not explained
-here. The 7-day in-track median at 1,338 km is 0.4 to 0.8 km in three windows and 4.4 km in May.
+window but one: October at 800 km is 5 d (31 km at 6 d), carried by SARAL (4 d) and Sentinel-3A
+(5 d) while Sentinel-3B holds 7 d. The 7-day in-track median at 1,338 km is 0.4 to 0.8 km in three
+windows and 4.4 km in May.
+
+**Sentinel-3B, diagnosed 2026-09-07.** In the first run of this expansion the October figure at
+800 km was 3 d, carried by Sentinel-3B while Sentinel-3A, in the same orbit, held 7 d; 3B was also
+the short mission in the quiet week (4 d) and in August (4 d). The two spacecraft are alike in every
+element-set property compared: B-star of the same sign and size with no sign change in any window,
+the same spread of epochs; they differ in cadence, a set every 6.7 hours for 3A against every 10 to
+13 hours for 3B (27 against 13 sets in the October window). No thruster record is published for
+either, so their manoeuvre exclusion rests on the reconstructed orbit's own step detector, which
+finds one burn per spacecraft per window (two for 3A in October, two for 3B in August) and which the
+element sets never show, the set-jump detector finding none. The cause was in the exclusion rule.
+The record path (Swarm, GRACE-FO) excludes a set with a burn in the 24 hours before its epoch, since
+the network's fit spans the burn and the set is wrong from its epoch on; the detection path excluded
+only pairs whose propagation arc, from the epoch to the lead, crossed the burn. Every short 3B window
+was carried by the one set issued a few hours after that window's burn (10 October 10:20 UTC, an
+hour after a burn ending 09:25, +33 km at four days; 25 April 14:38, +25 km; 13 August 22:11,
++30 km), and with 7 to 10 usable sets per window one such set is the 95th percentile. Why 3B's first
+post-burn sets are wrong by tens of kilometres and 3A's, after burns of the same kind, are not is
+recorded as open; the sets do not say how they were fitted. With the same 24-hour arc on both paths
+(`precise.MANOEUVRE_ARC_HOURS`) Sentinel-3B is at 7 d in the quiet week and October and 5 d in
+August, and the table above is the corrected one. The rule reaches every detection-only mission:
+CryoSat-2 in August and Sentinel-1A in May go from 6 d to 5 d, SWOT in October from 5 d to 7 d, and
+Sentinel-3A in October from 7 d to 5 d, because the pairs the arc removes were well-behaved ones and
+the set of 11 October 03:49, issued into the storm, now carries the 95th percentile on 25 sets. The
+October figures at 800 km for SARAL (4 d, 25 km at 5 d) and 3A are storm effects on 17 to 27 sets,
+not diagnosed further.
 
 **Coverage of the empirical covariance** (in-track, inside two sigma, 95 per cent claimed). At 460
 to 507 km on five spacecraft item 6 repeats: 98 to 100 per cent in the quiet week from one to seven
 days, 65 to 84 per cent in the storms, and 33 per cent at seven days in August. Above 600 km the
-storms still under-cover at a day (67 to 85 per cent). At 1,338 km the covariance under-covers **in
-every window**, 51 per cent at a day in the quiet week and 6 per cent in May: the residual there is
-small, 0.3 to 0.5 km at a day, but the consistency of the sets is smaller still, so the model's
-floor sits below the error. The sixth-hour under-coverage of item 6 (the half-day floor) is general:
-17 to 57 per cent at six hours in every band.
+storms still under-cover at a day (67 to 85 per cent). At 1,338 km the covariance under-covers in
+every window, the quiet week included, for a reason of its own: item 9. The sixth-hour
+under-coverage of item 6 (the half-day floor) is general: 17 to 57 per cent at six hours in every
+band.
 
 **The storm term** on five spacecraft at 460 to 507 km repeats item 6: it hurts in the quiet week
 (−56 per cent at a day, −137 at three), hurts inside a day or two of a storm and helps from three
@@ -382,11 +431,8 @@ retroreflector's distance from the centre of mass on a large spacecraft, uncorre
 normal points inflate the RMS to between 2 and 38 m in seven of the sixty mission-windows without
 moving the median or the 95th percentile. The two references therefore agree at the metre level,
 three orders of magnitude below the element-set residuals, and neither validates the other at its
-own centimetre level. One construction lesson, recorded because an independent truth is again what
-made it visible: before the site eccentricities were applied, the trailer-mounted NASA stations
-(Yarragadee, Greenbelt, Monument Peak, Hartebeesthoek) showed −1 to −3.5 m residuals growing with
-elevation on every satellite, the signature of a telescope 3 m above its marker; the coordinate
-file refers to the marker and the offset lives in a separate ILRS file.
+own centimetre level. The station eccentricities were missing from the first run, and the error
+they left is recorded with the others of its class in item 2.
 
 **The element set against the laser**, median absolute range residual at a day and at seven days:
 0.3 to 0.4 km and 7 to 20 km at 460 to 507 km, 0.2 and 1 to 5 km at 700 km, 0.2 to 0.3 and 0.5 to
@@ -399,17 +445,46 @@ stated for them.
 **Population, for every downstream page.** Fifteen spacecraft with a reconstructed orbit in five
 bands from 460 to 1,338 km, near-circular, free-flying between manoeuvres, one week of element sets
 per window in four windows, with manoeuvre arcs excluded from a published record (Swarm, GRACE-FO:
-one GRACE-FO 2 burn on 15 May 2024 took 38 set-lead pairs out) and from detection otherwise, which
-took up to half the pairs out of some Sentinel-1A and Sentinel-3 windows. Nothing is measured for
+one GRACE-FO 2 burn on 15 May 2024 took 38 set-lead pairs out) and from detection otherwise, with the
+24-hour arc before each epoch on both paths, which took up to three fifths of the pairs out of some
+Sentinel-1A and Sentinel-3 windows. Nothing is measured for
 debris, for eccentric orbits, for station-kept constellations, for objects the network tracks less
 often, or above 1,340 km, and a detection that reads storm drag as a burn removes trials from
 exactly the intervals a storm benchmark needs; that failure mode is counted for Swarm in item 6 and
 not measured for the detection-only missions.
 
-### 9. ESA's dSGP4 reproduces SGP4 to the metre; its ML-dSGP4 hybrid, trained as published, is worse than SGP4 on both held-out storms
+### 9. At 1,338 km the consistency-derived covariance under-covers in quiet conditions, because the sets agree with one another better than with the truth
+
+The empirical covariance is fitted from how an object's successive element sets disagree
+(`docs/methods.md`, uncertainty and probability), and claims 95 per cent of trials inside two
+sigma. At 460 to 507 km it holds in the quiet week (98 to 100 per cent from one to seven days,
+item 8) and fails in storms. At 1,338 km, on Jason-3 and Sentinel-6A, it fails in the quiet week
+as well, in-track, inside two sigma:
+
+| Window | Median in-track residual at a day | Fitted one-day sigma | Inside two sigma at a day | At six hours |
+| --- | ---: | ---: | ---: | ---: |
+| quiet | 0.27 km | 0.26 km | **51 %** | 32 % |
+| May 2024 | 0.45 km | 0.11 km | 6 % | 15 % |
+| October 2024 | 0.32 km | 0.43 km | 81 % | 53 % |
+| August 2024 | 0.27 km | 0.04 km | 9 % | 0 % |
+| 400 to 600 km, quiet, for comparison | 0.37 km | 0.98 km | 98 % | |
+
+The error is small; the sets' agreement with one another is smaller. Drag is negligible at that
+altitude, so successive fits by the same network to the same tracking with the same force model
+repeat one another closely, and whatever error they share, the fit's own systematic error, is
+invisible to any measure of their consistency. The fitted sigma is a statement about the network's
+repeatability, and it coincides with its accuracy only where a changing atmosphere makes successive
+fits disagree by about as much as they are wrong, which is what happens at 500 km in a quiet week
+and nowhere in a storm. Consequence: at 1,338 km the quiet-scenario probability is computed with an
+in-track sigma smaller than the error in every window, and the first recorded candidate in
+`ROADMAP.md`, a covariance scale validated on the held-out windows per altitude band, is the fix;
+nothing on any page applies it yet, and the report's probabilities at that altitude carry this
+item beside them.
+
+### 10. ESA's dSGP4 reproduces SGP4 to the metre; its ML-dSGP4 hybrid, trained as published, is worse than SGP4 on both held-out storms
 
 ESA's dsgp4 (Acciarini, Baydin and Izzo 2025, Acta Astronautica 226; version 1.3.0), run on the
-reference benchmark's 1,228 usable trial sets (`docs/dsgp4-evaluation.md`): with WGS72 constants
+reference benchmark's 1,201 usable trial sets (`docs/dsgp4-evaluation.md`): with WGS72 constants
 it reproduces the sgp4 library's in-track residual to the metre at every lead in every window, and
 with its default WGS-84 constants it differs by up to five per cent of the median, decametres at
 seven days. Its ML-dSGP4 hybrid wraps the propagator in two small networks that perturb the mean
@@ -419,12 +494,13 @@ operator's predictions in a quiet week, SpaceX's Starlink ephemerides, so the st
 Two hybrids were trained here on the quiet and May windows only, with the corrections starting at
 zero so that the untrained model is exactly SGP4 and the epoch of lowest training loss kept: one on
 Swarm (111 sets, 18,648 hourly truth states to seven days) and one on every mission with a
-reconstructed orbit (639 sets, 107,352). A sweep of the learning rate over 10⁻³, 10⁻⁴ and 10⁻⁵ on
+reconstructed orbit (625 sets, 105,000). A sweep of the learning rate over 10⁻³, 10⁻⁴ and 10⁻⁵ on
 the Swarm set gave losses of 6.66, 6.73 and 6.77 × 10⁻⁶ against 6.80 at the zero start, so the
 training does lower the published objective. It raises the residual. On the training windows the
 Swarm hybrid's median in-track residual is 7 to 46 km against SGP4's 0.4 to 7 km and the
-all-mission hybrid's 1.5 to 6 km; on the held-out storms neither improves one of the ten leads
-(October at a day: 15 and 6 km against 0.65; August: 13 and 3 km against 0.45). **The rule fixed
+all-mission hybrid's 1.5 to 7 km; on the held-out storms neither improves one of the ten leads
+(October at a day: 15 and 5 km against 0.64; August: 14 and 7 km against 0.45; at seven days in
+October 92 and 16 km against 11). **The rule fixed
 before the numbers were seen, adopt only if the held-out storms improve, says do not adopt.** The
 mechanism is in the numbers: the objective is a mean of squared errors over every hour to seven
 days, which the seven-day tail of tens to hundreds of kilometres dominates, so its optimum trades
@@ -437,12 +513,13 @@ three days and beyond in a storm.
 Everything above is indicative, not operational: the covariances come from the consistency of
 public element sets, which measures how much successive fits by one network disagree and bounds
 their accuracy in neither direction, because successive sets share observations and assumptions;
-the one calibration against an independent truth (item 6) covers three satellites in one orbit
-class and finds that consistency under-covers the error in a storm; the Kelvins reproduction
+the calibrations against independent truths (items 6, 8 and 9) cover fifteen spacecraft in five
+altitude bands and find that consistency under-covers the error in a storm, and at 1,338 km in the
+quiet week as well; the Kelvins reproduction
 validates the probability arithmetic on ESA's inputs and calibrates none of this; and the
 probabilities are computed by the two-dimensional method, which is a known underestimate for slow
 encounters.
 `docs/methods.md` lists every approximation, with the precedent this rests on (Flohrer, Krag and
 Klinkrad, 2008; Parker and Linares, 2024) and what is done differently.
 
-_Last updated 7 September 2026._
+_Last updated 8 September 2026._

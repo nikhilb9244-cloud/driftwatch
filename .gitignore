@@ -18,6 +18,7 @@ data/spacex/
 data/weather/
 data/ballistic/
 data/validation/
+data/archive/
 
 # wrangler cached the account id and the account name (an email address) here; retired 2026-09-05
 .wrangler/

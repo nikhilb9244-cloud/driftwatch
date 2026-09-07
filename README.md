@@ -11,24 +11,27 @@ geomagnetic scenario.
 
 ## The horizon
 
-Against ESA's reduced-dynamic precise science orbits for **Swarm A, B and C** — three
-sun-synchronous satellites at approximately 460 and 506 km, the only population this has been measured on — a public
-element set keeps the satellite inside the 25 km in-track half-width of the screening box, at the
-95th percentile of trials, for **five days in a quiet week** (20–27 April 2024), **two days in the
-May 2024 Gannon storm** (6–13 May) and **one day in a held-out October 2024 storm** (6–13 October).
-Those three windows are the whole of the evidence. A probability computed from an element set
-propagated past its horizon is arithmetic on a position the set no longer predicts, so the quiet
-scenario is the default everywhere and a storm scenario is an explicit choice. Detail:
-[docs/calibration-benchmark.md](docs/calibration-benchmark.md).
+Against public reconstructed orbits for fifteen spacecraft in five altitude bands, a public element
+set keeps the satellite inside the 25 km in-track half-width of the screening box, at the 95th
+percentile of trials, for:
 
-The same horizon measured on fifteen spacecraft with a public reconstructed orbit, in five altitude
-bands from 460 to 1,338 km and in four windows with August 2024 added and held out
-([docs/reference-benchmark.md](docs/reference-benchmark.md)): **5 d / 2 d / 24 h / 2 d** at 460 to
-507 km (Swarm and GRACE-FO agree), **5 to 7 days** at 700 km in every window, and **7 days** at 800 km
-and above except Sentinel-3B and SARAL in October. Laser ranging puts the reconstructed orbits and
-the element sets on the same page: the two references agree at the metre level; the element sets
-do not. Nothing is measured for debris, eccentric orbits, station-kept constellations or above
-1,340 km.
+| Altitude band | Spacecraft | Quiet week, 20 to 27 April 2024 | May 2024 storm | October 2024 storm (held out) | August 2024 storm (held out) |
+| --- | --- | --- | --- | --- | --- |
+| 460 to 507 km | Swarm A, B, C; GRACE-FO 1, 2 | **5 d** | **2 d** | **24 h** | **2 d** |
+| 696 to 719 km | Sentinel-1A, CryoSat-2 | 5 d | 5 d | 7 d | 5 d |
+| 783 to 803 km | SARAL, Sentinel-3A, 3B | 7 d | 7 d | 5 d | 7 d |
+| 893 to 952 km | SWOT, HY-2C, 2D | 7 d | 7 d | 7 d | 7 d |
+| 1,338 km | Jason-3, Sentinel-6A | 7 d | 7 d | 7 d | 7 d |
+
+Those four windows, one week of element sets each, are the whole of the evidence; this is the
+measured population, and every page that attaches a horizon to an object attaches its band's. A
+probability computed from an element set propagated past its horizon is arithmetic on a position
+the set no longer predicts, so the quiet scenario is the default everywhere and a storm scenario is
+an explicit choice. Laser ranging puts the reconstructed orbits and the element sets on the same
+page: the two references agree at the metre level; the element sets do not. Nothing is measured for
+debris, eccentric orbits, station-kept constellations or above 1,340 km. Detail:
+[docs/calibration-benchmark.md](docs/calibration-benchmark.md) (Swarm, the first three windows) and
+[docs/reference-benchmark.md](docs/reference-benchmark.md) (all fifteen spacecraft, four windows).
 
 ## Provenance findings
 
@@ -53,6 +56,12 @@ Each was measured, and each is stated with the correction it forced.
    one-day sigma changed on 21,644 of 22,039 objects (median −5 per cent) and the flagged events
    under `quiet` went from 21 to 12.
 
+4. **A station's coordinates locate its marker, not its telescope.** The laser-ranging comparison
+   placed each station at its SLRF2020 position and showed **−1 to −3.5 m** at the four NASA MOBLAS
+   stations on every satellite, growing with elevation; the telescope's offset from the marker
+   (3.18 m up at Yarragadee) lives in a separate ILRS file. Exposed only by comparing the two
+   independent references per station; applied, the residual is −0.1 to −0.6 m per mission.
+
 ## Scope and limits
 
 - **Absolute probabilities are indicative, not operational.** They combine a predicted separation,
@@ -60,7 +69,8 @@ Each was measured, and each is stated with the correction it forced.
 - **The uncertainty model measures consistency, not accuracy.** It is fitted from how an object's
   successive element sets disagree; those sets share observations and assumptions, so their
   agreement bounds the true error in neither direction. The Swarm A/B/C comparison across the three stated windows found it over-covering from one to five days in a quiet week and under-covering at
-  every lead in a storm.
+  every lead in a storm; at 1,338 km it under-covers in the quiet week as well, because the sets
+  agree with one another better than with the truth (findings item 9).
 - **There is no independent orbit determination.** Positions come from public element sets, published operator predictions or supplied orbit products,
   no sensor, and no tracking of any kind in this project.
 - **The storm term has demonstrated skill for one population, at one end of the window, on one
