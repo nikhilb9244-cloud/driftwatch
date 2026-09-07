@@ -64,7 +64,7 @@ Radio Astronomy Observatory: latitude -25.890, longitude 27.687, height 1414.744
 published IGS station list (`https://files.igs.org/pub/station/general/IGSNetwork.csv`). That is a
 surveyed geodetic marker, not a statement about which antenna is used or whether the site is
 available. Over 11 May 2024 the two sets predict the same three passes and their acquisition times
-differ by about a second, although the two predicted positions are 9 km apart — which is a result
+differ by about a second, although at the first acquisition the two predicted positions are 9 km apart — which is a result
 about this object over this day, not a general claim about refresh policy.
 
 **Two tools ship no example.** The conjunction-message tool needs two CCSDS CDMs, KVN or XML,

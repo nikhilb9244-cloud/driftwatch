@@ -8,8 +8,10 @@ plan or a methods page, the page wins. **Nothing else is built until a user supp
 ## Reading order for a fresh session
 
 1. `README.md`, the **findings and corrections** page at the top. It opens with the horizon, ahead
-   of any probability: five days quiet, two days in the May 2024 storm, one day in the October 2024
-   storm, at the screening box's 25 km in-track half-width and the 95th percentile of trials. Item 2
+   of any probability, measured on Swarm A, B and C — three well-tracked satellites at 460 to
+   506 km, one trial per element set: five days quiet, two days in the May 2024 storm, one day in
+   the October 2024 storm, at the screening box's 25 km in-track half-width and the 95th
+   percentile of trials. Item 2
    now carries three corrections of one class, the frame, the clock and the fit's window, each a
    constant offset between two conventions that no self-comparison could see. Item 6 is the
    calibration against ESA's precise orbits and carries the explanation of the under-coverage in the

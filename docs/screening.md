@@ -511,7 +511,17 @@ per cent of their kilometre-scale envelope past a day, and a tripling of the pro
 inside one, where the covariance would otherwise be tighter than the gap between the two
 trajectories. The version-to-version revision the supplemental fit measures is a different
 matter and is deliberately **not** added: it is a different quantity, and `driftwatch spacex`
-prints the two side by side instead:
+Replace docs/screening.md:514
+
+  prints the two side by side instead:
+
+with (wrapped to the file's line width, replacing that single line):
+
+  prints the two side by side instead — measured on 120 Starlink satellites of the demo run on
+  2026-09-02, the closest-approach-ranked subset that was fetched, and constellation medians at
+  each lead rather than any one satellite's envelope:
+
+Nothing else in the section changes. Lines 524-529 keep the "Theirs is the uncertainty *within* one published plan" framing, the "past about ten hours it is a stated envelope on round figures rather than a propagated covariance" caveat, and the existing pointer to `docs/spacex-ephemerides.md`, which is why the corrected wording does not repeat that pointer.
 
 | Lead | SpaceX in-track | driftwatch in-track | Ratio |
 | ---: | ---: | ---: | ---: |

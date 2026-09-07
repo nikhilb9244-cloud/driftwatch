@@ -22,7 +22,7 @@ Implementation detail and operating limits: [docs/workspace.md](docs/workspace.m
 
 ### Visual, standards and scope update — 6 September 2026
 
-The workspace now has a coherent deep-ink/lime/cyan visual system, a larger Earth-led comparison surface, sharp vector charts, selectable traces, keyboard rotation and bounded high-density rendering. It reports actual canvas resolution; the existing Earth source is 4096 × 2048. Scientific evidence remains expandable. Research and adoption tasks: [experience-design.md](docs/experience-design.md).
+The workspace now uses one deep-ink/lime/cyan palette across its views, a larger Earth-led comparison area, charts drawn as vectors rather than bitmaps, selectable traces, keyboard rotation and bounded high-density rendering. It reports actual canvas resolution; the existing Earth source is 4096 × 2048. Scientific evidence remains expandable. Research and adoption tasks: [experience-design.md](docs/experience-design.md).
 
 Browser verification now covers OEM and element-set comparison against the two genuine Swarm A element sets, the contacts view over the ISS element sets and the HRAO00ZAF coordinates, evidence feedback and visual controls. The CDM and planner views are checked only in their awaiting-input state, because neither has been exercised on real data. The usability pass added readable captions over bright Earth imagery, second-level contact timestamps and an export preview with a full-text manual-copy route for restrictive browsers. The full Python suite passed (577 tests), with final TypeScript and production-build checks after the interface fixes. A real user's second-PC trial remains the next adoption gate; in-app browser download completion has not been confirmed. Detailed evidence: [workspace verification](docs/workspace.md#verification-on-6-september-2026).
 
@@ -196,7 +196,8 @@ the one reader who can change what it does, an operator with real warnings:
 1. **A findings-and-corrections page at the top of the README** (built 2026-09-05). Two pages: the
    drift curve between SpaceX's published states and CelesTrak's fit to them; the frame and the
    48-hour seam findings in the published files; the storm-term predictability split with its
-   lead-time structure (skill at three to four days, near zero inside two); and the two falsified
+   lead-time structure (on the May 2024 Gannon storm alone, and only for objects whose ballistic
+   coefficient was measured from their own decay: skill at three to four days, near zero inside two); and the two falsified
    headlines — common-mode cancellation, and the EOS SAT-1 red — each with its dated correction. It
    is what a reviewer reads first, and it is the honest form of the write-up Step 7 would have been.
 2. **A CCSDS CDM parser and matcher** (built 2026-09-05; `src/driftwatch/cdm/`, `driftwatch cdm`).
@@ -298,8 +299,9 @@ the objects the analysis blocked around are not where the analysis put them, and
 on Monday is not cleared on Wednesday. That is the same in-track displacement driftwatch already
 models — and the **storm-term validity split says how much of it is predictable**, object by
 object. A launch conjunction assessment that reports which of its blocked intervals rest on
-objects whose storm response is measured, and which rest on objects where it is not, is saying
-something no existing tool says.
+objects whose storm response is measured, and which rest on objects where it is not, would report
+something this project has not seen reported elsewhere; no survey of existing launch-assessment
+tools has been made here, so that is an impression and not a finding.
 
 **The insertion case**, which is the sharp end: a vehicle **inserting at low altitude during a
 storm** faces both elevated drag on its own initial orbit and a catalogue that has shifted
@@ -346,8 +348,9 @@ to saying the same thing a hundred thousand kilometres further out.
    measure, and what is measured here feeds no catalogue the region controls.
    This is the observational input that item 3 needs and the one place where being here rather
    than anywhere else is an advantage rather than a constraint.
-5. **Cislunar conjunction screening.** An **unoccupied niche** — the traffic is growing, nobody
-   publishes screening for it, and the three-body dynamics make it a genuinely different problem
+5. **Cislunar conjunction screening.** No public screening service for it is known here, and
+   cislunar traffic is reported to be growing — neither claim has been checked against a source,
+   so treat both as unverified. The three-body dynamics make it a genuinely different problem
    from the Earth-orbit case rather than the same one at a larger radius. Requires items 1 and 2.
 6. **Near-Earth asteroid close approaches.** An adjacent public-interest application of the same
    propagation and close-approach machinery, against a population that is already public and

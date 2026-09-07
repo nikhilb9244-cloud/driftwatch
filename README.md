@@ -35,7 +35,8 @@ Each was measured, and each is stated with the correction it forced.
 
 2. **A frame or a clock stated only in a filename or a header will be read wrongly, and nothing
    internal will catch it.** SpaceX's published states are MEME (J2000), 0.36 degrees from TEME by
-   2026: read as TEME they sit **36.2 km** from the fit to the same file, and 0.356 km when
+   2026: on six satellites' files (2026-09-03), compared at the ephemeris start with the fit to
+   the same file, they sit a median **36.2 km** away read as TEME and a median 0.356 km when
    rotated. The same class of error in the time system put ESA's Swarm orbits **137 km** along
    track when their GPS epochs were read as UTC — invisible to every check that compares a source
    with itself, and visible only against an independent reference.
@@ -159,9 +160,10 @@ could separate them (`docs/spacex-ephemerides.md`, "Lineage, checked").
 ### 2. The published files are in a different frame from the one the catalogue uses, and only the filename says so
 
 SpaceX's states are in MEME (J2000). The file header names the covariance frame and never the
-states'. MEME is 0.36 degrees from TEME by 2026, about **44 km** at low Earth orbit radius: read as
-TEME the states sit 36.2 km from CelesTrak's fit to the same file, rotated into TEME they sit
-0.356 km away, which is the published residual. Getting this wrong would have introduced a 44 km
+states'. MEME is 0.36 degrees from TEME by 2026, about **44 km** at low Earth orbit radius:
+measured on six satellites' files (2026-09-03), with the states compared at the ephemeris start,
+read as TEME the states sit a median 36.2 km from CelesTrak's fit to the same file, rotated into
+TEME they sit a median 0.356 km away, which is the published residual. Getting this wrong would have introduced a 44 km
 error in the course of removing a 0.2 km one, silently. Every fetch re-runs the comparison and
 refuses to write the store if it fails (`docs/ephemeris-frame.md`).
 
@@ -447,7 +449,18 @@ What works today:
   the two active South African objects.
 - `driftwatch screen --fleet fleets/demo.yaml --days 7` screens the fleet against the
   whole catalogue in three stages (apogee/perigee overlap, coarse time stepping with a
+Replace README.md:450 (exact match, including the two-space indent):
+
   step and threshold chosen so nothing inside the screening volume can be missed, and
+
+with:
+
+  step and threshold derived so that no minimum inside the screening volume is lost while the
+  trajectory is continuous with a bounded derivative — where a published ephemeris makes it
+  jump the threshold is re-derived, those candidates are refined by a hundred-point scan that
+  places the time of closest approach to about a hundredth of a step rather than by
+  root-finding, and a break in the very first or very last interval of a published file cannot
+  be detected at all (`docs/screening.md`) — and
   root-finding on the range rate), using CelesTrak's supplemental Starlink sets for
   Starlink secondaries; then backfills 45 days of Space-Track element-set history for
   the fleet and every surviving secondary, fits each object's position uncertainty from
@@ -477,7 +490,8 @@ What works today:
   no probability at all: `unscoreable`, with the reason on the row and excluded from every
   aggregate. It did its job twice: it excluded the artefact, and then it **falsified the
   explanation** the headline result had been given — the relative-to-absolute ratio is 1.85 out
-  of a possible 2 over the free-flying pairs, so the two displacements are nearly independent.
+  of a possible 2 over the 981 events of the 3 September 2026 run with both objects free-flying,
+  so the two displacements are nearly independent on that population.
   What it could not find was that the result itself rested on displacing operator-controlled
   objects; an external review did (2026-09-05), and the ratio is now taken over free-flying
   pairs only. See `docs/storm-term.md`.
@@ -564,8 +578,17 @@ What works today:
   manoeuvre exclusion (`docs/calibration-benchmark.md`, item 6 above).
 - `driftwatch local` runs an operator's own files through the provenance check, the CDM matcher
   and the same benchmark with the operator's ephemeris as the truth, with every outbound request
-  refused for the duration, so nothing leaves their machine and the public demonstration stays
-  reproducible from public sources alone (`docs/local-analysis.md`).
+  refused for the duration by an application-level guard over the clients this project fetches
+  through — `httpx.Client.send`, `httpx.AsyncClient.send` and `urllib.request.urlopen` replaced
+  and astropy's auto-download switched off, each restored on exit, any request inside the block
+  raising `NetworkRefused` and exiting with code 3. It is an application guard, not OS-level
+  isolation: it bounds what driftwatch itself sends, not what the machine can send. So the
+  operator's files stay on the operator's machine and the public demonstration stays reproducible
+  from public sources alone (`docs/local-analysis.md`).
+
+(Same pass, README.md:758, which repeats the unbounded framing: replace "and the guard that keeps
+them on the operator's machine." with "and the application-level guard — not OS-level isolation —
+that refuses driftwatch's own outbound requests for the duration.")
 - Tests cover the official SGP4 verification cases, frame conversions against skyfield,
   a real ISS pass over Durban, the cache rules, the snapshot schema, the export, the
   Space-Track client, the fleet files, the screening (synthetic conjunctions with a
@@ -700,9 +723,18 @@ space stations, Starlink, OneWeb, other constellations, other payloads, rocket b
 debris, unknown. The slider spans 24 hours either side of the reference time. Hover for
 name, altitude and position; click or search to pin an object.
 
-Positions come from public two-line element sets propagated with SGP4. They are good to
-hundreds of metres to a few kilometres near the element-set epoch and drift by kilometres
-per day, more in a storm. The viewer's Earth-fixed frame ignores UT1 and polar motion,
+Positions come from public two-line element sets propagated with SGP4. Near the element-set epoch
+they are good to hundreds of metres to a few kilometres, and they drift by kilometres per day,
+more in a storm; that general range is not itself measured in this project. The only population it
+has been measured on here is ESA's Swarm A, B and C (item 6; `docs/calibration-benchmark.md`),
+three sun-synchronous satellites at 460 to 506 km, 57, 54 and 61 element sets across three
+one-week windows, one set being one trial. Median in-track error at 6 h / 24 h / 72 h / 7 days:
+0.3 / 0.5 / 3.2 / 24 km in the quiet week of 20-27 April 2024, 0.5 / 0.8 / 7.2 / 75 km in the May
+2024 Gannon storm, 0.9 / 1.8 / 15 / 49 km in the held-out October 2024 storm. Past a couple of
+days, and in a storm, the error is well beyond a few kilometres. Nothing is measured for debris,
+for higher orbits or for objects the network tracks less often. The viewer's Earth-fixed frame
+ignores UT1 and polar motion, which costs under a pixel. Everything approximate is listed in
+`docs/methods.md`. The viewer's Earth-fixed frame ignores UT1 and polar motion,
 which costs under a pixel. Everything approximate is listed in `docs/methods.md`.
 
 Coverage is the CelesTrak groups (operational payloads, stations, the Starlink and

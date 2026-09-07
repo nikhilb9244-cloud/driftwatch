@@ -69,7 +69,7 @@ env:
   # stored inputs (docs/pipeline.md, "Reproducibility"). While it is empty a production deploy
   # is downgraded to a preview, with a warning: nothing goes to production until the same
   # inputs have been shown to give the same events in both environments.
-  REPRODUCED_RUN: ""
+  REPRODUCED_RUN: "demo_20260905T000400Z"
   # The snapshot the run screened must be fresher than this, or the bundle is not published.
   # Six hours: a daily pipeline whose fetch silently fell back to yesterday's cache has not
   # run, whatever its exit code said.

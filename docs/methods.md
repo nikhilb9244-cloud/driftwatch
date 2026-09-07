@@ -166,7 +166,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   publishes with every set (a median of 0.20 km, a 90th percentile of 0.27 km and a worst case of 10.8 km when read on 2026-09-02) are the residual over the arc the fit was made on — how
   well the set represents that ephemeris there, and no bound on it elsewhere: propagated, a set is
   kilometres from its file within a day ("How big that residual actually is", below) — and the
-  ephemeris itself is a prediction revised as plans change. Used for 10,728 of the 11,094 Starlink objects on the first run;
+  ephemeris itself is a prediction revised as plans change. Used for 10,728 of the 11,094 Starlink objects on the first run (2026-09-02, on the snapshot of 2026-09-01 20:48 UTC); the coverage moves with what CelesTrak has fitted on the day — a later run over the same snapshot applied 10,727, at a median epoch lag of +0.70 days rather than +0.40 — and it has not been tracked beyond those runs;
   `secondary_ephemeris` says which set an event used.
 - **Attached and co-orbiting objects are excluded structurally, not by name (Phase 4 Step 2
   review).** A docked visiting vehicle, a station module and a payload still mated to its
@@ -606,8 +606,18 @@ and provenance rather than about new physics, and it is meant to be read as one.
 
 ### Storm-term validity
 
-- **The storm term has skill for an object whose ballistic coefficient was measured from its own
-  decay, and no demonstrated skill otherwise.** On the May 2024 record the predicted sign is right
+- **The storm term has skill in a storm, for an object whose ballistic coefficient was measured
+  from its own decay, and no demonstrated skill otherwise; on the one quiet week measured it made
+  the prediction worse.** On the quiet control of the Swarm benchmark (element sets issued 20 to
+  27 April 2024, Kp at or under 4; Swarm A, B and C, 57 sets, every one on a `history`
+  coefficient -- the population this bullet endorses) the term made the median in-track residual
+  worse at eight of the ten leads, from one to six days of lead, by 10 to 96 per cent, and
+  improved it only at 12 hours and 7 days: the excess it integrates is not zero without a storm,
+  because the density the set's B\* implies is not the model's quiet density
+  (`docs/calibration-benchmark.md`, "quiet (control)"). Three satellites in one orbit class over
+  one week is not a measurement of quiet conditions in general, and the held-out October storm
+  shows the sign is not fixed by the condition alone -- there the term helps to five days and
+  hurts at six and seven. On the May 2024 record the predicted sign is right
   on about nine comparisons in ten at three to four days of lead for the measured population, with
   a robust slope of 0.63 to 0.75, and there is no skill inside two days (the lead-time bullet
   below); over the free-flying population as a whole the shifts are uncorrelated. A `bstar`
@@ -711,9 +721,10 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
 
 ## Propagation
 
-- **SGP4 with WGS72 constants, improved mode.** The only correct way to use TLE/OMM
-  data. Verified against the official `tcppver.out` to 1e-6 km through the same
-  vectorised path the pipeline uses.
+- **SGP4 with WGS72 constants, improved mode.** The model TLE and OMM mean elements are
+  defined against, so any other constant set or mode reads them as something they are not.
+  Verified against the official `tcppver.out` to 1e-6 km through the same vectorised path the
+  pipeline uses.
 - **Error handling.** SGP4 error codes are kept per object and positions are masked to
   NaN. Nothing is silently dropped or plotted at a bogus location.
 - **Time.** UTC everywhere; SGP4 evaluation uses split Julian dates so microsecond
@@ -762,7 +773,10 @@ Full account in `docs/storm-validation.md`. What is approximate about the *measu
   object. The difference comes from the OMM epoch being rounded to milliseconds by
   JavaScript `Date` parsing (up to 0.5 ms times orbital speed) and is far below the
   catalogue's own accuracy. Frame compute time with the WebAssembly path is about 11 ms
-  for the whole catalogue.
+  for that same 19,183-object 2026-09-01 snapshot, taken in one browser on one development
+  machine on a single occasion; the machine and browser are not recorded here. It sizes the
+  approach on the hardware it happened to run on and measures no other device, no other
+  browser and no other catalogue size.
 - **Interpolation between worker frames.** The worker computes positions and velocities
   on a time grid; the GPU interpolates with a cubic Hermite polynomial between grid
   points. For a 90-minute orbit and a 60-second grid step the interpolation error is

@@ -28,7 +28,7 @@ Every shipped example is measured or published data, and names its object and so
 | --- | --- | --- |
 | Reference OEM, and the orbit comparison | `swarm-a-esa-orbit.oem` against `swarm-a-elements-2024-05-12.json` and `swarm-a-elements-2024-05-06.json` | Swarm A, NORAD 39452. Reference: ESA reduced-dynamic precise science orbit `SW_OPER_SP3ACOM_2_`. Predictions: two Space-Track `gp_history` element sets six days apart, from `data/history/gph_*.parquet`. |
 | OMM / GP JSON, and ground contacts | `iss-elements-2024-05-10.json`, `iss-elements-2024-05-04.json` | ISS, NORAD 25544, two Space-Track `gp_history` element sets, over IGS station HRAO00ZAF (-25.890, 27.687, 1414.744 m) from `https://files.igs.org/pub/station/general/IGSNetwork.csv`. |
-| Manoeuvre CSV | `swarm-a-esa-manoeuvres.csv` | ESA `SW_OPER_SC_xDYN_1B` thruster record for Swarm A. Empty over this window, because ESA recorded no orbit-control thrust in it. |
+| Manoeuvre CSV | `swarm-a-esa-manoeuvres.csv` | ESA `SW_OPER_SC_xDYN_1B` thruster record for Swarm A. Empty over the comparison window 2024-05-13T00:00:00Z to 2024-05-14T00:00:00Z, because ESA recorded no orbit-control thrust in it; that is a statement about this window only. |
 | Model benchmark JSON | `benchmark.json` | Swarm A, B and C against ESA precise orbits: the measured driftwatch calibration benchmark. |
 | CCSDS CDM | none | No example ships. The tool needs two CDMs, KVN or XML, for the same conjunction, from the reader's own provider. **It has not been exercised on real conjunction messages.** |
 | Contact planner table | none | No example ships. The tool needs one week of the station's own requests. **It has not been exercised against a real request week.** |

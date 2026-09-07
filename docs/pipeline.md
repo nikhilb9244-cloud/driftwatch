@@ -358,6 +358,33 @@ them can only be reproduced over the events that did not involve a served object
 comparison is therefore made on a `spacex: no` run, and a served run's reproducibility is
 bounded by that partition.
 
+**The comparison, made 2026-09-07.** `demo_20260905T000400Z` (run `20260905T000442Z-8856`) was
+rebuilt on a second machine from the archived release asset and the store branch alone: snapshot
+`gp_20260905T000415Z.parquet`, supplemental `starlink_20260905T000442Z.parquet`, screened with
+`--no-spacex --offline` over the same window. **Every event matches.** 5,766 events on both sides,
+the same (primary, secondary, TCA) keys in the same order, and the largest disagreement across
+every numeric column -- miss distance, its radial, in-track and cross-track components, both
+objects' state vectors -- is 1.5 x 10^-9 km, which is floating-point noise and not a difference.
+The counts agree object by object: 151, 487, 480, 535, 3,775 and 338 events for the six fleet
+members. So do the whole-run figures: 48,043 pairs, 22,704 objects propagated, 463,638,384
+propagations, 170,977 candidates, 1,040 events in the box, 5,645 within the watch radius, and the
+attached filter's 10 pairs excluded and **444 candidates dropped**. `REPRODUCED_RUN` names this run
+and production deploys are no longer downgraded.
+
+**One thing the comparison caught, which is a real limit of the mode.** The first attempt did *not*
+match: 6,330 events against 5,766. `driftwatch screen --offline` reads the supplemental Starlink
+sets from the CelesTrak response cache at `data/cache/celestrak/supplemental/starlink.json`, not
+from the versioned `data/supplemental/<name>_<version>.parquet` that the run records and the store
+branch carries. On the second machine that cache held a two-day-older fetch, so the replay screened
+a different Starlink input -- 4,120 of 11,117 sets applied against the run's 10,723, with a median
+epoch lag of -0.798 days against +0.228 -- and the extra events were almost all on the one fleet
+member whose secondaries are mostly Starlink. Nothing warned that the input had been substituted.
+Seeding the cache from the version the run names gives the exact match above. Until a replay reads
+`elements_for_run` rather than the cache, **a reproduction is only valid if the operator confirms
+the supplemental version in the rebuilt run's `run.json` matches the archived one**; the two runs
+above both report `n_records` 11,115, `n_applied` 10,723 and `epoch_lag_days_median` 0.228, which
+is the check.
+
 **The discrepancy this was built to settle, and what it was.** The attached-object filter
 dropped 2,170 candidates on the local 3 September run and none on two runner runs, all three
 reporting the same ten ISS pairs excluded. It was the input, not the machine. On the afternoon
@@ -369,7 +396,10 @@ orbit and the filter has 217 candidates a pair to drop. By the time the runner f
 whole cluster was on one copy to the last digit: zero separation, a range rate that never
 changes sign, no candidate, nothing to drop — and the filter still reporting the pair attached,
 which is what made the two reports comparable at all. `tests/test_screening.py` pins both
-readings, and `docs/phase4-plan.md` (Step 2, the attached-object filter) carries the note.
+readings, and `docs/phase4-plan.md` (Step 2, the attached-object filter) carries the note. The
+2026-09-07 comparison adds the third reading and settles it: the 5 September run dropped **444**
+candidates on the runner and **444** on a second machine from the same stored snapshot, so the
+quantity is a property of the element sets that were served, not of the machine that screened them.
 
 ## How it fails
 

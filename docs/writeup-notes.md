@@ -86,8 +86,9 @@ The red threshold is 10⁻⁴, the one NASA applies to the ISS.
 **Why it is worth a paragraph and not a footnote.**
 
 - **It is at the near end of the horizon, not the far end.** Fifteen hours out, the two
-  trajectories disagree by a median of about 1.6 km — the disagreement grows to tens of
-  kilometres by two and a half days. This flag needed only the near-end disagreement. The
+  trajectories disagree by a median of about 1.6 km — measured on the nineteen matched Starlink
+  files of the 2026-09-03 fetch, against SpaceX's published prediction rather than the realised
+  orbit — and the disagreement grows to tens of kilometres by two and a half days. This flag needed only the near-end disagreement. The
   effect does not depend on going out to where the two trajectories are obviously different.
 - **It falsifies the measurement Phase 2 published about itself.** Phase 2 added CelesTrak's
   0.20 km fit residual in quadrature to every served covariance, measured the result, and found

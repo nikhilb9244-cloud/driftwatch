@@ -99,9 +99,7 @@ orbit has genuinely dropped far enough that it is not.
 
 **Read the magnitudes.** A doubled density at 300 km puts an object 4,000 km along its own
 track in a week. That is not a rounding error on a conjunction screening; it is the difference
-between a conjunction and no conjunction at all. At 550 km the same doubling is 63 km, and at
-800 km it would be a few kilometres. This is why the storm layer matters most exactly where
-the catalogue is densest.
+between a conjunction and no conjunction at all. At 550 km the same doubling is 63 km — both figures are for `B = 0.01` on the test orbit above, over a week, and not for any catalogued object; no 800 km case was integrated. The displacement falls with the density, so it is largest at the lowest altitudes. How much of the catalogue sits at those altitudes is not measured here.
 
 ## Where the excess is measured from
 
@@ -490,9 +488,7 @@ difference is large:
 | 1e-7 to 1e-5 | **0.12** | 0.80 | 0.52 |
 | 1e-5 to 1 | **0.24** | 0.85 | 0.49 |
 
-Read down the first column: **where the storm term is validated, the displacement lowers the
-probability by roughly an order of magnitude**, and it lowers it on 718 of the 835 comparable
-events. Where it is indicative the ratio sits near 0.85 and the shift barely moves the number at
+Read down the first column: on the 1 September demo run's G5 scenario, over the 835 comparable `validated` events, **the displacement lowered the probability by roughly an order of magnitude**, and lowered it on 718 of them. That measurement predates the operator-controlled correction of 2026-09-05 and is withdrawn as a finding of these runs: it was made while the term was still displacing Starlinks on supplemental element sets and station-kept primaries, and on the population whose shifts were legitimate — both objects free-flying — the probability is lowered and raised in nearly equal numbers. The section "Corrected 2026-09-05: operator-controlled objects are not displaced" below has the measurement. Where it is indicative the ratio sits near 0.85 and the shift barely moves the number at
 all — which is what would be expected of a displacement built on a coefficient that has no
 demonstrated relationship to the object.
 

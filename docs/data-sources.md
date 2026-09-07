@@ -109,9 +109,10 @@ mean equator, mean equinox, of J2000 — and the header does not say so.** The h
 prefix on the filename. MEME is not TEME, which is what SGP4 produces and what most
 conjunction tooling assumes: by 2026 precession and nutation have separated them by about
 0.36 degrees, which is **roughly 44 km at low Earth orbit radius**. Measured here on
-2026-09-03 against CelesTrak's SGP4 fits to the same files: read as TEME the states sit
-**36.2 km** from the fit, and rotated into TEME they sit **0.356 km** from it, which is
-CelesTrak's own published fit residual and therefore the right answer. There is nothing to
+2026-09-03 on six Starlink satellites, each file's states compared with CelesTrak's SGP4 fit
+to the same file at the ephemeris start: read as TEME the states sit a median **36.2 km** from
+the fit, and rotated into TEME a median **0.356 km** from it, which is CelesTrak's own
+published fit residual and therefore the right answer. There is nothing to
 signal a misreading — the trajectory stays smooth and plausible, it is simply in
 the wrong place — and in driftwatch's case the mistake would have introduced a 44 km error
 in the course of removing a 0.2 km one. `docs/ephemeris-frame.md` is the standalone note,
