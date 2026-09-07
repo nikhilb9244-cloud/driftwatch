@@ -455,7 +455,10 @@ hours of a burn is fitted across it and is wrong along track by kilometres to te
 from its epoch, and the next set is not; how long after a burn the first set is issued differs by
 object, and the sets do not say why. Why a set issued a few hours after a burn is wrong by 19 to
 33 km on Sentinel-3B and SWOT and by 2 to 5 km on Sentinel-1A and CryoSat-2 is not ordered by
-cadence, by delay or by burn size, and that part of the 3B question stays open.
+cadence, by delay or by burn size, and that part of the 3B question stays open. The radio lane's
+per-object output and export now carry the time since the last detected manoeuvre and whether the
+set's likely fit arc spanned it, with this measurement as the stated consequence
+(`docs/radio-lane.md`).
 
 **Coverage of the empirical covariance** (in-track, inside two sigma, 95 per cent claimed). At 460
 to 507 km on five spacecraft item 6 repeats: 98 to 100 per cent in the quiet week from one to seven

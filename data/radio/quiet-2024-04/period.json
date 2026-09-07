@@ -1,5 +1,5 @@
 {
- "built_at": "2026-09-07T22:28:17.735053+00:00",
+ "built_at": "2026-09-07T23:34:36.513543+00:00",
  "period": {
   "name": "quiet-2024-04",
   "label": "quiet week, 20 to 27 April 2024",
@@ -179,7 +179,11 @@
      "benchmark_lead_h": null,
      "benchmark_n_trials": null,
      "emission_status": "none expected",
-     "emission_detail": "debris or rocket body"
+     "emission_detail": "debris or rocket body",
+     "manoeuvre_detected_between": null,
+     "hours_since_manoeuvre": null,
+     "fit_arc_spanned_manoeuvre": false,
+     "manoeuvre_detection": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found"
     },
     {
      "norad_id": 39231,
@@ -214,7 +218,11 @@
      "benchmark_lead_h": null,
      "benchmark_n_trials": null,
      "emission_status": "none expected",
-     "emission_detail": "debris or rocket body"
+     "emission_detail": "debris or rocket body",
+     "manoeuvre_detected_between": null,
+     "hours_since_manoeuvre": null,
+     "fit_arc_spanned_manoeuvre": false,
+     "manoeuvre_detection": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found"
     }
    ]
   }

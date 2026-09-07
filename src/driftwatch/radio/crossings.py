@@ -13,7 +13,10 @@ time shift the calibration benchmark gives that age and geometry, and the two ho
 *crossing horizon*, governed by the cross-track error (whether the crossing happens), and the
 *position horizon*, governed by the along-track error (where the object is at an instant), each
 inside or outside. Objects outside the benchmark's population carry *no measured horizon* and
-the reason for both.
+the reason for both. Each object also carries the time since the last manoeuvre the element-set
+jump detector finds in its own sets, as a lower bound, and whether the set's likely fit arc, the
+benchmark's exclusion arc before its epoch, spanned it: the benchmark measured what such a set
+does (the post-burn table on the reference page), and the export states it beside the flag.
 
 Both are geometry from public element sets. Nothing here is a received power, an occupancy or
 a sensitivity loss.
@@ -53,6 +56,7 @@ from driftwatch.radio.horizon import COVERAGE, CrossingUncertainty
 from driftwatch.radio.observations import Observation
 from driftwatch.radio.site import Site, boresight, look_from, separation_deg, sky_projection, teme_to_pef
 from driftwatch.screening.ric import ric_basis
+from driftwatch.storm import precise
 
 log = logging.getLogger(__name__)
 
@@ -69,6 +73,9 @@ MEASURED_MAX_AGE_DAYS = 7.0
 ELEVATION_CUTOFF_DEG = 10.0
 # Newest set at or before the observation, no older than this, or the object is not in the catalogue that day.
 CATALOGUE_MAX_AGE_DAYS = 7.0
+# The tracking arc an element set is likely to have been fitted from: the benchmark's exclusion arc. A
+# detected burn inside it means the set was fitted across the burn and is wrong from its epoch on.
+FIT_ARC_HOURS = precise.MANOEUVRE_ARC_HOURS
 
 COARSE_STEP_S = 10.0
 FINE_STEP_S = 1.0
@@ -334,6 +341,10 @@ class Crossing:
     benchmark_n_trials: int | None
     emission_status: str
     emission_detail: str
+    manoeuvre_detected_between: list[str] | None = None  # the two set epochs the last detected burn lies between
+    hours_since_manoeuvre: float | None = None  # from the later of those to the crossing: a lower bound
+    fit_arc_spanned_manoeuvre: bool | None = None  # the likely fit arc, FIT_ARC_HOURS before the epoch, reaches it
+    manoeuvre_detection: str = "no detection"  # what was searched, and what it found
     samples: list[Sample] = field(default_factory=list)
 
     def record(self, with_samples: bool = True) -> dict[str, Any]:
@@ -372,6 +383,37 @@ def _object_emission(object_type: str, constellation: str | None, rx: site_mod.R
     if object_type in ("DEB", "R/B"):
         return "none expected", "debris or rocket body"
     return emissions.emission_status(constellation, rx)
+
+
+def last_manoeuvre(
+    own_sets: pd.DataFrame | None, epoch: pd.Timestamp, t_ca: pd.Timestamp, *, arc_hours: float = FIT_ARC_HOURS
+) -> tuple[list[str] | None, float | None, bool | None, str]:
+    """The last manoeuvre the set-jump detector finds in the object's own sets at or before ``epoch``.
+
+    Returns the interval between the two sets either side of it (the sets do not say when inside
+    it the burn was), the hours from the interval's end to ``t_ca`` (a lower bound on the time
+    since the burn), whether the set's likely fit arc, ``arc_hours`` before its epoch, reaches the
+    interval, and a statement of what was searched. Only sets at or before the epoch are read, so
+    a burn after the newest set is invisible here, as it is to the set. ``epoch`` and ``t_ca`` are
+    naive UTC.
+    """
+    if own_sets is None or not len(own_sets):
+        return None, None, None, "no detection: no element-set history held"
+    epochs = pd.to_datetime(own_sets["epoch"], utc=True).dt.tz_convert(None)
+    own = own_sets[epochs <= epoch].sort_values("epoch").drop_duplicates("epoch", keep="last")
+    if len(own) < 2:
+        return None, None, None, "no detection: fewer than two element sets held at or before the epoch"
+    first = pd.to_datetime(own["epoch"].iloc[0], utc=True)
+    last = pd.to_datetime(own["epoch"].iloc[-1], utc=True)
+    searched = f"set-jump detector on {len(own)} sets from {first:%Y-%m-%d} to {last:%Y-%m-%d}"
+    intervals = precise.manoeuvre_intervals_from_sets(own)
+    if not intervals:
+        return None, None, False, f"{searched}: none found"
+    lo, hi = intervals[-1]
+    spanned = bool(lo <= epoch and hi >= epoch - pd.Timedelta(hours=arc_hours))
+    since_h = float((t_ca - hi).total_seconds() / 3600.0)
+    between = [lo.isoformat() + "Z", hi.isoformat() + "Z"]
+    return between, since_h, spanned, f"{searched}: last found between {between[0]} and {between[1]}"
 
 
 class _Refiner:
@@ -414,8 +456,13 @@ def beam_crossings(
     *,
     coarse_step_s: float = COARSE_STEP_S,
     fine_step_s: float = FINE_STEP_S,
+    sets: pd.DataFrame | None = None,
 ) -> list[Crossing]:
-    """Product two for one observation: every object whose track passes inside the half-power radius."""
+    """Product two for one observation: every object whose track passes inside the half-power radius.
+
+    ``sets`` is the element-set history the catalogue was built from; each crossing object's own sets at
+    or before its epoch go to the manoeuvre detector. Without it the manoeuvre fields are null.
+    """
     radius = obs.fwhm_deg / 2.0
     bands = tuple(horizon_mod.bands_present(trials))
     coarse = time_grid(obs.start, obs.duration_s, coarse_step_s)
@@ -464,6 +511,7 @@ def beam_crossings(
             right = np.r_[s_filled[1:], np.inf]
             minima = np.flatnonzero((s_filled <= left) & (s_filled <= right) & (s_filled - margin[j] <= radius))
             row = catalogue.iloc[int(cand[sl][j])]
+            own = None if sets is None else sets[sets["norad_id"] == int(row["norad_id"])]
             refiner = _Refiner(cand_satrecs[sl][j], site, t0, fine_s, bore_fine)
             for k in minima:
                 lo = max(float(fine_s[k]) - 1.5 * fine_step_s, 0.0)
@@ -478,7 +526,18 @@ def beam_crossings(
                 partial = bool(k == 0 or k == len(s_filled) - 1)
                 crossings.append(
                     _describe(
-                        row, refiner, t_ca_s, closest, partial, obs, trials, period, site, float(fine_s[-1]), bands
+                        row,
+                        refiner,
+                        t_ca_s,
+                        closest,
+                        partial,
+                        obs,
+                        trials,
+                        period,
+                        site,
+                        float(fine_s[-1]),
+                        bands,
+                        own_sets=own,
                     )
                 )
     crossings.sort(key=lambda c: c.t_ca_utc)
@@ -542,6 +601,7 @@ def _describe(
     site: Site,
     t_end_s: float,
     bands: tuple[str, ...] | None = None,
+    own_sets: pd.DataFrame | None = None,
 ) -> Crossing:
     r_pef, v_rot, _, t_ca = refiner.state(t_ca_s)
     lk = look_from(site, r_pef[None, :])
@@ -578,6 +638,7 @@ def _describe(
     ra, dec = site_mod.sky_from_alt_az(site, lk.elevation_deg, lk.azimuth_deg, np.array([t_ca]))
     samples = _in_beam_samples(refiner, site, t_ca_s, range_km, obs.fwhm_deg / 2.0, t_end_s)
     status, detail = _object_emission(str(row["object_type"]), row["constellation"], obs.receiver)
+    between, since_h, spanned, detection = last_manoeuvre(own_sets, epoch.tz_convert(None), t_ca_dt.tz_convert(None))
     return Crossing(
         norad_id=int(row["norad_id"]),
         name=str(row["name"]),
@@ -612,6 +673,10 @@ def _describe(
         benchmark_n_trials=unc.n_trials if unc else None,
         emission_status=status,
         emission_detail=detail,
+        manoeuvre_detected_between=between,
+        hours_since_manoeuvre=since_h,
+        fit_arc_spanned_manoeuvre=spanned,
+        manoeuvre_detection=detection,
         samples=samples,
     )
 
@@ -648,7 +713,7 @@ def run_observation(
         CATALOGUE_MAX_AGE_DAYS,
     )
     counts = constellation_view(cat, site, obs.start, obs.duration_s, obs.receiver, elevation_deg=elevation_deg)
-    crossings = beam_crossings(cat, site, obs, trials, period)
+    crossings = beam_crossings(cat, site, obs, trials, period, sets=sets)
     return ObservationResult(obs, len(cat), obs.start.isoformat().replace("+00:00", "Z"), counts, crossings)
 
 

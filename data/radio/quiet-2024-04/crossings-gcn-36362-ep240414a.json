@@ -19,7 +19,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 66.91662344245493,
@@ -34,7 +36,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 66.9034128989463,
@@ -49,7 +53,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 66.89015619869767,
@@ -64,7 +70,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 66.87685344318687,
@@ -79,7 +87,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 66.86350473402906,
@@ -94,7 +104,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 66.85011017303904,
@@ -109,7 +121,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 66.83666986216474,
@@ -124,7 +138,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       }
      ]
     },
@@ -145,7 +161,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 69.14246693485933,
@@ -160,7 +178,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 69.08866972861112,
@@ -175,7 +195,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 69.03488432177357,
@@ -190,7 +212,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 68.98111095858735,
@@ -205,7 +229,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 68.92734988138577,
@@ -220,7 +246,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 68.87360133033441,
@@ -235,7 +263,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       },
       {
        "altitude": 68.81986554315496,
@@ -250,7 +280,9 @@
        "cross_track_uncertainty_deg": null,
        "crossing_horizon": "no measured horizon",
        "along_track_shift_s": null,
-       "position_horizon": "no measured horizon"
+       "position_horizon": "no measured horizon",
+       "hours_since_manoeuvre": null,
+       "fit_arc_spanned_manoeuvre": false
       }
      ]
     }
@@ -265,8 +297,15 @@
    "cross_track_uncertainty_deg",
    "crossing_horizon",
    "along_track_shift_s",
-   "position_horizon"
+   "position_horizon",
+   "hours_since_manoeuvre",
+   "fit_arc_spanned_manoeuvre"
   ],
+  "post_manoeuvre": {
+   "arc_hours": 24.0,
+   "detector": "the element-set jump detector on the object's own sets at or before the set's epoch, so a burn after the newest set is invisible; the burn lies between the two set epochs reported in the crossing record, hours_since_manoeuvre counts from the later of them, and fit_arc_spanned_manoeuvre is true when that interval reaches into the arc_hours before the set's epoch",
+   "measured_consequence": "In the reference benchmark (docs/reference-benchmark.md, the first element sets after a burn: 12 burns on 6 spacecraft at 700 to 950 km in four windows of 2024, each burn placed by the orbit-step detector on the reconstructed orbit), the first element set issued after a burn was wrong along track at four days by 2.3 to 33 km when it was issued within ten hours of the burn (19 to 33 km on four of those seven) and by 0.1 to 2.3 km when issued twelve hours or later; at one day by 0.6 to 9.6 km against 0.1 to 0.9; the second set after every burn was within 5.3 km at four days. Nothing is measured for station-kept objects or debris."
+  },
   "fov": {
    "ra_deg": 191.50695833333336,
    "dec_deg": -9.719111111111111,
@@ -443,7 +482,11 @@
     "benchmark_lead_h": null,
     "benchmark_n_trials": null,
     "emission_status": "none expected",
-    "emission_detail": "debris or rocket body"
+    "emission_detail": "debris or rocket body",
+    "manoeuvre_detected_between": null,
+    "hours_since_manoeuvre": null,
+    "fit_arc_spanned_manoeuvre": false,
+    "manoeuvre_detection": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found"
    },
    {
     "norad_id": 39231,
@@ -478,13 +521,18 @@
     "benchmark_lead_h": null,
     "benchmark_n_trials": null,
     "emission_status": "none expected",
-    "emission_detail": "debris or rocket body"
+    "emission_detail": "debris or rocket body",
+    "manoeuvre_detected_between": null,
+    "hours_since_manoeuvre": null,
+    "fit_arc_spanned_manoeuvre": false,
+    "manoeuvre_detection": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found"
    }
   ],
   "limits": [
    "Positions come from public element sets propagated with SGP4; no tracking, no orbit determination.",
    "cross_track_uncertainty_deg is the 95th percentile of the calibration benchmark's cross-track residual at the element set's age, projected on the sky at the crossing's range, and crossing_horizon says whether 95 per cent of the benchmark's trials at that age keep it under a third of the beam (inside) or not (outside): whether the object crossed the beam.",
    "along_track_shift_s is the 95th percentile of the benchmark's along-track residual at that age as a time shift at the orbital speed, and position_horizon says whether the along-track angular error keeps the same coverage (inside) or not (outside): where the object is at an instant. Both horizons are null where the object is outside the benchmark's population, and both say so. The population is the altitude-band table of docs/radio-horizon.md: near-circular, free-flying spacecraft with a public reconstructed orbit, in bands from 400 to 1400 km, each object scored against its own band's trials; nothing is measured for debris, eccentric orbits or station-kept objects through a burn.",
+   "hours_since_manoeuvre and fit_arc_spanned_manoeuvre come from the element-set jump detector on the object's own sets at or before the set's epoch: a lower bound on the time since the last detected burn, and whether the set's likely fit arc, the benchmark's 24-hour exclusion arc before its epoch, reaches that burn. Both are null where fewer than two sets are held; a burn the detector misses, or one after the newest set, is not reported. The consequence of a spanned arc is the benchmark's measured post-burn error, stated under post_manoeuvre.",
    "Nothing here is a received power, an occupancy fraction or a sensitivity loss."
   ]
  }

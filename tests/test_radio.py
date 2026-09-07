@@ -366,7 +366,7 @@ def test_observation_csv_refuses_a_missing_column(tmp_path):
         observations.read_observations(path)
 
 
-def test_satchecker_export_has_the_documented_shape_and_the_two_added_fields():
+def test_satchecker_export_has_the_documented_shape_and_the_added_fields():
     t = datetime(2024, 4, 23, 20, 40, tzinfo=UTC)
     epoch = t - timedelta(hours=3)
     sat = _overhead_satrec(t, epoch=epoch)
@@ -388,6 +388,47 @@ def test_satchecker_export_has_the_documented_shape_and_the_two_added_fields():
     assert position["position_horizon"] == "inside" and position["along_track_shift_s"] > 0
     assert "horizon" not in position, "the single horizon field is gone: the export carries the two named ones"
     assert data["total_position_results"] == len(entry["positions"])
+    # One set in the history: no manoeuvre detection is possible, and the export says so once, with the consequence.
+    assert position["hours_since_manoeuvre"] is None and position["fit_arc_spanned_manoeuvre"] is None
+    assert result.crossings[0].manoeuvre_detection.startswith("no detection")
+    post = payload[0]["post_manoeuvre"]
+    assert post["arc_hours"] == 24.0 and "12 burns on 6 spacecraft" in post["measured_consequence"]
+    assert any("fit_arc_spanned_manoeuvre" in line for line in payload[0]["limits"])
+    text = report._crossings_table(result.crossings)[2]
+    assert "| no detection |" in text
+
+
+def test_the_last_detected_manoeuvre_is_reported_with_the_fit_arc_flag():
+    """Fourteen sets eight hours apart, a two-kilometre raise between the ninth and the tenth: the detector places
+    the burn between those two epochs; the time since counts from the later one; the fit-arc flag holds for a set
+    issued up to the arc after that epoch and clears beyond it; sets before the burn find nothing."""
+    from synthetic import history_records, raised_copy
+
+    t_burn = datetime(2024, 4, 22, 20, 0, tzinfo=UTC)
+    base = _overhead_satrec(datetime(2024, 4, 23, 20, 40, tzinfo=UTC))
+    raised = raised_copy(base, t_burn, 2.0)
+    epochs = [datetime(2024, 4, 20, 0, 0, tzinfo=UTC) + timedelta(hours=8 * k) for k in range(14)]
+    records = history_records(90001, lambda t: raised if t > t_burn else base, epochs, np.random.default_rng(1))
+    sets = records_to_frame(records)
+    t_ca = pd.Timestamp("2024-04-24T12:00:00")
+
+    between, since_h, spanned, text = crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-23T00:00:00"), t_ca)
+    assert between == ["2024-04-22T16:00:00Z", "2024-04-23T00:00:00Z"]
+    assert since_h == pytest.approx(36.0) and spanned is True
+    assert text.startswith("set-jump detector on 10 sets") and "last found between" in text
+    # Two sets later the 24-hour arc still reaches the interval; at 32 hours after its end it does not.
+    assert crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-23T16:00:00"), t_ca)[2] is True
+    between, since_h, spanned, _ = crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-24T08:00:00"), t_ca)
+    assert between[1] == "2024-04-23T00:00:00Z" and since_h == pytest.approx(36.0) and spanned is False
+    # Before the burn there is nothing to find; with one set there is no detection at all.
+    assert crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-22T16:00:00"), t_ca) == (
+        None,
+        None,
+        False,
+        "set-jump detector on 9 sets from 2024-04-20 to 2024-04-22: none found",
+    )
+    assert crossings.last_manoeuvre(sets.iloc[:1], pd.Timestamp("2024-04-20T00:00:00"), t_ca)[2] is None
+    assert crossings.last_manoeuvre(None, pd.Timestamp("2024-04-20T00:00:00"), t_ca)[3].startswith("no detection")
 
 
 def test_period_report_states_population_products_and_limits():

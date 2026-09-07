@@ -83,8 +83,12 @@ belongs to a constellation with a declared emission, counted by constellation, t
 ten degrees during the observation, with how many are up at once: the aggregate a sidelobe sees.
 Second, every object whose predicted track passes inside the half-power radius, with its closest
 approach to the boresight, the time, the element set's age, the cross-track angular uncertainty
-and the along-track shift at that age and geometry, and the two horizon labels, crossing and
-position. Both products are geometry.
+and the along-track shift at that age and geometry, the two horizon labels, crossing and
+position, and, from the object's own element sets, the time since the last manoeuvre the
+set-jump detector finds, as a lower bound, with whether the set's likely fit arc, the benchmark's
+24-hour exclusion arc before its epoch, spanned it. The benchmark measured what such a set does
+(`docs/reference-benchmark.md`, the first element sets after a burn), and the export states it
+beside the flag. Both products are geometry.
 
 ## The archive's route
 
@@ -188,18 +192,31 @@ page (`docs/radio-emissions.md`).
 Each observation's crossings are written in the shape of the IAU CPS SatChecker field-of-view
 response (`GET /fov/satellite-passes/`, synchronous form): `data.satellites` keyed by name and
 NORAD id, each with its `positions` carrying altitude, angle from the field centre, azimuth, time,
-right ascension, declination, Julian date, element-set epoch and range. Four fields are added to
-every position, `cross_track_uncertainty_deg` with `crossing_horizon` and `along_track_shift_s`
-with `position_horizon`, and those four are the whole of what this lane would offer upstream;
-everything else driftwatch writes sits beside `data` under its own keys. Positions through the beam are sampled every tenth of a second, because a low object
+right ascension, declination, Julian date, element-set epoch and range. Six fields are added to
+every position: `cross_track_uncertainty_deg` with `crossing_horizon`, `along_track_shift_s`
+with `position_horizon`, and `hours_since_manoeuvre` with `fit_arc_spanned_manoeuvre`. The last
+pair comes from the element-set jump detector on the object's own sets at or before its epoch: a
+lower bound on the time since the last detected burn, which lies between the two set epochs the
+crossing record names, and whether the set's likely fit arc, the benchmark's 24-hour exclusion
+arc, reaches it. The consequence of a spanned arc is stated once, under `post_manoeuvre`, as the
+benchmark measured it on twelve burns of six spacecraft: the first set issued within ten hours of
+a burn was wrong along track at four days by 2.3 to 33 km, the first set issued twelve hours or
+later by under 2.5 km, and the next set after every burn by under 5.3 km. Those six fields are
+the whole of what this lane would offer upstream; everything else driftwatch writes sits beside
+`data` under its own keys. Positions through the beam are sampled every tenth of a second, because a low object
 crosses a half-degree beam in under a second. SatChecker itself is unchanged; it is a field-of-view
 predictor with orbit-source provenance, not a radio tool, and carries no per-object accuracy.
 
 ## What this does not show
 
 - No received power, occupancy fraction or sensitivity loss, anywhere.
-- Both horizons rest on three satellites in one orbit class over three weeks of element sets. They
-  are bounds at zenith range; a crossing at 30 degrees of elevation sees half the angle.
+- Both horizons rest on the reference benchmark's fifteen spacecraft in five altitude bands over
+  four weeks of element sets, each object scored against its own band. They are bounds at zenith
+  range; a crossing at 30 degrees of elevation sees half the angle.
+- The manoeuvre fields rest on the element-set jump detector alone: a burn it misses, and any burn
+  after the object's newest set, go unreported, and a station-kept object may carry the flag on
+  every set. The consequence quoted is the benchmark's, measured on free-flying spacecraft at 700
+  to 950 km.
 - The beam width is measured at L-band and scaled by wavelength; near the top of each band the
   holography measurements depart from the scaling.
 - Constellation counts include retired members. GPS shows 75 catalogued and up to 33 above ten

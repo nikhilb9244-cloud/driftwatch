@@ -6,12 +6,16 @@ satchecker.readthedocs.io): a list holding one object with ``data.satellites`` k
 ``"NAME (NORAD)"``, each with ``name``, ``norad_id`` and ``positions`` carrying ``altitude``,
 ``angle``, ``azimuth``, ``date_time``, ``dec``, ``julian_date``, ``ra``, ``tle_epoch`` and
 ``range_km``, plus ``total_position_results`` and ``total_satellites``, ``source`` and
-``version``. Four fields are added to every position: ``cross_track_uncertainty_deg`` and
+``version``. Six fields are added to every position: ``cross_track_uncertainty_deg`` and
 ``crossing_horizon`` (the cross-track uncertainty at the set's age, and whether the crossing is
 inside the crossing horizon), ``along_track_shift_s`` and ``position_horizon`` (the along-track
-time shift, and whether the position at an instant is inside the position horizon). Those four
-are the whole of what this lane would offer upstream; everything else driftwatch adds sits under
-its own keys beside ``data`` and can be ignored by a SatChecker reader.
+time shift, and whether the position at an instant is inside the position horizon), and
+``hours_since_manoeuvre`` and ``fit_arc_spanned_manoeuvre`` (a lower bound on the time since the
+last manoeuvre the element-set jump detector finds in the object's own sets, and whether the
+set's likely fit arc reached it, with the benchmark's measured post-burn error stated once under
+``post_manoeuvre``). Those six are the whole of what this lane would offer upstream; everything
+else driftwatch adds sits under its own keys beside ``data`` and can be ignored by a SatChecker
+reader.
 """
 
 from __future__ import annotations
@@ -30,13 +34,37 @@ from driftwatch.radio import horizon as horizon_mod
 from driftwatch.radio.crossings import (
     CATALOGUE_MAX_AGE_DAYS,
     ELEVATION_CUTOFF_DEG,
+    FIT_ARC_HOURS,
     Crossing,
     ObservationResult,
     Period,
 )
 from driftwatch.radio.site import MEERKAT, RECEIVERS, Site, beam_fwhm_deg
 
-ADDED_FIELDS = ("cross_track_uncertainty_deg", "crossing_horizon", "along_track_shift_s", "position_horizon")
+ADDED_FIELDS = (
+    "cross_track_uncertainty_deg",
+    "crossing_horizon",
+    "along_track_shift_s",
+    "position_horizon",
+    "hours_since_manoeuvre",
+    "fit_arc_spanned_manoeuvre",
+)
+# The consequence of a spanned fit arc, as the reference benchmark measured it (docs/reference-benchmark.md, the
+# post-burn table, 2026-09-08). Quoted once in the export rather than per position.
+POST_MANOEUVRE_CONSEQUENCE = (
+    "In the reference benchmark (docs/reference-benchmark.md, the first element sets after a burn: 12 burns on 6 "
+    "spacecraft at 700 to 950 km in four windows of 2024, each burn placed by the orbit-step detector on the "
+    "reconstructed orbit), the first element set issued after a burn was wrong along track at four days by 2.3 to "
+    "33 km when it was issued within ten hours of the burn (19 to 33 km on four of those seven) and by 0.1 to "
+    "2.3 km when issued twelve hours or later; at one day by 0.6 to 9.6 km against 0.1 to 0.9; the second set "
+    "after every burn was within 5.3 km at four days. Nothing is measured for station-kept objects or debris."
+)
+POST_MANOEUVRE_DETECTOR = (
+    "the element-set jump detector on the object's own sets at or before the set's epoch, so a burn after the "
+    "newest set is invisible; the burn lies between the two set epochs reported in the crossing record, "
+    "hours_since_manoeuvre counts from the later of them, and fit_arc_spanned_manoeuvre is true when that "
+    "interval reaches into the arc_hours before the set's epoch"
+)
 SATCHECKER_FORMAT = (
     "IAU CPS SatChecker /fov/satellite-passes/ synchronous response "
     "(satchecker.readthedocs.io, Field of View endpoints)"
@@ -57,6 +85,12 @@ EXPORT_LIMITS = [
     "table of docs/radio-horizon.md: near-circular, free-flying spacecraft with a public reconstructed orbit, "
     "in bands from 400 to 1400 km, each object scored against its own band's trials; nothing is measured for "
     "debris, eccentric orbits or station-kept objects through a burn.",
+    "hours_since_manoeuvre and fit_arc_spanned_manoeuvre come from the element-set jump detector on the object's "
+    "own sets at or before the set's epoch: a lower bound on the time since the last detected burn, and whether "
+    "the set's likely fit arc, the benchmark's 24-hour exclusion arc before its epoch, reaches that burn. Both "
+    "are null where fewer than two sets are held; a burn the detector misses, or one after the newest set, is "
+    "not reported. The consequence of a spanned arc is the benchmark's measured post-burn error, stated under "
+    "post_manoeuvre.",
     "Nothing here is a received power, an occupancy fraction or a sensitivity loss.",
 ]
 
@@ -68,7 +102,7 @@ def _iso(t: datetime) -> str:
 def satchecker_export(
     result: ObservationResult, site: Site, period: Period, elevation_deg: float
 ) -> list[dict[str, Any]]:
-    """One observation's crossings in the SatChecker field-of-view shape, with the two added fields."""
+    """One observation's crossings in the SatChecker field-of-view shape, with the added fields."""
     obs = result.observation
     satellites: dict[str, Any] = {}
     n_positions = 0
@@ -91,6 +125,8 @@ def satchecker_export(
                     "crossing_horizon": c.crossing_horizon,
                     "along_track_shift_s": c.along_track_shift_s,
                     "position_horizon": c.position_horizon,
+                    "hours_since_manoeuvre": c.hours_since_manoeuvre,
+                    "fit_arc_spanned_manoeuvre": c.fit_arc_spanned_manoeuvre,
                 }
             )
             n_positions += 1
@@ -105,6 +141,11 @@ def satchecker_export(
             "version": __version__,
             "format": SATCHECKER_FORMAT,
             "added_fields": list(ADDED_FIELDS),
+            "post_manoeuvre": {
+                "arc_hours": FIT_ARC_HOURS,
+                "detector": POST_MANOEUVRE_DETECTOR,
+                "measured_consequence": POST_MANOEUVRE_CONSEQUENCE,
+            },
             "fov": {
                 "ra_deg": obs.ra_deg,
                 "dec_deg": obs.dec_deg,
@@ -178,9 +219,9 @@ def _crossings_table(crossings: list[Crossing]) -> list[str]:
         return ["No catalogued object's predicted track passed inside the half-power radius during this observation."]
     lines = [
         "| Object | Type | Closest approach (UTC) | Angle from boresight | Elevation | Range | Set age "
-        "| Cross-track uncertainty (p95) | Along-track shift (p95) | Trials inside beam/3, crossing / position "
-        "| Crossing horizon | Position horizon | Emission in this band |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | ---: | ---: | ---: | --- | --- | --- |",
+        "| Since last detected manoeuvre | Cross-track uncertainty (p95) | Along-track shift (p95) "
+        "| Trials inside beam/3, crossing / position | Crossing horizon | Position horizon | Emission in this band |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- |",
     ]
     kinds = {"DEB": "debris", "R/B": "rocket body", "PAY": "payload"}
     for c in crossings:
@@ -198,10 +239,16 @@ def _crossings_table(crossings: list[Crossing]) -> list[str]:
             crossing_h = f"no measured horizon ({c.population_reason})"
             position_h = "no measured horizon"
         partial = " (in progress at the edge)" if c.partial else ""
+        if c.hours_since_manoeuvre is None:
+            since = "none found" if c.fit_arc_spanned_manoeuvre is False else "no detection"
+        else:
+            arc = "fit arc spans it" if c.fit_arc_spanned_manoeuvre else "fit arc clear"
+            since = f"{c.hours_since_manoeuvre / 24:.1f} d or more, {arc}"
         when = c.t_ca_utc[:19].replace("T", " ") + partial
         lines.append(
             f"| {c.name} ({c.norad_id}) | {kind} | {when} | {60 * c.separation_deg:.1f}' | {c.elevation_deg:.1f} deg "
-            f"| {c.range_km:.0f} km | {c.set_age_days:.2f} d | {unc} | {shift} | {frac} | {crossing_h} | {position_h} "
+            f"| {c.range_km:.0f} km | {c.set_age_days:.2f} d | {since} | {unc} | {shift} | {frac} | {crossing_h} "
+            f"| {position_h} "
             f"| {c.emission_status}: {c.emission_detail} |"
         )
     return lines
