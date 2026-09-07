@@ -86,3 +86,27 @@ def omm_records(verification_tles) -> list[dict]:
         if e == 0 and sat.ecco < 1.0 and sat.intldesg.strip():
             out.append(omm_record(tle.line1, tle.line2, f"OBJECT {sat.satnum}"))
     return out
+
+
+def pytest_sessionstart(session) -> None:
+    """Refuse to start when pymsis sits under a path NRLMSIS cannot read.
+
+    The Fortran holds the parameter-file path in a 128-character buffer; past that it prints
+    "MSIS parameter set ... not found. Stopping." and stops the interpreter with exit status 0
+    (SWxTREC/pymsis#80), so a suite that reached a density test would end early and read as
+    green. Failing here, before any test runs, is the loud version of that. The CI job also
+    compares the tests that ran against the tests collected (scripts/check_test_count.py).
+    """
+    from pathlib import Path
+
+    import pymsis
+
+    parm = Path(pymsis.__file__).resolve().parent / "msis21.parm"
+    limit = 128
+    if len(str(parm)) > limit:
+        pytest.exit(
+            f"pymsis is installed at a path of {len(str(parm))} characters, past the {limit} the NRLMSIS "
+            "Fortran can read; the density tests would stop the interpreter silently. Install under a "
+            "shorter path.",
+            returncode=3,
+        )
