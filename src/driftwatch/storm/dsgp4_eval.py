@@ -249,7 +249,12 @@ def train_hybrid(
     target_t = torch.tensor(target, dtype=torch.float64)
     ts_all = torch.tensor(tsince_min, dtype=torch.float64)
     optimiser = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    # The corrections start at zero and the needed ones are small, so the rate falls through the run
+    # (cosine, to a hundredth of its start) and the epoch with the lowest training loss is kept; the
+    # held-out windows play no part in either.
+    scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optimiser, T_max=max(epochs, 1), eta_min=learning_rate / 100)
     losses: list[float] = []
+    best = (float("inf"), None)
     t0 = time.time()
     model.train()
     for epoch in range(epochs):
@@ -265,7 +270,12 @@ def train_hybrid(
             optimiser.step()
             total += loss.item() * len(idx)
         losses.append(total / max(n, 1))
+        scheduler.step()
+        if losses[-1] < best[0]:
+            best = (losses[-1], {k: v.detach().clone() for k, v in model.state_dict().items()})
         log.info("ML-dSGP4 epoch %d/%d: loss %.3e (%.0f s)", epoch + 1, epochs, losses[-1], time.time() - t0)
+    if best[1] is not None:
+        model.load_state_dict(best[1])
     model.eval()
     n_sets = len({id(o) for o in omms})
     return TrainingRecord(n, n_sets, epochs, batch_size, learning_rate, losses, time.time() - t0)

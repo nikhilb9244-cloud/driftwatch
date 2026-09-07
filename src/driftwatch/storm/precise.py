@@ -655,7 +655,11 @@ def manoeuvre_intervals_from_orbit(
     """
     if not len(orbit.table):
         return []
-    t = orbit.table["t"].to_numpy(dtype="datetime64[us]")[::6]  # every minute
+    t_all = orbit.table["t"].to_numpy(dtype="datetime64[us]")
+    steps = np.diff(t_all) / np.timedelta64(1, "s")
+    # Every minute whatever the table's own step: ESA's ten-second product strides six, a one-minute one strides one.
+    stride = max(1, int(round(60.0 / float(np.median(steps))))) if steps.size else 6
+    t = t_all[::stride]
     r, v, ok = orbit.states_teme(t)
     if ok.sum() < 300:
         return []

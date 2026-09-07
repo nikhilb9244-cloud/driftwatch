@@ -139,6 +139,17 @@ What works today:
   empirical covariance against the 68 and 95 per cent it claims, the storm term's effect with
   the observed ap, and the horizon for the screening box, and reads ESA's thruster record for the
   manoeuvre exclusion (`docs/calibration-benchmark.md`, item 6 above).
+- `driftwatch validate reference` extends the calibration to every mission with a public reconstructed
+  orbit on an anonymous server (the DORIS satellites through the IDS data centre, Sentinel-1A through ESA's
+  STEP mirror, GRACE-FO through GFZ's ISDC, Swarm as before) and, for every mission with a retroreflector,
+  compares ILRS laser-ranging normal points with the reconstructed orbit and with each element set's
+  propagation; four windows, August 2024 added and held out like October; the horizon by altitude band
+  and window, the population statement, and what was not obtainable (`docs/reference-benchmark.md`).
+  `--missions` picks keys, `--no-slr` skips the laser comparison, `--offline` reads the cache only.
+- `driftwatch validate dsgp4` runs ESA's dSGP4 and its ML-dSGP4 hybrid on the reference benchmark's trials
+  (`uv sync --extra dsgp4` installs them): the hybrid is trained on the quiet and May windows only, scored
+  on all four against plain SGP4 and the storm term, and adopted only if the held-out storms improve
+  (`docs/dsgp4-evaluation.md`).
 - `driftwatch radio horizon`, `driftwatch radio emissions` and `driftwatch radio period <name>` are
   the radio lane (`docs/radio-lane.md`): the calibration benchmark's residuals as angles on the sky
   for the 13.5 m MeerKAT dish, by receiver and lead (`docs/radio-horizon.md`); the declared

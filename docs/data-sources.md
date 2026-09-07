@@ -79,6 +79,36 @@ The earlier statement that the data had not been fetched was stale: the publishe
 uses them. It checks probability arithmetic on supplied inputs, not screening recall or
 driftwatch's covariance calibration. [Reproduction and limits](kelvins-reproduction.md).
 
+## Reference orbits beyond Swarm, and laser ranging
+
+The reference expansion (`docs/reference-benchmark.md`) reads every reconstructed orbit an anonymous
+server hands out for the missions asked for, and says which are not obtainable that way rather than
+substituting. All are public products with attribution; none implies use of, or agreement with, the
+producer.
+
+- **CNES/SSALTO precise orbit ephemerides** for the DORIS satellites (Jason-3, Sentinel-3A and 3B,
+  Sentinel-6A, CryoSat-2, SARAL, HY-2C and 2D, SWOT), through the International DORIS Service data
+  centre at IGN, `ftp://doris.ign.fr/pub/doris/products/orbits/ssa/` (anonymous FTP): SP3, ITRF, TAI,
+  one-minute states, POE-F and POE-G standards. Attribution: CNES and the IDS.
+- **Copernicus Sentinel-1A precise orbit ephemerides** (AUX_POEORB, Copernicus POD service), mirrored by
+  ESA's STEP auxiliary-data server, `https://step.esa.int/auxdata/orbits/Sentinel-1/POEORB/S1A/`
+  (anonymous HTTPS). Attribution: ESA and the Copernicus programme.
+- **GRACE-FO Level-1B release 04** from JPL, served by GFZ's ISDC,
+  `https://isdc-data.gfz.de/grace-fo/Level-1B/JPL/INSTRUMENT/RL04/` (anonymous HTTPS): the GNV1B
+  navigation product as the orbit and the THR1B thruster record as the manoeuvre record. Attribution:
+  NASA/JPL and GFZ.
+- **ILRS laser ranging**: normal points in CRD v2 from the EUROLAS Data Center,
+  `https://edc.dgfi.tum.de/pub/slr/data/npt_crd_v2/` (anonymous HTTPS); station coordinates SLRF2020 and
+  the site eccentricities from the ILRS, `https://ilrs.gsfc.nasa.gov/docs/`. Attribution: the ILRS and its
+  stations, DGFI-TUM.
+- **Not obtainable without an account, so not used**: Sentinel-2 precise orbits (Copernicus Data Space
+  Ecosystem), ICESat-2's orbit (inside ATL03 at NSIDC, Earthdata login), TerraSAR-X and TanDEM-X orbits
+  for 2024 (GFZ serves them anonymously only through 2020), GOCE (ESA EO-SSO). CHAMP's 2000 to 2010
+  orbits are anonymous at GFZ and are recorded as a candidate, not read.
+
+ESA's dSGP4 (`dsgp4` on PyPI, github.com/esa/dSGP4) is an optional dependency (`uv sync --extra dsgp4`)
+used only by `driftwatch validate dsgp4`.
+
 ## Weather, imagery and station geometry
 
 NOAA SWPC supplies Kp forecasts, real-time K indices, the 27-day outlook and propagated L1 solar

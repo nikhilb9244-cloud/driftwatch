@@ -2507,7 +2507,7 @@ def cmd_validate_dsgp4(args: argparse.Namespace) -> int:
         "citation": dsgp4_eval.CITATION,
         "published_training": dsgp4_eval.PUBLISHED_TRAINING,
         "what_was_done": (
-            f"{len(items)} trial sets from {len(missions)} missions over {len(windows)} windows; the hybrids trained "
+            f"{len(items)} trial sets from {len(missions)} mission(s) over {len(windows)} windows; the hybrids trained "
             f"on the {len(training)} sets of the quiet and May windows only, with the reconstructed orbit sampled "
             f"hourly to seven days, corrections starting at zero, hidden size {args.hidden_size}; scored at the "
             "benchmark's leads in the truth's radial, in-track, cross-track frame against plain SGP4, dsgp4 with "
@@ -3859,7 +3859,7 @@ def build_parser() -> argparse.ArgumentParser:
     validate.add_argument("--missions", default="all", help="reference: comma-separated mission keys (default: all)")
     validate.add_argument("--no-slr", action="store_true", help="reference: skip the laser-ranging comparison")
     validate.add_argument("--hidden-size", type=int, default=35, help="dsgp4: hidden layer width (default 35)")
-    validate.add_argument("--epochs", type=int, default=30, help="dsgp4: training epochs (default 30)")
+    validate.add_argument("--epochs", type=int, default=40, help="dsgp4: training epochs (default 40)")
     validate.add_argument("--batch-size", type=int, default=4096, help="dsgp4: training batch (default 4096)")
     validate.add_argument("--lr", type=float, default=1e-3, help="dsgp4: learning rate (default 1e-3)")
     validate.add_argument("--seed", type=int, default=0, help="dsgp4: random seed (default 0)")

@@ -103,9 +103,14 @@ def _sgp4_residuals_by_lead(
         if not len(sub):
             continue
         # Thin dense passes so one satellite-day does not outweigh the rest of the bin.
-        sub = sub.groupby("lead_bin_h", group_keys=False).apply(
-            lambda g: g.sample(min(len(g), SLR_MAX_POINTS_PER_SET_BIN), random_state=0), include_groups=True
-        )
+        rng = np.random.default_rng(0)
+        keep_idx: list[int] = []
+        for _, g in sub.groupby("lead_bin_h"):
+            idx = g.index.to_numpy()
+            if len(idx) > SLR_MAX_POINTS_PER_SET_BIN:
+                idx = rng.choice(idx, SLR_MAX_POINTS_PER_SET_BIN, replace=False)
+            keep_idx.extend(int(i) for i in idx)
+        sub = sub.loc[sorted(keep_idx)]
         satrec = build_satrecs(row.to_frame().T.reset_index(drop=True))[0]
         res = slr.range_residuals(sub, slr.sgp4_position_fn(satrec), stations)
         if not len(res):
