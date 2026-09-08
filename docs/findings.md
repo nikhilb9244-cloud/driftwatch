@@ -443,7 +443,8 @@ population; the association is one spacecraft.** What holds at every level is th
 burn and the first set's epoch: −0.71 per burn (p = 0.010), −0.62 without 3B (p = 0.077), −0.89 per
 spacecraft (p = 0.019). The seven first sets issued within ten hours of the burn are wrong at four
 days by 2.3 to 33 km (19 to 33 on Sentinel-3B and SWOT, 2.3 to 4.6 on Sentinel-1A and CryoSat-2);
-the five issued twelve hours or later by 0.1 to 2.3 km; at a day, 0.6 to 9.6 km against 0.1 to 0.9.
+the five issued twelve hours or later by 0.1 to 2.3 km; at a day, 0.6 to 9.6 km against 0.1 to 0.9;
+twelve burns on six spacecraft in four windows, a split re-measured whenever a window is added.
 The second set after every burn is within 5.3 km at four days and the third within 8.3. The burn's
 size does not order it: Sentinel-3A's burns raised the semi-major axis by 66 and 75 m, as much as
 3B's 41 to 65 m, and the two largest, HY-2D's 95 m and CryoSat-2's 86 m, left the smallest
@@ -459,6 +460,35 @@ cadence, by delay or by burn size, and that part of the 3B question stays open. 
 per-object output and export now carry the time since the last detected manoeuvre and whether the
 set's likely fit arc spanned it, with this measurement as the stated consequence
 (`docs/radio-lane.md`).
+
+**The fit each set carries, checked 2026-09-08: the contrast is explained.** Each of the twelve first
+post-burn sets was put in the reconstructed orbit's convention (SGP4 over one revolution centred on
+its epoch, the osculating semi-major axis averaged as the detector averages the orbit's; the
+constant between the two conventions, 70 to 74 m for every mission and most of it the ten-second
+finite-difference velocity the orbit reader carries, calibrated on each window's clean sets, whose
+scatter is 2 to 6 m) and compared with the orbit at its own epoch rather than the
+plateau after the burn, because CryoSat-2 at 717 km decays about 10 m a day and had moved 25 m
+below the plateau by the time its sets were issued. The fraction of the burn a set contains is one
+plus its error over the burn; the thresholds, a quarter and three quarters, and the rule that a
+burn under three scatters is unresolved, were fixed before any set was classified
+(`docs/reference-benchmark.md`, "What the first set after each burn contains"). Sentinel-3B's three
+first post-burn sets contain 6, 4 and 12 per cent of their burns and SWOT's none (−7 per cent): they
+are pre-burn fits with their epochs advanced past the burn, and the drift their error predicts,
+three halves of the mean motion times the error times the lead, reproduces the observed residual at
+four days to within 20 per cent (−21, −34, −25 and −17 km predicted against −25, −33, −30 and −19
+observed) and its growth with lead; the 0.5 to 3 km it falls short by is there already at a day,
+the offset the set carries at its epoch. CryoSat-2's three contain 92, 106 and 85 per cent, Sentinel-3A's two 102 and
+98, HY-2D's two 86 and 100: fitted after the burn, with errors of −7 to +5 m against the orbit at
+their epoch, and residuals at the clear-arc level. Sentinel-1A's is unresolved by the rule, a 9 m
+burn against a 15 m threshold, though its error at its epoch, −11 m, predicts its residual (−1.5 km
+at a day and −6 at four against −1.5 and −4.2 observed), which is what a pre-burn fit of a small
+burn would do. No set is mixed. So the mechanism, on twelve burns of six spacecraft in four windows:
+**the first set after a burn is wrong by the part of the burn it does not contain, and whether it
+contains the burn or is a pre-burn fit re-epoched past it differs by object, not by delay**:
+CryoSat-2's set issued 5.4 hours after its burn already contained it, Sentinel-3B's issued 3 to 8
+hours after did not. The delay split above is therefore a description of this sample, in which the
+re-epoched sets happened to be the ones issued within ten hours. What stays open is why the network
+re-epochs a pre-burn fit for some objects and refits after the burn for others; the sets do not say.
 
 **Coverage of the empirical covariance** (in-track, inside two sigma, 95 per cent claimed). At 460
 to 507 km on five spacecraft item 6 repeats: 98 to 100 per cent in the quiet week from one to seven

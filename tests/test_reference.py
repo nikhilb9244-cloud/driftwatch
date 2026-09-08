@@ -321,6 +321,26 @@ def test_the_post_burn_table_reads_the_first_sets_after_a_burn_against_cadence_a
                     ["2024-04-27T10:00:00", "2024-04-27T12:00:00"],
                 ],
                 "manoeuvres_detected_sets": [],
+                "post_burn_fits": [
+                    {
+                        "burn_from": "2024-04-20T12:00:00",
+                        "burn_to": "2024-04-20T14:00:00",
+                        "delta_a_m": 50.0,
+                        "offset_m": 70.0,
+                        "sigma_m": 2.0,
+                        "n_clean_sets": 4,
+                        "resolvable": True,
+                        "sets_after": [
+                            {
+                                "epoch": "2024-04-20T16:00:00",
+                                "a_error_m": -48.0,
+                                "fraction": 0.04,
+                                "class": "pre-burn re-epoched",
+                                "predicted_in_track_km": {"24": -6.0, "72": -18.0, "96": -24.0, "168": -42.0},
+                            }
+                        ],
+                    }
+                ],
             },
             "storm": {
                 "manoeuvres_recorded": [["2024-05-12T23:00:00", "2024-05-12T23:05:00"]],
@@ -343,6 +363,9 @@ def test_the_post_burn_table_reads_the_first_sets_after_a_burn_against_cadence_a
     assert second["delay_h"] == pytest.approx(11.0) and second["in_track_km"]["96"] == 2.0
     assert third["in_track_km"]["24"] == 2.5
     assert burn["clear_median_km"]["24"] == pytest.approx(2.0), "sets 1, 2, 4, 5, 6: 0.5, 1.0, 2.0, 2.5, 3.0"
+    assert burn["delta_a_m"] == 50.0 and burn["n_clean_sets"] == 4
+    assert first["class"] == "pre-burn re-epoched" and first["predicted_in_track_km"]["96"] == -24.0
+    assert second["class"] is None and second["fraction"] is None, "only the first set was classified"
     assert post["burns_after_the_span"] == [
         {
             "mission": "x",
@@ -360,3 +383,8 @@ def test_the_post_burn_table_reads_the_first_sets_after_a_burn_against_cadence_a
     text = "\n".join(reference_run._post_burn_section(post, names))
     assert "| X | quiet | 2024-04-20 13:00, orbit-step | 6, 8.0 h | 3.0 h; 20.0 / 20.0 / 20.0 / - |" in text
     assert "Burns after a span" in text and "no set issued after them" in text
+    assert "### What the first set after each burn contains" in text
+    assert (
+        "| X | quiet | +50 | 4, +70, 2.0 | 3.0 h, -48, 0.04, pre-burn re-epoched | +20.0 / -6.0 | +20.0 / -24.0 |"
+        in text
+    )

@@ -57,7 +57,10 @@ POST_MANOEUVRE_CONSEQUENCE = (
     "reconstructed orbit), the first element set issued after a burn was wrong along track at four days by 2.3 to "
     "33 km when it was issued within ten hours of the burn (19 to 33 km on four of those seven) and by 0.1 to "
     "2.3 km when issued twelve hours or later; at one day by 0.6 to 9.6 km against 0.1 to 0.9; the second set "
-    "after every burn was within 5.3 km at four days. Nothing is measured for station-kept objects or debris."
+    "after every burn was within 5.3 km at four days; the error is the part of the burn the set does not contain, "
+    "and a set issued after a burn can still be a pre-burn fit with its epoch advanced. Twelve burns on six "
+    "spacecraft in four windows, re-measured whenever a window is added. Nothing is measured for station-kept "
+    "objects or debris."
 )
 POST_MANOEUVRE_DETECTOR = (
     "the element-set jump detector on the object's own sets at or before the set's epoch, so a burn after the "

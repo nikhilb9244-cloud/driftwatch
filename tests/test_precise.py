@@ -384,3 +384,78 @@ def test_a_trial_against_a_truth_built_from_its_own_set_has_no_residual_and_the_
     handed = precise.satellite_trials(inputs, orbit, window, None, leads_hours=leads, detected=burn)
     assert handed["manoeuvre"].all() and handed["manoeuvre_detected"].all()
     assert handed["manoeuvre_source"].eq("detected").all()
+
+
+def test_post_burn_fits_tell_a_re_epoched_pre_burn_set_from_one_fitted_after_the_burn():
+    """A designed orbit raised by 60 m at noon on 7 May, with the truth as SGP4 path before and after.
+    Five sets before the burn are clean; the first sits at the edge of the truth. The first set after the
+    burn carries the pre-burn orbit with its epoch four hours past the burn: fraction near zero, pre-burn
+    re-epoched, and the drift its error predicts is about three halves of the mean motion times 60 m times
+    the lead. The next two carry the raised orbit: fraction near one."""
+    from datetime import datetime, timedelta
+
+    from synthetic import history_records, raised_copy
+
+    from driftwatch.catalogue.snapshot import records_to_frame
+
+    epoch0 = datetime(2024, 5, 6, 0, 0, 0)
+    base = satrec_from_kepler(90002, epoch0, 7190.0, 0.001, np.radians(98.6), 0.5, 0.2, 0.1, bstar=1e-5)
+    t_burn = datetime(2024, 5, 7, 12, 0, 0)
+    raised = raised_copy(base, t_burn, 0.060, bstar=1e-5)
+    grid = pd.to_datetime(epoch0) + pd.to_timedelta(np.arange(0, 6 * 86400, 10), unit="s")
+    times = grid.to_numpy(dtype="datetime64[us]")
+    before = times < np.datetime64(t_burn, "us")
+    r = np.empty((times.size, 3))
+    v = np.empty((times.size, 3))
+    for sat, mask in ((base, before), (raised, ~before)):
+        state = propagate_satrecs([sat], np.array([90002]), times[mask])
+        r[mask], v[mask] = state.r_teme[0], state.v_teme[0]
+    table = pd.DataFrame(
+        {
+            "t": times,
+            "x_km": r[:, 0],
+            "y_km": r[:, 1],
+            "z_km": r[:, 2],
+            "vx_kms": v[:, 0],
+            "vy_kms": v[:, 1],
+            "vz_kms": v[:, 2],
+        }
+    )
+    orbit = precise.PreciseOrbit("X", 90002, table, [], ["synthetic"], frame="TEME")
+    rng = np.random.default_rng(0)
+    pre_epochs = [epoch0 + timedelta(hours=6 * k) for k in range(6)]  # 6 May 00:00 to 7 May 06:00
+    re_epoched = [t_burn + timedelta(hours=4)]  # the pre-burn orbit, epoch advanced past the burn
+    post_epochs = [t_burn + timedelta(hours=12), t_burn + timedelta(hours=24), t_burn + timedelta(hours=36)]
+    records = history_records(90002, lambda t: base, pre_epochs + re_epoched, rng, bstar=1e-5)
+    records += history_records(90002, lambda t: raised, post_epochs, rng, bstar=1e-5)
+    sets = records_to_frame(records)
+    burn = [(pd.Timestamp(t_burn) - pd.Timedelta(hours=1), pd.Timestamp(t_burn) + pd.Timedelta(hours=1))]
+
+    (fit,) = precise.post_burn_fits(sets, orbit, burn)
+    assert fit["delta_a_m"] == pytest.approx(60.0, abs=5.0)
+    # The constant between the two conventions is a property of the method, not of the orbit: the orbit reader takes
+    # the velocity as a finite difference over ten seconds, and a chord runs slower than the arc, which lowers the
+    # vis-viva semi-major axis by tens of metres. It is the same for every clean set, and the calibration removes it.
+    assert 20.0 < fit["offset_m"] < 100.0 and fit["sigma_m"] < 1.0
+    assert fit["n_clean_sets"] == 6, (
+        "five clean sets before the burn, the first being at the edge of the truth, and the one 36 h after"
+    )
+    assert fit["resolvable"] is True
+    first, second, third = fit["sets_after"]
+    assert first["epoch"].startswith("2024-05-07T16:00") and first["class"] == "pre-burn re-epoched"
+    assert first["fraction"] == pytest.approx(0.0, abs=0.1) and first["a_error_m"] == pytest.approx(-60.0, abs=6.0)
+    n = np.sqrt(398600.4418 / 7190.0**3)
+    assert first["predicted_in_track_km"]["96"] == pytest.approx(-1.5 * n * 0.060 * 96 * 3600, rel=0.15)
+    assert second["class"] == "post-burn" and second["fraction"] == pytest.approx(1.0, abs=0.1)
+    assert third["class"] == "post-burn"
+    # A burn smaller than three scatters cannot be classified, whatever the fraction says.
+    small = precise.post_burn_fits(sets, orbit, burn)
+    assert small[0]["sigma_m"] is not None
+    grid_t, mean_a, period_min = precise.orbit_mean_semi_major_axis(orbit)
+    assert 95 <= period_min <= 105 and np.isfinite(mean_a).sum() > 8000
+    # A clean set away from the edge sits the same constant above the orbit as the fit reports.
+    row = sets.iloc[1]
+    orbit_a = precise._mean_a_at(grid_t, mean_a, pd.Timestamp(epoch0) + pd.Timedelta(hours=6))
+    assert precise.set_mean_semi_major_axis(row, period_min) - orbit_a == pytest.approx(
+        fit["offset_m"] / 1000, abs=0.001
+    )

@@ -655,21 +655,9 @@ def manoeuvre_intervals_from_orbit(
     """
     if not len(orbit.table):
         return []
-    t_all = orbit.table["t"].to_numpy(dtype="datetime64[us]")
-    steps = np.diff(t_all) / np.timedelta64(1, "s")
-    # Every minute whatever the table's own step: ESA's ten-second product strides six, a one-minute one strides one.
-    stride = max(1, int(round(60.0 / float(np.median(steps))))) if steps.size else 6
-    t = t_all[::stride]
-    r, v, ok = orbit.states_teme(t)
-    if ok.sum() < 300:
+    t, mean_a, period_min = orbit_mean_semi_major_axis(orbit)
+    if not t.size:
         return []
-    a_km = np.full(t.size, np.nan)
-    a_km[ok] = osculating_semi_major_axis_km(r[ok], v[ok])
-    period_min = int(round(2.0 * np.pi * np.sqrt(np.nanmedian(a_km) ** 3 / 398600.4418) / 60.0))
-    series = pd.Series(a_km)
-    # Full windows only: a partial window at the table's edge does not cancel the J2 short-period term
-    # in the osculating semi-major axis, and reads as a step of hundreds of metres.
-    mean_a = series.rolling(period_min, center=True, min_periods=period_min).mean().to_numpy()
     step = (mean_a[period_min:] - mean_a[:-period_min]) * 1000.0
     finite = np.isfinite(step)
     if finite.sum() < 10:
@@ -688,6 +676,187 @@ def manoeuvre_intervals_from_orbit(
     for s, e in zip(np.nonzero(edges == 1)[0], np.nonzero(edges == -1)[0], strict=True):
         intervals.append((pd.Timestamp(t[s]), pd.Timestamp(t[e - 1])))
     return intervals
+
+
+def orbit_mean_semi_major_axis(orbit: PreciseOrbit) -> tuple[np.ndarray, np.ndarray, int]:
+    """The reconstructed orbit's semi-major axis on a minute grid, averaged over one revolution.
+
+    Returns the grid, the one-revolution rolling mean of the osculating semi-major axis (km; NaN
+    where a full revolution is not available) and the revolution's length in minutes. This is the
+    convention every semi-major axis in the benchmark is compared in; the manoeuvre detector
+    differences it one revolution apart, and :func:`set_mean_semi_major_axis` puts an element set
+    in the same convention. Empty arrays when the orbit holds fewer than 300 usable states.
+    """
+    t_all = orbit.table["t"].to_numpy(dtype="datetime64[us]")
+    steps = np.diff(t_all) / np.timedelta64(1, "s")
+    # Every minute whatever the table's own step: ESA's ten-second product strides six, a one-minute one strides one.
+    stride = max(1, int(round(60.0 / float(np.median(steps))))) if steps.size else 6
+    t = t_all[::stride]
+    r, v, ok = orbit.states_teme(t)
+    if ok.sum() < 300:
+        return np.array([], dtype="datetime64[us]"), np.array([]), 0
+    a_km = np.full(t.size, np.nan)
+    a_km[ok] = osculating_semi_major_axis_km(r[ok], v[ok])
+    period_min = int(round(2.0 * np.pi * np.sqrt(np.nanmedian(a_km) ** 3 / 398600.4418) / 60.0))
+    series = pd.Series(a_km)
+    # Full windows only: a partial window at the table's edge does not cancel the J2 short-period term
+    # in the osculating semi-major axis, and reads as a step of hundreds of metres.
+    mean_a = series.rolling(period_min, center=True, min_periods=period_min).mean().to_numpy()
+    return t, mean_a, period_min
+
+
+def set_mean_semi_major_axis(row: pd.Series, period_min: int) -> float:
+    """An element set's semi-major axis in the reconstructed orbit's convention.
+
+    SGP4 is propagated over one revolution centred on the set's epoch on the same minute grid, the
+    osculating semi-major axis is computed from its states with the same function, and averaged.
+    What remains between this and the reconstructed orbit's value for the same orbit is a constant
+    of the method, about 70 m for every mission here: the orbit's velocity is taken as a finite
+    difference over ten seconds (:class:`PreciseOrbit`), a chord runs slower than the arc, and the
+    vis-viva semi-major axis comes out tens of metres low (64 m at these altitudes by the chord
+    factor; 50 m on a designed orbit in the tests). :func:`post_burn_fits` calibrates it away on
+    each window's clean sets. NaN when SGP4 fails.
+    """
+    epoch = np.datetime64(_naive(row["epoch"]).to_datetime64(), "us")
+    offsets = (np.arange(period_min) - period_min // 2) * 60.0
+    times = epoch + (offsets * 1e6).astype("timedelta64[us]")
+    one = row.to_frame().T.reset_index(drop=True)
+    state = propagate_satrecs(build_satrecs(one), one["norad_id"].to_numpy(), times)
+    if state.error[0].any():
+        return float("nan")
+    return float(np.mean(osculating_semi_major_axis_km(state.r_teme[0], state.v_teme[0])))
+
+
+def _mean_a_at(t: np.ndarray, mean_a: np.ndarray, when: pd.Timestamp) -> float:
+    x = (t - t[0]) / np.timedelta64(1, "s")
+    q = (np.datetime64(when.to_datetime64(), "us") - t[0]) / np.timedelta64(1, "s")
+    ok = np.isfinite(mean_a)
+    if ok.sum() < 2 or q < x[ok][0] or q > x[ok][-1]:
+        return float("nan")
+    return float(np.interp(q, x[ok], mean_a[ok]))
+
+
+# The first sets after a burn, classified by how much of the burn their semi-major axis contains. The
+# fraction is one plus the set's error at its own epoch over the burn; the class thresholds and the
+# resolvability rule were fixed before any set was classified.
+POST_BURN_FIT_SETS = 3
+POST_BURN_FRACTION_PRE = 0.25
+POST_BURN_FRACTION_POST = 0.75
+POST_BURN_RESOLVE_SIGMAS = 3.0
+POST_BURN_PLATEAU_H = 3.0
+POST_BURN_CLASSES = ("pre-burn re-epoched", "mixed", "post-burn", "unresolved")
+
+
+def post_burn_fits(
+    trial_sets: pd.DataFrame,
+    orbit: PreciseOrbit,
+    intervals: list[tuple[pd.Timestamp, pd.Timestamp]],
+    *,
+    arc_hours: float = MANOEUVRE_ARC_HOURS,
+    leads_hours: tuple[float, ...] = LEADS_HOURS,
+    sets_after: int = POST_BURN_FIT_SETS,
+) -> list[dict[str, Any]]:
+    """For each burn, what the first element sets issued after it say about how they were fitted.
+
+    A set is put in the reconstructed orbit's convention (:func:`set_mean_semi_major_axis`) and
+    the constant between the two conventions is calibrated as the median residual against the
+    orbit over the window's clean sets, those with no burn inside the arc before their epoch or
+    the revolution around it; the residual's scatter is 1.4826 times its median absolute
+    deviation. For each of the first ``sets_after`` sets after a burn: its error against the
+    orbit at its own epoch (``a_error_m``; the orbit at the epoch, not the plateau after the burn,
+    because a decaying orbit has moved on by then), the fraction of the burn it contains, one plus
+    that error over the burn (``fraction``), its class (pre-burn re-epoched at or under
+    ``POST_BURN_FRACTION_PRE``, post-burn at or over ``POST_BURN_FRACTION_POST``, mixed between;
+    unresolved when the burn is under ``POST_BURN_RESOLVE_SIGMAS`` scatters), and the along-track
+    drift its error predicts at each lead, truth minus SGP4 in the benchmark's sign: three halves
+    of the mean motion times the error times the lead. The burn's size is the orbit's mean
+    semi-major axis over ``POST_BURN_PLATEAU_H`` hours after the interval minus the same before it.
+    """
+    if not len(trial_sets) or not len(orbit.table):
+        return []
+    t, mean_a, period_min = orbit_mean_semi_major_axis(orbit)
+    if not t.size:
+        return []
+    arc = pd.Timedelta(hours=arc_hours)
+    revolution = pd.Timedelta(minutes=period_min)
+    plateau = pd.Timedelta(hours=POST_BURN_PLATEAU_H)
+    rows = trial_sets.sort_values("epoch").drop_duplicates("epoch", keep="last").reset_index(drop=True)
+    epochs = [_naive(e) for e in rows["epoch"]]
+    a_set = [set_mean_semi_major_axis(row, period_min) for _, row in rows.iterrows()]
+    a_orbit = [_mean_a_at(t, mean_a, e) for e in epochs]
+    residuals = np.array(
+        [
+            s - o
+            for e, s, o in zip(epochs, a_set, a_orbit, strict=True)
+            if np.isfinite(s) and np.isfinite(o) and not _overlaps(intervals, e - arc, e + revolution)
+        ]
+    )
+    offset = float(np.median(residuals)) if residuals.size else float("nan")
+    sigma = float(1.4826 * np.median(np.abs(residuals - offset))) if residuals.size else float("nan")
+    x = (t - t[0]) / np.timedelta64(1, "s")
+
+    def plateau_median(start: pd.Timestamp, end: pd.Timestamp) -> float:
+        q0 = (np.datetime64(start.to_datetime64(), "us") - t[0]) / np.timedelta64(1, "s")
+        q1 = (np.datetime64(end.to_datetime64(), "us") - t[0]) / np.timedelta64(1, "s")
+        inside = mean_a[(x >= q0) & (x <= q1)]
+        return float(np.nanmedian(inside)) if np.isfinite(inside).any() else float("nan")
+
+    out: list[dict[str, Any]] = []
+    for lo, hi in intervals:
+        a_pre = plateau_median(lo - plateau, lo)
+        a_post = plateau_median(hi, hi + plateau)
+        delta_a = a_post - a_pre
+        after = [k for k, e in enumerate(epochs) if e > hi][:sets_after]
+        resolvable = bool(
+            np.isfinite(delta_a) and np.isfinite(sigma) and abs(delta_a) >= POST_BURN_RESOLVE_SIGMAS * sigma
+        )
+        sets: list[dict[str, Any]] = []
+        for k in after:
+            e, s, o = epochs[k], a_set[k], a_orbit[k]
+            if not (np.isfinite(s) and np.isfinite(o) and np.isfinite(offset)):
+                sets.append(
+                    {
+                        "epoch": e.isoformat(),
+                        "a_error_m": None,
+                        "fraction": None,
+                        "class": "unresolved",
+                        "predicted_in_track_km": {},
+                    }
+                )
+                continue
+            error_km = s - offset - o
+            fraction = 1.0 + error_km / delta_a if delta_a else float("nan")
+            if not resolvable or not np.isfinite(fraction):
+                cls = "unresolved"
+            elif fraction <= POST_BURN_FRACTION_PRE:
+                cls = "pre-burn re-epoched"
+            elif fraction >= POST_BURN_FRACTION_POST:
+                cls = "post-burn"
+            else:
+                cls = "mixed"
+            n = float(np.sqrt(398600.4418 / o**3))
+            sets.append(
+                {
+                    "epoch": e.isoformat(),
+                    "a_error_m": float(error_km * 1000.0),
+                    "fraction": float(fraction) if np.isfinite(fraction) else None,
+                    "class": cls,
+                    "predicted_in_track_km": {f"{ld:g}": float(1.5 * n * error_km * ld * 3600.0) for ld in leads_hours},
+                }
+            )
+        out.append(
+            {
+                "burn_from": lo.isoformat(),
+                "burn_to": hi.isoformat(),
+                "delta_a_m": float(delta_a * 1000.0) if np.isfinite(delta_a) else None,
+                "offset_m": float(offset * 1000.0) if np.isfinite(offset) else None,
+                "sigma_m": float(sigma * 1000.0) if np.isfinite(sigma) else None,
+                "n_clean_sets": int(residuals.size),
+                "resolvable": resolvable,
+                "sets_after": sets,
+            }
+        )
+    return out
 
 
 def manoeuvre_intervals_from_sets(sets: pd.DataFrame) -> list[tuple[pd.Timestamp, pd.Timestamp]]:

@@ -248,6 +248,27 @@ Spearman rank correlation of the first set's residual with the cadence and with 
 | 4 d | +0.78 (n 12, p 0.003) | -0.71 (n 12, p 0.010) | +0.66 (n 6, p 0.156) | -0.89 (n 6, p 0.019) |
 | 7 d | +0.97 (n 9, p 0.000) | -0.88 (n 9, p 0.002) | +1.00 (n 5, p 0.000) | -0.80 (n 5, p 0.104) |
 
+### What the first set after each burn contains
+
+Each set's semi-major axis is put in the reconstructed orbit's convention (SGP4 over one revolution centred on its epoch, the osculating value averaged as the detector averages the orbit's), the constant between the two conventions, most of it the ten-second finite-difference velocity the orbit reader carries, is calibrated on the window's clean sets (their median residual against the orbit, with the scatter as 1.4826 times the median absolute deviation), and the set's error is measured against the orbit at its own epoch, not the plateau after the burn, because a decaying orbit has moved on by then. The fraction of the burn a set contains is one plus that error over the burn: at or under 0.25 the set is a pre-burn fit with its epoch advanced past the burn, at or over 0.75 it contains the burn, between the two it was fitted across it; a burn under 3 scatters is unresolved. The drift the error predicts, three halves of the mean motion times the error times the lead, is beside the observed residual, signed as the benchmark signs it (positive when the satellite is ahead of the set). The thresholds were fixed before any set was classified.
+
+| Mission | Window | Burn (m) | Clean sets: n, offset, scatter (m) | First set after: delay, error at its epoch (m), fraction, class | Observed / predicted at 24 h (km) | Observed / predicted at 4 d (km) |
+| --- | --- | ---: | --- | --- | --- | --- |
+| Sentinel-1A | storm | +9 | 27, +74, 5.1 | 6.2 h, -11, -0.22, unresolved | -1.5 / -1.5 | -4.2 / -6.1 |
+| CryoSat-2 | quiet | +71 | 14, +73, 1.8 | 5.4 h, -6, 0.92, post-burn | -0.7 / -0.8 | -4.6 / -3.3 |
+| CryoSat-2 | held-out | +86 | 15, +72, 6.4 | 9.6 h, +5, 1.06, post-burn | +0.6 / +0.7 | +2.3 / +3.0 |
+| CryoSat-2 | august | +45 | 14, +74, 5.3 | 18.6 h, -7, 0.85, post-burn | +0.7 / -0.9 | +2.3 / -3.7 |
+| Sentinel-3A | quiet | +66 | 27, +74, 4.3 | 18.5 h, +1, 1.02, post-burn | +0.3 / +0.2 | +0.2 / +0.8 |
+| Sentinel-3A | held-out | +75 | 22, +71, 2.7 | 11.7 h, -2, 0.98, post-burn | -0.9 / -0.2 | -0.1 / -0.9 |
+| Sentinel-3B | quiet | +41 | 12, +70, 2.5 | 6.8 h, -38, 0.06, pre-burn re-epoched | -7.0 / -5.2 | -25.3 / -20.7 |
+| Sentinel-3B | held-out | +65 | 12, +70, 4.3 | 3.4 h, -63, 0.04, pre-burn re-epoched | -9.0 / -8.5 | -32.8 / -33.9 |
+| Sentinel-3B | august | +53 | 13, +70, 3.4 | 8.3 h, -47, 0.12, pre-burn re-epoched | -9.6 / -6.3 | -30.1 / -25.3 |
+| SWOT | held-out | +30 | 17, +71, 6.2 | 2.4 h, -32, -0.07, pre-burn re-epoched | -5.8 / -4.3 | -19.3 / -17.1 |
+| HY-2D | storm | +34 | 24, +71, 1.9 | 13.8 h, -5, 0.86, post-burn | -0.5 / -0.6 | +0.2 / -2.6 |
+| HY-2D | held-out | +95 | 18, +73, 1.9 | 58.6 h, -0, 1.00, post-burn | +0.1 / -0.0 | -0.4 / -0.1 |
+
+The observed residuals in this table are signed; the tables above carry their absolute values. The second and third sets after each burn are classified in the JSON beside this page.
+
 Burns inside a span with no set issued after them before the span's end: Sentinel-1A, august (2024-08-13 19:47 to 23:39, orbit-step); Sentinel-3A, august (2024-08-14 11:47 to 18:42, orbit-step).
 
 Burns after a span's last set, inside the truth period, which take out only the leads of earlier sets: Swarm A, held-out (2024-10-15 21:07 to 21:08, record); Swarm A, held-out (2024-10-15 21:54 to 21:54, record); Swarm B, held-out (2024-10-17 22:58 to 23:23, record); GRACE-FO 2 (D), storm (2024-05-15 06:11 to 06:14, record); Sentinel-1A, storm (2024-05-14 19:47 to 23:49, orbit-step); Sentinel-1A, storm (2024-05-16 12:32 to 15:49, orbit-step); Sentinel-1A, storm (2024-05-16 19:08 to 22:42, orbit-step); Sentinel-1A, held-out (2024-10-13 20:00 to 01:10, orbit-step); CryoSat-2, august (2024-08-15 15:55 to 19:43, orbit-step); Sentinel-3A, storm (2024-05-16 06:00 to 09:39, orbit-step); Sentinel-3A, held-out (2024-10-17 06:14 to 09:50, orbit-step); Sentinel-3B, storm (2024-05-15 05:16 to 09:52, orbit-step); Sentinel-3B, august (2024-08-20 06:57 to 11:20, orbit-step); HY-2C, storm (2024-05-15 00:13 to 03:45, orbit-step); HY-2C, august (2024-08-20 10:39 to 14:26, orbit-step); HY-2D, august (2024-08-15 06:09 to 10:37, orbit-step).

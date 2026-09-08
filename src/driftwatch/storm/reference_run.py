@@ -72,6 +72,8 @@ class MissionWindowRun:
     # What the two detectors found, recorded whether or not a record decided the exclusions.
     manoeuvres_detected_orbit: list[tuple[pd.Timestamp, pd.Timestamp]] = field(default_factory=list)
     manoeuvres_detected_sets: list[tuple[pd.Timestamp, pd.Timestamp]] = field(default_factory=list)
+    # The first sets after each burn, classified by how much of the burn their semi-major axis contains.
+    post_burn_fits: list[dict[str, Any]] = field(default_factory=list)
 
 
 def _sgp4_residuals_by_lead(
@@ -175,6 +177,7 @@ def run_mission_window(
         "none" if orbit is None else f"{len(orbit.table)} states, {len(orbit.days_missing)} day(s) missing",
     )
     trials = None
+    fits: list[dict[str, Any]] = []
     if orbit is not None and n_sets:
         label = {reference.MANOEUVRES_ESA: "esa-record", reference.MANOEUVRES_GRACEFO: "thr1b-record"}.get(
             mission.manoeuvres, "esa-record"
@@ -187,6 +190,8 @@ def run_mission_window(
         trials["altitude_km"] = [by_epoch.get(pd.Timestamp(e), np.nan) for e in trials["set_epoch"]]
         trials["mission"] = mission.key
         trials["altitude_band"] = reference.altitude_band_label(float(np.nanmedian(alt)))
+        burns = list(record.intervals) if record is not None else detected_orbit
+        fits = precise.post_burn_fits(inputs.trial_sets, orbit, burns)
     elif orbit is None:
         notes.append("no reconstructed orbit: laser ranging only")
     orbit_vs_slr = None
@@ -218,6 +223,7 @@ def run_mission_window(
         notes,
         detected_orbit,
         detected_sets,
+        fits,
     )
 
 
@@ -429,6 +435,14 @@ def summarise_post_burn(trials: pd.DataFrame, coverage: dict[str, Any], windows:
                     without.append(head)
                     continue
                 mid = lo + (hi - lo) / 2
+                fit = next(
+                    (
+                        f
+                        for f in entry.get("post_burn_fits") or []
+                        if _naive(f["burn_from"]) == lo and _naive(f["burn_to"]) == hi
+                    ),
+                    None,
+                )
                 usable = g[~g["gap"] & ~g["manoeuvre"] & (g["sgp4_error"] == 0)]
                 clear = {
                     f"{ld:g}": _q(usable[usable["lead_h"] == ld]["in_track_km"].abs().to_numpy(), 0.5) for ld in leads
@@ -438,22 +452,34 @@ def summarise_post_burn(trials: pd.DataFrame, coverage: dict[str, Any], windows:
                 for k, epoch in enumerate(after[:POST_BURN_SETS], start=1):
                     sub = g[g["set_epoch"] == epoch]
                     residual: dict[str, float | None] = {}
+                    signed: dict[str, float | None] = {}
                     for ld in leads:
                         r = sub[sub["lead_h"] == ld]
                         value = None
+                        signed_value = None
                         if len(r):
                             r0 = r.iloc[0]
                             reaches_later = any(a <= r0["t"] and b >= epoch for a, b in later)
                             clean = not bool(r0["gap"]) and int(r0["sgp4_error"]) == 0
                             if not reaches_later and clean and np.isfinite(r0["in_track_km"]):
                                 value = float(abs(r0["in_track_km"]))
+                                signed_value = float(r0["in_track_km"])
                         residual[f"{ld:g}"] = value
+                        signed[f"{ld:g}"] = signed_value
+                    fit_set = None
+                    if fit is not None:
+                        fit_set = next((s for s in fit["sets_after"] if _naive(s["epoch"]) == epoch), None)
                     rows.append(
                         {
                             "k": k,
                             "epoch": epoch.isoformat(),
                             "delay_h": float((epoch - mid).total_seconds() / 3600.0),
                             "in_track_km": residual,
+                            "in_track_signed_km": signed,
+                            "a_error_m": None if fit_set is None else fit_set["a_error_m"],
+                            "fraction": None if fit_set is None else fit_set["fraction"],
+                            "class": None if fit_set is None else fit_set["class"],
+                            "predicted_in_track_km": {} if fit_set is None else fit_set["predicted_in_track_km"],
                         }
                     )
                 burns.append(
@@ -464,6 +490,10 @@ def summarise_post_burn(trials: pd.DataFrame, coverage: dict[str, Any], windows:
                         "n_sets": int(len(epochs)),
                         "n_sets_after": len(after),
                         "clear_median_km": clear,
+                        "delta_a_m": None if fit is None else fit["delta_a_m"],
+                        "offset_m": None if fit is None else fit["offset_m"],
+                        "sigma_m": None if fit is None else fit["sigma_m"],
+                        "n_clean_sets": None if fit is None else fit["n_clean_sets"],
                         "sets_after": rows,
                     }
                 )
@@ -604,6 +634,7 @@ def run_reference(
                         [a.isoformat(), b.isoformat()] for a, b in r.manoeuvres_detected_orbit
                     ],
                     "manoeuvres_detected_sets": [[a.isoformat(), b.isoformat()] for a, b in r.manoeuvres_detected_sets],
+                    "post_burn_fits": r.post_burn_fits,
                     "orbit_vs_slr": r.orbit_vs_slr,
                     "notes": r.notes,
                 }
@@ -755,6 +786,61 @@ def _corr_cell(c: dict[str, Any] | None) -> str:
     return f"{c['rho']:+.2f} (n {c['n']}, p {c['p']:.3f})"
 
 
+def _post_burn_fit_lines(burns: list[dict[str, Any]], names: dict[str, str], keys: list[str]) -> list[str]:
+    """The first set after each burn, classified by how much of the burn its semi-major axis contains."""
+    if not any(b.get("delta_a_m") is not None for b in burns):
+        return []
+    lead_a, lead_b = ("24", "96") if "24" in keys and "96" in keys else (keys[0], keys[-1])
+    lines = [
+        "",
+        "### What the first set after each burn contains",
+        "",
+        "Each set's semi-major axis is put in the reconstructed orbit's convention (SGP4 over one revolution "
+        "centred on its epoch, the osculating value averaged as the detector averages the orbit's), the constant "
+        "between the two conventions, most of it the ten-second finite-difference velocity the orbit reader carries, "
+        "is calibrated on the window's clean sets (their median residual against the orbit, with the scatter as "
+        "1.4826 times the median absolute deviation), and the set's error is measured "
+        "against the orbit at its own epoch, not the plateau after the burn, because a decaying orbit has moved on "
+        "by then. The fraction of the burn a set contains is one plus that error over the burn: at or under "
+        f"{precise.POST_BURN_FRACTION_PRE:g} the set is a pre-burn fit with its epoch advanced past the burn, at or "
+        f"over {precise.POST_BURN_FRACTION_POST:g} it contains the burn, between the two it was fitted across it; a "
+        f"burn under {precise.POST_BURN_RESOLVE_SIGMAS:g} scatters is unresolved. The drift the error predicts, "
+        "three halves of the mean motion times the error times the lead, is beside the observed residual, signed as "
+        "the benchmark signs it (positive when the satellite is ahead of the set). The thresholds were fixed before "
+        "any set was classified.",
+        "",
+        "| Mission | Window | Burn (m) | Clean sets: n, offset, scatter (m) | First set after: delay, error at its "
+        f"epoch (m), fraction, class | Observed / predicted at {_lead(float(lead_a))} (km) "
+        f"| Observed / predicted at {_lead(float(lead_b))} (km) |",
+        "| --- | --- | ---: | --- | --- | --- | --- |",
+    ]
+    for b in burns:
+        if b.get("delta_a_m") is None:
+            continue
+        first = b["sets_after"][0]
+        err = "-" if first.get("a_error_m") is None else f"{first['a_error_m']:+.0f}"
+        frac = "-" if first.get("fraction") is None else f"{first['fraction']:.2f}"
+        cells = []
+        for key in (lead_a, lead_b):
+            obs = (first.get("in_track_signed_km") or first["in_track_km"]).get(key)
+            pred = (first.get("predicted_in_track_km") or {}).get(key)
+            o = "-" if obs is None else f"{obs:+.1f}"
+            p = "-" if pred is None else f"{pred:+.1f}"
+            cells.append(f"{o} / {p}")
+        lines.append(
+            f"| {names.get(b['mission'], b['mission'])} | {b['window']} | {b['delta_a_m']:+.0f} "
+            f"| {b['n_clean_sets']}, {b['offset_m']:+.0f}, {b['sigma_m']:.1f} "
+            f"| {first['delay_h']:.1f} h, {err}, {frac}, {first.get('class') or '-'} | " + " | ".join(cells) + " |"
+        )
+    # The observed residual is signed here; the tables above carry its absolute value.
+    lines.append("")
+    lines.append(
+        "The observed residuals in this table are signed; the tables above carry their absolute values. The second "
+        "and third sets after each burn are classified in the JSON beside this page."
+    )
+    return lines
+
+
 def _post_burn_section(post: dict[str, Any], names: dict[str, str]) -> list[str]:
     """The first element sets after a burn, against the cadence of the mission's sets and the delay after the burn."""
     leads = [float(x) for x in post.get("leads_h", [])]
@@ -826,6 +912,7 @@ def _post_burn_section(post: dict[str, Any], names: dict[str, str]) -> list[str]
             for i in items
         )
 
+    lines += _post_burn_fit_lines(burns, names, keys)
     without = post.get("burns_without_a_set_after") or []
     after_span = post.get("burns_after_the_span") or []
     if without:
