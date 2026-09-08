@@ -25,14 +25,14 @@ import pyarrow as pa
 import pyarrow.compute as pc
 import pyarrow.parquet as pq
 
-from driftwatch import config
+from driftwatch import availability, config
 from driftwatch.catalogue.classify import altitude_bands, categorise_frame
 from driftwatch.orbit.propagator import build_satrecs, mean_orbit_geometry
 from driftwatch.orbit.time import stamp
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # OMM field -> snapshot column, for the fields taken verbatim from CelesTrak.
 OMM_FIELDS: dict[str, str] = {
@@ -94,6 +94,8 @@ SNAPSHOT_SCHEMA = pa.schema(
         pa.field("reconstructed_at", pa.timestamp("us", tz="UTC")),
         pa.field("epoch_selection_as_of", pa.timestamp("us", tz="UTC")),
         pa.field("selection_kind", pa.string()),
+        pa.field("availability_as_of", pa.timestamp("us", tz="UTC")),
+        pa.field("membership_provenance", pa.string()),
     ]
 )
 
@@ -107,11 +109,16 @@ def records_to_frame(records: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
     if missing:
         raise ValueError(f"OMM records lack fields: {missing}")
     created = pd.to_datetime(df.get("CREATION_DATE", pd.Series(pd.NaT, index=df.index)), utc=True, format="ISO8601")
+    provenance = {
+        key: df.get("_driftwatch_" + key, pd.Series(pd.NaT, index=df.index)) for key in ("published_at", "retrieved_at")
+    }
     df = df[list(OMM_FIELDS)].rename(columns=OMM_FIELDS)
     df["provider_created_at"] = created
-    df["published_at"] = pd.Series(pd.NaT, index=df.index, dtype="datetime64[us, UTC]")
+    for key, values in provenance.items():
+        df[key] = pd.to_datetime(values, utc=True, format="mixed")
     df["norad_id"] = df["norad_id"].astype("int64")
     df["epoch"] = pd.to_datetime(df["epoch"], utc=True, format="ISO8601")
+    df["state_epoch"] = df["epoch"]
     for col in (
         "mean_motion",
         "eccentricity",
@@ -137,7 +144,7 @@ def build_snapshot(
     records_by_group: Mapping[str, Sequence[Mapping[str, Any]]],
     satcat: pd.DataFrame | None,
     *,
-    fetched_at: datetime,
+    fetched_at: datetime | None = None,
     source: str = "celestrak",
     extra_sources: Mapping[str, Sequence[Mapping[str, Any]]] | None = None,
 ) -> pd.DataFrame:
@@ -149,7 +156,9 @@ def build_snapshot(
     equal epoch the CelesTrak record wins the tie: CelesTrak redistributes Space-Track's
     data, so equal epochs are the same element set and the tie only decides the label.
     ``groups`` lists the CelesTrak groups an object appeared in and is empty for objects
-    that only another source holds.
+    that only another source holds. Per-record retrieval annotations survive merging;
+    ``fetched_at`` is an optional actual acquisition time for a single shared fetch,
+    never the time a cached file was imported or this snapshot was built.
     """
     frames = []
     for group, records in records_by_group.items():
@@ -179,6 +188,7 @@ def build_snapshot(
     df["groups"] = [g if isinstance(g, list) else [] for g in groups.reindex(df.index)]
     df = df.reset_index()
 
+    df["fetched_at"] = df["retrieved_at"]
     return enrich(df, satcat, fetched_at=fetched_at)
 
 
@@ -233,12 +243,16 @@ def temporal_fields(df: pd.DataFrame) -> pd.DataFrame:
         "retrieved_at",
         "reconstructed_at",
         "epoch_selection_as_of",
+        "availability_as_of",
     ):
         if name not in df:
             df[name] = df.get("fetched_at", pd.NaT) if name == "retrieved_at" else pd.NaT
         df[name] = pd.to_datetime(df[name], utc=True)
+    df["retrieved_at"] = df["retrieved_at"].fillna(df["fetched_at"])
     if "selection_kind" not in df:
         df["selection_kind"] = "retrieval snapshot"
+    if "membership_provenance" not in df:
+        df["membership_provenance"] = None
     return df
 
 
@@ -250,6 +264,8 @@ def snapshot_as_of(
     groups: Mapping[int, Sequence[str]] | None = None,
     max_age_days: float | None = None,
     reconstructed_at: datetime | None = None,
+    selection_kind: str = availability.EPOCH_RECONSTRUCTION,
+    membership: pd.DataFrame | None = None,
 ) -> pd.DataFrame:
     """Epoch-based reconstruction: newest stored state epoch no later than ``as_of``.
 
@@ -258,18 +274,27 @@ def snapshot_as_of(
     Provider creation is not publication. Actual input retrieval times survive;
     missing times remain unknown. Supplied SATCAT and group membership can be
     retrospective and do not establish historical membership. ``max_age_days``
-    limits state-epoch age only. Availability-based replay remains a separate gate.
+    limits state-epoch age only. ``causal replay`` additionally requires publication
+    or actual retrieval evidence before the cutoff and a supplied membership history.
     """
     if not len(sets):
         raise ValueError("no element sets to build a snapshot from")
     at = pd.Timestamp(as_of)
     at = at.tz_localize("UTC") if at.tzinfo is None else at.tz_convert("UTC")
     epochs = pd.to_datetime(sets["epoch"], utc=True)
-    before = sets[epochs <= at].copy()
+    before = availability.select(sets.assign(epoch=epochs), as_of=at, selection_kind=selection_kind)
+    membership_rows = None
+    if selection_kind == availability.CAUSAL_REPLAY and membership is None:
+        raise ValueError("Causal catalogue replay requires an explicit membership history")
+    if membership is not None:
+        membership_rows = availability.membership_at(membership, as_of=at, selection_kind=selection_kind)
+        before = before[before.norad_id.isin(membership_rows.norad_id)]
     if not len(before):
         raise ValueError(f"no element set in the history is at or before {at.isoformat()}")
     before["epoch"] = pd.to_datetime(before["epoch"], utc=True)
-    latest = before.sort_values(["norad_id", "epoch"]).drop_duplicates("norad_id", keep="last")
+    latest = before.sort_values(
+        ["norad_id", "epoch", "provider_created_at", "retrieved_at"], na_position="first", kind="stable"
+    ).drop_duplicates("norad_id", keep="last")
     if max_age_days is not None:
         age_days = (at - latest["epoch"]).dt.total_seconds() / 86400.0
         latest = latest[age_days <= float(max_age_days)]
@@ -277,14 +302,29 @@ def snapshot_as_of(
         raise ValueError(f"no element set within {max_age_days} days of {at.isoformat()}")
     latest = latest.reset_index(drop=True)
     latest["norad_id"] = latest["norad_id"].astype("int64")
-    lookup = {int(k): list(v) for k, v in (groups or {}).items()}
+    lookup = (
+        {int(k): list(v) for k, v in (groups or {}).items()}
+        if selection_kind == availability.EPOCH_RECONSTRUCTION
+        else {}
+    )
     latest["groups"] = [lookup.get(int(i), []) for i in latest["norad_id"]]
     if "source" not in latest.columns:
         latest["source"] = "gp_history"
-    latest["selection_kind"] = "epoch-based reconstruction"
+    latest["selection_kind"] = selection_kind
     latest["epoch_selection_as_of"] = at
+    latest["availability_as_of"] = at if selection_kind == availability.CAUSAL_REPLAY else pd.NaT
+    provenance = (
+        {}
+        if membership_rows is None
+        else {
+            int(row["norad_id"]): json.dumps(row)
+            for row in availability.metadata(membership_rows, epoch_column="effective_at")
+        }
+    )
+    latest["membership_provenance"] = [provenance.get(int(n)) for n in latest.norad_id]
     latest["reconstructed_at"] = pd.to_datetime(reconstructed_at or datetime.now(UTC), utc=True)
-    return enrich(latest, satcat)
+    # Current SATCAT attributes cannot be attached as historical causal facts.
+    return enrich(latest, satcat if selection_kind == availability.EPOCH_RECONSTRUCTION else None)
 
 
 def as_of_path(as_of: datetime, snapshot_dir: Path = config.AS_OF_SNAPSHOT_DIR) -> Path:
@@ -314,7 +354,7 @@ def to_arrow(df: pd.DataFrame, extra_metadata: Mapping[str, str] | None = None) 
 
 
 def snapshot_path(fetched_at: datetime, snapshot_dir: Path = config.SNAPSHOT_DIR) -> Path:
-    """File name for a snapshot fetched at ``fetched_at``."""
+    """Name a local build; the legacy argument name does not set the rows' retrieval time."""
     return snapshot_dir / f"gp_{stamp(fetched_at)}.parquet"
 
 
@@ -335,7 +375,7 @@ def read_snapshot(path: Path) -> pd.DataFrame:
         log.warning("Snapshot %s has schema version %s, expected %s", path.name, version, SCHEMA_VERSION)
     frame = table.to_pandas(date_as_object=True)
     metadata = table.schema.metadata or {}
-    if version != str(SCHEMA_VERSION) and (path.name.startswith("gp_asof_") or b"driftwatch_as_of" in metadata):
+    if version == "1" and (path.name.startswith("gp_asof_") or b"driftwatch_as_of" in metadata):
         # Legacy reconstructions wrote the target epoch into fetched_at. That
         # field cannot be recovered as an acquisition time from these bytes.
         cutoff = metadata.get(b"driftwatch_as_of")
@@ -380,11 +420,13 @@ def snapshot_problem(path: Path) -> str | None:
     version = metadata.get("driftwatch_schema_version")
     if version is None:
         return f"{path.name} carries no driftwatch_schema_version, so it was not written as a snapshot"
-    if version not in {"1", str(SCHEMA_VERSION)}:
+    if version not in {"1", "2", str(SCHEMA_VERSION)}:
         return f"{path.name} has snapshot schema version {version}, expected {SCHEMA_VERSION}"
     required = SNAPSHOT_SCHEMA.names
     if version == "1":
         required = required[: required.index("state_epoch")]
+    elif version == "2":
+        required = required[: required.index("availability_as_of")]
     missing = [name for name in required if name not in schema.names]
     if missing:
         return f"{path.name} is missing snapshot columns: {', '.join(missing)}"

@@ -3,22 +3,30 @@
 All on-disk products live under `data/` (git-ignored) except the viewer bundle, which is
 written into `web/public/data/` so Vite serves it. Times are UTC throughout.
 
-## Time semantics in snapshot schema 2
+## Time semantics in snapshot schema 3
 
 `epoch` is retained for compatibility and `state_epoch` names its meaning explicitly.
 `provider_created_at`, `published_at` and `retrieved_at` are separate nullable timestamps;
 creation never substitutes for publication. `fetched_at` is the legacy alias for actual
 acquisition, not the historical target. `epoch_selection_as_of` records the reconstruction
 cutoff; `reconstructed_at` records when that reconstruction was made. `selection_kind`
-labels an `epoch-based reconstruction` or a `retrieval snapshot`.
+labels an `epoch-based reconstruction`, `retrieval snapshot` or `causal replay`.
+`availability_as_of` is populated only for causal replay. `membership_provenance` retains
+the selected membership event, its separate time fields, source identifier and content hash
+when supplied. Causal catalogue replay requires explicit membership history and does not
+join current SATCAT attributes or group membership as historical facts.
 
-Old epoch reconstructions stored their target in `fetched_at`; readers clear that fabricated
+Schema-1 epoch reconstructions stored their target in `fetched_at`; readers clear that fabricated
 acquisition value and preserve it as unknown. They cannot recover publication or retrieval
 from epoch. Current SATCAT/group metadata does not establish historical membership.
 History files retain available provider creation/publication/retrieval fields; absent fields
 in older files remain null. OEM local analysis retains creation and originator, records local
 import separately, and leaves provider retrieval and publication unknown unless supplied.
-The late-publication operational replay acceptance test remains open in [the roadmap](../ROADMAP.md).
+The [G1 acceptance tests](g1-availability.md) cover late element sets, catalogue membership
+and manoeuvre records. Known publication must precede or equal the decision time; actual
+retrieval can prove availability only when publication is unknown. Neither creation nor
+local import time supplies missing availability. This is a selection contract for supplied
+provenance, not independent validation of the provider's publication history.
 
 ## Cache: `data/cache/celestrak/`
 
@@ -173,7 +181,11 @@ parquet metadata as `driftwatch_schema_version`. Column order is fixed by
 | `launch_date` | date32 | From SATCAT, null if unknown. |
 | `groups` | list<string> | Every CelesTrak group the object appeared in. Empty for objects that only Space-Track holds. |
 | `source` | string | Where the winning element set came from: `celestrak` or `spacetrack`. |
-| `fetched_at` | timestamp[us, UTC] | When the snapshot was built. |
+| `fetched_at` | timestamp[us, UTC] | Actual retrieval of the winning element set; legacy alias of `retrieved_at`. Rebuilding from cache does not refresh it. |
+| `state_epoch` | timestamp[us, UTC] | Explicit alias of the element-set `epoch`. |
+| `provider_created_at`, `published_at`, `retrieved_at` | nullable timestamp[us, UTC] | Separate provider creation, known publication and actual retrieval times. |
+| `reconstructed_at`, `epoch_selection_as_of`, `availability_as_of` | nullable timestamp[us, UTC] | Local build time, state-epoch cutoff and causal availability cutoff respectively. |
+| `selection_kind`, `membership_provenance` | string, nullable string | Declared selection rule and JSON for the selected historical membership event. |
 
 An object present in several groups or sources is kept once, with the newest epoch. At
 equal epoch the CelesTrak record wins the tie; CelesTrak redistributes Space-Track's
@@ -245,10 +257,11 @@ and `end`, or the ids and range of a `history` command). A second pull in the sa
 second gets a `_2`, `_3` suffix rather than overwriting the first. Each file holds
 every element set Space-Track's `gp_history` returned. Columns are the element-set
 columns of the snapshot (`norad_id` through `rev_at_epoch`) plus `source`
-(`spacetrack`) and `fetched_at`, one row per (`norad_id`, `epoch`), sorted by object
-and epoch and written in row groups of 50,000 rows so that a read filtered on
-`norad_id` skips most of a large file. A re-issued element set with the same epoch
-replaces the earlier one.
+(`spacetrack`), `state_epoch`, `fetched_at` and the separate nullable creation,
+publication and retrieval fields. Rows are sorted by object and epoch and written in row
+groups of 50,000 rows so a read filtered on `norad_id` skips most of a large file.
+New history imports preserve reissued records sharing the same state epoch. Previously
+collapsed versions cannot be recovered from the remaining rows.
 
 `index.parquet` is the consolidated index: one row per
 element set in every history file, `norad_id` (int64), `epoch` (timestamp[us, UTC])
@@ -259,7 +272,8 @@ write, rebuilt from the files whenever it is missing or does not list every file
 `driftwatch.catalogue.history.load_history(norad_ids=...)` reads the index, opens only
 the history files that hold those objects (with the row-group filter), adds the rows
 for those objects from every snapshot (which carry the same columns), and keeps one
-row per (`norad_id`, `epoch`), so the snapshots taken by the daily fetch and the
+row per (`norad_id`, `epoch`) by default. Causal selection passes `preserve_versions=True`
+and filters availability before choosing the latest eligible revision, so the snapshots taken by the daily fetch and the
 backfilled history form one table. Without `norad_ids` every file is read. Step 3 fits
 the covariance from that table; Phase 3 replays storms from it.
 

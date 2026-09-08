@@ -83,7 +83,7 @@ def test_build_snapshot_dedupes_and_joins(omm_records, tmp_path):
     path = write_snapshot(df, snapshot_path(fetched_at, tmp_path), groups=list(groups))
     assert path.name == "gp_20260901T120000Z.parquet"
     meta = pq.read_metadata(path).metadata
-    assert meta[b"driftwatch_schema_version"] == b"2"
+    assert meta[b"driftwatch_schema_version"] == b"3"
     back = read_snapshot(path)
     assert len(back) == len(df)
     assert list(back.columns) == list(df.columns)

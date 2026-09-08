@@ -117,9 +117,15 @@ def test_frozen_september_result_bytes_remain_bound_to_completion_manifest():
 
 def test_publication_inputs_and_method_sources_match_the_bound_hashes():
     data, _ = evidence()
-    for source in data["inputs"] + data["source_code"]:
+    for source in data["inputs"]:
         expected = publication_assets.effective_hash(source["path"], source["sha256"], root=ROOT)
         assert hashlib.sha256((ROOT / source["path"]).read_bytes()).hexdigest() == expected, source["path"]
+    import publication_method
+
+    for source in data["source_code"]:
+        expected = publication_assets.effective_hash(source["path"], source["sha256"], root=ROOT)
+        raw = publication_method.published_source(source["path"], expected, root=ROOT)
+        assert hashlib.sha256(raw).hexdigest() == expected
     frozen = ROOT / data["publication"]["frozen_protocol_markdown_path"]
     assert hashlib.sha256(frozen.read_bytes()).hexdigest() == data["publication"]["frozen_protocol_markdown_sha256"]
     status = (ROOT / "docs/protocols/2026-09-08-september-2024.md").read_text(encoding="utf-8")

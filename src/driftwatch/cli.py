@@ -24,7 +24,7 @@ import pandas as pd
 import pyarrow as pa
 import pyarrow.parquet as pq
 
-from driftwatch import __version__, config
+from driftwatch import __version__, availability, config
 from driftwatch import stability as stability_mod
 from driftwatch.catalogue import celestrak, history, satcat, snapshot, spacetrack
 from driftwatch.cdm import kelvins as cdm_kelvins
@@ -103,10 +103,19 @@ def cmd_fetch(args: argparse.Namespace) -> int:
             log.warning("Space-Track skipped (%s); the snapshot is CelesTrak only", exc)
         else:
             log.info("%-22s %6d objects  %s", "spacetrack gp", st.n_objects, "cache" if st.from_cache else "downloaded")
-            extra_sources["spacetrack"] = spacetrack.load_gp_records(config.CACHE_DIR)
+            extra_sources["spacetrack"] = [
+                {**r, "_driftwatch_retrieved_at": st.fetched_at} for r in spacetrack.load_gp_records(config.CACHE_DIR)
+            ]
 
-    records = {res.group: celestrak.load_group_records(res.group, config.CACHE_DIR) for res in results}
-    df = snapshot.build_snapshot(records, satcat_df, fetched_at=now, extra_sources=extra_sources)
+    records = {
+        res.group: [
+            {**r, "_driftwatch_retrieved_at": res.fetched_at}
+            for r in celestrak.load_group_records(res.group, config.CACHE_DIR)
+        ]
+        for res in results
+    }
+    df = snapshot.build_snapshot(records, satcat_df, extra_sources=extra_sources)
+    df["reconstructed_at"] = pd.Timestamp(now)
     path = snapshot.write_snapshot(df, snapshot.snapshot_path(now, config.SNAPSHOT_DIR), groups=groups)
     summary = snapshot.snapshot_summary(df)
     log.info("Snapshot %s: %d objects", path.name, summary["n_objects"])
@@ -232,12 +241,12 @@ def cmd_history(args: argparse.Namespace) -> int:
     now = datetime.now(UTC)
     try:
         records = spacetrack.fetch_gp_history(
-            ids, start, end, cache_dir=config.CACHE_DIR, now=now, offline=args.offline
+            ids, start, end, cache_dir=config.CACHE_DIR, now=now, offline=args.offline, with_provenance=True
         )
     except (spacetrack.SpaceTrackAuthError, FileNotFoundError) as exc:
         log.error("Cannot fetch history: %s", exc)
         return 2
-    df = history.frame_from_records(records, fetched_at=now)
+    df = history.frame_from_records(records, preserve_versions=True)
     path = history.write_history(
         df,
         history.unique_history_path(now, config.HISTORY_DIR),
@@ -322,12 +331,25 @@ def select_historical_objects(
 
 
 def cmd_snapshot_as_of(args: argparse.Namespace) -> int:
-    """Build an epoch-based reconstruction from stored gp_history; availability is unknown."""
+    """Reconstruct by epoch or replay explicit publication and membership evidence."""
     as_of = parse_utc(args.date)
     path = snapshot.as_of_path(as_of, config.AS_OF_SNAPSHOT_DIR)
+    selection_kind = availability.CAUSAL_REPLAY if args.selection == "causal" else availability.EPOCH_RECONSTRUCTION
+    membership = None
+    if selection_kind == availability.CAUSAL_REPLAY:
+        if not args.ids or not args.membership_history:
+            log.error(
+                "Causal replay requires --ids and --membership-history; current filters are not historical evidence"
+            )
+            return 2
+        membership = availability.read_records(args.membership_history)
+        path = path.with_name(path.name.replace("gp_asof_", "gp_causal_"))
     if path.exists() and not args.force:
+        if selection_kind == availability.CAUSAL_REPLAY:
+            log.error("Causal replay output already exists; reopen that file or use --force with the supplied evidence")
+            return 2
         df = snapshot.read_snapshot(path)
-        log.info("Using cached epoch-based reconstruction %s: %d objects", path.name, len(df))
+        log.info("Using cached %s %s: %d objects", selection_kind, path.name, len(df))
         print(path)
         return 0
     now = datetime.now(UTC)
@@ -338,11 +360,14 @@ def cmd_snapshot_as_of(args: argparse.Namespace) -> int:
         log.warning("No SATCAT (%s); the snapshot will carry no object type or radar cross-section", exc)
         satcat_frame = None
 
-    ids, why = select_historical_objects(args, as_of, satcat_frame)
+    if selection_kind == availability.CAUSAL_REPLAY:
+        ids, why = sorted({int(n) for n in args.ids.split(",")}), {"selection": "fixed supplied identities"}
+    else:
+        ids, why = select_historical_objects(args, as_of, satcat_frame)
     if not ids:
         log.error("no objects selected; pass --ids, --launch, --fleet or an altitude range")
         return 2
-    log.info("Epoch-based reconstruction for %s: %d objects selected (%s)", as_of.date(), len(ids), why)
+    log.info("%s for %s: %d objects selected (%s)", selection_kind, as_of.date(), len(ids), why)
 
     # The pull has to reach back far enough that every object has a set *before* the date.
     end = as_of + timedelta(days=1)
@@ -363,7 +388,12 @@ def cmd_snapshot_as_of(args: argparse.Namespace) -> int:
         log.error("Cannot fetch history: %s", exc)
         return 2
 
-    sets = history.load_history(norad_ids=ids, start=as_of - timedelta(days=days), end=end)
+    sets = history.load_history(
+        norad_ids=ids,
+        start=as_of - timedelta(days=days),
+        end=end,
+        preserve_versions=selection_kind == availability.CAUSAL_REPLAY,
+    )
     if not len(sets):
         log.error("no element sets stored for those objects in the %d days to %s", days, as_of.date())
         return 2
@@ -375,7 +405,13 @@ def cmd_snapshot_as_of(args: argparse.Namespace) -> int:
         pass
     try:
         df = snapshot.snapshot_as_of(
-            sets, satcat_frame, as_of=as_of, groups=current_groups, max_age_days=args.max_age_days
+            sets,
+            satcat_frame,
+            as_of=as_of,
+            groups=current_groups,
+            max_age_days=args.max_age_days,
+            selection_kind=selection_kind,
+            membership=membership,
         )
     except ValueError as exc:
         log.error("%s", exc)
@@ -402,9 +438,7 @@ def cmd_snapshot_as_of(args: argparse.Namespace) -> int:
         float(ages.quantile(0.9)),
         float(ages.max()),
     )
-    print(
-        f"{len(df)} objects in an epoch-based reconstruction at {as_of.isoformat()}; publication availability unknown"
-    )
+    print(f"{len(df)} objects in {selection_kind} at {as_of.isoformat()}")
     print("by category:", df["category"].value_counts().to_dict())
     print(
         f"perigee km: min {df['perigee_km'].min():.0f}, median {df['perigee_km'].median():.0f}, "
@@ -2330,7 +2364,7 @@ def cmd_validate_swarm(args: argparse.Namespace) -> int:
         return 2
     frame = pd.concat(trials, ignore_index=True)
     summary = precise.summarise(frame)
-    sources = precise.sources_record(orbits, retrieved_at=now, weather_sources=weather_used, records=records)
+    sources = precise.sources_record(orbits, reviewed_at=now, weather_sources=weather_used, records=records)
 
     out = Path(args.out or config.DATA_DIR / "validation")
     out.mkdir(parents=True, exist_ok=True)
@@ -2542,6 +2576,11 @@ def cmd_local(args: argparse.Namespace) -> int:
     from driftwatch.storm import precise
 
     now = datetime.now(UTC)
+    selection_kind = availability.CAUSAL_REPLAY if args.selection == "causal" else availability.EPOCH_RECONSTRUCTION
+    decision_at = parse_utc(args.as_of) if args.as_of else None
+    if selection_kind == availability.CAUSAL_REPLAY and decision_at is None:
+        log.error("Causal local analysis requires --as-of")
+        return 2
     out = Path(args.out)
     if not any([args.run, args.cdm, args.ephemeris]):
         log.error("nothing to do: give --run, --cdm (with --run), or --ephemeris with --norad")
@@ -2621,13 +2660,24 @@ def cmd_local(args: argparse.Namespace) -> int:
                     return 2
                 if args.sets:
                     records = json.loads(Path(args.sets).read_text(encoding="utf-8"))
-                    sets = history.frame_from_records(records, source="local")
+                    records = [
+                        {
+                            **r,
+                            "_driftwatch_published_at": args.sets_published_at,
+                            "_driftwatch_retrieved_at": args.sets_retrieved_at,
+                        }
+                        for r in records
+                    ]
+                    sets = history.frame_from_records(
+                        records, source="local", preserve_versions=selection_kind == availability.CAUSAL_REPLAY
+                    )
                     sets_origin = f"{len(sets)} OMM records from {args.sets}"
                 else:
                     sets = history.load_history(
                         norad_ids=[int(args.norad)],
                         start=(span[0] - pd.Timedelta(days=precise.COVARIANCE_HISTORY_DAYS + 15)).tz_localize("UTC"),
                         end=span[1].tz_localize("UTC"),
+                        preserve_versions=selection_kind == availability.CAUSAL_REPLAY,
                     )
                     sets_origin = f"{len(sets)} element sets from the local history store ({config.HISTORY_DIR})"
                 if not len(sets):
@@ -2638,7 +2688,18 @@ def cmd_local(args: argparse.Namespace) -> int:
                     )
                     return 2
                 sets = sets.assign(category=sets.get("category", "payload"))
-                published = local_mod.load_manoeuvre_records(args.manoeuvres) if args.manoeuvres else None
+                manoeuvre_frame = (
+                    local_mod.manoeuvre_table(
+                        pd.read_csv(args.manoeuvres), as_of=decision_at, selection_kind=selection_kind
+                    )
+                    if args.manoeuvres
+                    else None
+                )
+                published = (
+                    None
+                    if manoeuvre_frame is None
+                    else [(r.start.tz_convert(None), r.end.tz_convert(None)) for r in manoeuvre_frame.itertuples()]
+                )
                 grid = None
                 weather_origin = "not used: --storm-term not given"
                 if args.storm_term:
@@ -2665,6 +2726,8 @@ def cmd_local(args: argparse.Namespace) -> int:
                     grid=grid,
                     tolerance_km=args.tolerance_km,
                     reference_kind=args.reference_kind,
+                    selection_kind=selection_kind,
+                    decision_at=decision_at,
                 )
                 out.mkdir(parents=True, exist_ok=True)
                 bench.trials.to_parquet(out / "ephemeris_trials.parquet", index=False)
@@ -2687,6 +2750,9 @@ def cmd_local(args: argparse.Namespace) -> int:
                     if coefficient is None
                     else {"b_m2_kg": float(coefficient["b_m2_kg"]), "source": str(coefficient.get("source"))},
                     "manoeuvre_record": args.manoeuvres,
+                    "manoeuvre_time_metadata": []
+                    if manoeuvre_frame is None
+                    else availability.metadata(manoeuvre_frame, epoch_column="start"),
                     "leads_hours": list(leads),
                     "summary": bench.summary,
                 }
@@ -3910,9 +3976,16 @@ def build_parser() -> argparse.ArgumentParser:
 
     asof = sub.add_parser(
         "snapshot-as-of",
-        help="build an epoch-based reconstruction from gp_history; publication availability is unknown",
+        help="reconstruct gp_history by epoch, or replay explicit publication and membership evidence",
     )
     asof.add_argument("--date", required=True, help="the date to reconstruct, ISO 8601 UTC")
+    asof.add_argument(
+        "--selection",
+        choices=("epoch", "causal"),
+        default="epoch",
+        help="epoch reconstruction, or causal replay with publication and membership evidence",
+    )
+    asof.add_argument("--membership-history", help="availability provenance JSON with effective_at and present rows")
     asof.add_argument("--ids", help="comma-separated NORAD ids")
     asof.add_argument("--launch", help="comma-separated international designator prefixes, e.g. 2022-010")
     asof.add_argument("--fleet", help="fleet file whose members to include")
@@ -4093,6 +4166,14 @@ def build_parser() -> argparse.ArgumentParser:
         "--out", required=True, help="directory for local_analysis.json, local_analysis.md and the trials"
     )
     local.add_argument("--run", help="a stored run: directory, name under data/conjunctions, or 'latest'")
+    local.add_argument("--selection", choices=("epoch", "causal"), default="epoch")
+    local.add_argument("--as-of", help="decision time for causal prediction-input selection")
+    local.add_argument(
+        "--sets-published-at", help="known publication time of the supplied element-set file; omit if unknown"
+    )
+    local.add_argument(
+        "--sets-retrieved-at", help="actual provider retrieval time of the supplied element-set file; omit if unknown"
+    )
     local.add_argument("--max-snapshot-age-hours", type=float, help="fail the provenance check past this age")
     local.add_argument("--cdm", help="the operator's messages (a file or a directory); needs --run")
     local.add_argument("--scenario", help="which scored scenario the messages are matched against (default quiet)")

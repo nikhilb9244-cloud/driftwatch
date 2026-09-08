@@ -486,6 +486,7 @@ def fetch_gp_history(
     client: SpaceTrackClient | None = None,
     now: datetime | None = None,
     offline: bool = False,
+    with_provenance: bool = False,
 ) -> list[dict[str, Any]]:
     """Every element set for ``norad_ids`` with an epoch on the days ``start`` to ``end`` inclusive.
 
@@ -517,7 +518,13 @@ def fetch_gp_history(
             if path.exists():
                 log.info("Using cached gp_history %s", key)
                 with path.open(encoding="utf-8") as fh:
-                    records.extend(json.load(fh))
+                    cached = json.load(fh)
+                if with_provenance:
+                    meta_path = _meta_path(path)
+                    metadata = json.loads(meta_path.read_text(encoding="utf-8")) if meta_path.exists() else {}
+                    retrieved = metadata.get("retrieved_at", metadata.get("fetched_at"))
+                    cached = [{**r, "_driftwatch_retrieved_at": retrieved} for r in cached]
+                records.extend(cached)
                 continue
             if offline:
                 raise FileNotFoundError(f"No cached gp_history for {key} and offline=True")
@@ -533,7 +540,11 @@ def fetch_gp_history(
                     _write_history_cache(out_dir, part, start, end, query_end, part_records, now, predicates)
             else:
                 _write_history_cache(out_dir, chunk, start, end, query_end, chunk_records, now, predicates)
-            records.extend(chunk_records)
+            records.extend(
+                [{**r, "_driftwatch_retrieved_at": now.isoformat()} for r in chunk_records]
+                if with_provenance
+                else chunk_records
+            )
     finally:
         if own_client and client is not None:
             client.close()
@@ -562,6 +573,7 @@ def _write_history_cache(
                 "end": end.isoformat(),
                 "query": gp_history_request(ids, start, query_end, predicates=predicates),
                 "fetched_at": now.isoformat(),
+                "retrieved_at": now.isoformat(),
                 "n_records": len(records),
             },
             indent=2,

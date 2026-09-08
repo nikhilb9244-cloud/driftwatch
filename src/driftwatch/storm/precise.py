@@ -1209,7 +1209,7 @@ def summarise(
 # The record of sources
 
 
-def _manoeuvre_source(records: dict[str, ThrusterRecord | None] | None, retrieved_at: datetime) -> dict[str, Any]:
+def _manoeuvre_source(records: dict[str, ThrusterRecord | None] | None, reviewed_at: datetime) -> dict[str, Any]:
     detection = (
         "the project's own detection -- a step in the orbit-mean semi-major axis of the precise orbit beyond "
         f"{MANOEUVRE_STEP_M:g} m and {MANOEUVRE_STEP_MAD_FACTOR:g} robust sigmas between consecutive orbits, and "
@@ -1221,14 +1221,20 @@ def _manoeuvre_source(records: dict[str, ThrusterRecord | None] | None, retrieve
             "source": "Manoeuvre intervals",
             "origin": f"NOT ESA's published record: {detection}. ESA's thruster record for these days is the "
             f"{SWARM_DYN_PRODUCT}, which was not available to this run",
-            "retrieved_at": retrieved_at.isoformat(),
+            "reviewed_at": reviewed_at.isoformat(),
+            "provider_created_at": None,
+            "published_at": None,
+            "retrieved_at": None,
         }
     return {
         "source": "Manoeuvre intervals",
         "origin": f"ESA Swarm Level 1b spacecraft dynamics, {SWARM_DYN_PRODUCT}, retrieved from {SWARM_DISS_URL}: "
         "per-second on-times of the twelve thrusters (dt_thr) and the nominal force of the orbit-control "
         "thrusters that fired (f_thr); each day's header Maneuver_Information ids are kept beside it",
-        "retrieved_at": retrieved_at.isoformat(),
+        "reviewed_at": reviewed_at.isoformat(),
+        "provider_created_at": None,
+        "published_at": None,
+        "retrieved_at": None,
         "derivation": "an orbit manoeuvre is a run of seconds with non-zero orbit-control force, merged across gaps "
         f"under {THRUST_GAP_S:g} s; a trial is excluded when one falls between {MANOEUVRE_ARC_HOURS:g} h before its "
         "element set's epoch and the lead's time; thruster on-time with no orbit-control force is attitude control, "
@@ -1254,7 +1260,7 @@ def _manoeuvre_source(records: dict[str, ThrusterRecord | None] | None, retrieve
 def sources_record(
     orbits: dict[str, PreciseOrbit],
     *,
-    retrieved_at: datetime,
+    reviewed_at: datetime,
     weather_sources: Any = None,
     records: dict[str, ThrusterRecord | None] | None = None,
 ) -> list[dict[str, Any]]:
@@ -1267,7 +1273,10 @@ def sources_record(
             "origin": f"{SWARM_DISS_URL}#{SWARM_POD_DIR.format(letter='x')} — product SW_OPER_SP3xCOM_2_, "
             f"reduced-dynamic, centre of mass, IGS20 (ITRF2020) frame, ten-second states with velocities, produced by "
             f"TU Delft (SPC_DUT); SP3-d files, one a day, in zips with an Earth Explorer header",
-            "retrieved_at": retrieved_at.isoformat(),
+            "reviewed_at": reviewed_at.isoformat(),
+            "provider_created_at": None,
+            "published_at": None,
+            "retrieved_at": None,
             "files": {
                 k: {
                     "n": len(o.files),
@@ -1287,7 +1296,10 @@ def sources_record(
             "source": "Public element sets",
             "origin": "Space-Track gp_history for NORAD 39452 (Swarm A), 39451 (Swarm B), 39453 (Swarm C), through "
             "driftwatch's history backfill (data/cache/spacetrack/gp_history, data/history)",
-            "retrieved_at": retrieved_at.isoformat(),
+            "reviewed_at": reviewed_at.isoformat(),
+            "provider_created_at": None,
+            "published_at": None,
+            "retrieved_at": None,
             "derivation": f"each set propagated with sgp4 {sgp4.__version__} (WGS72, mode i) to leads "
             f"{list(LEADS_HOURS)} hours from its own epoch; the empirical covariance fitted per satellite from the "
             f"{COVARIANCE_HISTORY_DAYS} days of sets before each window (driftwatch.risk.covariance, the model the "
@@ -1298,13 +1310,16 @@ def sources_record(
             "source": "Observed geomagnetic activity",
             "origin": "CelesTrak SW-All.csv (observed ap and Kp, F10.7), through driftwatch.weather; nothing forecast "
             "enters the benchmark",
-            "retrieved_at": retrieved_at.isoformat(),
+            "reviewed_at": reviewed_at.isoformat(),
+            "provider_created_at": None,
+            "published_at": None,
+            "retrieved_at": None,
             "derivation": "the storm term (driftwatch.storm.term.object_shift via "
             "driftwatch.storm.validation.predicted_shifts) driven by NRLMSIS 2.1 with the observed ap over each "
             "trial's lead, from the trial set's own epoch, with the pre-window coefficient",
             "weather_sources": weather_sources,
         },
-        _manoeuvre_source(records, retrieved_at),
+        _manoeuvre_source(records, reviewed_at),
         {
             "source": "Not used, noted for later",
             "origin": f"Swarm thermospheric density from POD and accelerometer, {SWARM_DENSITY_PRODUCT}: would "

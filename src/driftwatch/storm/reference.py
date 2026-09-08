@@ -750,14 +750,21 @@ def manoeuvre_source(mission: Mission) -> str:
     }[mission.manoeuvres]
 
 
-def mission_sources_record(missions: list[Mission], retrieved_at: datetime) -> list[dict[str, Any]]:
+def mission_sources_record(missions: list[Mission], reviewed_at: datetime) -> list[dict[str, Any]]:
     """The sources block of the page: one entry per distinct product, plus what was not covered."""
     seen: dict[str, dict[str, Any]] = {}
     for m in missions:
         key = m.truth
         entry = seen.setdefault(
             key,
-            {"source": truth_source(m), "retrieved_at": retrieved_at.isoformat(), "missions": []},
+            {
+                "source": truth_source(m),
+                "reviewed_at": reviewed_at.isoformat(),
+                "provider_created_at": None,
+                "published_at": None,
+                "retrieved_at": None,
+                "missions": [],
+            },
         )
         entry["missions"].append(f"{m.name} (NORAD {m.norad_id})")
     out = list(seen.values())
@@ -770,7 +777,10 @@ def mission_sources_record(missions: list[Mission], retrieved_at: datetime) -> l
                     "url": manoeuvre_records.IDS_URL
                     if kind == MANOEUVRES_IDS
                     else manoeuvre_records.SENTINEL3_INDEX_URL,
-                    "retrieved_at": retrieved_at.isoformat(),
+                    "reviewed_at": reviewed_at.isoformat(),
+                    "provider_created_at": None,
+                    "published_at": None,
+                    "retrieved_at": None,
                     "missions": [f"{m.name} (NORAD {m.norad_id})" for m in selected],
                     "provenance": "Actual source retrieval time, SHA256, raw file and time system are retained "
                     "per mission-window; this page timestamp is not the source fetch timestamp.",

@@ -45,11 +45,11 @@ The radio branch remains research and partner-dependent. The measured beam data 
 
 A partner pilot would need rights-cleared beam information, actual schedules, acquisition/monitoring records and coordination logs; an agreed baseline and useful decision; and explicit instrument response, cadence and boundary checks. No partner, data access or commercial permission is presumed. Do not build a radio product or send an outreach letter on the strength of the geometric benchmark alone.
 
-## Open acceptance tests from the report
+## Acceptance tests from the report
 
-### G1 — Causal availability and late publication (open)
+### G1 — Causal availability and late publication (acceptance passed 2026-09-08)
 
-Construct a record whose state epoch precedes a decision time but whose known publication is later. An explicitly epoch-based reconstruction may include it and must say so; a causal replay at the decision time must exclude it. Provider creation time, known publication time, actual retrieval time and state epoch must remain distinct, and unknown values must remain unknown. Reopening the result must preserve those fields and the original acquisition provenance. Repeat the test for historical catalogue membership and a manoeuvre record published after the event. The implemented epoch-selection labelling and time separation do not yet establish a publication-aware causal replay or historical membership reconstruction.
+The [G1 implementation and acceptance tests](docs/g1-availability.md) construct a record whose state epoch precedes a decision time but whose known publication is later. The labelled epoch reconstruction includes it; causal replay excludes it before selecting a revision. The same test passes for late catalogue additions and removals and a manoeuvre record published after its event. Reopening preserves separate state/event, provider creation, known publication and actual retrieval times, including unknowns and supplied source provenance. Causal catalogue replay requires membership evidence and does not infer it from current SATCAT or group labels. These checks validate selection on supplied provenance; they cannot reconstruct missing historical versions or independently establish a provider's publication history. Work stops at this gate.
 
 ### G2 — Full scenario with candidate rediscovery (open)
 
@@ -79,4 +79,4 @@ Exact boundary offsets: crossing agreement 700/1344 (52.1%); false crossings 642
 
 ## Review and release gates
 
-The rewritten [paper](docs/paper.md), dated correction and public claim wording stop here for the author's review. Nothing is deposited before the author has read the rewritten paper. No outreach letter goes out before the README matches v2; matching it does not itself authorise sending a letter. No deployment, deposit, new scientific recipe or outreach is part of these recorded decisions.
+The author subsequently authorised v2 and its [dated v2.1 completeness correction](https://doi.org/10.5281/zenodo.22665947). The root README is checked against the v2 claims manifest. The four bounded maintenance items are recorded in [the current state of play](docs/state-of-play.md); G2, G7, the Johlander replication and new recipes remain open and have not been started. Matching the README does not authorise outreach.

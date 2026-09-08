@@ -1,0 +1,16 @@
+{
+  "schema_version": "publication-method-archive-v1",
+  "release_tag": "paper-2026-09-v2.1",
+  "method_commit": "fedc1bc7f398edf6bbff4b8c066f95c8f2865cd9",
+  "archive": "docs/assets/benchmark-v2-method.zip",
+  "sha256": "671a4d95708c3b8b5d3b880780f160a3c271d71602971da3c936e0bad541a45c",
+  "files": {
+    "src/driftwatch/storm/benchmark_statistics.py": "2cdd85ea8f72f7e0497a23262bf3734129ece814c4d1e2555e37139ea33b5ccf",
+    "src/driftwatch/storm/reference_run.py": "607fe6d43a9148e118d3b5694844a1ff70be605dad7d7613e44c0e1cd45d2ea2",
+    "src/driftwatch/storm/precise.py": "cae4f34ef087fc195c645e0237e4a096d4fb3c8c8a220e35d0b5ddd52f55bbc9",
+    "src/driftwatch/screening/ric.py": "20b772c29a87e3b76551b30009bda619ed257fe95608dabbba47ac5c027f1c9c",
+    "scripts/correct_covariance_basis.py": "7207176fdafbcaf0d8668e654433cc5e11907b931f4930203bb4994e8dc4a5c5",
+    "src/driftwatch/storm/manoeuvre_records.py": "ae773052bbbaff951c3b81f762b39af1336ab112b31e10cc36da87afc40753ec",
+    "scripts/render_paper_v2.py": "9b75f8095f8cb27d1c0b16364e1689892b1bf40fe680ad06c83e798e5c3ea6d8"
+  }
+}

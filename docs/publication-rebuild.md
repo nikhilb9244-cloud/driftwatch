@@ -30,6 +30,15 @@ The [v2 invariant baseline](assets/publication-invariants-v2.json) records 52 pu
 
 ## Regenerate the rendered publication
 
+Maintenance after publication can change the current provenance implementation. The
+[published method manifest](assets/benchmark-v2-method.json) binds the seven source
+files named by v2 to their exact bytes in `paper-2026-09-v2.1`; its adjacent archive keeps
+those first-party sources available to the publication-contract tests. The tests verify the
+archive and each member against the original bindings and the disclosed scrub ledger.
+They do not require today's implementation to pretend to be the published source. The
+monthly comparison checks out the immutable method commit recorded in its protocol.
+The G1 time-semantics maintenance does not regenerate any v2 measurements or tables.
+
 The sentences are authored in `docs/paper.template.md`. Figures are explicit scalar substitutions; the renderer does not compose sentences. `docs/assets/benchmark-v2.json` is the scientific evidence object. The correction's date, hashes and assigned DOI are in `docs/assets/publication-correction-v2.1.json`, separately from the frozen measurements so assigning a DOI does not change the scientific evidence hash.
 
 ```powershell

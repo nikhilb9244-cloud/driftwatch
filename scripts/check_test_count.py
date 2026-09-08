@@ -28,9 +28,9 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-# The migration-audit suite on 2026-09-08. Raise it when tests are added; lower it only
+# The G1 availability suite on 2026-09-08. Raise it when tests are added; lower it only
 # with the tests it counts.
-EXPECTED_MINIMUM = 769
+EXPECTED_MINIMUM = 786
 
 
 def reported_tests(report: Path) -> tuple[int, int]:

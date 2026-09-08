@@ -51,6 +51,7 @@ import httpx
 import numpy as np
 import pandas as pd
 
+from driftwatch import availability
 from driftwatch.cdm.parse import parse_epoch
 from driftwatch.storm import precise
 
@@ -310,19 +311,26 @@ def oem_to_precise_orbit(
 # The operator's records
 
 
-def load_manoeuvre_records(path: Path | str) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
-    """Manoeuvre intervals from a CSV with ``start`` and ``end`` columns of UTC times (case-insensitive)."""
-    frame = pd.read_csv(path)
-    columns = {c.lower().strip(): c for c in frame.columns}
-    if "start" not in columns or "end" not in columns:
-        raise ValueError(f"{path}: the manoeuvre record needs 'start' and 'end' columns; it has {list(frame.columns)}")
-    out = []
-    for start, end in zip(frame[columns["start"]], frame[columns["end"]], strict=True):
-        lo, hi = parse_epoch(start).tz_convert(None), parse_epoch(end).tz_convert(None)
-        if hi < lo:
-            raise ValueError(f"{path}: manoeuvre interval ends before it starts ({start} to {end})")
-        out.append((lo, hi))
-    return sorted(out)
+def manoeuvre_table(frame: pd.DataFrame, *, as_of=None, selection_kind=availability.EPOCH_RECONSTRUCTION):
+    """Keep event time distinct from creation/publication/retrieval and filter before exclusion."""
+    frame = frame.rename(columns={c: c.lower().strip() for c in frame.columns}).copy()
+    if not {"start", "end"} <= set(frame):
+        raise ValueError("Manoeuvre CSV needs start,end UTC columns")
+    for key in ("start", "end"):
+        frame[key] = pd.to_datetime(frame[key], utc=True, format="mixed")
+    if frame[["start", "end"]].isna().any().any() or (frame.end < frame.start).any():
+        raise ValueError("A manoeuvre interval ends before it starts or has an unknown event time")
+    return availability.select(
+        frame, as_of=as_of, selection_kind=selection_kind, epoch_column="start", restrict_epoch=False
+    )
+
+
+def load_manoeuvre_records(
+    path: Path | str, *, as_of=None, selection_kind=availability.EPOCH_RECONSTRUCTION
+) -> list[tuple[pd.Timestamp, pd.Timestamp]]:
+    """UTC CSV intervals under an explicit reconstruction or causal-availability rule."""
+    frame = manoeuvre_table(pd.read_csv(path), as_of=as_of, selection_kind=selection_kind)
+    return [(row.start.tz_convert(None), row.end.tz_convert(None)) for row in frame.sort_values("start").itertuples()]
 
 
 # --------------------------------------------------------------------------------------
@@ -350,6 +358,8 @@ def ephemeris_benchmark(
     altitude_band: str = "leo",
     tolerance_km: float = precise.HORIZON_TOLERANCE_KM,
     reference_kind: str = "prediction",
+    selection_kind: str = availability.EPOCH_RECONSTRUCTION,
+    decision_at: datetime | None = None,
 ) -> EphemerisBenchmark:
     """The Swarm benchmark's four outputs with the operator's declared reference ephemeris.
 
@@ -359,6 +369,15 @@ def ephemeris_benchmark(
     """
     if reference_kind not in {"prediction", "reconstructed", "navigation"}:
         raise ValueError("reference_kind must be prediction, reconstructed or navigation")
+    if selection_kind == availability.CAUSAL_REPLAY:
+        if grid is not None:
+            raise ValueError("Causal weather availability is not established for this local comparison")
+        sets = availability.select(sets, as_of=decision_at, selection_kind=selection_kind)
+        sets = sets.sort_values(
+            ["norad_id", "epoch", "provider_created_at", "retrieved_at"], na_position="first", kind="stable"
+        ).drop_duplicates(["norad_id", "epoch"], keep="last")
+    elif selection_kind != availability.EPOCH_RECONSTRUCTION:
+        raise ValueError("Unknown availability selection kind")
     span = orbit.span
     if span is None:
         raise ValueError("the ephemeris holds no states")
@@ -381,7 +400,8 @@ def ephemeris_benchmark(
         raise ValueError(f"no public element set for {norad_id} is held locally inside {first} to {sets_to}")
     trials = precise.satellite_trials(inputs, orbit, window, grid, leads_hours=leads_hours, published=published)
     summary = precise.summarise(trials, tolerance_km=tolerance_km)
-    summary["selection_kind"] = "epoch-based reconstruction"
+    summary["selection_kind"] = selection_kind
+    summary["availability_as_of"] = None if decision_at is None else availability.utc(decision_at).isoformat()
     summary["source_time_metadata"] = orbit.table.attrs.get("source_time_metadata", [])
     summary["element_set_time_metadata"] = [
         {
@@ -394,7 +414,10 @@ def ephemeris_benchmark(
         }
         for row in inputs.trial_sets.itertuples()
     ]
-    summary["availability_claim"] = False
+    summary["availability_claim"] = selection_kind == availability.CAUSAL_REPLAY
+    summary["availability_scope"] = (
+        "Prediction element sets for the fixed supplied object; reference may be reconstructed later"
+    )
     return EphemerisBenchmark(window, inputs, trials, summary)
 
 
@@ -461,10 +484,16 @@ def to_markdown(report: dict[str, Any]) -> str:
         )
         lines.append("")
         w = eph["summary"]["windows"]["ephemeris"]
-        lines.append(
-            "Epoch-based reconstruction: sets are selected by state epoch; "
-            "publication-time availability is not established."
-        )
+        if eph["summary"].get("selection_kind") == availability.CAUSAL_REPLAY:
+            lines.append(
+                "Causal replay of prediction inputs at " + eph["summary"]["availability_as_of"] + ": "
+                "publication or actual retrieval evidence is required. The reference may be reconstructed later."
+            )
+        else:
+            lines.append(
+                "Epoch-based reconstruction: sets are selected by state epoch; "
+                "publication-time availability is not established."
+            )
         for metadata in eph["summary"].get("source_time_metadata", []):
             lines.append("Source times (unknown fields remain null): " + json.dumps(metadata))
         lines.append("Element-set state and availability times are retained separately in the analysis JSON.")

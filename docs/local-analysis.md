@@ -1,10 +1,27 @@
 # Local analysis: an operator's own files, on the operator's own machine
 
-Local orbit comparison is an **epoch-based reconstruction**. State epochs select the inputs;
+Local orbit comparison defaults to an **epoch-based reconstruction**. State epochs select the inputs;
 provider creation does not establish publication. OEM header creation and originator are
 preserved separately from known publication, provider retrieval and actual local import time.
 Missing publication or retrieval times remain unknown. The output retains these distinctions;
-it does not claim the inputs were available at a historical decision time.
+the default does not claim the inputs were available at a historical decision time.
+
+The CLI supports `--selection causal --as-of <UTC instant>` for prediction inputs to a
+fixed-object ephemeris comparison. A supplied OMM file can declare `--sets-published-at`
+and `--sets-retrieved-at`; omit either when unknown. Stored history retains those fields
+per version. Records with known publication after the cutoff are refused; with unknown
+publication, actual retrieval must establish availability by the cutoff. Filtering precedes
+revision selection. A manoeuvre CSV can supply `provider_created_at`, `published_at` and
+`retrieved_at` alongside `start` and `end`, under the same rule. Creation and file import
+times never prove availability. The reference can be reconstructed later; its residuals and
+derived manoeuvre diagnostics remain retrospective. Causal weather selection is not
+established, so this mode refuses `--storm-term`.
+
+The local comparison API accepts the same per-file times and `selection_kind` / `as_of`
+through its existing input options; the browser form continues to use the default epoch
+reconstruction. Exported analysis JSON retains the selected time metadata. See the
+[G1 contract and acceptance evidence](g1-availability.md) for membership replay and
+unknown-value handling.
 
 
 **Correction:** a visual interface is now available in the

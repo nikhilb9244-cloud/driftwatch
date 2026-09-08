@@ -25,11 +25,12 @@ import numpy as np
 import pandas as pd
 from scipy.optimize import brentq, minimize_scalar
 
+from driftwatch import availability
 from driftwatch.catalogue.history import frame_from_records
 from driftwatch.cdm import parse as cdm_parse
 from driftwatch.contact_planner import schedule_contacts
 from driftwatch.imports import decode_orbit
-from driftwatch.local import no_network, oem_to_precise_orbit, parse_oem
+from driftwatch.local import manoeuvre_table, no_network, oem_to_precise_orbit, parse_oem
 from driftwatch.orbit.frames import teme_positions_to_geodetic
 from driftwatch.orbit.propagator import build_satrecs, propagate_satrecs
 from driftwatch.storm.precise import frame_kind
@@ -115,6 +116,13 @@ def trajectory(
     file: tuple[str, str], norad: int, at: pd.Timestamp | None = None, options: dict | None = None
 ) -> Trajectory:
     name, text = file
+    options = options or {}
+    selection_kind = options.get("selection_kind", availability.EPOCH_RECONSTRUCTION)
+    decision_at = options.get("as_of", at)
+    if selection_kind not in {availability.EPOCH_RECONSTRUCTION, availability.CAUSAL_REPLAY}:
+        raise ValueError("Unknown availability selection kind")
+    if selection_kind == availability.CAUSAL_REPLAY and pd.isna(availability.utc(decision_at)):
+        raise ValueError("Causal replay requires a decision time")
     decoded = decode_orbit(text, options)
     if decoded.records is not None:
         records = decoded.records
@@ -123,14 +131,25 @@ def trajectory(
                 "A reference needs sampled states (OEM or mapped state CSV), not mean elements. "
                 "Predictions also need a start time."
             )
-        rows = frame_from_records(records, source="local-upload")
+        annotated = [
+            {
+                **r,
+                "_driftwatch_published_at": options.get("published_at"),
+                "_driftwatch_retrieved_at": options.get("retrieved_at"),
+            }
+            for r in records
+        ]
+        rows = frame_from_records(annotated, source="local-upload", preserve_versions=True)
         rows = rows[(rows.norad_id == norad) & (rows.epoch <= at.tz_localize("UTC"))]
+        rows = availability.select(rows, as_of=decision_at, selection_kind=selection_kind)
         if not len(rows):
             raise ValueError(
                 f"No OMM record for {norad} has an epoch at or before the start. "
-                "Later state epochs are refused; publication availability is not established."
+                "Later state epochs and unavailable versions are refused under the declared selection rule."
             )
-        selected = rows.sort_values("epoch").iloc[-1:]
+        selected = rows.sort_values(
+            ["epoch", "provider_created_at", "retrieved_at"], na_position="first", kind="stable"
+        ).iloc[-1:]
         sat = build_satrecs(selected)[0]
         epoch = stamp(selected.epoch.iloc[0])
 
@@ -154,18 +173,29 @@ def trajectory(
                 "provider_created_at": None
                 if pd.isna(selected.provider_created_at.iloc[0])
                 else iso(selected.provider_created_at.iloc[0]),
-                "published_at": None,
-                "retrieved_at": None,
+                "published_at": None if pd.isna(selected.published_at.iloc[0]) else iso(selected.published_at.iloc[0]),
+                "retrieved_at": None if pd.isna(selected.retrieved_at.iloc[0]) else iso(selected.retrieved_at.iloc[0]),
                 "imported_at": iso(datetime.now(UTC)),
-                "selection_kind": "epoch-based reconstruction",
+                "selection_kind": selection_kind,
+                "availability_as_of": iso(decision_at) if selection_kind == availability.CAUSAL_REPLAY else None,
                 "age_at_start_h": (at - epoch).total_seconds() / 3600,
-                "note": "Epoch-based reconstruction: one fixed fit with latest state epoch at/before start. "
-                "Provider creation is not publication; provider retrieval time is unknown for this upload.",
+                "note": selection_kind + ": one fixed fit with latest eligible state epoch at/before start. "
+                "Provider creation is not publication; unknown acquisition times stay unknown.",
             },
             object_id,
         )
     text = decoded.oem
-    segments = parse_oem(text, source=name)
+    segments = parse_oem(
+        text, source=name, published_at=options.get("published_at"), retrieved_at=options.get("retrieved_at")
+    )
+    if selection_kind == availability.CAUSAL_REPLAY:
+        segments = [
+            segment
+            for segment in segments
+            if availability.available(pd.DataFrame([segment.temporal_metadata()]), decision_at).iloc[0]
+        ]
+        if not segments:
+            raise ValueError("No sampled orbit product was available by the causal decision time")
     identities = {s.object_id.strip() for s in segments}
     if len(identities) != 1 or not next(iter(identities)):
         raise ValueError("Every OEM segment must declare the same non-empty OBJECT_ID.")
@@ -214,6 +244,8 @@ def trajectory(
             "segments": len(segments),
             "object_id": next(iter(identities)),
             "source_time_metadata": [s.temporal_metadata() for s in segments],
+            "selection_kind": selection_kind,
+            "availability_as_of": iso(decision_at) if selection_kind == availability.CAUSAL_REPLAY else None,
             "state_epoch_start_utc": iso(orbit.span[0]),
             "state_epoch_end_utc": iso(orbit.span[1]),
             "note": "Covariance blocks are not used. States outside declared usable times are excluded. "
@@ -257,10 +289,14 @@ def compare(body: dict) -> dict:
         sources.append(source(*candidate_file, "candidate"))
     burns = upload(body, "manoeuvres", False)
     excluded_burns = np.zeros(len(times), dtype=bool)
+    burn_metadata = []
     if burns:
-        table = pd.read_csv(io.StringIO(burns[1]))
-        if not {"start", "end"}.issubset(table):
-            raise ValueError("Manoeuvre CSV needs start,end UTC columns.")
+        table = manoeuvre_table(
+            pd.read_csv(io.StringIO(burns[1])),
+            as_of=pred.metadata.get("availability_as_of"),
+            selection_kind=pred.metadata["selection_kind"],
+        )
+        burn_metadata = availability.metadata(table, epoch_column="start")
         for _, row in table.iterrows():
             lo, hi = stamp(row.start), stamp(row.end)
             if hi < lo:
@@ -326,6 +362,7 @@ def compare(body: dict) -> dict:
         "start": iso(start),
         "end": iso(end),
         "metadata": [m.metadata for m in members],
+        "manoeuvre_time_metadata": burn_metadata,
         "summary": summary,
         "samples": samples,
         "sources": sources,

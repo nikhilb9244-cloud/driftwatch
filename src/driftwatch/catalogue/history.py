@@ -52,6 +52,7 @@ log = logging.getLogger(__name__)
 
 HISTORY_COLUMNS: tuple[str, ...] = (
     *OMM_FIELDS.values(),
+    "state_epoch",
     "source",
     "fetched_at",
     "provider_created_at",
@@ -84,6 +85,7 @@ def _normalise(df: pd.DataFrame) -> pd.DataFrame:
     df = df.reindex(columns=list(HISTORY_COLUMNS)).copy()
     df["norad_id"] = df["norad_id"].astype("int64")
     df["epoch"] = pd.to_datetime(df["epoch"], utc=True).astype("datetime64[us, UTC]")
+    df["state_epoch"] = df["epoch"]
     df["fetched_at"] = pd.to_datetime(df["fetched_at"], utc=True).astype("datetime64[us, UTC]")
     for name in ("provider_created_at", "published_at", "retrieved_at"):
         df[name] = pd.to_datetime(df[name], utc=True).astype("datetime64[us, UTC]")
@@ -93,21 +95,30 @@ def _normalise(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def frame_from_records(
-    records: Sequence[Mapping[str, Any]], *, source: str = "spacetrack", fetched_at: datetime | None = None
+    records: Sequence[Mapping[str, Any]],
+    *,
+    source: str = "spacetrack",
+    fetched_at: datetime | None = None,
+    preserve_versions: bool = False,
 ) -> pd.DataFrame:
     """Turn raw OMM records (Space-Track ``gp_history`` or ``gp``) into a history frame.
 
     Space-Track may return the same epoch twice for an object (re-issued element sets);
-    the last one in ``records`` is kept. ``fetched_at`` must be an actual provider
-    retrieval time; omission preserves unknown acquisition time for local files.
+    the last one in ``records`` is kept by default. ``preserve_versions`` retains all
+    revisions for availability filtering before selection. ``fetched_at`` must be an
+    actual provider retrieval time; omission retains record provenance or unknowns.
     """
     if not records:
         return _empty_frame()
     df = records_to_frame(records)
     df["source"] = source
-    df["fetched_at"] = pd.to_datetime(fetched_at, utc=True) if fetched_at is not None else pd.NaT
+    df["fetched_at"] = pd.to_datetime(fetched_at, utc=True) if fetched_at is not None else df["retrieved_at"]
+    if fetched_at is not None:
+        df["retrieved_at"] = df["fetched_at"]
     df = _normalise(df)
-    df = df.sort_values(["norad_id", "epoch"]).drop_duplicates(["norad_id", "epoch"], keep="last")
+    df = df.sort_values(["norad_id", "epoch"], kind="stable")
+    if not preserve_versions:
+        df = df.drop_duplicates(["norad_id", "epoch"], keep="last")
     return df.reset_index(drop=True)
 
 
@@ -231,11 +242,13 @@ def load_history(
     history_dir: Path = config.HISTORY_DIR,
     snapshot_dir: Path = config.SNAPSHOT_DIR,
     include_snapshots: bool = True,
+    preserve_versions: bool = False,
 ) -> pd.DataFrame:
     """Every element set we hold, one row per (NORAD id, epoch), sorted by object then epoch.
 
     History files and (by default) snapshots are concatenated; where the same epoch
-    appears in several places the row read last wins, which is the newest snapshot.
+    appears in several places the row read last wins by default. ``preserve_versions``
+    retains those rows for causal availability filtering before version selection.
     ``start`` and ``end`` filter on epoch (inclusive, UTC). With ``norad_ids`` the index
     picks the history files to open and each is read with a row-group filter.
     """
@@ -258,7 +271,9 @@ def load_history(
         df = df[df["epoch"] >= _utc(start)]
     if end is not None:
         df = df[df["epoch"] <= _utc(end)]
-    df = df.sort_values(["norad_id", "epoch"]).drop_duplicates(["norad_id", "epoch"], keep="last")
+    df = df.sort_values(["norad_id", "epoch"], kind="stable")
+    if not preserve_versions:
+        df = df.drop_duplicates(["norad_id", "epoch"], keep="last")
     return df.reset_index(drop=True)
 
 
@@ -471,13 +486,14 @@ def backfill(
                     client=client,
                     now=now,
                     offline=offline,
+                    with_provenance=True,
                 )
             )
     finally:
         if own_client and client is not None:
             client.close()
 
-    df = frame_from_records(records, fetched_at=now)
+    df = frame_from_records(records, preserve_versions=True)
     path = None
     if len(df):
         path = write_history(

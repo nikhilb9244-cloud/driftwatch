@@ -17,7 +17,7 @@ from __future__ import annotations
 import hashlib
 import json
 import re
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import UTC, date, datetime, timedelta
 from html.parser import HTMLParser
 from pathlib import Path
@@ -28,7 +28,7 @@ import httpx
 import pandas as pd
 from astropy.time import Time
 
-from driftwatch import config
+from driftwatch import availability, config
 from driftwatch.storm.precise import ThrusterRecord
 
 IDS_URL = "https://ids-doris.org/user-corner/table-of-all-events.html"
@@ -71,6 +71,15 @@ class PublishedManoeuvreRecord(ThrusterRecord):
     coverage_end: str | None = None
     provenance: list[dict[str, Any]] = field(default_factory=list)
     issues: list[str] = field(default_factory=list)
+    selection_kind: str = availability.EPOCH_RECONSTRUCTION
+    availability_as_of: str | None = None
+
+    def for_causal_replay(self, as_of):
+        if not self.provenance or not availability.available(pd.DataFrame(self.provenance), as_of).all():
+            raise ValueError("Manoeuvre source was unavailable by the causal decision time")
+        return replace(
+            self, selection_kind=availability.CAUSAL_REPLAY, availability_as_of=availability.utc(as_of).isoformat()
+        )
 
     @property
     def authoritative(self) -> bool:
@@ -87,6 +96,8 @@ class PublishedManoeuvreRecord(ThrusterRecord):
             "issues": self.issues,
             "parser_version": PARSER_VERSION,
             "interval_time_system": "UTC",
+            "selection_kind": self.selection_kind,
+            "availability_as_of": self.availability_as_of,
         }
 
 
@@ -251,6 +262,8 @@ def cache_snapshot(
     *,
     cache_dir: Path = config.CACHE_DIR,
     retrieved_at: datetime | None = None,
+    provider_created_at: datetime | None = None,
+    published_at: datetime | None = None,
 ) -> dict[str, Any]:
     """Cache a downloaded raw source, also usable for importing an audited snapshot."""
     suffix, time_system = SOURCE_SPECS[source]
@@ -263,10 +276,13 @@ def cache_snapshot(
     metadata = {
         "source": source,
         "url": url,
-        "retrieved_at": (retrieved_at or datetime.now(UTC)).astimezone(UTC).isoformat(),
+        "retrieved_at": None if retrieved_at is None else availability.utc(retrieved_at).isoformat(),
+        "provider_created_at": None
+        if provider_created_at is None
+        else availability.utc(provider_created_at).isoformat(),
+        "published_at": None if published_at is None else availability.utc(published_at).isoformat(),
         "sha256": sha,
         "bytes": len(payload),
-        "raw_path": str(raw.resolve()),
         "raw_file": raw.name,
         "source_time_system": time_system,
     }
@@ -290,7 +306,9 @@ def _cached(source: str, cache_dir: Path) -> tuple[str, dict[str, Any]]:
         raise ValueError(f"cached {source} snapshot failed SHA256 verification")
     if metadata.get("source") != source or metadata.get("source_time_system") != SOURCE_SPECS[source][1]:
         raise ValueError("snapshot source identity or time system differs from its parser")
-    metadata["raw_path"] = str(raw.resolve())
+    metadata.pop("raw_path", None)
+    for name in availability.TIME_FIELDS:
+        metadata.setdefault(name, None)
     return payload.decode("utf-8-sig"), metadata
 
 
@@ -307,7 +325,9 @@ def _source(
         raise ValueError(f"no published URL resolved for {source}")
     response = client.get(url)
     response.raise_for_status()
-    metadata = cache_snapshot(source, response.content, str(response.url), cache_dir=cache_dir)
+    metadata = cache_snapshot(
+        source, response.content, str(response.url), cache_dir=cache_dir, retrieved_at=datetime.now(UTC)
+    )
     return response.content.decode("utf-8-sig"), metadata
 
 
@@ -388,7 +408,7 @@ def load_record(
                 "The IDS chronology lists published SSALTO events; its temporal span is known, "
                 "but exhaustive reporting of every firing is not independently established."
             )
-        record.files = [p["raw_path"] for p in record.provenance]
+        record.files = [p["raw_file"] for p in record.provenance]
         if mission not in parsed.bounds:
             raise ValueError(f"source contains no dated entries for {mission}")
         lo, hi = parsed.bounds[mission]
