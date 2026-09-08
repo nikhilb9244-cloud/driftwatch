@@ -1,0 +1,161 @@
+{
+  "created": "2026-09-08T13:49:51.152504+00:00",
+  "modified": "2026-09-08T14:01:49.189151+00:00",
+  "id": 22661809,
+  "conceptrecid": "22656991",
+  "doi": "10.5281/zenodo.22661809",
+  "conceptdoi": "10.5281/zenodo.22656991",
+  "doi_url": "https://doi.org/10.5281/zenodo.22661809",
+  "metadata": {
+    "title": "Public element sets against reconstructed orbits: a record-controlled reference benchmark",
+    "doi": "10.5281/zenodo.22661809",
+    "publication_date": "2026-09-08",
+    "description": "This version supersedes v1 (doi:10.5281/zenodo.22656992). It corrects manoeuvre exclusions, horizon criteria and covariance coordinates, and adds the completed September calendar replay and topocentric comparison while retaining both learned-propagator negative findings. The benchmark contains 1,193 usable element sets on 15 spacecraft at 460-1,338 km. All four historical windows have been inspected; the September replay is a retrospective physical diagnostic. Results are descriptive for the stated populations, not operational guarantees. The storm term is reported separately and is outside the paper scope.",
+    "access_right": "open",
+    "creators": [
+      {
+        "name": "Bhana, Nikhil",
+        "affiliation": null,
+        "orcid": "0009-0003-2220-627X"
+      }
+    ],
+    "keywords": [
+      "SGP4",
+      "orbit uncertainty",
+      "reference ephemerides",
+      "geomagnetic storm",
+      "covariance consistency",
+      "topocentric crossings"
+    ],
+    "related_identifiers": [
+      {
+        "identifier": "10.5281/zenodo.22656992",
+        "relation": "isNewVersionOf",
+        "scheme": "doi"
+      },
+      {
+        "identifier": "https://github.com/nikhilb9244-cloud/driftwatch/tree/paper-2026-09-v2",
+        "relation": "isSupplementTo",
+        "scheme": "url"
+      }
+    ],
+    "version": "paper-2026-09-v2",
+    "custom": {
+      "code:codeRepository": "https://github.com/nikhilb9244-cloud/driftwatch"
+    },
+    "resource_type": {
+      "title": "Software",
+      "type": "software"
+    },
+    "license": {
+      "id": "mit-license"
+    },
+    "relations": {
+      "version": [
+        {
+          "index": 1,
+          "is_last": true,
+          "parent": {
+            "pid_type": "recid",
+            "pid_value": "22656991"
+          }
+        }
+      ]
+    },
+    "notes": "<p>Code is MIT licensed; third-party data retain their source terms. Measured MeerKAT beam data are CC BY-NC 4.0 and used for research only. Raw SpaceX ephemerides and ESA Kelvins inputs are not redistributed. The release provides the paper PDF, canonical evidence object, claims manifest, complete tables and publication-contract tests. The original GitHub tag archive is preserved. The standalone paper-2026-09-v2.pdf is the final DOI-bearing paper; paper-v2-doi-materials.zip supplies the matching evidence, claims and source metadata from commit 5f220be9e6d47d1caaa3cb6c9180ab32323a22ba. Scientific results are unchanged from the tagged release.</p>"
+  },
+  "title": "Public element sets against reconstructed orbits: a record-controlled reference benchmark",
+  "links": {
+    "self": "https://zenodo.org/api/records/22661809",
+    "self_html": "https://zenodo.org/records/22661809",
+    "preview_html": "https://zenodo.org/records/22661809?preview=1",
+    "doi": "https://doi.org/10.5281/zenodo.22661809",
+    "self_doi": "https://doi.org/10.5281/zenodo.22661809",
+    "self_doi_html": "https://zenodo.org/doi/10.5281/zenodo.22661809",
+    "reserve_doi": "https://zenodo.org/api/records/22661809/draft/pids/doi",
+    "parent": "https://zenodo.org/api/records/22656991",
+    "parent_html": "https://zenodo.org/records/22656991",
+    "parent_doi": "https://doi.org/10.5281/zenodo.22656991",
+    "parent_doi_html": "https://zenodo.org/doi/10.5281/zenodo.22656991",
+    "self_iiif_manifest": "https://zenodo.org/api/iiif/record:22661809/manifest",
+    "self_iiif_sequence": "https://zenodo.org/api/iiif/record:22661809/sequence/default",
+    "files": "https://zenodo.org/api/records/22661809/files",
+    "media_files": "https://zenodo.org/api/records/22661809/media-files",
+    "thumbnails": {
+      "10": "https://zenodo.org/api/iiif/record:22661809:paper-2026-09-v2.pdf/full/%5E10,/0/default.jpg",
+      "50": "https://zenodo.org/api/iiif/record:22661809:paper-2026-09-v2.pdf/full/%5E50,/0/default.jpg",
+      "100": "https://zenodo.org/api/iiif/record:22661809:paper-2026-09-v2.pdf/full/%5E100,/0/default.jpg",
+      "250": "https://zenodo.org/api/iiif/record:22661809:paper-2026-09-v2.pdf/full/%5E250,/0/default.jpg",
+      "750": "https://zenodo.org/api/iiif/record:22661809:paper-2026-09-v2.pdf/full/%5E750,/0/default.jpg",
+      "1200": "https://zenodo.org/api/iiif/record:22661809:paper-2026-09-v2.pdf/full/%5E1200,/0/default.jpg"
+    },
+    "archive": "https://zenodo.org/api/records/22661809/files-archive",
+    "archive_media": "https://zenodo.org/api/records/22661809/media-files-archive",
+    "latest": "https://zenodo.org/api/records/22661809/versions/latest",
+    "latest_html": "https://zenodo.org/records/22661809/latest",
+    "versions": "https://zenodo.org/api/records/22661809/versions",
+    "draft": "https://zenodo.org/api/records/22661809/draft",
+    "access_links": "https://zenodo.org/api/records/22661809/access/links",
+    "access_grants": "https://zenodo.org/api/records/22661809/access/grants",
+    "access_users": "https://zenodo.org/api/records/22661809/access/users",
+    "access_request": "https://zenodo.org/api/records/22661809/access/request",
+    "access": "https://zenodo.org/api/records/22661809/access",
+    "communities": "https://zenodo.org/api/records/22661809/communities",
+    "communities-suggestions": "https://zenodo.org/api/records/22661809/communities-suggestions",
+    "request_deletion": "https://zenodo.org/api/records/22661809/request-deletion",
+    "file_modification": "https://zenodo.org/api/records/22661809/file-modification",
+    "quota_increase": "https://zenodo.org/api/records/22661809/quota-increase",
+    "requests": "https://zenodo.org/api/records/22661809/requests"
+  },
+  "updated": "2026-09-08T14:01:49.189151+00:00",
+  "recid": "22661809",
+  "revision": 4,
+  "files": [
+    {
+      "id": "0fcd3bfb-0ce8-43cf-81c9-d333455de6a6",
+      "key": "nikhilb9244-cloud/driftwatch-paper-2026-09-v2.zip",
+      "size": 26375820,
+      "checksum": "md5:d26cba7b4ce510bf54b81b70444bb9ff",
+      "links": {
+        "self": "https://zenodo.org/api/records/22661809/files/nikhilb9244-cloud/driftwatch-paper-2026-09-v2.zip/content"
+      }
+    },
+    {
+      "id": "afe99f5d-6b76-45cd-9ba5-d3cde71f11ad",
+      "key": "paper-2026-09-v2.pdf",
+      "size": 130442,
+      "checksum": "md5:181f745128e49183df1bdc9f4f05af90",
+      "links": {
+        "self": "https://zenodo.org/api/records/22661809/files/paper-2026-09-v2.pdf/content"
+      }
+    },
+    {
+      "id": "ee7fef42-2f1d-4d05-a911-adc67d1b01ee",
+      "key": "paper-v2-doi-materials.zip",
+      "size": 2654269,
+      "checksum": "md5:48f1f8ac3cdf21c83f70daa0eeb64686",
+      "links": {
+        "self": "https://zenodo.org/api/records/22661809/files/paper-v2-doi-materials.zip/content"
+      }
+    }
+  ],
+  "swh": {},
+  "owners": [
+    {
+      "id": "1870976"
+    }
+  ],
+  "status": "published",
+  "stats": {
+    "downloads": 0,
+    "unique_downloads": 0,
+    "views": 1,
+    "unique_views": 1,
+    "version_downloads": 0,
+    "version_unique_downloads": 0,
+    "version_unique_views": 0,
+    "version_views": 0
+  },
+  "state": "done",
+  "submitted": true
+}
