@@ -1,0 +1,31 @@
+name: Scheduled workflow health
+
+on:
+  schedule:
+    - cron: "17 */6 * * *"
+  workflow_dispatch:
+  workflow_run:
+    workflows: [pipeline, supplemental]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  freshness:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check scheduled starts and successful completion
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python scripts/check_workflow_health.py --max-age-hours 36 --output output/workflow-health.json
+      - name: Retain the health report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: workflow-health
+          path: output/workflow-health.json
+          if-no-files-found: error

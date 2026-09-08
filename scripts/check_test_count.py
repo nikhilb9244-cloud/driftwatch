@@ -28,9 +28,9 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-# The v2.1 completeness-correction suite on 2026-09-08. Raise it when tests are added; lower it only
+# The workflow-health suite on 2026-09-08. Raise it when tests are added; lower it only
 # with the tests it counts.
-EXPECTED_MINIMUM = 735
+EXPECTED_MINIMUM = 746
 
 
 def reported_tests(report: Path) -> tuple[int, int]:
