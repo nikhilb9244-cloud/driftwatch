@@ -9065,10 +9065,10 @@ Secondary horizons, component coverage and deletion checks for every population/
 | data/validation/v1/reference_benchmark.json | fe8b94719f96815dcb3de794f74fe1288eba64690683503e700faf2b76b31862 |
 | data/validation/v1/reference_benchmark.parquet | 89621556826a8b9db0bc1f17535043b2c25b3ce40132356497a05dddd31374ef |
 | data/validation/covariance-basis-correction-2026-09-08/correction.json | 9aa3d60a6469ba2ffe58d24b583fb0c41ba94cccaddfa198516d5915fcfe839a |
-| docs/publication-metadata.json | e35c6a0696d70a2915f097b167f32ffa24de9672f847597c2a305c43f7319f6a |
+| docs/publication-metadata.json | 821fc73830b984fa11385b1e589846b12eef23ff829b9c716b3eb6c121622952 |
 | data/radio/track_benchmark_v2_complete/radio_track_cases.csv | 222103dd99b43718e6533fc48bcf5ce935636d55fbac4215a44f2f6e7a68938f |
 | docs/archive/september-2024-protocol-frozen.md | 03536c9e693a83c67825deffd35dd9edf5618f22121939ccfd1b44f1635c3500 |
-| docs/paper.template.md | 54c2220c02bde186afd9689a677526221261cd2b8dba2d830a760e931ad03bb1 |
+| docs/paper.template.md | 4a5e544cd8c2b987593870cf13e1aa02b0d3b762f28a58a235df79ff1f593020 |
 | scripts/publication_text.py | 3b603b812c087974f231cfdcb3618470309d8d3d07fef708c45a8c48b5bb4816 |
 | data/validation/covariance-basis-correction-2026-09-08/reference-original.parquet | 61cc9be0ba5df1dfc1670b106b61dc3ce5ee135d357a460eba6a05cedbda4491 |
 | data/validation/covariance-basis-correction-2026-09-08/reference-trials.parquet | 4408d789ee0d1cdfb8aab57ce95d7fad1f9053d8ae64bc1a8c2c278dcc7ed76a |

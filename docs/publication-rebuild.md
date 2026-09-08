@@ -6,6 +6,8 @@ The covariance amendment uses only the retained offline inputs. The original pre
 
 To rebuild the evidence and all publication tables from the retained inputs, run from the repository root:
 
+Install the complete validation environment with `uv sync --all-groups --extra dsgp4`. CI installs that extra as well: without it, the learned-propagator module is skipped and the test-count guard correctly rejects the incomplete inventory.
+
 ```powershell
 uv run --offline python scripts/render_paper_v2.py --dsgp4 data/validation/dsgp4_evaluation.json --dsgp4-pairs data/validation/dsgp4_paired_comparisons.csv --dsgp4-audit output/referee/dsgp4_correction_audit.json --radio data/radio/horizon.json --radio-tracks data/radio/track_benchmark_v2_complete/radio_track_summary.json --locked data/validation/locked-september-2024/locked_experiment.json
 uv run --offline python scripts/render_public_claims.py
@@ -20,7 +22,7 @@ The public claims manifest records a result hash, method, population, denominato
 
 The root README's horizon section is rendered from `docs/assets/claims-v2.json`. The publication-contract suite explicitly checks its v2 low-altitude brackets, the May 600-750 km result passing through 168 hours, and the October 600-750 km bracket of 96/120 hours.
 
-Build the paper PDF from the rendered Markdown with `python scripts/build_paper_pdf.py --font-dir C:/Windows/Fonts` in an environment containing ReportLab. The builder embeds the supplied Times New Roman font files and resolves repository links against the release tag. It does not generate prose. On another operating system, supply a directory with the same licensed font files. Render every page with Poppler and inspect the tables, references and page boundaries before attaching the PDF to the release.
+Build the paper PDF from the rendered Markdown with `python scripts/build_paper_pdf.py --font-dir C:/Windows/Fonts` in an environment containing ReportLab. The builder embeds the supplied Times New Roman font files and resolves repository links against the release tag. For the PDF containing the assigned DOI, pass `--repository-ref` with the immutable DOI metadata commit so its evidence link resolves to the exact object whose hash it displays. It does not generate prose. On another operating system, supply a directory with the same licensed font files. Render every page with Poppler and inspect the tables, references and page boundaries before attaching the PDF to the release.
 
 The current September status pages are generated from the frozen protocol, separately bound attestation, first-access marker and completion metadata. The original method Markdown is retained byte-for-byte in `docs/archive/september-2024-protocol-frozen.md`. The original pre-access audit was a check at freezing time; it is not a claim that current edited source files still have the frozen source hashes. The original numerical audit applies to the preserved experiment, while the later covariance amendment has separate transport checks.
 

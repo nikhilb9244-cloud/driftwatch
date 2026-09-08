@@ -19,7 +19,7 @@
   "frozen_protocol_markdown_path": "docs/archive/september-2024-protocol-frozen.md",
   "frozen_protocol_markdown_sha256": "03536c9e693a83c67825deffd35dd9edf5618f22121939ccfd1b44f1635c3500",
   "release_tag": "paper-2026-09-v2",
-  "version_doi": "[v2 DOI pending Zenodo version deposition]",
+  "version_doi": "10.5281/zenodo.22661809",
   "reference_years": {
     "flohrer": 2008,
     "mason": 2013,
@@ -30,5 +30,6 @@
   },
   "parker_journal_details": "61(5), 1412-1416",
   "acciarini_volume": 226,
-  "observation_circular": 36362
+  "observation_circular": 36362,
+  "version_doi_url": "https://doi.org/10.5281/zenodo.22661809"
 }

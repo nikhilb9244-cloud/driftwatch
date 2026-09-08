@@ -1,6 +1,6 @@
 # September calendar replay: current execution status
 
-Local review artefact generated 2026-09-08T13:39:28.905293+00:00 from [the canonical publication object](../assets/benchmark-v2.json).
+Local review artefact generated 2026-09-08T13:54:26.645716+00:00 from [the canonical publication object](../assets/benchmark-v2.json).
 
 The scientific protocol was frozen at 2026-09-08T10:42:57.285144+00:00 with SHA-256 `11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae`. [Frozen scientific protocol JSON](2026-09-08-september-2024.json); [unchanged historical method note](../archive/september-2024-protocol-frozen.md). Any pending-attestation or not-started wording in that snapshot describes the time of freezing.
 

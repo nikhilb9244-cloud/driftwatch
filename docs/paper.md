@@ -6,7 +6,7 @@ ORCID: 0009-0003-2220-627X · nikhilb9244@gmail.com
 
 This version, v2, supersedes v1 at doi [10.5281/zenodo.22656992](https://doi.org/10.5281/zenodo.22656992). It corrects manoeuvre exclusions, horizon criteria and covariance coordinates, and adds the completed calendar replay and topocentric comparison while retaining the learned-propagator negative findings.
 
-Evidence object: [benchmark-v2.json](assets/benchmark-v2.json), SHA-256 `a644e1c60a5bf851ad2bd923ff94313fbaa0e0ab31c9acf6d7c2cb747ce6249c`.
+Evidence object: [benchmark-v2.json](assets/benchmark-v2.json), SHA-256 `f19c24451e65d8e0baf6b803f379380aab72146e5ef73687b818397bcb5609e5`.
 
 ## Abstract
 
@@ -157,7 +157,7 @@ The work uses public element sets from the US Space Force through Space-Track.or
 
 ## Data and code availability
 
-The [driftwatch repository](https://github.com/nikhilb9244-cloud/driftwatch) provides the code, evidence object, recorded tables and reproduction instructions. Release [paper-2026-09-v2](https://github.com/nikhilb9244-cloud/driftwatch/releases/tag/paper-2026-09-v2) freezes the paper and supporting repository state; the Zenodo version DOI is [v2 DOI pending Zenodo version deposition]. Code is distributed under the [MIT licence](https://github.com/nikhilb9244-cloud/driftwatch/blob/paper-2026-09-v2/LICENSE). Third-party inputs retain their source terms, and the code licence does not relicense them. Raw SpaceX ephemerides and ESA Kelvins inputs are not redistributed. Product identifiers, retained-file hashes, access limits and reconstruction commands are recorded in the [data-source record](data-sources.md), [complete tables](benchmark-v2-tables.md) and [rebuild instructions](publication-rebuild.md). Citation metadata is in [CITATION.cff](https://github.com/nikhilb9244-cloud/driftwatch/blob/paper-2026-09-v2/CITATION.cff).
+The [driftwatch repository](https://github.com/nikhilb9244-cloud/driftwatch) provides the code, evidence object, recorded tables and reproduction instructions. Release [paper-2026-09-v2](https://github.com/nikhilb9244-cloud/driftwatch/releases/tag/paper-2026-09-v2) freezes the paper and supporting repository state; the Zenodo version DOI is [10.5281/zenodo.22661809](https://doi.org/10.5281/zenodo.22661809). Code is distributed under the [MIT licence](https://github.com/nikhilb9244-cloud/driftwatch/blob/paper-2026-09-v2/LICENSE). Third-party inputs retain their source terms, and the code licence does not relicense them. Raw SpaceX ephemerides and ESA Kelvins inputs are not redistributed. Product identifiers, retained-file hashes, access limits and reconstruction commands are recorded in the [data-source record](data-sources.md), [complete tables](benchmark-v2-tables.md) and [rebuild instructions](publication-rebuild.md). Citation metadata is in [CITATION.cff](../CITATION.cff).
 
 ## References
 

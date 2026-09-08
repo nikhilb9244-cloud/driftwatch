@@ -47,14 +47,14 @@ def inline(text, base):
     return "".join(out)
 
 
-def build(source, output, font_dir):
+def build(source, output, font_dir, repository_ref=None):
     for name, filename in (("Paper", "times.ttf"), ("Paper-Bold", "timesbd.ttf"), ("Paper-Italic", "timesi.ttf")):
         pdfmetrics.registerFont(TTFont(name, str(font_dir / filename)))
     pdfmetrics.registerFontFamily(
         "Paper", normal="Paper", bold="Paper-Bold", italic="Paper-Italic", boldItalic="Paper-Bold"
     )
     metadata = json.loads((ROOT / "docs/publication-metadata.json").read_text(encoding="utf-8"))
-    base = f"https://github.com/nikhilb9244-cloud/driftwatch/blob/{metadata['release_tag']}/docs/"
+    base = f"https://github.com/nikhilb9244-cloud/driftwatch/blob/{repository_ref or metadata['release_tag']}/docs/"
     width, height = A4
     margin = 43
     available = width - 2 * margin
@@ -160,5 +160,9 @@ if __name__ == "__main__":
     parser.add_argument("--source", type=Path, default=ROOT / "docs/paper.md")
     parser.add_argument("--output", type=Path, default=ROOT / "output/pdf/paper-2026-09-v2.pdf")
     parser.add_argument("--font-dir", type=Path, default=Path("C:/Windows/Fonts"))
+    parser.add_argument(
+        "--repository-ref",
+        help="Immutable commit containing the DOI metadata and evidence, if later than the release tag",
+    )
     args = parser.parse_args()
-    build(args.source, args.output, args.font_dir)
+    build(args.source, args.output, args.font_dir, args.repository_ref)
