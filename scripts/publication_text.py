@@ -126,9 +126,21 @@ def enrich(data, trials):
 
 
 def resolve(data, path):
-    value = data
+    if path.startswith("correction/"):
+        value = json.loads((ROOT / "docs/assets/publication-correction-v2.1.json").read_text(encoding="utf-8"))
+        path = path.removeprefix("correction/")
+    else:
+        value = data
     for key in path.split("/"):
         value = value[int(key)] if isinstance(value, list) else value[key]
+    if isinstance(value, dict) and set(value) == {"source_identifier", "content_sha256"}:
+        if value["source_identifier"] != "docs/publication-metadata.json#/email":
+            raise ValueError(f"Unsupported scalar source reference: {path}")
+        contact = json.loads((ROOT / "docs/publication-metadata.json").read_text(encoding="utf-8"))["email"]
+        encoded = json.dumps(contact, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+        if hashlib.sha256(encoded).hexdigest() != value["content_sha256"]:
+            raise ValueError("Author metadata differs from its bound contact hash")
+        value = contact
     if isinstance(value, (dict, list)):
         raise ValueError(f"Prose substitutions must be scalars: {path}")
     return value

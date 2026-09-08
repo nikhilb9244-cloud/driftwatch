@@ -10,6 +10,7 @@ import argparse
 import hashlib
 import html
 import json
+import os
 import re
 from pathlib import Path
 from urllib.parse import urljoin
@@ -54,7 +55,12 @@ def build(source, output, font_dir, repository_ref=None):
         "Paper", normal="Paper", bold="Paper-Bold", italic="Paper-Italic", boldItalic="Paper-Bold"
     )
     metadata = json.loads((ROOT / "docs/publication-metadata.json").read_text(encoding="utf-8"))
-    base = f"https://github.com/nikhilb9244-cloud/driftwatch/blob/{repository_ref or metadata['release_tag']}/docs/"
+    correction_path = ROOT / "docs/assets/publication-correction-v2.1.json"
+    if correction_path.exists():
+        metadata["release_tag"] = json.loads(correction_path.read_text(encoding="utf-8"))["release_tag"]
+    citation = (ROOT / "CITATION.cff").read_text(encoding="utf-8")
+    repository = re.search(r'^repository-code:\s*"([^"]+)"', citation, flags=re.MULTILINE)[1]
+    base = f"{repository}/blob/{repository_ref or metadata['release_tag']}/docs/"
     width, height = A4
     margin = 43
     available = width - 2 * margin
@@ -73,6 +79,7 @@ def build(source, output, font_dir, repository_ref=None):
         "cell_head": ParagraphStyle("cell_head", fontName="Paper-Bold", fontSize=8.1, leading=10.2, spaceAfter=0),
     }
     text = source.read_text(encoding="utf-8")
+    text = re.sub(r"<!--.*?-->", "", text, flags=re.DOTALL)
     story = []
     for block in re.split(r"\n\s*\n", text.strip()):
         if block.startswith("# "):
@@ -158,11 +165,15 @@ def build(source, output, font_dir, repository_ref=None):
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--source", type=Path, default=ROOT / "docs/paper.md")
-    parser.add_argument("--output", type=Path, default=ROOT / "output/pdf/paper-2026-09-v2.pdf")
-    parser.add_argument("--font-dir", type=Path, default=Path("C:/Windows/Fonts"))
+    parser.add_argument("--output", type=Path, default=ROOT / "output/pdf/paper-2026-09-v2.1.pdf")
+    parser.add_argument(
+        "--font-dir", type=Path, default=Path(os.environ["WINDIR"]) / "Fonts" if "WINDIR" in os.environ else None
+    )
     parser.add_argument(
         "--repository-ref",
         help="Immutable commit containing the DOI metadata and evidence, if later than the release tag",
     )
     args = parser.parse_args()
+    if args.font_dir is None:
+        parser.error("--font-dir is required on this operating system")
     build(args.source, args.output, args.font_dir, args.repository_ref)

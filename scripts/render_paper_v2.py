@@ -1173,7 +1173,7 @@ def detailed_tables(data: dict, *, secondary_only: bool = False) -> str:
                     "not integrated" if record is None else record.get("coverage_status", "published record"),
                     "not available"
                     if coverage.get("manoeuvres_recorded") is None
-                    else len(coverage["manoeuvres_recorded"]),
+                    else coverage.get("manoeuvres_recorded_count", len(coverage["manoeuvres_recorded"])),
                     json.dumps(check, ensure_ascii=False),
                 ]
             )
@@ -2597,6 +2597,13 @@ def render(data: dict) -> dict[str, str]:
     supplement += table(["Window", "Epoch selection begins", "Epoch selection ends"], window_rows)
     supplement += "\n\n" + table(["Input or source", "SHA-256"], metadata_rows)
     supplement += "\n\n" + table(["Source", "Use in this work"], bibliography_rows)
+    if "release_correction" in data:
+        supplement += (
+            "\n\nThe tables above preserve the published v2 measurements and original v2 provenance bindings. "
+            "The dated v2.1 [correction ledger](assets/publication-assets-v2.1.json) records the distributable "
+            "replacement hashes and release assets; original provenance hashes are not assertions that a "
+            "scrubbed replacement has the same bytes. No table entry has changed."
+        )
     output = {
         "docs/paper.md": paper,
         "docs/benchmark-v2-tables.md": publication_text.display_windows(supplement, data),

@@ -11,14 +11,50 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "scripts"))
+import check_publication_invariants  # noqa: E402
+import publication_assets  # noqa: E402
 import publication_text  # noqa: E402
 import render_paper_v2  # noqa: E402
 import render_public_claims  # noqa: E402
 
 
+@pytest.fixture(scope="module", autouse=True)
+def restore_publication_inputs():
+    publication_assets.restore_required(root=ROOT)
+
+
 def evidence():
     path = ROOT / "docs/assets/benchmark-v2.json"
     return json.loads(path.read_text(encoding="utf-8")), hashlib.sha256(path.read_bytes()).hexdigest()
+
+
+def test_v21_changes_no_v2_table_substitution_or_other_paper_text():
+    result = check_publication_invariants.check(ROOT)
+    assert result["diff_count"] == 0, result["differences"]
+
+
+def test_distributable_evidence_has_no_private_identifiers_or_embedded_provider_payload():
+    import re
+
+    data, _ = evidence()
+    contact = json.loads((ROOT / "docs/publication-metadata.json").read_text())["email"].split("@")[0]
+    text = json.dumps(data)
+    assert contact.lower() not in text.lower()
+    assert re.search(r"(?i)(?<![\w])[a-z]:[\\\\/]|/Users/|/home/|DESKTOP-[a-z0-9]+", text) is None
+
+    def visit(value):
+        if isinstance(value, dict):
+            assert "raw_path" not in value and "raw_file" not in value
+            assert not {"NORAD_CAT_ID", "EPOCH"} <= value.keys()
+            for key, item in value.items():
+                if key in {"site", "measured_metrics"} or (key == "manoeuvres_recorded" and item is not None):
+                    assert set(item) == {"source_identifier", "content_sha256"}
+                visit(item)
+        elif isinstance(value, list):
+            for item in value:
+                visit(item)
+
+    visit(data)
 
 
 def test_paper_has_only_bound_figures_and_matches_current_evidence():
@@ -72,13 +108,17 @@ def test_frozen_september_result_bytes_remain_bound_to_completion_manifest():
     folder = ROOT / "data/validation/locked-september-2024"
     manifest = json.loads((folder / "completion-manifest.json").read_text())
     for name in ("locked_trials.parquet", "locked_experiment.json"):
-        assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == manifest["files"][name]
+        relative = (folder / name).relative_to(ROOT).as_posix()
+        assert hashlib.sha256((folder / name).read_bytes()).hexdigest() == publication_assets.effective_hash(
+            relative, manifest["files"][name], root=ROOT
+        )
 
 
 def test_publication_inputs_and_method_sources_match_the_bound_hashes():
     data, _ = evidence()
     for source in data["inputs"] + data["source_code"]:
-        assert hashlib.sha256((ROOT / source["path"]).read_bytes()).hexdigest() == source["sha256"], source["path"]
+        expected = publication_assets.effective_hash(source["path"], source["sha256"], root=ROOT)
+        assert hashlib.sha256((ROOT / source["path"]).read_bytes()).hexdigest() == expected, source["path"]
     frozen = ROOT / data["publication"]["frozen_protocol_markdown_path"]
     assert hashlib.sha256(frozen.read_bytes()).hexdigest() == data["publication"]["frozen_protocol_markdown_sha256"]
     status = (ROOT / "docs/protocols/2026-09-08-september-2024.md").read_text(encoding="utf-8")
