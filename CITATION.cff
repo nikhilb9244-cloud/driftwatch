@@ -15,6 +15,7 @@ authors:
     country: "ZA"
 repository-code: "https://github.com/nikhilb9244-cloud/driftwatch"
 url: "https://github.com/nikhilb9244-cloud/driftwatch/releases/tag/paper-2026-09-v1"
+doi: "10.5281/zenodo.22656992"
 abstract: >-
   Public SGP4 element sets are compared with reconstructed orbits for fifteen
   spacecraft at 460 to 1,338 km over a quiet window and three storm windows,
