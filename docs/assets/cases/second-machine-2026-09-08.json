@@ -1,0 +1,37 @@
+{
+  "verified_on": "2026-09-08",
+  "workflow_run_id": 34277186366,
+  "workflow_sha256": "9b2250348e157a8a7143401ea375fb0320415619e5575b5524daec048d502365",
+  "source_commit": "bde7e5909bf9aa2bac6341c0094674f868617423",
+  "fresh_clone_without_data": true,
+  "source_and_lock_from_bundle": true,
+  "result": {
+    "case_sha256": "db0d7296ae676a67b6cfeffa4d6e0b664bdb43e2565e0037f8d25865e772b37a",
+    "reproduced": true,
+    "decision": {
+      "accepted": true,
+      "max_position_difference_km": 7.697421867117993e-06,
+      "max_velocity_difference_km_s": 8.576289394490428e-09,
+      "criterion_sha256": "4a93840b3738a86b6ba370500aa5a5c25f552c5a8ab3483012f5586c4de10a9d",
+      "limitations": [
+        "Public adapter demonstration; no customer has agreed or accepted this criterion.",
+        "The baseline is a TLE encoding of the same stored mean elements; it is not independent truth.",
+        "Agreement measures encoding and adapter behaviour, not orbit accuracy or operational suitability.",
+        "Single mission and element epoch; no transfer to other adapters or unsupported conventions.",
+        "No short-window dynamical validation or timing application is claimed.",
+        "Unknown provider creation and publication times remain unknown."
+      ]
+    },
+    "maximum_component_reproduction_errors": {
+      "baseline/r_teme_km": 0.0,
+      "baseline/v_teme_km_s": 0.0,
+      "candidate/r_teme_km": 9.094947017729282e-13,
+      "candidate/v_teme_km_s": 8.881784197001252e-16,
+      "differences/delta_r_teme_km": 9.094947017729282e-13,
+      "differences/delta_v_teme_km_s": 8.881784197001252e-16
+    },
+    "verification_os": "Linux",
+    "python": "3.12.14",
+    "external_data_used": false
+  }
+}

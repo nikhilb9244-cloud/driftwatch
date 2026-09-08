@@ -12,7 +12,7 @@ All four windows have been inspected: April 2024 control, May 2024, August 2024 
 
 The proposed paid offer is a bounded review of an orbit product and its software adapter against a customer-agreed acceptance criterion. Agree the integration decision, responsible owner, reference conventions, input rights, baseline workflow, exclusions and tolerance before work starts. Report accepted and failed cases with their practical consequences; passing a parser is not a standards or operational certification.
 
-The deliverable is a reopenable case bundle: supplied files and rights record, hashes, time/frame/unit/origin conventions, selected adapters, exact software environment, baseline and candidate outputs, signed differences, acceptance result and limitations. Acceptance requires a second person to open the bundle on a second machine and reproduce the decision without relying on the author's session. Save/open persistence, portable installation and a rights-cleared customer case remain open work. No price, customer agreement, delivery date or outreach is implied by recording this offer.
+The deliverable is a reopenable case bundle: supplied files and rights record, hashes, time/frame/unit/origin conventions, selected adapters, exact software environment, baseline and candidate outputs, signed differences, acceptance result and limitations. Acceptance requires a second person to open the bundle on a second machine and reproduce the decision without relying on the author's session. [Portable CLI bundles and a public second-machine reproduction](docs/case-bundles.md) are implemented. An independent person reopening a rights-cleared customer case remains open; the public criterion is not customer acceptance. No price, customer agreement, delivery date or outreach is implied by recording this offer.
 
 ## 3. Use a TLE-to-OMM migration audit as the entry offer
 
@@ -28,6 +28,8 @@ The entry offer checks whether a customer's existing TLE path and proposed OMM p
 | Full adapter path | Parser through propagation and downstream joins | Parser through propagation and downstream joins | Round-trip fields and signed state differences remain reproducible through storage, browser and export |
 
 A review must distinguish format compatibility, numerical propagation agreement and product accuracy. An adapter audit establishes only the criteria actually tested. The second-person reopenable-bundle test from decision two also applies here.
+
+The [8 September audit of driftwatch's own paths](docs/migration-audit-2026-09-08.md) records every axis as passed, failed or untested. Optional-field defaults and covariance loss are failed checks; browser display/export and the complete browser round trip remain untested. These results do not verify a customer's adapter.
 
 ## 4. Advance one bounded scientific experiment at a time
 

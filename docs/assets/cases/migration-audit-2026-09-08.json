@@ -1,0 +1,182 @@
+{
+  "schema_version": "tle-omm-migration-audit-v1",
+  "audited_at": "2026-09-08T20:54:50.033293+00:00",
+  "bundle_sha256": "d5cf9b72bd3e12b16412a4922372aff5765aa6ffaf6d599ef8e42c447f1c19c2",
+  "population": "One stored Swarm A GP record and declared format/identity variants",
+  "customer_adapter": "unverified",
+  "source_sha256": {
+    "imports.py": "0072cdf0f28c610f99317a6888c614b716acc4601cfebfefff37331f52130e22",
+    "catalogue/history.py": "087dd4fc85a362558102c37338d81a3f02344708b9066288746af020ac9c2772",
+    "catalogue/snapshot.py": "5fd1584bcc1b8fbd9b950ef0ef96f415d93623f1fe52fc8962e36a51128d9a8a",
+    "orbit/propagator.py": "8fc15d881c77969a04bc297330291e550ddb16cc5e8fc9a986ba7f59211107f7",
+    "workbench.py": "6a442893b04153191aea3f251a258d22b60c410ba193942620b494666e3f14e2"
+  },
+  "rows": [
+    {
+      "axis": "Object identity",
+      "status": "untested",
+      "checks": [
+        {
+          "name": "json identifier 39452: import, history and inspection API",
+          "status": "passed",
+          "observation": {
+            "identifiers": [
+              39452,
+              39452,
+              39452
+            ],
+            "construction": "stored identity"
+          }
+        },
+        {
+          "name": "tle identifier 100001: import, history and inspection API",
+          "status": "passed",
+          "observation": {
+            "identifiers": [
+              100001,
+              100001,
+              100001
+            ],
+            "construction": "identifier-only variant of the public case; not another observed spacecraft"
+          }
+        },
+        {
+          "name": "json identifier 999999999: import, history and inspection API",
+          "status": "passed",
+          "observation": {
+            "identifiers": [
+              999999999,
+              999999999,
+              999999999
+            ],
+            "construction": "identifier-only variant of the public case; not another observed spacecraft"
+          }
+        },
+        {
+          "name": "Browser display and exported identity joins",
+          "status": "untested",
+          "observation": "Inspection API was exercised; browser display and export were not automated."
+        }
+      ]
+    },
+    {
+      "axis": "Time and availability",
+      "status": "passed",
+      "checks": [
+        {
+          "name": "State epoch and provider creation stay distinct",
+          "status": "passed",
+          "observation": {
+            "state_epoch": "2024-04-01T12:17:27.273408+00:00",
+            "provider_created_at": "2024-04-02T00:00:00+00:00"
+          }
+        },
+        {
+          "name": "Actual supplied retrieval time survives history storage",
+          "status": "passed",
+          "observation": "2026-09-08T00:00:00+00:00"
+        },
+        {
+          "name": "Unknown publication and acquisition remain unknown",
+          "status": "passed",
+          "observation": "Neither epoch nor local import time establishes publication or retrieval"
+        }
+      ]
+    },
+    {
+      "axis": "Frame, centre and units",
+      "status": "passed",
+      "checks": [
+        {
+          "name": "Unsupported REF_FRAME fails explicitly",
+          "status": "passed",
+          "observation": "ITRF"
+        },
+        {
+          "name": "Unsupported CENTER_NAME fails explicitly",
+          "status": "passed",
+          "observation": "MARS"
+        },
+        {
+          "name": "Unsupported TIME_SYSTEM fails explicitly",
+          "status": "passed",
+          "observation": "TAI"
+        },
+        {
+          "name": "Unsupported declared mean-motion units fail explicitly",
+          "status": "passed",
+          "observation": "rad/s refused"
+        }
+      ]
+    },
+    {
+      "axis": "Mean-element theory",
+      "status": "passed",
+      "checks": [
+        {
+          "name": "Same public elements through TLE and OMM preserve the declared SGP4 output",
+          "status": "passed",
+          "observation": {
+            "accepted": true,
+            "max_position_difference_km": 7.697422427244107e-06,
+            "max_velocity_difference_km_s": 8.576288718861792e-09,
+            "criterion_sha256": "4a93840b3738a86b6ba370500aa5a5c25f552c5a8ab3483012f5586c4de10a9d",
+            "limitations": [
+              "Public adapter demonstration; no customer has agreed or accepted this criterion.",
+              "The baseline is a TLE encoding of the same stored mean elements; it is not independent truth.",
+              "Agreement measures encoding and adapter behaviour, not orbit accuracy or operational suitability.",
+              "Single mission and element epoch; no transfer to other adapters or unsupported conventions.",
+              "No short-window dynamical validation or timing application is claimed.",
+              "Unknown provider creation and publication times remain unknown."
+            ]
+          }
+        },
+        {
+          "name": "Unsupported mean-element theory is refused",
+          "status": "passed",
+          "observation": "DSST"
+        }
+      ]
+    },
+    {
+      "axis": "Optional and missing data",
+      "status": "failed",
+      "checks": [
+        {
+          "name": "Missing optional values remain unknown",
+          "status": "failed",
+          "observation": {
+            "CLASSIFICATION_TYPE": "U",
+            "ELEMENT_SET_NO": 0,
+            "REV_AT_EPOCH": 0
+          }
+        },
+        {
+          "name": "Supplied covariance metadata and matrix survive the history adapter",
+          "status": "failed",
+          "observation": {
+            "decoded": true,
+            "retained_in_history": false,
+            "explicit_rejection": false
+          }
+        }
+      ]
+    },
+    {
+      "axis": "Full adapter path",
+      "status": "untested",
+      "checks": [
+        {
+          "name": "Legacy and OMM identity joins agree",
+          "status": "passed",
+          "observation": "Same public spacecraft and international designator"
+        },
+        {
+          "name": "Full browser, save/open and export round trip",
+          "status": "untested",
+          "observation": "CLI bundle reopening was independently verified; an end-to-end browser case workflow was not exercised."
+        }
+      ]
+    }
+  ]
+}
