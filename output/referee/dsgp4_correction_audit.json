@@ -1,0 +1,44 @@
+{
+  "protocol_time": "2026-09-08T10:26:53.151728+00:00",
+  "training": {
+    "ML-dSGP4 (Swarm)": {
+      "candidate_hourly_targets": 18648,
+      "usable_hourly_targets": 18648,
+      "excluded_manoeuvre_targets": 0,
+      "training_windows": [
+        "quiet",
+        "storm"
+      ],
+      "checkpoint_sha256": "d064ce7bc0870b2d547324ab67ec8d09032eb5d56dbd16a68f6b3cb5d867fa97",
+      "initial_objective": 6.804227169951469e-06,
+      "selected_objective": 6.662583067503173e-06,
+      "reloaded_objective": 6.662583067503173e-06
+    },
+    "ML-dSGP4 (all missions)": {
+      "candidate_hourly_targets": 103488,
+      "usable_hourly_targets": 89258,
+      "excluded_manoeuvre_targets": 14230,
+      "training_windows": [
+        "quiet",
+        "storm"
+      ],
+      "checkpoint_sha256": "fe7de0d5567882ada2c9f2e53e17aa5d8d107d5c4a644359584d9439033c4cd6",
+      "initial_objective": 1.749999077724167e-06,
+      "selected_objective": 1.653823768118933e-06,
+      "reloaded_objective": 1.653823768118933e-06
+    }
+  },
+  "residual_rows_by_method": {
+    "ML-dSGP4 (Swarm)": 10310,
+    "ML-dSGP4 (all missions)": 10310,
+    "dsgp4 (WGS-84)": 10310,
+    "dsgp4 (WGS72)": 10310,
+    "sgp4 (library, WGS72)": 10310,
+    "sgp4 + storm term (observed ap)": 4732
+  },
+  "paired_cells_by_scope": {
+    "pooled": 200,
+    "spacecraft": 2616
+  },
+  "status": "passed"
+}

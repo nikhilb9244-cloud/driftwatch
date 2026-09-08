@@ -1,0 +1,22 @@
+{
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+  "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+  "gp_manifest_sha256": "5a36a1093ac33a14effe606fb8e5c9cf38b013f4e7f164620498696d60e39e08",
+  "mission": "saral",
+  "orbit_table": "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/orbit.parquet",
+  "metadata": "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/metadata.json",
+  "files": {
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/orbit.parquet": "9d9aff202d8b4c90c79c989661f6fd52713c5b8c8cf293aa9ce0029abb55d66b",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/metadata.json": "2fc31ee6b0331253451c2be1a536e787fbd510b32a898cbbaa3bb0df654b8e2f",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/source-7355031aeddc6f37a54e4280f32c2440f1eed2343f988f76f85372d4930e07c4": "7355031aeddc6f37a54e4280f32c2440f1eed2343f988f76f85372d4930e07c4",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/source-56709bbd3296cd09d7384e498c2f1d3585a5e8e2a562335fd6ff98a2f83d6ed4": "56709bbd3296cd09d7384e498c2f1d3585a5e8e2a562335fd6ff98a2f83d6ed4",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/source-8922dcb7de4e9e4746d3e0d28034bfd60f059947767120ead25dd98967bd5d43": "8922dcb7de4e9e4746d3e0d28034bfd60f059947767120ead25dd98967bd5d43",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/source-80c7d4d04a7a4b034175bdfea8c14dce012c1147095e8a52488f245cbb2aa4cf": "80c7d4d04a7a4b034175bdfea8c14dce012c1147095e8a52488f245cbb2aa4cf",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/source-9f9c2ac062e5a0704aacc852c030a1cc3f96ce31eda1b52c810b9a0ea3b9bc96": "9f9c2ac062e5a0704aacc852c030a1cc3f96ce31eda1b52c810b9a0ea3b9bc96",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/source-8986d5bd4fec56622afe64b11dc3fa08850ba0282f44cbbc639ca1cd8918a006": "8986d5bd4fec56622afe64b11dc3fa08850ba0282f44cbbc639ca1cd8918a006",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/source-98d8d76507457758804014a0440132e2e95c4f912d82abf231359bf342676897": "98d8d76507457758804014a0440132e2e95c4f912d82abf231359bf342676897",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/source-cc495708fbde5c4367db5dda5a9c4a76f51e0ecffe0669aa9101d1c3485b37f3": "cc495708fbde5c4367db5dda5a9c4a76f51e0ecffe0669aa9101d1c3485b37f3",
+    "inputs/saral/20260908T113216-input-acquisition-e7de48a5d489/source-871ddab6cbdfd401e3e3d916a060ae2b5e25b5ffad5ae62dab58cc463b76b03e": "871ddab6cbdfd401e3e3d916a060ae2b5e25b5ffad5ae62dab58cc463b76b03e"
+  }
+}

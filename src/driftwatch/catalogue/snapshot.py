@@ -32,7 +32,7 @@ from driftwatch.orbit.time import stamp
 
 log = logging.getLogger(__name__)
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 
 # OMM field -> snapshot column, for the fields taken verbatim from CelesTrak.
 OMM_FIELDS: dict[str, str] = {
@@ -87,6 +87,13 @@ SNAPSHOT_SCHEMA = pa.schema(
         pa.field("groups", pa.list_(pa.string())),
         pa.field("source", pa.string()),
         pa.field("fetched_at", pa.timestamp("us", tz="UTC")),
+        pa.field("state_epoch", pa.timestamp("us", tz="UTC")),
+        pa.field("provider_created_at", pa.timestamp("us", tz="UTC")),
+        pa.field("published_at", pa.timestamp("us", tz="UTC")),
+        pa.field("retrieved_at", pa.timestamp("us", tz="UTC")),
+        pa.field("reconstructed_at", pa.timestamp("us", tz="UTC")),
+        pa.field("epoch_selection_as_of", pa.timestamp("us", tz="UTC")),
+        pa.field("selection_kind", pa.string()),
     ]
 )
 
@@ -99,7 +106,10 @@ def records_to_frame(records: Sequence[Mapping[str, Any]]) -> pd.DataFrame:
     missing = [f for f in OMM_FIELDS if f not in df.columns]
     if missing:
         raise ValueError(f"OMM records lack fields: {missing}")
+    created = pd.to_datetime(df.get("CREATION_DATE", pd.Series(pd.NaT, index=df.index)), utc=True, format="ISO8601")
     df = df[list(OMM_FIELDS)].rename(columns=OMM_FIELDS)
+    df["provider_created_at"] = created
+    df["published_at"] = pd.Series(pd.NaT, index=df.index, dtype="datetime64[us, UTC]")
     df["norad_id"] = df["norad_id"].astype("int64")
     df["epoch"] = pd.to_datetime(df["epoch"], utc=True, format="ISO8601")
     for col in (
@@ -172,7 +182,7 @@ def build_snapshot(
     return enrich(df, satcat, fetched_at=fetched_at)
 
 
-def enrich(df: pd.DataFrame, satcat: pd.DataFrame | None, *, fetched_at: datetime) -> pd.DataFrame:
+def enrich(df: pd.DataFrame, satcat: pd.DataFrame | None, *, fetched_at: datetime | None = None) -> pd.DataFrame:
     """Join SATCAT metadata, derive the orbit geometry and classify, into the snapshot schema.
 
     Split out of :func:`build_snapshot` so a snapshot can also be built from stored element
@@ -204,12 +214,31 @@ def enrich(df: pd.DataFrame, satcat: pd.DataFrame | None, *, fetched_at: datetim
         altitude_bands(df["perigee_km"].to_numpy(), df["apogee_km"].to_numpy(), df["eccentricity"].to_numpy()),
         dtype="string",
     )
-    df["fetched_at"] = (
-        pd.Timestamp(fetched_at).tz_convert("UTC")
-        if pd.Timestamp(fetched_at).tzinfo
-        else pd.Timestamp(fetched_at, tz="UTC")
-    )
+    if fetched_at is not None:
+        df["fetched_at"] = pd.to_datetime(fetched_at, utc=True)
+        df["retrieved_at"] = df["fetched_at"]
+    df = temporal_fields(df)
     df = df[[f.name for f in SNAPSHOT_SCHEMA]].sort_values("norad_id").reset_index(drop=True)
+    return df
+
+
+def temporal_fields(df: pd.DataFrame) -> pd.DataFrame:
+    """Keep state, creation, publication and acquisition distinct; absent dates stay unknown."""
+    df = df.copy()
+    df["state_epoch"] = pd.to_datetime(df["epoch"], utc=True)
+    for name in (
+        "fetched_at",
+        "provider_created_at",
+        "published_at",
+        "retrieved_at",
+        "reconstructed_at",
+        "epoch_selection_as_of",
+    ):
+        if name not in df:
+            df[name] = df.get("fetched_at", pd.NaT) if name == "retrieved_at" else pd.NaT
+        df[name] = pd.to_datetime(df[name], utc=True)
+    if "selection_kind" not in df:
+        df["selection_kind"] = "retrieval snapshot"
     return df
 
 
@@ -220,22 +249,16 @@ def snapshot_as_of(
     as_of: datetime,
     groups: Mapping[int, Sequence[str]] | None = None,
     max_age_days: float | None = None,
+    reconstructed_at: datetime | None = None,
 ) -> pd.DataFrame:
-    """The catalogue as it stood on ``as_of``: each object's newest element set at or before it.
+    """Epoch-based reconstruction: newest stored state epoch no later than ``as_of``.
 
-    ``sets`` is a history frame (``catalogue/history.py``) -- every element set we hold for the
-    objects in question -- and this picks one per object exactly the way an operator screening
-    on that day would have: the newest fit published by then, and nothing later. Using a set
-    from *after* the date is the failure mode this exists to prevent, and it is the one that
-    would quietly make a storm validation come out right: an element set issued on 12 May
-    already contains the storm's effect, so propagating it would "predict" the drag it was
-    fitted to.
-
-    ``max_age_days`` drops objects whose newest set by then is staler than that, which is how
-    an object that stopped being tracked long before the date is kept out of the snapshot
-    rather than carried in on a fit nobody would have used. ``groups`` supplies the CelesTrak
-    group membership, which history does not carry: pass the current snapshot's, understanding
-    that group membership is being read from today rather than from then.
+    This does not establish which products were published or available at that
+    historical time. A late-published fit with an early epoch may be selected.
+    Provider creation is not publication. Actual input retrieval times survive;
+    missing times remain unknown. Supplied SATCAT and group membership can be
+    retrospective and do not establish historical membership. ``max_age_days``
+    limits state-epoch age only. Availability-based replay remains a separate gate.
     """
     if not len(sets):
         raise ValueError("no element sets to build a snapshot from")
@@ -258,29 +281,32 @@ def snapshot_as_of(
     latest["groups"] = [lookup.get(int(i), []) for i in latest["norad_id"]]
     if "source" not in latest.columns:
         latest["source"] = "gp_history"
-    return enrich(latest, satcat, fetched_at=at)
+    latest["selection_kind"] = "epoch-based reconstruction"
+    latest["epoch_selection_as_of"] = at
+    latest["reconstructed_at"] = pd.to_datetime(reconstructed_at or datetime.now(UTC), utc=True)
+    return enrich(latest, satcat)
 
 
 def as_of_path(as_of: datetime, snapshot_dir: Path = config.AS_OF_SNAPSHOT_DIR) -> Path:
     """Where a historical snapshot lives. Named by the date it reconstructs, not by when it was built.
 
-    Cached permanently: the input is ``gp_history``, which does not change, so the file is a
-    pure function of the date and the object list and rebuilding it is waste.
+    Stored for reuse. Later retrievals can include revisions or late publications,
+    so an epoch-selected reconstruction can change when rebuilt.
 
     In :data:`driftwatch.config.AS_OF_SNAPSHOT_DIR`, deliberately not beside the live snapshots.
     :func:`list_snapshots` globs one directory for ``gp_*.parquet`` and takes the last by name,
     and ``gp_asof_2022...`` sorts after ``gp_20260901...`` because a letter beats a digit -- so
     a reconstruction of an old day would silently become "the latest snapshot" for the screener,
     the coefficient fit and the history loader alike. It is also a different kind of file: a
-    live snapshot is what the catalogue said at a fetch, this is what it said on a chosen date,
-    rebuilt afterwards from history.
+    live snapshot records a retrieval; this is an epoch-based reconstruction from
+    later-held history, not proof of what was available on the chosen date.
     """
     return Path(snapshot_dir) / f"gp_asof_{stamp(as_of)}.parquet"
 
 
 def to_arrow(df: pd.DataFrame, extra_metadata: Mapping[str, str] | None = None) -> pa.Table:
     """Convert a snapshot frame to an Arrow table with the canonical schema and metadata."""
-    table = pa.Table.from_pandas(df, schema=SNAPSHOT_SCHEMA, preserve_index=False)
+    table = pa.Table.from_pandas(temporal_fields(df), schema=SNAPSHOT_SCHEMA, preserve_index=False)
     metadata = {b"driftwatch_schema_version": str(SCHEMA_VERSION).encode()}
     for key, value in (extra_metadata or {}).items():
         metadata[key.encode()] = value.encode()
@@ -307,7 +333,21 @@ def read_snapshot(path: Path) -> pd.DataFrame:
     version = (table.schema.metadata or {}).get(b"driftwatch_schema_version", b"?").decode()
     if version != str(SCHEMA_VERSION):
         log.warning("Snapshot %s has schema version %s, expected %s", path.name, version, SCHEMA_VERSION)
-    return table.to_pandas(date_as_object=True)
+    frame = table.to_pandas(date_as_object=True)
+    metadata = table.schema.metadata or {}
+    if version != str(SCHEMA_VERSION) and (path.name.startswith("gp_asof_") or b"driftwatch_as_of" in metadata):
+        # Legacy reconstructions wrote the target epoch into fetched_at. That
+        # field cannot be recovered as an acquisition time from these bytes.
+        cutoff = metadata.get(b"driftwatch_as_of")
+        frame["epoch_selection_as_of"] = (
+            pd.to_datetime(cutoff.decode(), utc=True) if cutoff else pd.to_datetime(frame["fetched_at"], utc=True)
+        )
+        built = metadata.get(b"driftwatch_built_at")
+        frame["reconstructed_at"] = pd.to_datetime(built.decode(), utc=True) if built else pd.NaT
+        frame["fetched_at"] = pd.NaT
+        frame["retrieved_at"] = pd.NaT
+        frame["selection_kind"] = "epoch-based reconstruction"
+    return temporal_fields(frame)
 
 
 def snapshot_problem(path: Path) -> str | None:
@@ -340,22 +380,31 @@ def snapshot_problem(path: Path) -> str | None:
     version = metadata.get("driftwatch_schema_version")
     if version is None:
         return f"{path.name} carries no driftwatch_schema_version, so it was not written as a snapshot"
-    if version != str(SCHEMA_VERSION):
+    if version not in {"1", str(SCHEMA_VERSION)}:
         return f"{path.name} has snapshot schema version {version}, expected {SCHEMA_VERSION}"
-    missing = [f.name for f in SNAPSHOT_SCHEMA if f.name not in schema.names]
+    required = SNAPSHOT_SCHEMA.names
+    if version == "1":
+        required = required[: required.index("state_epoch")]
+    missing = [name for name in required if name not in schema.names]
     if missing:
         return f"{path.name} is missing snapshot columns: {', '.join(missing)}"
     return None
 
 
-def snapshot_fetched_at(path: Path) -> datetime:
+def snapshot_fetched_at(path: Path) -> datetime | None:
     """When the catalogue snapshot at ``path`` was fetched: the newest ``fetched_at`` in it.
 
     Read from the data rather than parsed out of the file name, so that a renamed or copied
     file cannot make a stale snapshot look fresh. The pipeline's staleness check runs on this.
     """
-    column = pq.read_table(path, columns=["fetched_at"])["fetched_at"]
-    return pd.Timestamp(pc.max(column).as_py()).tz_convert("UTC").to_pydatetime()
+    table = pq.read_table(path, columns=["fetched_at"])
+    metadata = table.schema.metadata or {}
+    if metadata.get(b"driftwatch_schema_version") == b"1" and (
+        path.name.startswith("gp_asof_") or b"driftwatch_as_of" in metadata
+    ):
+        return None  # The legacy field was a reconstruction cutoff, not a retrieval.
+    value = pc.max(table["fetched_at"]).as_py()
+    return pd.Timestamp(value).tz_convert("UTC").to_pydatetime() if value is not None else None
 
 
 def list_snapshots(snapshot_dir: Path = config.SNAPSHOT_DIR) -> list[Path]:
@@ -379,6 +428,7 @@ def snapshot_summary(df: pd.DataFrame) -> dict[str, Any]:
     age_days = (now - pd.to_datetime(df["epoch"], utc=True)).dt.total_seconds() / 86400.0
     return {
         "n_objects": int(len(df)),
+        "selection_kind": sorted(df.selection_kind.dropna().unique()) if "selection_kind" in df else ["unknown"],
         "by_category": {k: int(v) for k, v in df["category"].value_counts().sort_index().items()},
         "by_band": {k: int(v) for k, v in df["altitude_band"].value_counts().sort_index().items()},
         "by_source": {k: int(v) for k, v in df["source"].value_counts().sort_index().items()},

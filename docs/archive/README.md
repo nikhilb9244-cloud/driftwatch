@@ -1,0 +1,3 @@
+# Historical paper v1
+
+The display paper has a dated correction notice and retains its historical body. The exact local body before that notice is [preserved separately](paper-2026-09-v1.original.md); the local-body and original Git-tag blob hashes are recorded in the canonical evidence object. The companion benchmark pages are preserved from the `paper-2026-09-v1` Git tag. These are historical artefacts, not current results. Read the [revised paper v2](../paper.md) and [complete corrected tables](../benchmark-v2-tables.md) for current results. Current publication pages are rendered by `scripts/render_paper_v2.py` from `docs/assets/benchmark-v2.json`; the corresponding original derived trials and summaries are under `data/validation/v1`.

@@ -1,0 +1,22 @@
+{
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+  "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+  "gp_manifest_sha256": "5a36a1093ac33a14effe606fb8e5c9cf38b013f4e7f164620498696d60e39e08",
+  "mission": "swot",
+  "orbit_table": "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/orbit.parquet",
+  "metadata": "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/metadata.json",
+  "files": {
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/orbit.parquet": "ccec08b66093c35c883d6679243c54d4b1d06aa09e360ccb13a0df9d7be7ba07",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/metadata.json": "3363229c1331ee318f35a942aefc691184821894bdfc2a1b49aaf8b80d045d2c",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/source-7355031aeddc6f37a54e4280f32c2440f1eed2343f988f76f85372d4930e07c4": "7355031aeddc6f37a54e4280f32c2440f1eed2343f988f76f85372d4930e07c4",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/source-6964aa39039e0b45ab3b3efa0c425ce4fe452b7c1cce9b809ac8bfa5765b73ee": "6964aa39039e0b45ab3b3efa0c425ce4fe452b7c1cce9b809ac8bfa5765b73ee",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/source-93a38d3dae2f9a50fa929bfc5c542b1916fe46a7d1fc9a2a01909ba73ebc7545": "93a38d3dae2f9a50fa929bfc5c542b1916fe46a7d1fc9a2a01909ba73ebc7545",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/source-67b810f1e72e2be72fa9cb17bdefa9c469765a6a09ac1f8ea5eb534702b6d11b": "67b810f1e72e2be72fa9cb17bdefa9c469765a6a09ac1f8ea5eb534702b6d11b",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/source-80725431898f7e917b125d5b0b701b71a90d029c33c83c3085ad5a3ffdbc5006": "80725431898f7e917b125d5b0b701b71a90d029c33c83c3085ad5a3ffdbc5006",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/source-d13a8799f0c5a9fd5727265c4278bbf4bd4729d5a1b2fab100ba5fec1af0687f": "d13a8799f0c5a9fd5727265c4278bbf4bd4729d5a1b2fab100ba5fec1af0687f",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/source-dffb2075c381b40f0e3fe88aa69dfde33f7b399d01ff2849ec8aa7ac0bbae86c": "dffb2075c381b40f0e3fe88aa69dfde33f7b399d01ff2849ec8aa7ac0bbae86c",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/source-5734c8fa116c3641af672bb90e11074593aaf659c5806dc9f8b0880066330aca": "5734c8fa116c3641af672bb90e11074593aaf659c5806dc9f8b0880066330aca",
+    "inputs/swot/20260908T113216-input-acquisition-e7de48a5d489/source-2acf4160004f51e3f7f3630dc839dac32ef9bea843cb80604ab98238c0e87594": "2acf4160004f51e3f7f3630dc839dac32ef9bea843cb80604ab98238c0e87594"
+  }
+}

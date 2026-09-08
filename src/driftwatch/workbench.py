@@ -126,7 +126,10 @@ def trajectory(
         rows = frame_from_records(records, source="local-upload")
         rows = rows[(rows.norad_id == norad) & (rows.epoch <= at.tz_localize("UTC"))]
         if not len(rows):
-            raise ValueError(f"No OMM record for {norad} has an epoch at or before the start. Future fits are refused.")
+            raise ValueError(
+                f"No OMM record for {norad} has an epoch at or before the start. "
+                "Later state epochs are refused; publication availability is not established."
+            )
         selected = rows.sort_values("epoch").iloc[-1:]
         sat = build_satrecs(selected)[0]
         epoch = stamp(selected.epoch.iloc[0])
@@ -147,8 +150,17 @@ def trajectory(
                 "frame": "TEME",
                 "time_system": "UTC",
                 "epoch": iso(epoch),
+                "state_epoch": iso(epoch),
+                "provider_created_at": None
+                if pd.isna(selected.provider_created_at.iloc[0])
+                else iso(selected.provider_created_at.iloc[0]),
+                "published_at": None,
+                "retrieved_at": None,
+                "imported_at": iso(datetime.now(UTC)),
+                "selection_kind": "epoch-based reconstruction",
                 "age_at_start_h": (at - epoch).total_seconds() / 3600,
-                "note": "One fixed fit, latest epoch at/before start. Epoch is not proof of publication time.",
+                "note": "Epoch-based reconstruction: one fixed fit with latest state epoch at/before start. "
+                "Provider creation is not publication; provider retrieval time is unknown for this upload.",
             },
             object_id,
         )
@@ -201,6 +213,9 @@ def trajectory(
             "time_system": ", ".join(sorted({s.time_system for s in segments})),
             "segments": len(segments),
             "object_id": next(iter(identities)),
+            "source_time_metadata": [s.temporal_metadata() for s in segments],
+            "state_epoch_start_utc": iso(orbit.span[0]),
+            "state_epoch_end_utc": iso(orbit.span[1]),
             "note": "Covariance blocks are not used. States outside declared usable times are excluded. "
             "Frame conversion uses the project's documented "
             "J2000 approximation where applicable.",

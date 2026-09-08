@@ -2,7 +2,7 @@
 
 import numpy as np
 
-from driftwatch.screening.ric import relative_ric, ric_basis, to_ric
+from driftwatch.screening.ric import relative_ric, ric_basis, to_ric, transport_covariance
 
 
 def test_circular_equatorial_orbit_axes():
@@ -45,3 +45,23 @@ def test_relative_ric_of_an_in_track_offset():
 def test_degenerate_state_gives_nan_not_an_exception():
     basis = ric_basis(np.zeros((1, 3)), np.ones((1, 3)))
     assert np.isnan(basis).all()
+
+
+def test_anisotropic_covariance_transport_preserves_physical_ellipsoid():
+    source = ric_basis([[7000, 0, 0]], [[0, 7, 1]])
+    target = ric_basis([[2000, 6000, 1000]], [[-6, 2, 3]])
+    covariance = np.array([[[1, 0.5, 0], [0.5, 100, 2], [0, 2, 9]]])
+    transported = transport_covariance(covariance, source, target)
+    cartesian = source.swapaxes(-1, -2) @ covariance @ source
+    expected = target @ cartesian @ target.swapaxes(-1, -2)
+    np.testing.assert_allclose(transported, expected, atol=1e-12)
+    np.testing.assert_allclose(transport_covariance(transported, target, source), covariance, atol=1e-12)
+    assert not np.allclose(np.diagonal(transported, axis1=-2, axis2=-1), [[1, 100, 9]])
+    residual = np.array([[2.0, -3.0, 1.0]])
+    before = to_ric(source, residual)
+    after = to_ric(target, residual)
+    np.testing.assert_allclose(
+        np.einsum("ni,nij,nj->n", before, np.linalg.inv(covariance), before),
+        np.einsum("ni,nij,nj->n", after, np.linalg.inv(transported), after),
+        atol=1e-12,
+    )

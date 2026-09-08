@@ -1,0 +1,21 @@
+{
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+  "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+  "gp_manifest_sha256": "5a36a1093ac33a14effe606fb8e5c9cf38b013f4e7f164620498696d60e39e08",
+  "mission": "sentinel-3b",
+  "orbit_table": "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/orbit.parquet",
+  "metadata": "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/metadata.json",
+  "files": {
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/orbit.parquet": "c8a71cefd8b6cbed85f07fe96d4a88212f43fc9c9b128bbadb887a7e40f3da55",
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/metadata.json": "cdd0c2a3ba643f35347db66d27056350c642f6188667b1811d26e6cb3f9956a7",
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/source-51f7c3cab1c67559cfb7882a1d062172f73aa19ddbb82a4b8df4213faeef9cce": "51f7c3cab1c67559cfb7882a1d062172f73aa19ddbb82a4b8df4213faeef9cce",
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/source-0f741b90ce90b6fabb7e909392ec3fad24b221db0af79d9cacee1c709fadc69f": "0f741b90ce90b6fabb7e909392ec3fad24b221db0af79d9cacee1c709fadc69f",
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/source-7c1ab908a4f3b3539cbac441be66ee79ce541c90a5fbb7d62b3d38ab824713a7": "7c1ab908a4f3b3539cbac441be66ee79ce541c90a5fbb7d62b3d38ab824713a7",
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/source-4099d5be1a815e1887fb0a7a2024affad1ff219c87105f7e0a2c4caa3683cb7c": "4099d5be1a815e1887fb0a7a2024affad1ff219c87105f7e0a2c4caa3683cb7c",
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/source-ee9c494acfaa43507d004eae39a7b1483afdcaaaba46e7b165904128b81a5249": "ee9c494acfaa43507d004eae39a7b1483afdcaaaba46e7b165904128b81a5249",
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/source-98ccdaed9620edb5db8c6fd352db10f713e2772f144c5fff6409bb1c5e5c4317": "98ccdaed9620edb5db8c6fd352db10f713e2772f144c5fff6409bb1c5e5c4317",
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/source-002bb25eb67d0511a4fad05a0da29e318ac01e02ae8117b966e5095d7ea508b6": "002bb25eb67d0511a4fad05a0da29e318ac01e02ae8117b966e5095d7ea508b6",
+    "inputs/sentinel-3b/20260908T113216-input-acquisition-e7de48a5d489/source-9d4705099221173799f97b36f1326fc9b935c970601981c61f316afd9fd62274": "9d4705099221173799f97b36f1326fc9b935c970601981c61f316afd9fd62274"
+  }
+}

@@ -1,5 +1,25 @@
-* text=auto eol=lf
+* text=auto eol=lf whitespace=blank-at-eol,blank-at-eof,space-before-tab,cr-at-eol
 *.png binary
 *.jpg binary
 *.bin binary
 *.parquet binary
+*.pdf binary
+
+# Publication evidence and its bound sources are hashed as exact bytes.
+# Preserve the frozen local line endings in clones and source archives.
+data/validation/** -text
+data/radio/** -text
+docs/assets/** -text
+docs/protocols/** -text
+docs/archive/september-2024-protocol-frozen.md -text
+docs/publication-metadata.json -text
+docs/paper.template.md -text
+output/referee/*.json -text
+scripts/publication_text.py -text
+scripts/render_paper_v2.py -text
+scripts/correct_covariance_basis.py -text
+src/driftwatch/storm/benchmark_statistics.py -text
+src/driftwatch/storm/reference_run.py -text
+src/driftwatch/storm/precise.py -text
+src/driftwatch/storm/manoeuvre_records.py -text
+src/driftwatch/screening/ric.py -text

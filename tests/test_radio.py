@@ -135,9 +135,9 @@ def test_horizon_table_fraction_is_one_when_cross_track_is_inside_a_third_of_the
     t = _trials(cross_km=0.1, in_track_km=1.0)
     table = horizon.horizon_table(t)
     col = horizon.receiver_column(RECEIVERS["L"])
-    assert (table[col.crossing_key] == 1.0).all()
-    assert horizon.horizon_hours(table, col) == {"quiet": 24.0}, "only the windows present are reported"
-    assert horizon.crossing_horizon_hours(table, col) == horizon.horizon_hours(table, col, which="crossing")
+    assert (table[col.cross_track_key] == 1.0).all()
+    assert horizon.threshold_hours(table, col) == {"quiet": 24.0}, "only the windows present are reported"
+    assert horizon.cross_track_threshold_hours(table, col) == horizon.threshold_hours(table, col, which="cross_track")
     # 0.1 km at 500 km is 0.69 arcmin; the table carries the median and p95 in arcmin.
     assert table["cross_median_arcmin"].iloc[0] == pytest.approx(60 * np.degrees(0.1 / 500), rel=1e-3)
 
@@ -146,35 +146,41 @@ def test_horizon_table_fraction_is_zero_when_cross_track_exceeds_a_third_of_the_
     t = _trials(cross_km=5.0, in_track_km=1.0)
     table = horizon.horizon_table(t)
     col = horizon.receiver_column(RECEIVERS["L"])
-    assert (table[col.crossing_key] == 0.0).all() and horizon.horizon_hours(table, col)["quiet"] is None
-    assert (table[col.position_key] == 1.0).all()
-    assert horizon.position_horizon_hours(table, col)["quiet"] == 24.0
+    assert (table[col.cross_track_key] == 0.0).all() and horizon.threshold_hours(table, col)["quiet"] is None
+    assert (table[col.in_track_key] == 1.0).all()
+    assert horizon.in_track_threshold_hours(table, col)["quiet"] == 24.0
     with pytest.raises(ValueError, match="which"):
-        horizon.horizon_hours(table, col, which="sideways")
+        horizon.threshold_hours(table, col, which="sideways")
 
 
-def test_the_two_horizons_are_separate_quantities():
-    """A small cross-track error with a large along-track one: the crossing happens, the position is unknown."""
+def test_component_diagnostics_do_not_claim_crossing_or_position_accuracy():
+    """Small C and large I alone do not answer a beam-crossing question."""
     t = _trials(cross_km=0.1, in_track_km=30.0)  # 30 km at 500 km is 3.4 degrees, beyond a third of every beam
     table = horizon.horizon_table(t)
     col = horizon.receiver_column(RECEIVERS["L"])
-    assert horizon.horizon_hours(table, col, which="crossing")["quiet"] == 24.0
-    assert horizon.horizon_hours(table, col, which="position")["quiet"] is None
-    both = horizon.horizons(table, [col])
+    assert horizon.threshold_hours(table, col, which="cross_track")["quiet"] == 24.0
+    assert horizon.threshold_hours(table, col, which="in_track")["quiet"] is None
+    both = horizon.component_thresholds(table, [col])
     band = "400-600 km"
-    assert both["crossing"][band][col.key]["quiet"] == 24.0 and both["position"][band][col.key]["quiet"] is None
-    u = horizon.crossing_uncertainty(t, "quiet", 3.0, 500.0, 1.0, 1.0, col.fwhm_deg)
-    assert u is not None and u.crossing_fraction_inside == 1.0 and u.position_fraction_inside == 0.0
+    assert both["cross_track"][band][col.key]["quiet"] == 24.0 and both["in_track"][band][col.key]["quiet"] is None
+    u = horizon.component_diagnostic(t, "quiet", 3.0, 500.0, 1.0, 1.0, col.fwhm_deg)
+    assert u is not None and u.cross_track_fraction_inside == 1.0 and u.in_track_fraction_inside == 0.0
     payload = horizon.to_json(table, [col], trials=t)
-    assert payload["crossing_horizon_hours"][band][col.key]["quiet"] == 24.0
-    assert payload["position_horizon_hours"][band][col.key]["quiet"] is None
-    assert {"crossing_horizon", "position_horizon"} <= set(payload["definitions"])
+    assert payload["component_thresholds_hours"]["cross_track"][band][col.key]["quiet"] == 24.0
+    assert payload["component_thresholds_hours"]["in_track"][band][col.key]["quiet"] is None
+    assert not payload["crossing_classification_calibrated"]
+    assert "crossing_horizon_hours" not in payload and "position_horizon_hours" not in payload
+    status = payload["threshold_status"]["cross_track"][band][col.key]["quiet"]
+    assert status["end_reason"] == "data_exhausted" and status["first_failed_sampled_h"] is None
+    failed = payload["threshold_status"]["in_track"][band][col.key]["quiet"]
+    assert failed["end_reason"] == "threshold_failure" and failed["first_failed_sampled_h"] == 6
+    assert failed["below_first_lead"] == "unmeasured"
     assert payload["population"][band]["spacecraft"] == ["Swarm A"] and payload["bands"] == [band]
-    statements = horizon.horizon_statements(table, horizon.table_columns(), band=band)
-    assert any("crossing horizon at 400-600 km holds for the full 24 h in every window" in s for s in statements)
-    assert any("is not possible at any element-set age" in s for s in statements)
+    statements = " ".join(horizon.horizon_statements(table, horizon.table_columns(), band=band))
+    assert "No beam-entry or beam-timing accuracy follows" in statements
+    assert "not possible at any" not in statements and "exhausted window is not a threshold failure" in statements
     assert horizon.population_sentence(t) == "400-600 km (500 to 500 km): Swarm A; sets 1 quiet"
-    assert horizon.format_lead(None) == "under 6 h" and horizon.format_lead(168.0) == "7 d"
+    assert horizon.format_lead(None) == "no sampled lead passed" and horizon.format_lead(168.0) == "7 d"
 
 
 def test_lead_bin_is_the_smallest_lead_at_or_beyond_the_age():
@@ -185,27 +191,34 @@ def test_lead_bin_is_the_smallest_lead_at_or_beyond_the_age():
     assert horizon.lead_bin_hours(200.0, leads) is None
 
 
-def test_crossing_uncertainty_projects_the_residual_onto_the_sky():
+def test_component_diagnostic_projects_the_residual_onto_the_sky():
     t = _trials(cross_km=0.5, in_track_km=2.0)
-    across = horizon.crossing_uncertainty(t, "quiet", 3.0, 1000.0, 1.0, 1.0, 1.12)
-    along_los = horizon.crossing_uncertainty(t, "quiet", 3.0, 1000.0, 0.0, 0.0, 1.12)
+    across = horizon.component_diagnostic(t, "quiet", 3.0, 1000.0, 1.0, 1.0, 1.12)
+    along_los = horizon.component_diagnostic(t, "quiet", 3.0, 1000.0, 0.0, 0.0, 1.12)
     assert across is not None and along_los is not None
     assert across.lead_h == 6.0 and across.n_trials == 10
     assert across.cross_p95_deg == pytest.approx(np.degrees(0.5 / 1000.0), rel=1e-3)
-    assert along_los.cross_p95_deg == 0.0 and along_los.crossing_fraction_inside == 1.0
+    assert along_los.cross_p95_deg == 0.0 and along_los.cross_track_fraction_inside == 1.0
     six_hours = t[t["lead_h"] == 6.0]
     assert across.along_shift_p95_s == pytest.approx(np.quantile(six_hours["in_track_km"], 0.95) / 7.6, rel=1e-3)
-    assert horizon.crossing_uncertainty(t, "storm", 3.0, 1000.0, 1.0, 1.0, 1.12) is None
+    assert horizon.component_diagnostic(t, "storm", 3.0, 1000.0, 1.0, 1.0, 1.12) is None
 
 
-def test_population_label_states_the_band_or_the_reason():
-    assert crossings.population_label(500.0, 0.001, 1.0) == ("measured", "400-600 km")
-    assert crossings.population_label(800.0, 0.001, 1.0) == ("measured", "750-850 km")
-    assert crossings.population_label(20000.0, 0.001, 1.0)[0] == "no measured horizon"
-    outside = crossings.population_label(800.0, 0.001, 1.0, bands=["400-600 km"])[1]
+def test_population_label_requires_identity_scope_and_measured_age():
+    valid = dict(norad_id=39452, object_type="PAY", scope=crossings.REFERENCE_SCOPE)
+    assert crossings.population_label(500.0, 0.001, 1.0, **valid) == ("reference_component_diagnostics", "400-600 km")
+    assert crossings.population_label(20000.0, 0.001, 1.0, **valid)[0] == "unsupported"
+    outside = crossings.population_label(800.0, 0.001, 1.0, bands=["400-600 km"], **valid)[1]
     assert "outside the measured altitude bands (400-600 km)" in outside
-    assert "eccentricity" in crossings.population_label(500.0, 0.1, 1.0)[1]
-    assert "days old" in crossings.population_label(500.0, 0.001, 9.0)[1]
+    assert "eccentricity" in crossings.population_label(500.0, 0.1, 1.0, **valid)[1]
+    assert "days old" in crossings.population_label(500.0, 0.001, 9.0, **valid)[1]
+    assert crossings.population_label(500.0, 0.001, 0.1, **valid)[0] == "unsupported"
+    assert crossings.population_label(500.0, 0.001, 1.0)[0] == "unsupported"
+    assert crossings.population_label(500.0, 0.001, 1.0, norad_id=39452)[0] == "unsupported"
+    assert crossings.population_label(500.0, 0.001, 1.0, **(valid | {"norad_id": 90001}))[0] == "unsupported"
+    assert crossings.population_label(500.0, 0.001, 1.0, **(valid | {"object_type": "DEB"}))[0] == "unsupported"
+    for altitude, eccentricity in ((np.nan, 0.001), (500, np.nan), (500, -0.001), (np.inf, 0.001)):
+        assert crossings.population_label(altitude, eccentricity, 1, **valid)[0] == "unsupported"
 
 
 # --------------------------------------------------------------------------------------
@@ -307,11 +320,11 @@ def test_beam_crossings_finds_a_satellite_built_to_cross_the_boresight():
     t_ca = datetime.fromisoformat(c.t_ca_utc.replace("Z", "+00:00"))
     assert abs((t_ca - t).total_seconds()) < 2.0
     assert c.elevation_deg > 80.0 and 480.0 < c.range_km < 520.0
-    assert c.population == "measured" and c.crossing_horizon == "inside" and c.position_horizon == "inside"
-    assert c.crossing_fraction_inside == 1.0 and c.position_fraction_inside == 1.0
+    assert c.population == "unsupported" and not c.orbit_quality["crossing_classification_calibrated"]
+    assert c.cross_track_uncertainty_deg is None and c.along_track_shift_s is None
     assert 0.9 < c.projection_cross <= 1.0 and 0.9 < c.projection_along <= 1.0
     assert c.set_age_days == pytest.approx(3.0 / 24.0, abs=1e-3)
-    assert c.benchmark_lead_h == 6.0 and c.benchmark_window == "quiet"
+    assert c.benchmark_lead_h is None and c.benchmark_window == "quiet"
     assert c.emission_status == "none declared"
     assert c.samples and all(s.separation_deg <= obs.fwhm_deg / 2 for s in c.samples)
     assert min(s.separation_deg for s in c.samples) < 0.05
@@ -327,14 +340,14 @@ def test_beam_crossings_reports_nothing_when_the_dish_points_away():
     assert crossings.beam_crossings(cat, MEERKAT, obs, _trials(0.2, 1.0), crossings.PERIODS["quiet-2024-04"]) == []
 
 
-def test_an_object_outside_the_benchmark_population_carries_no_measured_horizon():
+def test_an_object_outside_the_benchmark_population_has_unsupported_accuracy():
     t = datetime(2024, 4, 23, 20, 40, tzinfo=UTC)
     sat = _overhead_satrec(t, altitude_km=1000.0)
     obs = _observation(sat, t, "test-high")
     cat = _catalogue_for(sat, "HIGH OBJECT", t, obs.start)
     (c,) = crossings.beam_crossings(cat, MEERKAT, obs, _trials(0.2, 1.0), crossings.PERIODS["quiet-2024-04"])
-    assert c.population == "no measured horizon" and "outside the measured altitude bands" in c.population_reason
-    assert c.crossing_horizon == "no measured horizon" and c.position_horizon == "no measured horizon"
+    assert c.population == "unsupported" and "outside the measured altitude bands" in c.population_reason
+    assert "crossing_horizon" not in c.record() and "position_horizon" not in c.record()
     assert c.cross_track_uncertainty_deg is None and c.along_track_shift_s is None
 
 
@@ -384,20 +397,56 @@ def test_satchecker_export_has_the_documented_shape_and_the_added_fields():
     position = entry["positions"][0]
     documented = {"altitude", "angle", "azimuth", "date_time", "dec", "julian_date", "ra", "tle_epoch", "range_km"}
     assert set(position) == documented | set(report.ADDED_FIELDS)
-    assert position["crossing_horizon"] == "inside" and position["cross_track_uncertainty_deg"] > 0
-    assert position["position_horizon"] == "inside" and position["along_track_shift_s"] > 0
-    assert "horizon" not in position, "the single horizon field is gone: the export carries the two named ones"
+    assert position["orbit_quality"]["status"] == "unsupported"
+    assert not position["orbit_quality"]["crossing_classification_calibrated"]
+    assert position["orbit_quality"]["publication_age_h"] is None
+    assert position["radio_band"]["object_transmitting"] is None
+    assert "crossing_horizon" not in position and "position_horizon" not in position
     assert data["total_position_results"] == len(entry["positions"])
-    # One set in the history: no manoeuvre detection is possible, and the export says so once, with the consequence.
-    assert position["hours_since_manoeuvre"] is None and position["fit_arc_spanned_manoeuvre"] is None
-    assert position["next_set_shows_jump"] is None, "one set, nothing follows it"
-    assert "pre-burn fit with its epoch advanced" in payload[0]["post_manoeuvre"]["measured_consequence"]
+    candidate = position["candidate_discontinuity"]
+    assert candidate["between_element_epochs"] is None and candidate["overlaps_assumed_exclusion_arc"] is None
+    assert candidate["next_set_shows_jump"] is None
+    assert not candidate["fit_arc_known"] and not candidate["publication_time_known"]
+    assert "not confirmation of a manoeuvre" in payload[0]["post_manoeuvre"]["measured_consequence"]
+    assert payload[0]["metadata_schema_version"] == 2
+    assert not payload[0]["catalogue"]["availability_as_of_known"]
     assert result.crossings[0].manoeuvre_detection.startswith("no detection")
-    post = payload[0]["post_manoeuvre"]
-    assert post["arc_hours"] == 24.0 and "twelve burns on six spacecraft" in post["measured_consequence"]
     assert any("fit_arc_spanned_manoeuvre" in line for line in payload[0]["limits"])
-    text = report._crossings_table(result.crossings)[2]
-    assert "| no detection |" in text
+    text = " ".join(report._crossings_table(result.crossings))
+    assert "no detection" in text and "Crossing horizon" not in text
+
+
+def test_radio_band_evidence_separates_publication_from_unknown_operation_dates():
+    from types import SimpleNamespace
+
+    c = SimpleNamespace(constellation="Starlink", emission_status="declared in-band", emission_detail="test")
+    value = report.radio_band_record(c, SimpleNamespace(receiver=RECEIVERS["L"]))
+    assert value["evidence"]
+    evidence = value["evidence"][0]
+    assert evidence["source_publication_date"] == "2024-11-26"
+    assert evidence["operation_valid_from"] is None and evidence["operation_valid_until"] is None
+    assert evidence["historical_validity"].startswith("unknown")
+    assert value["object_transmitting"] is None and not value["historical_operation_established"]
+
+
+def test_qualified_reference_estimate_has_scope_version_hash_and_counts():
+    t = datetime(2024, 4, 23, 20, 40, tzinfo=UTC)
+    epoch = t - timedelta(hours=12)
+    sat = _overhead_satrec(t, epoch=epoch)
+    obs = _observation(sat, t, "qualified-synthetic-pass")
+    cat = _catalogue_for(sat, "SYNTHETIC REFERENCE ID", epoch, obs.start)
+    # Construct an explicitly qualified identity solely to exercise the schema.
+    cat["norad_id"] = 39452
+    cat["object_type"] = "PAY"
+    cat["benchmark_scope"] = crossings.REFERENCE_SCOPE
+    found = crossings.beam_crossings(cat, MEERKAT, obs, _trials(0.2, 1), crossings.PERIODS["quiet-2024-04"])
+    assert len(found) == 1
+    estimate = found[0].orbit_quality["reference_population_estimate"]
+    assert estimate["scope"] == crossings.REFERENCE_SCOPE
+    assert estimate["method_version"].endswith("v2") and len(estimate["reference_rows_sha256"]) == 64
+    assert estimate["n_trials"] == 10 and estimate["n_missions"] == estimate["n_element_sets"] == 1
+    assert estimate["cross_track_component_p95_deg"] > 0
+    assert not found[0].orbit_quality["crossing_classification_calibrated"]
 
 
 def test_the_last_detected_manoeuvre_is_reported_with_the_fit_arc_flag():

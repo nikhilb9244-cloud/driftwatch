@@ -1,5 +1,12 @@
 # Local analysis: an operator's own files, on the operator's own machine
 
+Local orbit comparison is an **epoch-based reconstruction**. State epochs select the inputs;
+provider creation does not establish publication. OEM header creation and originator are
+preserved separately from known publication, provider retrieval and actual local import time.
+Missing publication or retrieval times remain unknown. The output retains these distinctions;
+it does not claim the inputs were available at a historical decision time.
+
+
 **Correction:** a visual interface is now available in the
 [local workspace](workspace.md). The CLI also accepts `--reference-kind prediction`,
 `reconstructed` or `navigation`, defaulting to prediction. A supplied operator OEM is
@@ -67,7 +74,7 @@ does not fetch it and says so when it is missing.
   from the history.
 - `--manoeuvres`: the operator's own record, a CSV with `start` and `end` columns of UTC times. It
   decides the exclusion: a trial is excluded when a manoeuvre falls between 24 hours before its
-  element set's epoch (the tracking arc the set was fitted from) and the lead's time. The project's
+  element set's epoch (an exclusion rule, not a measured fitting arc) and the lead's time. The project's
   own detection (a step in the orbit-mean semi-major axis of the ephemeris; the jump detector on the
   element sets) is computed either way and reported beside the record as a cross-check; without a
   record it is what excludes, and every row says which.

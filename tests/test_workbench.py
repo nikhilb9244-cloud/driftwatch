@@ -55,7 +55,7 @@ def test_future_omm_is_not_selected_and_manoeuvres_are_counted():
     record = dict(RECORD)
     record["EPOCH"] = "2025-01-01T00:00:00"
     body["prediction"] = {"name": "future.json", "text": json.dumps([record])}
-    with pytest.raises(ValueError, match="Future fits"):
+    with pytest.raises(ValueError, match="Later state epochs"):
         workbench.analyse("compare", body)
     body = request("orbit")
     body["manoeuvres"] = {"name": "burns.csv", "text": "start,end\n2024-05-10T00:00:00Z,2024-05-10T01:00:00Z\n"}

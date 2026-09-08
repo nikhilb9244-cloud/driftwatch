@@ -1,0 +1,20 @@
+{
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+  "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+  "gp_manifest_sha256": "5a36a1093ac33a14effe606fb8e5c9cf38b013f4e7f164620498696d60e39e08",
+  "mission": "sentinel-6a",
+  "orbit_table": "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/orbit.parquet",
+  "metadata": "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/metadata.json",
+  "files": {
+    "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/orbit.parquet": "f13d5583e3b093a4444449258aaf20a0ff65442e98b0a70e6de5346668a94d38",
+    "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/metadata.json": "43ed40b5c35b31335083ea6b417a47a26693745849cb45d31e0c3ec3a69da82a",
+    "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/source-7355031aeddc6f37a54e4280f32c2440f1eed2343f988f76f85372d4930e07c4": "7355031aeddc6f37a54e4280f32c2440f1eed2343f988f76f85372d4930e07c4",
+    "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/source-957642100a8953b9a47a83c58ee62db9592955b04a970ff488b8b0cc4be4753a": "957642100a8953b9a47a83c58ee62db9592955b04a970ff488b8b0cc4be4753a",
+    "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/source-bd78ef28d6b40cf67a67b52d3f204edaa5897091a49afc7081c771f6cca627ce": "bd78ef28d6b40cf67a67b52d3f204edaa5897091a49afc7081c771f6cca627ce",
+    "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/source-39f124103dcfbc904562966df2fd61948a80c79ba586b06115778f80ed32ad67": "39f124103dcfbc904562966df2fd61948a80c79ba586b06115778f80ed32ad67",
+    "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/source-53fae2bfe8e60f482c8645b9e786a61b06dfccb5410ba83d195f84f5c4d03ea4": "53fae2bfe8e60f482c8645b9e786a61b06dfccb5410ba83d195f84f5c4d03ea4",
+    "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/source-75cb2028bd80e2d01f4ebec04a8abe35fef49d6cf380ad8c290e3642fb3d9f04": "75cb2028bd80e2d01f4ebec04a8abe35fef49d6cf380ad8c290e3642fb3d9f04",
+    "inputs/sentinel-6a/20260908T111847-input-acquisition-cf7c8f7ed1dd/source-e850dcbf6a4622c9cb03a086c00948d33e387ecd071d0d665cca69fb7db4481d": "e850dcbf6a4622c9cb03a086c00948d33e387ecd071d0d665cca69fb7db4481d"
+  }
+}

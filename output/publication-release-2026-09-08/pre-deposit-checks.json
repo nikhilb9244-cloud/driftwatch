@@ -1,0 +1,35 @@
+{
+  "date": "2026-09-08",
+  "author_authorized_deposition": true,
+  "outreach_authorized": false,
+  "release_tag": "paper-2026-09-v2",
+  "pytest": {
+    "name": "pytest",
+    "errors": "0",
+    "failures": "0",
+    "skipped": "0",
+    "tests": "724",
+    "time": "317.904",
+    "timestamp": "2026-09-08T15:42:27.664798+02:00",
+    "hostname": "DESKTOP-2TEE7MM"
+  },
+  "publication_contract": {
+    "local_passed": 8,
+    "clean_export_passed": 8
+  },
+  "checks": {
+    "ruff": "passed",
+    "web_typecheck": "passed",
+    "web_build": "passed with existing dependency externalisation and size warnings",
+    "staged_diff_check": "passed",
+    "bound_staged_hashes": 41,
+    "pdf_visual_review": "all seven pages checked"
+  },
+  "sha256": {
+    "docs/paper.md": "9cb5d7460c2e2fc570d6d13b15c67f04c52edcc06a9038d16b201c45bde872bd",
+    "docs/assets/benchmark-v2.json": "a644e1c60a5bf851ad2bd923ff94313fbaa0e0ab31c9acf6d7c2cb747ce6249c",
+    "docs/assets/claims-v2.json": "1ddf6a52c622133001fef61d335fc4271d8bc71787217a6b1064c09cad08adfc",
+    "README.md": "da09eb97e08e415fb424ab06606e27cea85d01b0450f0cb4eac82d7be1868df3",
+    "output/pdf/paper-2026-09-v2.pdf": "c80ee823df8ba3607d2a51febabbf8b39ee5880701d7832b3e9f84260b18149d"
+  }
+}

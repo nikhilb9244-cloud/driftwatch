@@ -62,6 +62,7 @@ class Observation:
 
     @property
     def fwhm_deg(self) -> float:
+        """Historical analytic circular width; corrected comparisons require MeasuredBeam."""
         return beam_fwhm_deg(self.centre_mhz)
 
     def record(self) -> dict[str, object]:
@@ -76,6 +77,7 @@ class Observation:
             "band": self.receiver.name,
             "centre_mhz": self.centre_mhz,
             "beam_fwhm_deg": self.fwhm_deg,
+            "beam_model": "historical analytic circular scale, not a measured Jones pattern",
             "source": self.source,
             "note": self.note,
         }

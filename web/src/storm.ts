@@ -141,8 +141,8 @@ export function buildStormControl(
       summary.hidden = false;
       summary.innerHTML =
         state.current === "quiet"
-          ? '<p class="caveat">Quiet is the baseline: no additional storm displacement or uncertainty term. Compare another scenario to see the modelled change.</p>'
-          : '<p class="caveat">No events have a modelled displacement in this scenario. Their position uncertainty may still change.</p>';
+          ? '<p class="caveat">Sensitivity analysis on the baseline event set. Quiet applies no additional storm displacement or uncertainty; candidate discovery is not repeated.</p>'
+          : '<p class="caveat">Sensitivity analysis on the baseline event set: no stored events have a modelled displacement. Their position uncertainty may still change; candidate discovery is not repeated.</p>';
       return;
     }
     summary.hidden = false;

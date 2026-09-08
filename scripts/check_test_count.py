@@ -28,9 +28,9 @@ import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
 
-# The suite on 2026-09-08, with the post-burn and post-manoeuvre tests. Raise it when tests are added; lower it only
+# The corrected v2 suite on 2026-09-08. Raise it when tests are added; lower it only
 # with the tests it counts.
-EXPECTED_MINIMUM = 641
+EXPECTED_MINIMUM = 724
 
 
 def reported_tests(report: Path) -> tuple[int, int]:

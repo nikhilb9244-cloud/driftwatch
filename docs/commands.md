@@ -38,7 +38,7 @@ What works today:
   Every event is labelled `robust` or `dilution` by where the maximum probability sits:
   a flag in the dilution region is reported at low confidence and never as actionable,
   because shrinking the covariance would raise it.
-- `driftwatch risk <run> --scenario <name>` rescores a stored run's events with another
+- `driftwatch risk <run> --scenario <name>` performs a sensitivity analysis on the baseline event set, rescoring stored encounters with another
   covariance model without rescreening (today a scale factor; Phase 3's storm model
   uses the same interface), so a quiet row and a storm row for the same event sit side
   by side in the export.
@@ -79,7 +79,7 @@ What works today:
   conjunction bundle. Repeated encounters of one pair are collapsed to a single row with
   the event count, the closest miss, the highest probability and the first time of
   closest approach, expanding to the individual events on demand, with a cumulative
-  probability per pair labelled as the upper bound it is.
+  value per pair labelled as an independence-form summary, with no established bound.
 - The viewer's conjunctions panel lists those pairs. Selecting an event jumps the clock
   to the time of closest approach, highlights both objects, draws ten minutes of each
   track either side and opens an inset of the encounter plane with the covariance
@@ -133,7 +133,7 @@ What works today:
   from-kelvins` writes out as messages with synthetic identities (`docs/cdm-matching.md`).
 - `driftwatch validate swarm` is the calibration benchmark against precise orbits: every public
   element set issued for Swarm A, B and C in three windows (a quiet control, the May 2024 storm,
-  and an October 2024 storm held out from every tuning) propagated with SGP4 to leads from six
+  and October 2024 held out, all now inspected) propagated with SGP4 to leads from six
   hours to seven days and measured against ESA's precise science orbit in the satellite's own RIC
   frame, one trial per element set. It reports the residual distribution, the coverage of the
   empirical covariance against the 68 and 95 per cent it claims, the storm term's effect with
@@ -143,24 +143,24 @@ What works today:
   orbit on an anonymous server (the DORIS satellites through the IDS data centre, Sentinel-1A through ESA's
   STEP mirror, GRACE-FO through GFZ's ISDC, Swarm as before) and, for every mission with a retroreflector,
   compares ILRS laser-ranging normal points with the reconstructed orbit and with each element set's
-  propagation; four windows, August 2024 added and held out like October; the horizon by altitude band
+  propagation; April 2024 control, May 2024, August 2024 held out and October 2024 held out, all inspected; the horizon by altitude band
   and window, the population statement, and what was not obtainable (`docs/reference-benchmark.md`).
   `--missions` picks keys, `--no-slr` skips the laser comparison, `--offline` reads the cache only.
 - `driftwatch validate dsgp4` runs ESA's dSGP4 and its ML-dSGP4 hybrid on the reference benchmark's trials
-  (`uv sync --extra dsgp4` installs them): the hybrid is trained on the quiet and May windows only, scored
-  on all four against plain SGP4 and the storm term, and adopted only if the held-out storms improve
+  (`uv sync --extra dsgp4` installs them): the stored hybrids trained on April 2024 control and May 2024 are scored
+  on all four inspected windows against plain SGP4 and the storm term. Both checkpoints remain
+  negative findings; the historical rule is not an adoption gate for a new recipe
   (`docs/dsgp4-evaluation.md`).
 - `driftwatch radio horizon`, `driftwatch radio emissions` and `driftwatch radio period <name>` are
-  the radio lane (`docs/radio-lane.md`): the calibration benchmark's residuals as angles on the sky
-  for the 13.5 m MeerKAT dish, by receiver and lead (`docs/radio-horizon.md`); the declared
-  satellite emissions by band from public filings (`docs/radio-emissions.md`); and, for a period,
-  the two products on the catalogue as it stood at each observation start -- constellation members
-  above ten degrees, counted, and every object whose track passes inside the half-power radius,
-  with its closest approach, element-set age, cross-track angular uncertainty, the two horizon labels,
-  the time since the last detected manoeuvre with whether the set's likely fit arc spanned it, and,
-  retrospectively, whether the following set shows a jump the set may omit --
-  written as a report under `docs/radio/` and an export in the IAU CPS SatChecker field-of-view
-  shape under `data/radio/`. Observations come from a CSV; `driftwatch radio archive <name>` writes
+  the radio lane (`docs/radio-lane.md`): separate orbital-component angular thresholds, with the
+  former beam-crossing guarantees withdrawn (`docs/radio-horizon.md`); declared emissions
+  (`docs/radio-emissions.md`); and illustrative passages selected by the latest archived element
+  epoch before the observation cutoff. Publication-time availability is unknown. Schema 2 adds
+  qualified reference-population applicability, declared frequency evidence and candidate element
+  discontinuities; unknown information remains null. These are proposed SatChecker-shaped metadata,
+  not an accepted upstream schema or a known catalogue fit arc. Reports are under `docs/radio/`,
+  exports under `data/radio/`. The separate measured-beam comparison uses constructed pointings
+  and both complete topocentric tracks. Observations come from a CSV; `driftwatch radio archive <name>` writes
   one under `data/archive/sarao/` (ignored by the repository) from the SARAO archive's documented
   GraphQL API with the token in `SARAO_ARCHIVE_TOKEN` (read-only, paced, metadata only, public
   records past the proprietary period only, identifiers cited rather than records reproduced); the history

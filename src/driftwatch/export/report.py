@@ -9,12 +9,8 @@ the first time of closest approach, and the individual events underneath on dema
 parquet and the JSON keep every event.
 
 A pair also gets a cumulative probability, one minus the product of the complements over
-its events. It is an upper bound rather than a probability: the events of one pair are
-repeated passes of the same two objects propagated from the same two element sets, so
-their errors are strongly correlated and the true combined probability is lower. It is
-reported because a reader comparing a pair that comes back 130 times with a pair seen
-once needs some measure of the difference, and it is labelled as not independent
-wherever it appears.
+its events. This combines them as if independent. Dependence is not modelled, so it
+is a ranking summary with no established bound on the true combined probability.
 
 The viewer bundle carries the encounter geometry and, for the events a reader can open,
 the two objects' tracks for ten minutes either side of the time of closest approach,
@@ -37,10 +33,11 @@ import numpy as np
 import pandas as pd
 
 from driftwatch import __version__, config
+from driftwatch.claims import HORIZON_HEADLINE, STORM_CALIBRATION_NOTE
 from driftwatch.export.conjunctions import RunDirectory
 from driftwatch.orbit.propagator import build_satrecs
 from driftwatch.orbit.time import julian_dates
-from driftwatch.risk.pc import RED_PC, SLOW_ENCOUNTER_KMS, YELLOW_PC
+from driftwatch.risk.pc import RED_PC, YELLOW_PC
 
 log = logging.getLogger(__name__)
 
@@ -58,35 +55,12 @@ MAX_TRACKED_EVENTS = 300
 MAX_DETAIL_PAIRS = 250
 TOP_N = 20
 
-# The benchmark's horizon and calibration (2026-09-05; `docs/calibration-benchmark.md`, README item 6).
-# Quoted, not computed: the benchmark is a stored measurement on Swarm A, B and C against ESA's precise
-# orbits, and the report and the viewer carry it beside every storm number so that none is read
-# without it. Plain text, so the same strings go into the bundle's caveats.
-HORIZON_HEADLINE = (
-    "In the Swarm A/B/C sample, the last tested leads before the 95th-percentile along-track error "
-    "exceeds 25 km are five days in the quiet window, two in May 2024 and one in October 2024. "
-    "These are results for three related spacecraft, not validated horizons for the demo fleet. "
-    "Probabilities remain indicative (docs/calibration-benchmark.md)."
-)
-STORM_CALIBRATION_NOTE = (
-    "Read every storm number here against the benchmark's calibration (2026-09-05; Swarm A, B and C "
-    "against ESA's precise orbits, one orbit class, two storms). The covariance under-covers in a storm: "
-    "two sigma held 65 to 80 per cent of the May 2024 residuals and 62 to 75 per cent of the October 2024 "
-    "ones against the 95 it claims, and nothing here scales it. The storm term with the observed ap helps "
-    "only from about four days of lead (+20 to +48 per cent on the May median from four to seven days) and "
-    "hurts from twelve hours to three days; in a quiet week it hurts from one to six days, because its "
-    "excess is not zero without a storm; and at seven days its shift over-corrects, about 1.5 times the "
-    "actual in May and twice the actual drift in the quiet week. The horizon at 25 km is five, two and "
-    "one days: quiet, May, October."
-)
-
 
 def default_scenario(scenarios: Sequence[str]) -> str:
     """The scenario a report or bundle shows when none is named: ``quiet`` wherever it was scored.
 
-    A storm scenario is chosen explicitly (2026-09-05). The benchmark against precise orbits found
-    the covariance under-covering in a storm and the storm term hurting inside three days, so a storm
-    number is never the one a reader meets first. A run scored without ``quiet`` (a replay scored
+    A storm sensitivity is chosen explicitly. Its baseline event set is fixed and
+    its covariance requires independent calibration. A run scored without ``quiet`` (a replay scored
     under its observed record alone) falls back to its first scenario by name.
     """
     if not scenarios or config.SCENARIO_QUIET in scenarios:
@@ -126,7 +100,7 @@ _FLAG_ORDER = {"none": 0, "yellow": 1, "red": 2}
 
 
 def cumulative_pc(pc: np.ndarray) -> float:
-    """``1 - prod(1 - pc)`` over a pair's events: an upper bound, since the events are not independent."""
+    """``1 - prod(1 - pc)``: an independence-form summary, with no dependence-adjusted bound."""
     p = np.asarray(pc, dtype=float)
     p = p[np.isfinite(p)]
     if not len(p):
@@ -503,6 +477,9 @@ def build_bundle(
         "fleet": info.get("fleet_name") or info.get("fleet"),
         "model_version": info.get("covariance", {}).get("model_version"),
         "scenario": scenario,
+        "analysis_scope": "sensitivity analysis on the baseline event set",
+        "candidate_rediscovery": False,
+        "catalogue_selection_kind": info.get("summary", {}).get("catalogue_selection_kind", ["unknown"]),
         "scenarios": scenarios,
         "window": {"start": info.get("start"), "end": info.get("end")},
         "supplemental": info.get("supplemental"),
@@ -560,7 +537,8 @@ def build_bundle(
             "for a trajectory that already carries the operator's drag model and burns. Their label says so.",
             "A pair's cumulative probability is one minus the product of the complements over its events. "
             "The events are repeated passes of the same two objects propagated from the same two element "
-            "sets, so they are not independent and the true combined probability is lower.",
+            "sets, so they are not independent. Their dependence is unmodelled; "
+            "no combined-probability bound is established.",
             "A flag in the dilution region is reported at low confidence: the probability there is held up "
             "by the size of the covariance rather than by the geometry, and is not actionable. It means the "
             "data cannot support a judgement either way, not that better data would clear the flag. Every "
@@ -938,12 +916,13 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
         "",
         "## The horizon",
         "",
-        f"**Five days, two days, one day.** {HORIZON_HEADLINE}",
+        HORIZON_HEADLINE,
         "",
         "## What this is",
         "",
-        "Every close approach between a fleet member and a catalogue object over the window, with a "
-        "probability of collision built on an uncertainty estimated from how much each object's own "
+        "Catalogue selection: " + ", ".join(info.get("summary", {}).get("catalogue_selection_kind", ["unknown"])) + ".",
+        "Sensitivity analysis on the baseline event set. Candidate discovery is not repeated for perturbed "
+        "trajectories. Stored close approaches carry a probability built on how much each object's own "
         "element sets disagree. Repeated encounters of the same pair are collapsed to one row; the "
         "individual events are underneath each pair and in full in the parquet and JSON.",
         "",
@@ -1046,20 +1025,16 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
     lines += [
         "## How to read this",
         "",
-        "- **The probability is not a forecast.** The covariance comes from how much each object's own "
-        "element sets disagree after propagation. That is a measure of consistency, not of accuracy, and "
-        "it bounds the accuracy in neither direction: successive sets share observations and assumptions, "
-        "so an error common to them is invisible here. The one calibration against an independent truth, "
-        "Swarm A, B and C against ESA's precise orbits (2026-09-05), found it over-covering from one to five "
-        "days in a quiet week and under-covering at every lead in a storm, and nothing here is scaled by it "
-        f"(`docs/screening.md`, `docs/calibration-benchmark.md`). Secondaries here: {sources}.",
+        "- **The probability is not a forecast.** " + STORM_CALIBRATION_NOTE + f" Secondaries here: {sources}.",
         "- **Maximum probability and its scale.** `Max Pc` is the largest probability over covariance scale "
         "factors from 0.1 to 10, with the miss held fixed. Where its scale is above one the covariance is "
         "smaller than the miss and a larger uncertainty would raise the probability; where it is below one "
         "the event is in the dilution region and the flag is not actionable. The sweep is arithmetic on the "
         "numbers in hand, not a forecast of what a better orbit would give.",
-        "- **Cumulative probability is an upper bound.** The events of a pair are repeated passes of the same "
-        "two objects from the same two element sets, so they are not independent.",
+        "- **Cumulative probability uses an independence-form calculation.** Repeated passes share "
+        "orbit errors and are not independent. Their dependence is unmodelled, "
+        "so this summary establishes no bound on the "
+        "true combined probability.",
         "- **The miss quoted is the one under this scenario.** Under `quiet` it is what the two element sets "
         "predicted. Under a storm scenario the term has moved both objects along track first, and this is the "
         "miss its probability was computed from; the per-event tables carry the pre-storm miss beside it, and "
@@ -1103,10 +1078,10 @@ def weekly_report(run: RunDirectory, *, scenario: str | None = None, top_n: int 
     if len(slow):
         flagged_slow = int(is_flagged(slow["flag"]).sum())
         lines.append(
-            f"- **{len(slow)} of these events are slow encounters**, below "
-            f"{SLOW_ENCOUNTER_KMS:g} km/s relative (slowest {slow['rel_speed_kms'].min():.3f} km/s), and "
+            f"- **{len(slow)} of these events are slow encounters**, flagged by transit duration relative to "
+            f"orbital period (slowest {slow['rel_speed_kms'].min():.3f} km/s), and "
             f"{flagged_slow or 'none'} of them {'is' if flagged_slow == 1 else 'are'} flagged. Their "
-            "probability is a **known underestimate**: the two-dimensional method assumes the pair passes in "
+            "probability has unmeasured error direction and magnitude: the two-dimensional method assumes a passage in "
             "a straight line at constant velocity, and a co-orbital pair does not. The flag rests on that "
             "assumption, not on a measured error — the ESA Kelvins reproduction agrees with the operational "
             "risk column on slow rows as closely as on fast ones, which cannot clear the method, because both "

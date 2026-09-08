@@ -1,0 +1,17 @@
+{
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+  "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+  "gp_manifest_sha256": "5a36a1093ac33a14effe606fb8e5c9cf38b013f4e7f164620498696d60e39e08",
+  "mission": "jason-3",
+  "inputs_manifest_sha256": "6f171c325105990c566609d8825fe8f645309266df5e107ecc17c3a992bda926",
+  "trials": "mission-results/jason-3/20260908T105851-c831ebc22446/trials.parquet",
+  "events": "mission-results/jason-3/20260908T105851-c831ebc22446/events.json",
+  "coverage": "mission-results/jason-3/20260908T105851-c831ebc22446/coverage.json",
+  "completed_at": "2026-09-08T11:42:32.964535+00:00",
+  "files": {
+    "mission-results/jason-3/20260908T105851-c831ebc22446/trials.parquet": "fc24b450d99cf97893878454f2de48957d957e357378f0e9b2038c350302f1ba",
+    "mission-results/jason-3/20260908T105851-c831ebc22446/events.json": "a5338d955b09046ec0b16f3a9625b7955c763aae07dc722e474e6078745f932f",
+    "mission-results/jason-3/20260908T105851-c831ebc22446/coverage.json": "a211d4d0cd785fdf59409d2d53bce997bebbe764c628093457c380c495054aa0"
+  }
+}

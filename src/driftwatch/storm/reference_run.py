@@ -8,9 +8,9 @@ laser-ranging normal points of the window are compared with the truth (how the t
 disagree) and with each element set's propagation (a one-dimensional range residual by lead).
 The tables are then by altitude band and window, and by mission and window.
 
-Held out means held out: the covariance and the coefficient used on a window are fitted from the
-history before it, for every mission, and no threshold in this module was chosen by looking at
-October or August.
+All four windows have been inspected. Historical held-out names do not establish
+untouched evaluation populations. Covariance and coefficient fits use history
+before the trial epochs in each window; epoch selection is not publication evidence.
 """
 
 from __future__ import annotations
@@ -29,7 +29,7 @@ from driftwatch import config
 from driftwatch.catalogue import history
 from driftwatch.drag import density as dn
 from driftwatch.orbit.propagator import build_satrecs
-from driftwatch.storm import precise, reference, slr
+from driftwatch.storm import benchmark_statistics, precise, reference, slr
 from driftwatch.storm.precise import BenchmarkWindow, PreciseOrbit, ThrusterRecord
 from driftwatch.storm.reference import Mission
 
@@ -155,6 +155,11 @@ def run_mission_window(
     day_to = window.truth_to.date()
     notes: list[str] = []
     orbit, record = reference.load_truth(mission, day_from, day_to, cache_dir=cache_dir, offline=offline)
+    if record is not None and (not getattr(record, "authoritative", True) or record.days_missing):
+        raise RuntimeError(
+            f"published manoeuvre coverage unavailable for {mission.key}: "
+            f"{getattr(record, 'issues', record.days_missing)}"
+        )
     if orbit is not None and not len(orbit.table):
         notes.append("no truth states in the window")
         orbit = None
@@ -179,9 +184,10 @@ def run_mission_window(
     trials = None
     fits: list[dict[str, Any]] = []
     if orbit is not None and n_sets:
-        label = {reference.MANOEUVRES_ESA: "esa-record", reference.MANOEUVRES_GRACEFO: "thr1b-record"}.get(
-            mission.manoeuvres, "esa-record"
-        )
+        label = getattr(record, "source_id", None) or {
+            reference.MANOEUVRES_ESA: "esa-record",
+            reference.MANOEUVRES_GRACEFO: "thr1b-record",
+        }.get(mission.manoeuvres, "published-record")
         trials = precise.satellite_trials(
             inputs, orbit, window, grid, record=record, record_label=label, detected=detected_orbit + detected_sets
         )
@@ -251,7 +257,7 @@ def _horizon(by_lead: dict[str, dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
-def summarise_group(frame: pd.DataFrame) -> dict[str, Any]:
+def _legacy_summarise_group(frame: pd.DataFrame) -> dict[str, Any]:
     """The Swarm benchmark's per-window summary on any set of trials, plus which missions and sets are in it."""
     usable = frame[~frame["gap"] & ~frame["manoeuvre"] & (frame["sgp4_error"] == 0)]
     by_lead: dict[str, dict[str, Any]] = {}
@@ -296,13 +302,58 @@ def summarise_group(frame: pd.DataFrame) -> dict[str, Any]:
     }
 
 
+def summarise_group(frame: pd.DataFrame, *, include_sensitivities: bool = True) -> dict[str, Any]:
+    """Auditable denominators and brackets, with aliases for existing consumers."""
+    out = benchmark_statistics.summarise_group(
+        frame,
+        leads_hours=precise.LEADS_HOURS,
+        tolerance_km=precise.HORIZON_TOLERANCE_KM,
+        include_sensitivities=include_sensitivities,
+    )
+    legacy = _legacy_summarise_group(frame)
+    for key in ("n_missions", "n_excluded_gap", "n_excluded_manoeuvre", "altitude_km"):
+        out[key] = legacy[key]
+    out["n_sets"] = out["n_sets_total"]
+    for lead, cell in out["by_lead_h"].items():
+        g = frame[(frame["lead_h"] == float(lead)) & ~frame["gap"] & ~frame["manoeuvre"] & (frame["sgp4_error"] == 0)]
+        for component, component_result in cell["components"].items():
+            cov = component_result["coverage"] or {}
+            cell[component] = {
+                "median_km": component_result["median_abs_km"],
+                "p68_km": _q(g[f"{component}_km"].abs().to_numpy(), 0.68),
+                "p95_km": component_result["quantile_abs_km"]["linear"],
+                "inside_1_sigma": cov.get("inside_1_sigma_fraction"),
+                "inside_2_sigma": cov.get("inside_2_sigma_fraction"),
+            }
+        sources = g["b_source"].value_counts().to_dict() if "b_source" in g else {}
+        supported = g[g["b_source"].eq("history")] if "b_source" in g else g.iloc[:0]
+        supported = supported.dropna(subset=["storm_shift_km", "in_track_corrected_km"])
+        raw = supported["in_track_km"].abs().to_numpy()
+        corrected = supported["in_track_corrected_km"].abs().to_numpy()
+        raw_median, corrected_median = _q(raw, 0.5), _q(corrected, 0.5)
+        cell["storm_term"] = {
+            "status": "supported_history_coefficient" if len(supported) else "unsupported",
+            "coefficient_source_counts": sources,
+            "n": len(supported),
+            "n_unsupported": len(g) - len(supported),
+            "median_abs_raw_km": raw_median,
+            "median_abs_corrected_km": corrected_median,
+            "median_abs_shift_km": _q(supported["storm_shift_km"].abs().to_numpy(), 0.5),
+            "improvement": 1 - corrected_median / raw_median if raw_median else None,
+            "share_of_trials_improved": float((corrected < raw).mean()) if len(supported) else None,
+        }
+    return out
+
+
 def summarise_trials(trials: pd.DataFrame) -> dict[str, Any]:
     """By altitude band and window, and by mission and window."""
     out: dict[str, Any] = {"by_band": {}, "by_mission": {}}
     for band, bf in trials.groupby("altitude_band", sort=False):
         out["by_band"][band] = {w: summarise_group(wf) for w, wf in bf.groupby("window", sort=False)}
     for mission, mf in trials.groupby("mission", sort=False):
-        out["by_mission"][mission] = {w: summarise_group(wf) for w, wf in mf.groupby("window", sort=False)}
+        out["by_mission"][mission] = {
+            w: summarise_group(wf, include_sensitivities=False) for w, wf in mf.groupby("window", sort=False)
+        }
     return out
 
 
@@ -357,6 +408,40 @@ POST_BURN_SETS = 3
 def _naive(ts: Any) -> pd.Timestamp:
     t = pd.Timestamp(ts)
     return t.tz_convert(None) if t.tzinfo else t
+
+
+def detector_crosscheck(
+    recorded: list[tuple[pd.Timestamp, pd.Timestamp]] | None,
+    detected: list[tuple[pd.Timestamp, pd.Timestamp]],
+) -> dict[str, Any]:
+    """Event-level overlap with published intervals; absence from a registry is not proof of no burn."""
+    if recorded is None:
+        return {"reference_available": False, "record_count": None, "misses": None, "unmatched_detections": None}
+    misses = [(a, b) for a, b in recorded if not precise._overlaps(detected, _naive(a), _naive(b))]
+    unmatched = [(a, b) for a, b in detected if not precise._overlaps(recorded, _naive(a), _naive(b))]
+    return {
+        "reference_available": True,
+        "record_count": len(recorded),
+        "matched_record_count": len(recorded) - len(misses),
+        "misses": [[a.isoformat(), b.isoformat()] for a, b in misses],
+        "unmatched_detections": [[a.isoformat(), b.isoformat()] for a, b in unmatched],
+        "matching_rule": "closed-interval overlap; detector intervals retain their timing uncertainty",
+        "limitation": "published registry completeness is not established by an empty interval list",
+    }
+
+
+def record_provenance(record: ThrusterRecord | None) -> dict[str, Any] | None:
+    if record is None:
+        return None
+    return {
+        **(record.as_metadata() if hasattr(record, "as_metadata") else {}),
+        "source_id": getattr(record, "source_id", "spacecraft-thruster-product"),
+        "files": record.files,
+        "days_missing": [d.isoformat() for d in record.days_missing],
+        "sources": getattr(record, "provenance", []),
+        "coverage_status": getattr(record, "coverage_status", "daily-products-complete"),
+        "issues": getattr(record, "issues", []),
+    }
 
 
 def burn_intervals(entry: dict[str, Any]) -> tuple[list[tuple[pd.Timestamp, pd.Timestamp]], str]:
@@ -447,7 +532,8 @@ def summarise_post_burn(trials: pd.DataFrame, coverage: dict[str, Any], windows:
                 clear = {
                     f"{ld:g}": _q(usable[usable["lead_h"] == ld]["in_track_km"].abs().to_numpy(), 0.5) for ld in leads
                 }
-                later = [(a, b) for a, b in intervals + detected_sets if a > mid]
+                later_intervals = intervals if source == "record" else intervals + detected_sets
+                later = [(a, b) for a, b in later_intervals if a > mid]
                 rows = []
                 for k, epoch in enumerate(after[:POST_BURN_SETS], start=1):
                     sub = g[g["set_epoch"] == epoch]
@@ -603,6 +689,14 @@ def run_reference(
     sgp4_vs_slr = pd.concat(slr_frames, ignore_index=True) if slr_frames else pd.DataFrame()
     mission_map = {m.key: m for m in missions}
     summary: dict[str, Any] = {
+        "execution": {
+            "requested_mission_windows": len(missions) * len(windows),
+            "failed_mission_windows": [
+                {"mission": r.mission.key, "window": r.window.name, "notes": r.notes}
+                for r in runs
+                if any(note.startswith("failed:") for note in r.notes)
+            ],
+        },
         "trial": "one element set; one residual per lead bin",
         "windows": {w.name: w.as_dict() for w in windows},
         "missions": {
@@ -630,6 +724,13 @@ def run_reference(
                     "manoeuvres_recorded": None
                     if r.record is None
                     else [[a.isoformat(), b.isoformat()] for a, b in r.record.intervals],
+                    "manoeuvre_record_provenance": record_provenance(r.record),
+                    "orbit_detector_crosscheck": detector_crosscheck(
+                        None if r.record is None else r.record.intervals, r.manoeuvres_detected_orbit
+                    ),
+                    "element_detector_crosscheck": detector_crosscheck(
+                        None if r.record is None else r.record.intervals, r.manoeuvres_detected_sets
+                    ),
                     "manoeuvres_detected_orbit": [
                         [a.isoformat(), b.isoformat()] for a, b in r.manoeuvres_detected_orbit
                     ],
@@ -669,7 +770,8 @@ def population_statement(missions: list[Mission], windows: list[BenchmarkWindow]
     return (
         "The measured population is "
         + "; ".join(parts)
-        + f"; {len(windows)} windows of one week of element sets each; near-circular, free-flying between manoeuvres, "
+        + f"; {len(windows)} windows with epoch bounds stated in the result; "
+        "near-circular, free-flying between manoeuvres, "
         "with manoeuvre arcs excluded from a published record where one exists and from detection otherwise. "
         "Nothing here is measured for debris, for eccentric orbits, for station-kept constellations, for objects "
         "the network tracks less often, or above 1,340 km."
@@ -686,13 +788,12 @@ def _lead(h: float) -> str:
 
 def _horizon_text(h: dict[str, Any]) -> str:
     within, beyond = h.get("last_lead_h_within"), h.get("first_lead_h_beyond")
-    if within is None and beyond is None:
-        return "-"
-    if beyond is None:
-        return f"{_lead(within)} (every lead measured)"
-    if within is None:
-        return f"under {_lead(beyond)} ({h['quantile_km_there']:.0f} km there)"
-    return f"{_lead(within)} ({h['quantile_km_there']:.0f} km at {_lead(beyond)})"
+    passed = "none" if within is None else _lead(within)
+    if beyond is not None:
+        return f"last passing {passed}; first failing {_lead(beyond)}"
+    if h.get("termination") == "longest_tested_lead":
+        return "passes through the longest tested lead"
+    return f"last passing {passed}; no measured failure; coverage censored"
 
 
 # The methodology correction of 7 September 2026 stays on the page, with the two tables as they stood before it.
@@ -802,12 +903,15 @@ def _post_burn_fit_lines(burns: list[dict[str, Any]], names: dict[str, str], key
         "1.4826 times the median absolute deviation), and the set's error is measured "
         "against the orbit at its own epoch, not the plateau after the burn, because a decaying orbit has moved on "
         "by then. The fraction of the burn a set contains is one plus that error over the burn: at or under "
-        f"{precise.POST_BURN_FRACTION_PRE:g} the set is a pre-burn fit with its epoch advanced past the burn, at or "
-        f"over {precise.POST_BURN_FRACTION_POST:g} it contains the burn, between the two it was fitted across it; a "
+        f"{precise.POST_BURN_FRACTION_PRE:g} the energy is compatible with retaining the pre-manoeuvre orbit despite "
+        f"the later epoch; at or over {precise.POST_BURN_FRACTION_POST:g} it is compatible with post-manoeuvre energy; "
+        "between these thresholds the fraction is mixed. These classes do not identify the catalogue's "
+        "fitting procedure. A "
         f"burn under {precise.POST_BURN_RESOLVE_SIGMAS:g} scatters is unresolved. The drift the error predicts, "
         "three halves of the mean motion times the error times the lead, is beside the observed residual, signed as "
-        "the benchmark signs it (positive when the satellite is ahead of the set). The thresholds were fixed before "
-        "any set was classified.",
+        "the benchmark signs it (positive when the satellite is ahead of the set). The thresholds are an "
+        "author-reported pre-execution choice; the first commit carrying them also carried results. "
+        "Epoch spacing is not publication cadence.",
         "",
         "| Mission | Window | Burn (m) | Clean sets: n, offset, scatter (m) | First set after: delay, error at its "
         f"epoch (m), fraction, class | Observed / predicted at {_lead(float(lead_a))} (km) "
@@ -936,269 +1040,205 @@ def to_markdown(
     missions: list[Mission],
     rendered_at: datetime | None = None,
 ) -> str:
-    """The page; ``rendered_at`` dates a re-render from the stored files, and the run's own date is kept beside it."""
-    s = result.summary
-    order = [w.name for w in windows]
-    bands = [b for _, _, b in reference.ALTITUDE_BANDS if b in s["results"]["by_band"]]
-    lines = [
-        "# Calibration against reference orbits: the population beyond Swarm",
-        "",
-        "Every number here is computed from the per-trial file beside `reference_benchmark.json`. The method is the "
-        "Swarm benchmark's (`docs/calibration-benchmark.md`): every public element set issued in a window is one "
-        "trial, propagated with SGP4 to leads from six hours to seven days and measured against the mission's "
-        "reconstructed orbit in the satellite's radial, in-track, cross-track frame; the covariance and the ballistic "
-        "coefficient on a window are fitted from history that ends where the window's sets begin. Two windows are held "
-        "out from every tuning, October 2024 as before and August 2024 added here. Laser ranging is the second, "
-        "independent truth where a mission carries a retroreflector: it is compared with the reconstructed orbit "
-        "first, so that the disagreement between the two references is on the page before either is compared with "
-        "an element set.",
-        "",
-        f"**Population.** {s['population']}",
-        "",
-        "## Windows",
-        "",
-        "| Window | Role | Element sets issued | Truth needed to | Disturbed interval | Note |",
-        "| --- | --- | --- | --- | --- | --- |",
-    ]
-    for w in windows:
-        d = f"{w.disturbed[0]:%Y-%m-%d %H:%M} to {w.disturbed[1]:%Y-%m-%d %H:%M}" if w.disturbed else "none"
-        lines.append(
-            f"| {w.name} | {w.role} | {w.sets_from:%Y-%m-%d} to {w.sets_to:%Y-%m-%d} | {w.truth_to:%Y-%m-%d} "
-            f"| {d} | {w.note} |"
+    """Render the stored corrected summary without historical hardcoded claims."""
+    import json
+
+    summary = result.summary
+    names = {mission.key: mission.name for mission in missions}
+
+    def number(value, *, percent=False):
+        if value is None:
+            return "unavailable"
+        return f"{value:.1%}" if percent else f"{value:.4g}"
+
+    def table(headers, rows):
+        def clean(value):
+            return str(value).replace("|", "/").replace("\n", " ")
+
+        return "\n".join(
+            [
+                "| " + " | ".join(headers) + " |",
+                "| " + " | ".join("---" for _ in headers) + " |",
+                *("| " + " | ".join(clean(value) for value in row) + " |" for row in rows),
+            ]
         )
-    lines += [
-        "",
-        "## Missions and their truth",
-        "",
-        "| Mission | NORAD | Band | Reconstructed orbit | Manoeuvres | Laser ranging | Sets per window ("
-        + ", ".join(order)
-        + ") | Truth coverage |",
-        "| --- | ---: | --- | --- | --- | --- | --- | --- |",
-    ]
-    for m in missions:
-        cov = s["coverage"][m.key]
-        n_sets = ", ".join(str(cov[w]["n_trial_sets"]) for w in order)
-        gaps = []
-        for w in order:
-            c = cov[w]
-            if c["truth_states"] == 0:
-                gaps.append(f"{w}: none")
-            elif c["truth_days_missing"]:
-                gaps.append(f"{w}: {len(c['truth_days_missing'])} day(s) missing")
-        coverage = "; ".join(gaps) if gaps else "complete"
-        truth = {
-            reference.TRUTH_SWARM: "ESA Swarm SP3 (TU Delft)",
-            reference.TRUTH_GRACEFO: "JPL GNV1B via GFZ ISDC",
-            reference.TRUTH_CNES: "CNES POE via IDS",
-            reference.TRUTH_S1: "Copernicus POEORB via ESA STEP",
-            reference.TRUTH_NONE: "none anonymous",
-        }[m.truth]
-        man = {
-            reference.MANOEUVRES_ESA: "ESA thruster record",
-            reference.MANOEUVRES_GRACEFO: "THR1B thruster record",
-            reference.MANOEUVRES_DETECTION: "detection",
-        }[m.manoeuvres]
-        lines.append(
-            f"| {m.name} | {m.norad_id} | {reference.altitude_band_label(m.altitude_km)} | {truth} | {man} | "
-            f"{m.slr or 'none'} | {n_sets} | {coverage} |"
-        )
-    lines += ["", "**Asked for and not obtainable without an account, said rather than substituted.**", ""]
-    for k, v in s["not_covered"].items():
-        lines.append(f"- **{k}.** {v}")
-    lines += [
-        "",
-        "## The horizon by altitude band and window",
-        "",
-        f"Task: in-track residual within {precise.HORIZON_TOLERANCE_KM:g} km, the screening box's half-width, at the "
-        f"{precise.HORIZON_QUANTILE:.0%} of trials; the last lead within it, with the 95th percentile at the first "
-        "lead beyond it in brackets.",
-        "",
-        "| Altitude band | Missions | " + " | ".join(order) + " |",
-        "| --- | --- | " + " | ".join("---" for _ in order) + " |",
-    ]
-    names = {m.key: m.name for m in missions}
-    for b in bands:
-        by_w = s["results"]["by_band"][b]
-        ms = sorted({names.get(k, k) for w in by_w.values() for k in w["missions"]})
-        cells = [_horizon_text(by_w[w]["horizon"]) if w in by_w else "-" for w in order]
-        lines.append(f"| {b} | {', '.join(ms)} | " + " | ".join(cells) + " |")
-    lines += [
-        "",
-        "### The in-track residual by band, window and lead",
-        "",
-        "Median and 95th percentile of the absolute in-track residual, km, with the number of trials; per band and "
-        "window.",
-        "",
-    ]
-    for b in bands:
-        by_w = s["results"]["by_band"][b]
-        lines += [
-            f"**{b}.**",
-            "",
-            "| Lead | " + " | ".join(f"{w}: n, median, p95" for w in order) + " |",
-            "| ---: | " + " | ".join("---" for _ in order) + " |",
-        ]
-        leads = sorted({float(k) for w in by_w.values() for k in w["by_lead_h"]})
-        for lead in leads:
-            cells = []
-            for w in order:
-                e = by_w.get(w, {}).get("by_lead_h", {}).get(f"{lead:g}")
-                if e is None:
-                    cells.append("-")
-                else:
-                    cells.append(f"{e['n']}, {e['in_track']['median_km']:.2f}, {e['in_track']['p95_km']:.1f}")
-            lines.append(f"| {_lead(lead)} | " + " | ".join(cells) + " |")
-        lines.append("")
-    lines += [
-        "### Coverage of the empirical covariance, and the storm term, by band",
-        "",
-        "The share of in-track residuals inside two sigma of the covariance the screening would have carried (95 per "
-        "cent claimed), and the storm term's change to the median absolute in-track residual, at one, three and seven "
-        "days; a positive improvement means the term brought the prediction closer to the truth. The term needs a "
-        "ballistic coefficient fitted from the object's own decay, which is not measurable at the higher altitudes, so "
-        "those cells are empty.",
-        "",
-        "| Band | Window | 2σ at 24 h / 72 h / 168 h | Storm term at 24 h / 72 h / 168 h |",
-        "| --- | --- | --- | --- |",
-    ]
-    for b in bands:
-        for w in order:
-            e = s["results"]["by_band"][b].get(w)
-            if e is None:
-                continue
-            cov_cells, term_cells = [], []
-            for lead in ("24", "72", "168"):
-                x = e["by_lead_h"].get(lead)
-                if x is None:
-                    cov_cells.append("-")
-                    term_cells.append("-")
-                    continue
-                cov_cells.append(f"{x['in_track']['inside_2_sigma']:.0%}")
-                t = x["storm_term"]
-                term_cells.append(f"{t['improvement']:+.0%}" if t["n"] and t["improvement"] is not None else "-")
-            lines.append(f"| {b} | {w} | {' / '.join(cov_cells)} | {' / '.join(term_cells)} |")
-    lines += [
-        "",
-        "## The horizon by mission and window",
-        "",
-        "| Mission | Band | " + " | ".join(order) + " |",
-        "| --- | --- | " + " | ".join("---" for _ in order) + " |",
-    ]
-    for m in missions:
-        by_w = s["results"]["by_mission"].get(m.key)
-        if not by_w:
-            continue
-        cells = [
-            _horizon_text(by_w[w]["horizon"]) + f" ({by_w[w]['n_sets']} sets)" if w in by_w else "-" for w in order
-        ]
-        lines.append(f"| {m.name} | {reference.altitude_band_label(m.altitude_km)} | " + " | ".join(cells) + " |")
-    lines += CORRECTION_2026_09_07
-    lines += _post_burn_section(s["results"].get("post_burn") or {}, names)
-    lines += [
-        "",
-        "## Laser ranging: how the two references disagree",
-        "",
-        "Observed minus predicted one-way range of the reconstructed orbit against every ILRS normal point of the "
-        "window above 20 degrees of elevation, metres: the median, the RMS and the 95th percentile of the absolute "
-        "residual, with the number of points and stations. Marini-Murray troposphere from the station's own "
-        "meteorology; station coordinates SLRF2020 with the ILRS site eccentricities; the retroreflector's offset from "
-        "the centre of mass is not applied, so the figures bound the disagreement at the metre level and do not "
-        "validate either product at its own centimetre level.",
-        "",
-        "| Mission | Window | n | Stations | Median (m) | RMS (m) | p95 of |residual| (m) |",
-        "| --- | --- | ---: | ---: | ---: | ---: | ---: |",
-    ]
-    for m in missions:
-        for w in order:
-            o = s["coverage"][m.key][w]["orbit_vs_slr"]
-            if not o or not o.get("n"):
-                continue
-            lines.append(
-                f"| {m.name} | {w} | {o['n']} | {o['n_stations']} | {o['median_m']:+.2f} | {o['rms_m']:.2f} "
-                f"| {o['p95_abs_m']:.2f} |"
-            )
-    lines += [
-        "",
-        "### The element set against the laser, by band, window and lead",
-        "",
-        "The same range residual for each element set's SGP4 propagation to the normal points inside its leads, km, "
-        "absolute, median and 95th percentile with the number of points and sets. A range residual is one projection "
-        "of the position error, so it is smaller than the in-track residual it accompanies; for the missions without a "
-        "reconstructed orbit it is the only truth.",
-        "",
-        "| Band | Window | Missions | 6 h | 24 h | 72 h | 168 h |",
-        "| --- | --- | --- | --- | --- | --- | --- |",
-    ]
-    for b, by_w in s["sgp4_vs_slr"].items():
-        for w in order:
-            e = by_w.get(w)
-            if e is None:
-                continue
-            cells = []
-            for lead in ("6", "24", "72", "168"):
-                x = e.get(lead)
-                cells.append(
-                    "-" if x is None else f"{x['median_km']:.2f} / {x['p95_km']:.1f} ({x['n']}, {x['n_sets']})"
+
+    horizon_rows, lead_rows = [], []
+    definition = None
+    for scope in ("by_band", "by_mission"):
+        for population, by_window in summary["results"][scope].items():
+            for window, group in by_window.items():
+                if "definition" not in group:
+                    raise ValueError("Re-summarise stored trials with the corrected statistics before rendering")
+                definition = group["definition"]
+                sensitivity = group.get("sensitivities", {})
+                spacecraft = sensitivity.get("leave_one_spacecraft_out", {})
+                deletion = (
+                    "; ".join(
+                        f"omit {names.get(mission, mission)}: {_horizon_text(value['empirical_coverage'])}"
+                        for mission, value in spacecraft.items()
+                    )
+                    or "not computed for this scope"
                 )
-            ms = ", ".join(names.get(k, k) for k in e["missions"])
-            lines.append(f"| {b} | {w} | {ms} | " + " | ".join(cells) + " |")
-    laser_only = [m for m in missions if m.truth == reference.TRUTH_NONE and m.slr]
-    by_mission = s.get("sgp4_vs_slr_by_mission", {})
-    if laser_only and by_mission:
-        lines += [
-            "",
-            "### The missions whose only truth is the laser",
-            "",
-            "The same range residual per mission and window for the missions with no reconstructed orbit on an "
-            "anonymous server: this is all that is measured for them, and the per-mission rows for every other "
-            "mission are in the JSON beside this page.",
-            "",
-            "| Mission | Window | Sets, stations | 6 h | 24 h | 72 h | 168 h |",
-            "| --- | --- | --- | --- | --- | --- | --- |",
-        ]
-        for m in laser_only:
-            for w in order:
-                e = by_mission.get(m.key, {}).get(w)
-                if e is None:
-                    continue
-                cells = []
-                for lead in ("6", "24", "72", "168"):
-                    x = e.get(lead)
-                    cells.append("-" if x is None else f"{x['median_km']:.2f} / {x['p95_km']:.1f} ({x['n']})")
-                lines.append(f"| {m.name} | {w} | {e['n_sets']}, {e['n_stations']} | " + " | ".join(cells) + " |")
-    lines += [
+                sets = sensitivity.get("leave_one_set_out", {})
+                horizon_rows.append(
+                    [
+                        scope,
+                        names.get(population, population),
+                        window,
+                        group["n_sets_total"],
+                        group["n_sets_usable"],
+                        _horizon_text(group["horizon"]),
+                        _horizon_text(group["horizons_by_criterion"]["linear_quantile"]),
+                        deletion,
+                        f"{sets.get('n_changed', 'unavailable')}/{sets.get('n_deletions', 'unavailable')}",
+                    ]
+                )
+                for lead, cell in group["by_lead_h"].items():
+                    component = cell["components"]["in_track"]
+                    components = []
+                    for name, value in cell["components"].items():
+                        coverage = value["coverage"]
+                        if coverage is None:
+                            components.append(f"{name}: sigma unavailable")
+                            continue
+                        components.append(
+                            f"{name}: median |error| {number(value['median_abs_km'])} km; "
+                            f"median sigma {number(coverage['median_sigma_km'])} km; "
+                            f"inside 1sigma {coverage['inside_1_sigma_count']}/{coverage['n']}; "
+                            f"inside 2sigma {coverage['inside_2_sigma_count']}/{coverage['n']}; "
+                            f"invalid {coverage['n_invalid_pairs']}"
+                        )
+                    term = cell.get("storm_term", {})
+                    lead_rows.append(
+                        [
+                            scope,
+                            names.get(population, population),
+                            window,
+                            lead,
+                            cell["n_total"],
+                            cell["n"],
+                            "; ".join(
+                                f"{names.get(mission, mission)}: {count}"
+                                for mission, count in cell["mission_counts"].items()
+                            )
+                            or "none",
+                            f"{cell['exceedance_count']}/{cell['n']} "
+                            f"({number(cell['exceedance_fraction'], percent=True)})",
+                            number(component["median_abs_km"]),
+                            number(component["quantile_abs_km"]["linear"]),
+                            number(component["quantile_abs_km"]["inverted_cdf"]),
+                            "; ".join(components),
+                            term.get("status", "not reported"),
+                        ]
+                    )
+    lines = [
+        "# Record-controlled reference benchmark",
         "",
-        "## Sources, with origin and derivation",
+        "This CLI page is generated from the corrected stored reference summary. The publication, "
+        "archived comparisons and full component deletion sensitivities are generated by "
+        "`scripts/render_paper_v2.py` in [the canonical publication](paper.md).",
+        "",
+        "An element-set epoch selects each trial; epoch spacing is not publication cadence. "
+        "Published manoeuvre records govern exclusions where available, including authoritative empty "
+        "interval lists. Missing record coverage is explicit. Detector intervals remain the labelled "
+        "fallback for other missions and auxiliary checks for recorded missions.",
         "",
     ]
-    for src in reference.mission_sources_record(missions, result.built_at):
-        if "items" in src:
-            lines.append(f"- **{src['source']}.** " + " ".join(f"{k}: {v}." for k, v in src["items"].items()))
-        else:
-            lines.append(
-                f"- **{src['source']}.** Retrieved {src['retrieved_at'][:10]}. Missions: {', '.join(src['missions'])}."
+    if definition:
+        lines += [
+            f"Primary criterion: at least {number(definition['quantile'], percent=True)} of finite usable "
+            f"absolute in-track errors within {number(definition['tolerance_km'])} km, on the planned lead grid "
+            f"{definition['leads_hours']} hours. Linear and inverted-CDF quantiles are reported separately. "
+            "Missing coverage censors the supported interval; a threshold failure is a different termination. "
+            "Deletion results are descriptive stability checks, not confidence intervals. These previously "
+            "examined windows are an exploratory corrected benchmark.",
+            "",
+        ]
+    lines += [
+        "## Horizons, counts and deletion checks",
+        "",
+        table(
+            [
+                "Scope",
+                "Population",
+                "Window",
+                "All sets",
+                "Usable sets at any lead",
+                "Primary empirical endpoints",
+                "Linear-quantile endpoints",
+                "Remove one spacecraft",
+                "Set deletions changing a criterion / tested",
+            ],
+            horizon_rows,
+        ),
+        "",
+        "## Every planned lead and component",
+        "",
+        table(
+            [
+                "Scope",
+                "Population",
+                "Window",
+                "Lead h",
+                "All pairs",
+                "Finite usable n",
+                "Mission composition",
+                "Exceedances / n",
+                "Median |I| km",
+                "Linear quantile km",
+                "Inverted-CDF quantile km",
+                "Component residuals and sigma coverage",
+                "Storm-term support",
+            ],
+            lead_rows,
+        ),
+        "",
+        "## Exclusion sources and coverage",
+        "",
+    ]
+    rows = []
+    for mission, by_window in summary.get("coverage", {}).items():
+        for window, coverage in by_window.items():
+            record = coverage.get("manoeuvre_record_provenance")
+            recorded = coverage.get("manoeuvres_recorded")
+            rows.append(
+                [
+                    names.get(mission, mission),
+                    window,
+                    "detector fallback" if record is None else record.get("source_id", "published record"),
+                    "not integrated" if record is None else record.get("coverage_status"),
+                    "unavailable" if recorded is None else len(recorded),
+                    json.dumps(record, sort_keys=True) if record else "no published-record metadata",
+                    json.dumps(coverage.get("orbit_detector_crosscheck"), sort_keys=True),
+                ]
             )
     lines += [
-        f"- **Laser ranging.** {slr.EDC_SOURCE}; {slr.SLRF2020_SOURCE}; {slr.ECCENTRICITY_SOURCE}. Derivation: one-way "
-        "range as the mean of the up and down legs with the light time iterated in TEME; Marini-Murray troposphere; "
-        "elevation cut 20 degrees; no centre-of-mass correction.",
-        "- **Public element sets.** Space-Track gp_history through driftwatch's history backfill, each set propagated "
-        f"with sgp4 to leads {list(precise.LEADS_HOURS)} hours from its epoch; covariance from the "
-        f"{precise.COVARIANCE_HISTORY_DAYS} days before each window, coefficient from the "
-        f"{precise.COEFFICIENT_HISTORY_DAYS}.",
+        table(
+            [
+                "Mission",
+                "Window",
+                "Authority",
+                "Coverage",
+                "Loaded published intervals",
+                "Provenance",
+                "Orbit detector check",
+            ],
+            rows,
+        ),
         "",
-        "## What this does not show",
-        "",
-        "- One week of sets per window and per mission; a mission's horizon rests on a few dozen sets.",
-        "- No published manoeuvre record was found on an anonymous server for the CNES, Copernicus and laser-only "
-        "missions, so detection decides their exclusions; a burn the detector misses lengthens a residual, and a storm "
-        "the detector reads as a burn removes a trial. Both directions are possible and neither is measured here.",
-        "- The laser comparison bounds the reconstructed orbits at the metre level only, for the reasons above.",
-        "- Jason-3 and Sentinel-6A fly at 1,336 km, just above the 1,300 km asked for; they are the top of the range.",
+        "Published registries do not independently prove exhaustive firing reports. Loaded record products "
+        "include date padding, so unmatched intervals must be classified by their overlap with actual scored "
+        "arcs; detector differencing also needs surrounding states. The canonical supplement reports those "
+        "individual scopes and mask effects. Swarm and GRACE-FO provide different mission/producer checks "
+        "within a GNSS-derived reference family. Sampled laser ranges constrain range error on observed passes "
+        "and do not establish a complete three-dimensional tail distribution. No operational reliability "
+        "probability or unobserved catalogue-processing mechanism is inferred here.",
         "",
         _last_updated(result.built_at, rendered_at),
+        "",
     ]
-    return "\n".join(lines) + "\n"
+    return "\n".join(lines)
 
 
 def _last_updated(built_at: datetime, rendered_at: datetime | None) -> str:

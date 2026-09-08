@@ -14,7 +14,9 @@ from driftwatch.catalogue.snapshot import (
     read_snapshot,
     records_to_frame,
     snapshot_as_of,
+    snapshot_fetched_at,
     snapshot_path,
+    snapshot_problem,
     snapshot_summary,
     write_snapshot,
 )
@@ -81,7 +83,7 @@ def test_build_snapshot_dedupes_and_joins(omm_records, tmp_path):
     path = write_snapshot(df, snapshot_path(fetched_at, tmp_path), groups=list(groups))
     assert path.name == "gp_20260901T120000Z.parquet"
     meta = pq.read_metadata(path).metadata
-    assert meta[b"driftwatch_schema_version"] == b"1"
+    assert meta[b"driftwatch_schema_version"] == b"2"
     back = read_snapshot(path)
     assert len(back) == len(df)
     assert list(back.columns) == list(df.columns)
@@ -149,12 +151,7 @@ def test_latest_snapshot_orders_by_stamp(omm_records, tmp_path):
 
 
 def test_a_historical_snapshot_takes_the_newest_set_before_the_date_and_nothing_after(omm_records):
-    """The trap this exists to avoid: an element set issued *after* the date already knows.
-
-    A storm validation built on a set from 12 May would "predict" the drag that set was fitted
-    to, and would come out beautifully right for the worst possible reason. So the rule is the
-    one an operator screening on that day was under: the newest fit published by then.
-    """
+    """Epoch selection rejects future state epochs but makes no publication-availability claim."""
     base = records_to_frame(omm_records).iloc[:1]
     epochs = [
         datetime(2024, 5, 6, tzinfo=UTC),
@@ -168,12 +165,14 @@ def test_a_historical_snapshot_takes_the_newest_set_before_the_date_and_nothing_
     assert len(out) == 1
     assert out["epoch"].iloc[0] == pd.Timestamp("2024-05-08 12:00", tz="UTC")
     assert out["mean_motion"].iloc[0] == pytest.approx(16.0)
-    # The snapshot is stamped with the date it reconstructs, not with when it was built.
-    assert out["fetched_at"].iloc[0] == pd.Timestamp("2024-05-09", tz="UTC")
+    assert out["fetched_at"].isna().all()
+    assert out["retrieved_at"].isna().all()
+    assert out["epoch_selection_as_of"].iloc[0] == pd.Timestamp("2024-05-09", tz="UTC")
+    assert out["selection_kind"].iloc[0] == "epoch-based reconstruction"
 
 
 def test_a_historical_snapshot_drops_objects_whose_newest_set_is_too_stale(omm_records):
-    """An object that stopped being tracked long before the date was not screenable on it."""
+    """The optional age limit applies to state epoch, not product availability."""
     base = records_to_frame(omm_records).iloc[:2].reset_index(drop=True)
     base["source"] = "gp_history"
     fresh = base.iloc[[0]].assign(epoch=pd.Timestamp("2024-05-08", tz="UTC"))
@@ -187,6 +186,55 @@ def test_a_historical_snapshot_drops_objects_whose_newest_set_is_too_stale(omm_r
 
     with pytest.raises(ValueError, match="at or before"):
         snapshot_as_of(sets, None, as_of=datetime(2023, 1, 1, tzinfo=UTC))
+
+
+def test_late_publication_remains_distinct_in_epoch_reconstruction(omm_records, tmp_path):
+    sets = records_to_frame(omm_records).iloc[:1].copy()
+    sets["epoch"] = pd.Timestamp("2024-05-08T00:00:00Z")
+    sets["provider_created_at"] = pd.Timestamp("2024-05-08T01:00:00Z")
+    sets["published_at"] = pd.Timestamp("2024-05-10T00:00:00Z")
+    sets["fetched_at"] = pd.Timestamp("2026-09-08T10:00:00Z")
+    sets["source"] = "test"
+    out = snapshot_as_of(
+        sets, None, as_of=datetime(2024, 5, 9, tzinfo=UTC), reconstructed_at=datetime(2026, 9, 8, 11, tzinfo=UTC)
+    )
+    assert len(out) == 1  # Epoch reconstruction may include the late publication.
+    assert out.state_epoch.iloc[0] < out.epoch_selection_as_of.iloc[0] < out.published_at.iloc[0]
+    assert out.provider_created_at.iloc[0] != out.published_at.iloc[0]
+    assert out.retrieved_at.iloc[0] == sets.fetched_at.iloc[0]
+    assert out.fetched_at.iloc[0] == sets.fetched_at.iloc[0]
+    assert out.reconstructed_at.iloc[0] > out.retrieved_at.iloc[0]
+    assert out.selection_kind.iloc[0] == "epoch-based reconstruction"
+    restored = read_snapshot(write_snapshot(out, tmp_path / "gp_asof_example.parquet"))
+    pd.testing.assert_series_equal(restored.retrieved_at, out.retrieved_at, check_dtype=False)
+    assert restored.published_at.iloc[0] == sets.published_at.iloc[0]
+
+
+def test_legacy_reconstruction_preserves_cutoff_without_inventing_acquisition(omm_records, tmp_path):
+    from driftwatch.catalogue.snapshot import to_arrow
+    from driftwatch.screening.stages import default_start
+
+    cutoff = datetime(2024, 5, 9, tzinfo=UTC)
+    frame = build_snapshot({"test": omm_records}, None, fetched_at=cutoff)
+    legacy_names = SNAPSHOT_SCHEMA.names[: SNAPSHOT_SCHEMA.names.index("state_epoch")]
+    table = to_arrow(frame).select(legacy_names)
+    metadata = {**table.schema.metadata, b"driftwatch_schema_version": b"1"}
+    live = tmp_path / "legacy-live.parquet"
+    pq.write_table(table.replace_schema_metadata(metadata), live)
+    assert snapshot_problem(live) is None
+    assert snapshot_fetched_at(live) == cutoff
+    # Renaming the historical file cannot turn its fabricated old fetch field
+    # into a real retrieval: the retained reconstruction metadata identifies it.
+    historical = tmp_path / "renamed.parquet"
+    metadata[b"driftwatch_as_of"] = cutoff.isoformat().encode()
+    pq.write_table(table.replace_schema_metadata(metadata), historical)
+    out = read_snapshot(historical)
+    assert snapshot_problem(historical) is None
+    assert snapshot_fetched_at(historical) is None
+    assert out.fetched_at.isna().all() and out.retrieved_at.isna().all()
+    assert out.published_at.isna().all() and out.provider_created_at.isna().all()
+    assert out.selection_kind.eq("epoch-based reconstruction").all()
+    assert default_start(out) == cutoff
 
 
 def test_historical_snapshots_are_kept_out_of_the_live_listing(tmp_path):

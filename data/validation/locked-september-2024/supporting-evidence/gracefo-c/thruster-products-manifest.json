@@ -1,0 +1,419 @@
+{
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+  "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+  "gp_manifest_sha256": "5a36a1093ac33a14effe606fb8e5c9cf38b013f4e7f164620498696d60e39e08",
+  "mission": "gracefo-c",
+  "normal_input_manifest_sha256": "8c5162ce21eeafd90446030891244b503061fddc92c9adf4cc6793ad7a0a54c0",
+  "preserved_at": "2026-09-08T11:41:23.289614+00:00",
+  "original_first_access_sha256": "804ca6fc77e7566f8730b98edead7d8d746c481d932b483d85804a17ff85d0fa",
+  "products": [
+    {
+      "date": "2024-08-24",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-08-24_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-08-24_C.parquet",
+      "sha256": "c53f25ab830ad3157dcdc29fcad0b4d4b681cc0277042bb53e6c0a848f913632",
+      "bytes": 2949
+    },
+    {
+      "date": "2024-08-25",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-08-25_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-08-25_C.parquet",
+      "sha256": "a72b557ca219add3d70ee18c03b196ae58f5cc6f9ccb2636632650e24406797a",
+      "bytes": 2957
+    },
+    {
+      "date": "2024-08-26",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-08-26_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-08-26_C.parquet",
+      "sha256": "d16b34d3773ebaac51bb63267f0ed2106f18c8273d28573d7807523a2eb812a8",
+      "bytes": 2957
+    },
+    {
+      "date": "2024-08-27",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-08-27_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-08-27_C.parquet",
+      "sha256": "2940bcc9b603d30633db85f45429dcde1da1346890249c74ce660b04748aa569",
+      "bytes": 2957
+    },
+    {
+      "date": "2024-08-28",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-08-28_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-08-28_C.parquet",
+      "sha256": "c0454d9bf3ef2d8f74e1ff960dc5684134b75c32157941ee4134cd3a4f354152",
+      "bytes": 2949
+    },
+    {
+      "date": "2024-08-29",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-08-29_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-08-29_C.parquet",
+      "sha256": "508ff9eaa1d46b22ff54353e255c7f3084a84c83934ccbefe544d2b5422a91eb",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-08-30",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-08-30_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-08-30_C.parquet",
+      "sha256": "269a3d02b64d6d5f5ad073ccb0c49d3e30ae1aa802eca66f079c09f10e2ccdbb",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-08-31",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-08-31_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-08-31_C.parquet",
+      "sha256": "407428c8cd80e9a7669217d84df62f7a73c2a102cf7b22cf33828df394e530a9",
+      "bytes": 2957
+    },
+    {
+      "date": "2024-09-01",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-01_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-01_C.parquet",
+      "sha256": "f52a0c7acae384f3e704cb0b7098c843f02adfca2232ea41960975da3dcc436b",
+      "bytes": 2974
+    },
+    {
+      "date": "2024-09-02",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-02_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-02_C.parquet",
+      "sha256": "6a21b2f5c88d3deb0291e9300af28c0483f530c1d7386ad386f036523a50dfd6",
+      "bytes": 2949
+    },
+    {
+      "date": "2024-09-03",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-03_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-03_C.parquet",
+      "sha256": "da1007593164a6b5ba42b1748aeb92343bd0fba39970ef4d274733d04cfc37d2",
+      "bytes": 2974
+    },
+    {
+      "date": "2024-09-04",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-04_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-04_C.parquet",
+      "sha256": "6b21abfac40bd81471de33981d35a9532706496b5d13772c47bb7e7d3611d11c",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-05",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-05_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-05_C.parquet",
+      "sha256": "c94bd82959add8e2d2089c0e3b928848da8bf4a7e1a37a2a3d6c207d0f375406",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-06",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-06_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-06_C.parquet",
+      "sha256": "e47ee08870cf6cf451f766a4f025d040821622cbe1e47cd58763cb587007b056",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-07",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-07_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-07_C.parquet",
+      "sha256": "80165d00bac78405523497c60d1dd633245b122be3405ec62264ca71152e5131",
+      "bytes": 2983
+    },
+    {
+      "date": "2024-09-08",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-08_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-08_C.parquet",
+      "sha256": "0e7431dac6d2c612d6568bf1ed4c7db64a06efcbe8290d333641ad4294509d9d",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-09",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-09_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-09_C.parquet",
+      "sha256": "ca9b1dec2f04bbfd5f0129bee1766c00bdfc5a12e104d9dcddbcd84f9354ba4b",
+      "bytes": 2974
+    },
+    {
+      "date": "2024-09-10",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-10_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-10_C.parquet",
+      "sha256": "498ea66cd2fcb82bcd62118cf298ef2c209e9e4002778c07dc4957e3a931bd66",
+      "bytes": 2983
+    },
+    {
+      "date": "2024-09-11",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-11_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-11_C.parquet",
+      "sha256": "0134417b5e4bdd81bd3a97c6b991a948b283f2ffbc26cbbced5bb1f80bfa652b",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-12",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-12_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-12_C.parquet",
+      "sha256": "0e1bd5f1be95551e842a45efe3e2cb717c9930eb2eb0d810cfbccf4b1706efd6",
+      "bytes": 2974
+    },
+    {
+      "date": "2024-09-13",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-13_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-13_C.parquet",
+      "sha256": "910cbfdbed7bfb8ad162e7694051f2bf766309194b01767ac51b4c781dcf9b69",
+      "bytes": 2983
+    },
+    {
+      "date": "2024-09-14",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-14_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-14_C.parquet",
+      "sha256": "21dec5a66f1d0c1a7cb9f46c354e3c38b59a7dfab8983f5e372b8de22fe32e7f",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-15",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-15_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-15_C.parquet",
+      "sha256": "c30843364d63a2a9b2fa02f66f8d9d53eb300a91310a4356627f16320c7b6d81",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-16",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-16_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-16_C.parquet",
+      "sha256": "b1f52fba9109912ed8677d1d996a9423ab80efc90f2366e9aae2c4779a367f48",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-17",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-17_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-17_C.parquet",
+      "sha256": "f7c320763ef85f2bf01e6817a1c18270c762219f46b539ffd440922bad27fedb",
+      "bytes": 2974
+    },
+    {
+      "date": "2024-09-18",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-18_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-18_C.parquet",
+      "sha256": "f6517a19b1cfe40aeec78f95637d9c2a80dd8b76f07aa611a4b9f4e4adaefacf",
+      "bytes": 2974
+    },
+    {
+      "date": "2024-09-19",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-19_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-19_C.parquet",
+      "sha256": "76cd291e20f0644fcf54b0ce58b1697bda3cf7de4c241fc134d376708dc6657c",
+      "bytes": 2992
+    },
+    {
+      "date": "2024-09-20",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-20_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-20_C.parquet",
+      "sha256": "b5ac2dbbf85a7c34f9d223a2cd5da50990eeaa245ef546881527292f18ec48e5",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-21",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-21_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-21_C.parquet",
+      "sha256": "507b4a9b47fff86455fcd17004edb844a65598c02fd54011f8b2608773d2f367",
+      "bytes": 2957
+    },
+    {
+      "date": "2024-09-22",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-22_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-22_C.parquet",
+      "sha256": "e12cb877c63939f68b7df031d204bcf70ddb980b2eeabbcdff6d26e8bb1bb4bd",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-23",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-23_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-23_C.parquet",
+      "sha256": "7fffec3c76046d5b760d35819844c0e093f813564ec1aa0945e61f13318971eb",
+      "bytes": 2966
+    },
+    {
+      "date": "2024-09-24",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-24_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-24_C.parquet",
+      "sha256": "90565883befba0819c88890f6dd8ca2456dc451db94087c45dae3386ec8b91fe",
+      "bytes": 2983
+    },
+    {
+      "date": "2024-09-25",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-25_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-25_C.parquet",
+      "sha256": "0b86171fee7d7ee7e9b1ea39e30da1c840d21186619829f9ea7daf65d77aed21",
+      "bytes": 2974
+    },
+    {
+      "date": "2024-09-26",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-26_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-26_C.parquet",
+      "sha256": "09dbd6090c0421de7d25993990e5815ff85aa05e48a6b74d6650f005ed85977e",
+      "bytes": 2992
+    },
+    {
+      "date": "2024-09-27",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-27_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-27_C.parquet",
+      "sha256": "6306846370f9ede85c740fcbf2125df4fd42c4a3d52237813bf36b8c38f964cf",
+      "bytes": 2992
+    },
+    {
+      "date": "2024-09-28",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-28_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-28_C.parquet",
+      "sha256": "2aa484cd89b90c08e381795367fb8a2e3901bf3e710873cc0b931f31e1504327",
+      "bytes": 2992
+    },
+    {
+      "date": "2024-09-29",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-29_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-29_C.parquet",
+      "sha256": "28cc51e607a92ab3fc695cc59493914b5315af179215846481659e25c1b6a1dc",
+      "bytes": 3011
+    },
+    {
+      "date": "2024-09-30",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-09-30_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-09-30_C.parquet",
+      "sha256": "3384a2c6b53c27f96a51e8db65d21e63ada2103e818ed561bdebf4c8315f63c2",
+      "bytes": 3011
+    },
+    {
+      "date": "2024-10-01",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-01_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-01_C.parquet",
+      "sha256": "dcca03b27e2c4526862835362306b505f039550e06423bf368df5d75bbd495ca",
+      "bytes": 2992
+    },
+    {
+      "date": "2024-10-02",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-02_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-02_C.parquet",
+      "sha256": "0da179c4b8390493f27bd4b3b4d8ec09b74cbc00f741ae4a770dd17e20b7020c",
+      "bytes": 3011
+    },
+    {
+      "date": "2024-10-03",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-03_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-03_C.parquet",
+      "sha256": "2331a244241e285316446847bbac77430e0ea19750995905596d739f5d3d731e",
+      "bytes": 3024
+    },
+    {
+      "date": "2024-10-04",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-04_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-04_C.parquet",
+      "sha256": "cda3c2eb959f3ce47ac940ab53879433a5d19467baa1fa3d12499d073bb5b08a",
+      "bytes": 2999
+    },
+    {
+      "date": "2024-10-05",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-05_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-05_C.parquet",
+      "sha256": "f4edc6875625d79e5f16596e41e26b2de2d6ef71db08f82ab547967f158764af",
+      "bytes": 3022
+    },
+    {
+      "date": "2024-10-06",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-06_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-06_C.parquet",
+      "sha256": "d1666bf6e6eb70176a3abf93f47f4d4931eaeec679ce2c4a2f67e1ab11f8d745",
+      "bytes": 2992
+    },
+    {
+      "date": "2024-10-07",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-07_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-07_C.parquet",
+      "sha256": "83527752c7095ac1f485ab6c2affab330a12d341c1bb2466a580cdf810e41d0b",
+      "bytes": 3022
+    },
+    {
+      "date": "2024-10-08",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-08_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-08_C.parquet",
+      "sha256": "a345ba7eb79e73b19ec3c19308fb706864f294e7ffc6b40c85ac1a2eff010fea",
+      "bytes": 3009
+    },
+    {
+      "date": "2024-10-09",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-09_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-09_C.parquet",
+      "sha256": "8ff6ef18697c5688e753c7e48d22096245c4237344f16616c97c118ab1393252",
+      "bytes": 2983
+    },
+    {
+      "date": "2024-10-10",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-10_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-10_C.parquet",
+      "sha256": "6d2e67824182037b1f6189dbc7c02d561c4ea2c48744588fd97410c411f17c6b",
+      "bytes": 2983
+    },
+    {
+      "date": "2024-10-11",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-11_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-11_C.parquet",
+      "sha256": "21d66a18315788b92c2b63d05335f2f36956a8b4ae4302a2540cc5bede3144cd",
+      "bytes": 2992
+    },
+    {
+      "date": "2024-10-12",
+      "source": "C:\\Users\\Nikhil\\Desktop\\space\\data\\cache\\gracefo\\THR1B_2024-10-12_C.parquet",
+      "snapshot": "supporting-evidence/gracefo-c/THR1B_2024-10-12_C.parquet",
+      "sha256": "24abadb0368e6894e085354753224ce1f6c31bac2d04cedfbe399c7b0fc6ebaa",
+      "bytes": 2957
+    }
+  ],
+  "n_products": 50,
+  "total_bytes": 148916,
+  "scope": "Additional supporting evidence; does not modify frozen mission snapshots or scoring",
+  "filename_limitation": "Frozen GRACE mission record.files duplicates the GNV orbit filenames and omits THR input filenames. Recorded intervals remain in the frozen metadata.",
+  "retention_convention": "The established loader parses GNV1B and THR1B products to Parquet and deletes each large daily raw archive. These exact parsed THR products are retained here; this is not retention of original raw text archives.",
+  "files": {
+    "supporting-evidence/gracefo-c/THR1B_2024-08-24_C.parquet": "c53f25ab830ad3157dcdc29fcad0b4d4b681cc0277042bb53e6c0a848f913632",
+    "supporting-evidence/gracefo-c/THR1B_2024-08-25_C.parquet": "a72b557ca219add3d70ee18c03b196ae58f5cc6f9ccb2636632650e24406797a",
+    "supporting-evidence/gracefo-c/THR1B_2024-08-26_C.parquet": "d16b34d3773ebaac51bb63267f0ed2106f18c8273d28573d7807523a2eb812a8",
+    "supporting-evidence/gracefo-c/THR1B_2024-08-27_C.parquet": "2940bcc9b603d30633db85f45429dcde1da1346890249c74ce660b04748aa569",
+    "supporting-evidence/gracefo-c/THR1B_2024-08-28_C.parquet": "c0454d9bf3ef2d8f74e1ff960dc5684134b75c32157941ee4134cd3a4f354152",
+    "supporting-evidence/gracefo-c/THR1B_2024-08-29_C.parquet": "508ff9eaa1d46b22ff54353e255c7f3084a84c83934ccbefe544d2b5422a91eb",
+    "supporting-evidence/gracefo-c/THR1B_2024-08-30_C.parquet": "269a3d02b64d6d5f5ad073ccb0c49d3e30ae1aa802eca66f079c09f10e2ccdbb",
+    "supporting-evidence/gracefo-c/THR1B_2024-08-31_C.parquet": "407428c8cd80e9a7669217d84df62f7a73c2a102cf7b22cf33828df394e530a9",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-01_C.parquet": "f52a0c7acae384f3e704cb0b7098c843f02adfca2232ea41960975da3dcc436b",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-02_C.parquet": "6a21b2f5c88d3deb0291e9300af28c0483f530c1d7386ad386f036523a50dfd6",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-03_C.parquet": "da1007593164a6b5ba42b1748aeb92343bd0fba39970ef4d274733d04cfc37d2",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-04_C.parquet": "6b21abfac40bd81471de33981d35a9532706496b5d13772c47bb7e7d3611d11c",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-05_C.parquet": "c94bd82959add8e2d2089c0e3b928848da8bf4a7e1a37a2a3d6c207d0f375406",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-06_C.parquet": "e47ee08870cf6cf451f766a4f025d040821622cbe1e47cd58763cb587007b056",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-07_C.parquet": "80165d00bac78405523497c60d1dd633245b122be3405ec62264ca71152e5131",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-08_C.parquet": "0e7431dac6d2c612d6568bf1ed4c7db64a06efcbe8290d333641ad4294509d9d",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-09_C.parquet": "ca9b1dec2f04bbfd5f0129bee1766c00bdfc5a12e104d9dcddbcd84f9354ba4b",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-10_C.parquet": "498ea66cd2fcb82bcd62118cf298ef2c209e9e4002778c07dc4957e3a931bd66",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-11_C.parquet": "0134417b5e4bdd81bd3a97c6b991a948b283f2ffbc26cbbced5bb1f80bfa652b",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-12_C.parquet": "0e1bd5f1be95551e842a45efe3e2cb717c9930eb2eb0d810cfbccf4b1706efd6",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-13_C.parquet": "910cbfdbed7bfb8ad162e7694051f2bf766309194b01767ac51b4c781dcf9b69",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-14_C.parquet": "21dec5a66f1d0c1a7cb9f46c354e3c38b59a7dfab8983f5e372b8de22fe32e7f",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-15_C.parquet": "c30843364d63a2a9b2fa02f66f8d9d53eb300a91310a4356627f16320c7b6d81",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-16_C.parquet": "b1f52fba9109912ed8677d1d996a9423ab80efc90f2366e9aae2c4779a367f48",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-17_C.parquet": "f7c320763ef85f2bf01e6817a1c18270c762219f46b539ffd440922bad27fedb",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-18_C.parquet": "f6517a19b1cfe40aeec78f95637d9c2a80dd8b76f07aa611a4b9f4e4adaefacf",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-19_C.parquet": "76cd291e20f0644fcf54b0ce58b1697bda3cf7de4c241fc134d376708dc6657c",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-20_C.parquet": "b5ac2dbbf85a7c34f9d223a2cd5da50990eeaa245ef546881527292f18ec48e5",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-21_C.parquet": "507b4a9b47fff86455fcd17004edb844a65598c02fd54011f8b2608773d2f367",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-22_C.parquet": "e12cb877c63939f68b7df031d204bcf70ddb980b2eeabbcdff6d26e8bb1bb4bd",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-23_C.parquet": "7fffec3c76046d5b760d35819844c0e093f813564ec1aa0945e61f13318971eb",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-24_C.parquet": "90565883befba0819c88890f6dd8ca2456dc451db94087c45dae3386ec8b91fe",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-25_C.parquet": "0b86171fee7d7ee7e9b1ea39e30da1c840d21186619829f9ea7daf65d77aed21",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-26_C.parquet": "09dbd6090c0421de7d25993990e5815ff85aa05e48a6b74d6650f005ed85977e",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-27_C.parquet": "6306846370f9ede85c740fcbf2125df4fd42c4a3d52237813bf36b8c38f964cf",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-28_C.parquet": "2aa484cd89b90c08e381795367fb8a2e3901bf3e710873cc0b931f31e1504327",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-29_C.parquet": "28cc51e607a92ab3fc695cc59493914b5315af179215846481659e25c1b6a1dc",
+    "supporting-evidence/gracefo-c/THR1B_2024-09-30_C.parquet": "3384a2c6b53c27f96a51e8db65d21e63ada2103e818ed561bdebf4c8315f63c2",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-01_C.parquet": "dcca03b27e2c4526862835362306b505f039550e06423bf368df5d75bbd495ca",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-02_C.parquet": "0da179c4b8390493f27bd4b3b4d8ec09b74cbc00f741ae4a770dd17e20b7020c",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-03_C.parquet": "2331a244241e285316446847bbac77430e0ea19750995905596d739f5d3d731e",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-04_C.parquet": "cda3c2eb959f3ce47ac940ab53879433a5d19467baa1fa3d12499d073bb5b08a",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-05_C.parquet": "f4edc6875625d79e5f16596e41e26b2de2d6ef71db08f82ab547967f158764af",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-06_C.parquet": "d1666bf6e6eb70176a3abf93f47f4d4931eaeec679ce2c4a2f67e1ab11f8d745",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-07_C.parquet": "83527752c7095ac1f485ab6c2affab330a12d341c1bb2466a580cdf810e41d0b",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-08_C.parquet": "a345ba7eb79e73b19ec3c19308fb706864f294e7ffc6b40c85ac1a2eff010fea",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-09_C.parquet": "8ff6ef18697c5688e753c7e48d22096245c4237344f16616c97c118ab1393252",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-10_C.parquet": "6d2e67824182037b1f6189dbc7c02d561c4ea2c48744588fd97410c411f17c6b",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-11_C.parquet": "21d66a18315788b92c2b63d05335f2f36956a8b4ae4302a2540cc5bede3144cd",
+    "supporting-evidence/gracefo-c/THR1B_2024-10-12_C.parquet": "24abadb0368e6894e085354753224ce1f6c31bac2d04cedfbe399c7b0fc6ebaa"
+  }
+}

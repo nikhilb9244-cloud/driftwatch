@@ -1,0 +1,35 @@
+{
+  "title": "Public element sets against reconstructed orbits: a record-controlled reference benchmark",
+  "upload_type": "software",
+  "publication_date": "2026-09-08",
+  "version": "paper-2026-09-v2",
+  "creators": [
+    {
+      "name": "Bhana, Nikhil",
+      "orcid": "0009-0003-2220-627X"
+    }
+  ],
+  "description": "This version supersedes v1 (doi:10.5281/zenodo.22656992). It corrects manoeuvre exclusions, horizon criteria and covariance coordinates, and adds the completed September calendar replay and topocentric comparison while retaining both learned-propagator negative findings. The benchmark contains 1,193 usable element sets on 15 spacecraft at 460-1,338 km. All four historical windows have been inspected; the September replay is a retrospective physical diagnostic. Results are descriptive for the stated populations, not operational guarantees. The storm term is reported separately and is outside the paper scope.",
+  "license": "mit",
+  "keywords": [
+    "SGP4",
+    "orbit uncertainty",
+    "reference ephemerides",
+    "geomagnetic storm",
+    "covariance consistency",
+    "topocentric crossings"
+  ],
+  "related_identifiers": [
+    {
+      "identifier": "10.5281/zenodo.22656992",
+      "relation": "isNewVersionOf",
+      "scheme": "doi"
+    },
+    {
+      "identifier": "https://github.com/nikhilb9244-cloud/driftwatch/tree/paper-2026-09-v2",
+      "relation": "isSupplementTo",
+      "scheme": "url"
+    }
+  ],
+  "notes": "Code is MIT licensed; third-party data retain their source terms. Measured MeerKAT beam data are CC BY-NC 4.0 and used for research only. Raw SpaceX ephemerides and ESA Kelvins inputs are not redistributed. The release provides the paper PDF, canonical evidence object, claims manifest, complete tables and publication-contract tests."
+}

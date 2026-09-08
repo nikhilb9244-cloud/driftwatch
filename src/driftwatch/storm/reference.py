@@ -30,11 +30,11 @@ The products, all read on 7 September 2026:
 Asked for and not obtainable without an account, said rather than substituted: see
 :data:`NOT_COVERED`.
 
-Manoeuvres. Where a mission publishes a thruster record that a public server carries (Swarm,
-GRACE-FO) it decides the exclusion, and the project's own detection is a cross-check. For the
-CNES, Copernicus and SLR-only missions no public manoeuvre record was found on an anonymous
-server, so the detection decides -- a step in the orbit-mean semi-major axis of the precise orbit,
-and the jump detector on the element sets -- and every table says so.
+Manoeuvres. Published records decide exclusions for Swarm and GRACE-FO, the nine CNES
+missions use the public IDS SSALTO event registry (Sentinel-3A/B use the more precise
+SentiWiki manoeuvre histories), and detection is a cross-check. Source coverage, raw-file
+hashes and time systems are retained; unavailable records are not empty no-burn histories.
+Sentinel-1A and the SLR-only missions still use orbit/set detection.
 """
 
 from __future__ import annotations
@@ -57,7 +57,7 @@ import pandas as pd
 
 from driftwatch import config
 from driftwatch.orbit.time import parse_utc
-from driftwatch.storm import precise
+from driftwatch.storm import manoeuvre_records, precise
 from driftwatch.storm.precise import BenchmarkWindow, PreciseOrbit, ThrusterRecord
 
 log = logging.getLogger(__name__)
@@ -70,6 +70,8 @@ TRUTH_NONE = "none"
 
 MANOEUVRES_ESA = "esa-record"
 MANOEUVRES_GRACEFO = "gracefo-thr1b"
+MANOEUVRES_IDS = manoeuvre_records.IDS_SOURCE_ID
+MANOEUVRES_SENTINEL3 = manoeuvre_records.SENTINEL3_SOURCE_ID
 MANOEUVRES_DETECTION = "detection"
 
 
@@ -99,17 +101,17 @@ MISSIONS: dict[str, Mission] = {
         "gracefo-d", "GRACE-FO 2 (D)", 43477, 490.0, TRUTH_GRACEFO, "D", "gracefo2", MANOEUVRES_GRACEFO
     ),
     "sentinel-1a": Mission("sentinel-1a", "Sentinel-1A", 39634, 693.0, TRUTH_S1, "S1A", None, MANOEUVRES_DETECTION),
-    "cryosat-2": Mission("cryosat-2", "CryoSat-2", 36508, 717.0, TRUTH_CNES, "cs2", "cryosat2", MANOEUVRES_DETECTION),
-    "saral": Mission("saral", "SARAL", 39086, 781.0, TRUTH_CNES, "srl", "saral", MANOEUVRES_DETECTION),
+    "cryosat-2": Mission("cryosat-2", "CryoSat-2", 36508, 717.0, TRUTH_CNES, "cs2", "cryosat2", MANOEUVRES_IDS),
+    "saral": Mission("saral", "SARAL", 39086, 781.0, TRUTH_CNES, "srl", "saral", MANOEUVRES_IDS),
     "sentinel-3a": Mission(
-        "sentinel-3a", "Sentinel-3A", 41335, 814.0, TRUTH_CNES, "s3a", "sentinel3a", MANOEUVRES_DETECTION
+        "sentinel-3a", "Sentinel-3A", 41335, 814.0, TRUTH_CNES, "s3a", "sentinel3a", MANOEUVRES_SENTINEL3
     ),
     "sentinel-3b": Mission(
-        "sentinel-3b", "Sentinel-3B", 43437, 814.0, TRUTH_CNES, "s3b", "sentinel3b", MANOEUVRES_DETECTION
+        "sentinel-3b", "Sentinel-3B", 43437, 814.0, TRUTH_CNES, "s3b", "sentinel3b", MANOEUVRES_SENTINEL3
     ),
-    "swot": Mission("swot", "SWOT", 54754, 891.0, TRUTH_CNES, "swo", "swot", MANOEUVRES_DETECTION),
-    "hy-2c": Mission("hy-2c", "HY-2C", 46469, 957.0, TRUTH_CNES, "h2c", "hy2c", MANOEUVRES_DETECTION),
-    "hy-2d": Mission("hy-2d", "HY-2D", 48621, 957.0, TRUTH_CNES, "h2d", "hy2d", MANOEUVRES_DETECTION),
+    "swot": Mission("swot", "SWOT", 54754, 891.0, TRUTH_CNES, "swo", "swot", MANOEUVRES_IDS),
+    "hy-2c": Mission("hy-2c", "HY-2C", 46469, 957.0, TRUTH_CNES, "h2c", "hy2c", MANOEUVRES_IDS),
+    "hy-2d": Mission("hy-2d", "HY-2D", 48621, 957.0, TRUTH_CNES, "h2d", "hy2d", MANOEUVRES_IDS),
     "jason-3": Mission(
         "jason-3",
         "Jason-3",
@@ -118,7 +120,7 @@ MISSIONS: dict[str, Mission] = {
         TRUTH_CNES,
         "ja3",
         "jason3",
-        MANOEUVRES_DETECTION,
+        MANOEUVRES_IDS,
         "at 1,336 km, just above the 1,300 km asked for; kept as the top of the range",
     ),
     "sentinel-6a": Mission(
@@ -129,7 +131,7 @@ MISSIONS: dict[str, Mission] = {
         TRUTH_CNES,
         "s6a",
         "sentinel6a",
-        MANOEUVRES_DETECTION,
+        MANOEUVRES_IDS,
         "Jason-3's orbit; the same note",
     ),
     # Laser ranging only: no reconstructed orbit on an anonymous server for 2024.
@@ -201,15 +203,14 @@ def altitude_band_label(altitude_km: float) -> str:
 
 
 # The fourth window. Kp reached 8- on 12 August 2024 (ap 207 in the 12:00 to 15:00 interval); the
-# sets issued from four days before the onset to three after are the trials, held out like October.
+# trial sets are selected by epoch around the onset. This window has now been inspected.
 AUGUST = BenchmarkWindow(
     "august",
     "held-out",
     parse_utc("2024-08-08T00:00:00Z"),
     parse_utc("2024-08-15T00:00:00Z"),
     (parse_utc("2024-08-12T00:00:00Z"), parse_utc("2024-08-13T12:00:00Z")),
-    "the 12 August 2024 storm (Kp 8-), the further disturbed window of the reference expansion; held out like "
-    "October, nothing was chosen by looking at it",
+    "August 2024 held out: historical role; inspected during the corrections",
 )
 WINDOWS: tuple[BenchmarkWindow, ...] = (*precise.WINDOWS, AUGUST)
 
@@ -698,8 +699,9 @@ def load_truth(
 ) -> tuple[PreciseOrbit | None, ThrusterRecord | None]:
     """The mission's reconstructed orbit over ``[start, end]`` and its published thruster record, where each exists.
 
-    ``records=False`` skips ESA's thruster record for Swarm (a slow CDF read per day) for callers that
-    only need the orbit, such as the dSGP4 evaluation, which takes its exclusions from the benchmark's trials.
+    ``records=False`` skips the separate Swarm and CNES mission manoeuvre histories for callers that
+    only need the orbit, such as dSGP4 evaluation. A returned published record can be unavailable:
+    callers must inspect ``authoritative`` and ``days_missing`` before accepting trial arcs.
     """
     if mission.truth == TRUTH_SWARM:
         orbit = precise.load_precise_orbit(mission.truth_code, start, end, cache_dir=cache_dir, offline=offline)
@@ -710,7 +712,15 @@ def load_truth(
     if mission.truth == TRUTH_GRACEFO:
         return load_gracefo_orbit(mission, start, end, cache_dir=cache_dir, offline=offline)
     if mission.truth == TRUTH_CNES:
-        return load_ids_orbit(mission, start, end, cache_dir=cache_dir, offline=offline), None
+        orbit = load_ids_orbit(mission, start, end, cache_dir=cache_dir, offline=offline)
+        record = (
+            manoeuvre_records.load_record(
+                mission.key, mission.norad_id, start, end, cache_dir=cache_dir, offline=offline
+            )
+            if records
+            else None
+        )
+        return orbit, record
     if mission.truth == TRUTH_S1:
         return load_s1_orbit(mission, start, end, cache_dir=cache_dir, offline=offline), None
     return None, None
@@ -731,8 +741,12 @@ def manoeuvre_source(mission: Mission) -> str:
         MANOEUVRES_ESA: "ESA's thruster record (SW_OPER_SC_xDYN_1B) decides; detection is a cross-check",
         MANOEUVRES_GRACEFO: "the THR1B thruster record decides (orbit-control thruster on-time); detection is a "
         "cross-check",
-        MANOEUVRES_DETECTION: "no public manoeuvre record on an anonymous server: detection decides (a step in the "
-        "orbit-mean semi-major axis of the precise orbit, and the jump detector on the element sets)",
+        MANOEUVRES_IDS: "published IDS SSALTO manoeuvre events decide; TAI converted to UTC; detection is a "
+        "cross-check. Registry coverage is dated, but exhaustive firing reporting is not independently established",
+        MANOEUVRES_SENTINEL3: "the public SentiWiki Sentinel-3 manoeuvre history decides (UTC start/end pairs); "
+        "detection is a cross-check and missing source coverage is unavailable, not a no-burn interval",
+        MANOEUVRES_DETECTION: "no published manoeuvre record is integrated for this mission: detection decides "
+        "(a step in the orbit-mean semi-major axis of the precise orbit, and the jump detector on the element sets)",
     }[mission.manoeuvres]
 
 
@@ -747,6 +761,21 @@ def mission_sources_record(missions: list[Mission], retrieved_at: datetime) -> l
         )
         entry["missions"].append(f"{m.name} (NORAD {m.norad_id})")
     out = list(seen.values())
+    for kind in (MANOEUVRES_IDS, MANOEUVRES_SENTINEL3):
+        selected = [m for m in missions if m.manoeuvres == kind]
+        if selected:
+            out.append(
+                {
+                    "source": manoeuvre_source(selected[0]),
+                    "url": manoeuvre_records.IDS_URL
+                    if kind == MANOEUVRES_IDS
+                    else manoeuvre_records.SENTINEL3_INDEX_URL,
+                    "retrieved_at": retrieved_at.isoformat(),
+                    "missions": [f"{m.name} (NORAD {m.norad_id})" for m in selected],
+                    "provenance": "Actual source retrieval time, SHA256, raw file and time system are retained "
+                    "per mission-window; this page timestamp is not the source fetch timestamp.",
+                }
+            )
     out.append(
         {
             "source": "Asked for and not obtainable without an account; said, not substituted",

@@ -27,18 +27,18 @@ in the uncertainty. Shrink the covariance and the Gaussian pulls away from the d
 inflate it and the mass spreads thin; the maximum sits at a standard deviation of the
 order of the miss distance. :func:`max_pc_sweep` scales the combined covariance by
 factors from 0.1 to 10 and reports the largest probability and the factor at which it
-occurs. When the empirical covariance is a floor on the true error (see ``covariance``)
-the maximum is the honest upper bound.
+occurs. This is a sensitivity over one covariance shape and a finite scale interval,
+not an upper bound over unknown biases, correlations, dynamics or covariance matrices.
 
 Where the straight-line assumption stops. It holds because the encounter is over in a
 fraction of a second while the geometry turns over on an orbital period. Two objects in
 nearly the same orbit -- two members of one constellation, a satellite and its own upper
 stage -- pass each other at metres per second instead of kilometres, and then the passage
 takes minutes and the relative path curves through it. :func:`slow_encounters` flags the
-events below :data:`SLOW_ENCOUNTER_KMS`. Their probability is a known underestimate: the
-pair lingers near the closest approach and can re-approach, so more of the uncertainty is in
-play than one plane sees. Nothing here corrects it -- the fix is a three-dimensional
-integration -- so the flag is carried through to the output and the report instead.
+events below :data:`SLOW_ENCOUNTER_KMS`. The pair can linger or re-approach, violating the
+single-plane approximation. The error's direction and magnitude depend on the dynamics
+and uncertainty; slow speed alone establishes neither. The flag requests an appropriate
+time-dependent three-dimensional assessment; nothing here supplies that correction.
 
 Note what a large in-track uncertainty is *not*. A seven-day-old element set can be hundreds
 of kilometres uncertain along track, but that is mostly a timing error: the object is on the
@@ -324,17 +324,17 @@ def max_pc_sweep(
 def slow_encounters(rel_speed_kms: np.ndarray, *, threshold_kms: float = SLOW_ENCOUNTER_KMS) -> np.ndarray:
     """Which encounters are too slow for the straight-line assumption to hold.
 
-    A true flag says the probability reported for that event is a **known underestimate**.
+    A true flag identifies a limitation of the straight-line approximation.
     The two-dimensional method projects the covariance onto one plane and integrates once,
     which is right only if the pair passes in a straight line at constant velocity. A slow
     pair does not: the relative path curves through the passage, the two can re-approach, and
-    more of the uncertainty is in play than the single plane sees.
+    the single plane may misrepresent the event. The sign and size of the error are unmeasured.
 
     It is a flag and not a correction. Nothing here rescales the probability; the fix is a
     three-dimensional integration over the encounter, and that is not in this phase.
 
     **It rests on the method's assumption and not on any measured error.** The reproduction
-    of ESA's Kelvins risk column cannot size the underestimate, or even detect it: ESA's own
+    of ESA's Kelvins risk column cannot size the approximation error, or even detect it: ESA's own
     column is computed the same way, so the residual binned by relative speed is flat at the
     slow end whatever the true bias is. Agreement between two tools that share an
     approximation is not evidence about the approximation

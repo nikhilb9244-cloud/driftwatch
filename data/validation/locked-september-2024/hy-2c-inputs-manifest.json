@@ -1,0 +1,20 @@
+{
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+  "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+  "gp_manifest_sha256": "5a36a1093ac33a14effe606fb8e5c9cf38b013f4e7f164620498696d60e39e08",
+  "mission": "hy-2c",
+  "orbit_table": "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/orbit.parquet",
+  "metadata": "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/metadata.json",
+  "files": {
+    "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/orbit.parquet": "89cadc887b69a11e80d86354c6496185d7f3b742a662e4e10a4c280e81650042",
+    "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/metadata.json": "2f847ee4d1c445b5ea50a66c06043462a8342da73455b60d50230db3b0aad8cc",
+    "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/source-7355031aeddc6f37a54e4280f32c2440f1eed2343f988f76f85372d4930e07c4": "7355031aeddc6f37a54e4280f32c2440f1eed2343f988f76f85372d4930e07c4",
+    "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/source-d3cfa52a8b2c8ba13aa31c488efb6b18804eb067ed9b4305ab4f0c870cdbf931": "d3cfa52a8b2c8ba13aa31c488efb6b18804eb067ed9b4305ab4f0c870cdbf931",
+    "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/source-b30c04f0acc9eca85ce0cd2383d7980e81e0b22eba48fc85af298e2e2b87f4e9": "b30c04f0acc9eca85ce0cd2383d7980e81e0b22eba48fc85af298e2e2b87f4e9",
+    "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/source-64d62c01d3e4541585dd1e085605e8bfb777bb34b919109c96e328aafec3854b": "64d62c01d3e4541585dd1e085605e8bfb777bb34b919109c96e328aafec3854b",
+    "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/source-8d9067dc99cb92b5d0f44bde1617e7b7320da9be160f71f4d588d32a9995c330": "8d9067dc99cb92b5d0f44bde1617e7b7320da9be160f71f4d588d32a9995c330",
+    "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/source-b376ee880922635a5ad4ed71746dfd92447a1c0cd847047286c28a1ca7008704": "b376ee880922635a5ad4ed71746dfd92447a1c0cd847047286c28a1ca7008704",
+    "inputs/hy-2c/20260908T113216-input-acquisition-e7de48a5d489/source-4573a4701b7c4c110c7aab816ccbff1b4acf7ade869be171b0ee99095a056e62": "4573a4701b7c4c110c7aab816ccbff1b4acf7ade869be171b0ee99095a056e62"
+  }
+}

@@ -1,0 +1,1790 @@
+{
+  "interpretation": "Previously inspected four-window evaluations with constructed fixed celestial pointings; not an observing schedule, detections, or independent population trials.",
+  "legacy_metadata": "The pre-run protocol copies old window registry notes verbatim. Their held-out wording is historical metadata, not evidence of untouched v2 evaluation data.",
+  "boundary_diagnostic": "Near-boundary means absolute peak-minus-half-power margin at most 1e-8, matching the scorer's tangency tolerance. This flags classification sensitivity even when a tiny interval is reported. Frozen classifications are retained.",
+  "audit_source_sha256": "547c89bab6421badbfbc6c9f965d831c54fa0687f5c3a65047f9b4057d86cc54",
+  "runtime_s": 1006.262035,
+  "n_input_trials": 10310,
+  "n_eligible_trials": 112,
+  "n_missions": 12,
+  "n_sets": 94,
+  "eligible_by_mission_window": [
+    {
+      "mission": "gracefo-c",
+      "window": "held-out",
+      "n_trials": 1
+    },
+    {
+      "mission": "gracefo-d",
+      "window": "held-out",
+      "n_trials": 3
+    },
+    {
+      "mission": "hy-2c",
+      "window": "august",
+      "n_trials": 2
+    },
+    {
+      "mission": "hy-2c",
+      "window": "held-out",
+      "n_trials": 5
+    },
+    {
+      "mission": "hy-2c",
+      "window": "quiet",
+      "n_trials": 7
+    },
+    {
+      "mission": "hy-2d",
+      "window": "held-out",
+      "n_trials": 1
+    },
+    {
+      "mission": "hy-2d",
+      "window": "quiet",
+      "n_trials": 1
+    },
+    {
+      "mission": "hy-2d",
+      "window": "storm",
+      "n_trials": 6
+    },
+    {
+      "mission": "jason-3",
+      "window": "august",
+      "n_trials": 7
+    },
+    {
+      "mission": "jason-3",
+      "window": "quiet",
+      "n_trials": 5
+    },
+    {
+      "mission": "jason-3",
+      "window": "storm",
+      "n_trials": 2
+    },
+    {
+      "mission": "saral",
+      "window": "august",
+      "n_trials": 2
+    },
+    {
+      "mission": "saral",
+      "window": "held-out",
+      "n_trials": 2
+    },
+    {
+      "mission": "saral",
+      "window": "quiet",
+      "n_trials": 2
+    },
+    {
+      "mission": "saral",
+      "window": "storm",
+      "n_trials": 2
+    },
+    {
+      "mission": "sentinel-1a",
+      "window": "august",
+      "n_trials": 2
+    },
+    {
+      "mission": "sentinel-1a",
+      "window": "held-out",
+      "n_trials": 6
+    },
+    {
+      "mission": "sentinel-1a",
+      "window": "quiet",
+      "n_trials": 7
+    },
+    {
+      "mission": "sentinel-1a",
+      "window": "storm",
+      "n_trials": 4
+    },
+    {
+      "mission": "sentinel-3a",
+      "window": "august",
+      "n_trials": 1
+    },
+    {
+      "mission": "sentinel-3a",
+      "window": "held-out",
+      "n_trials": 1
+    },
+    {
+      "mission": "sentinel-3b",
+      "window": "august",
+      "n_trials": 1
+    },
+    {
+      "mission": "sentinel-3b",
+      "window": "quiet",
+      "n_trials": 2
+    },
+    {
+      "mission": "sentinel-6a",
+      "window": "august",
+      "n_trials": 10
+    },
+    {
+      "mission": "sentinel-6a",
+      "window": "held-out",
+      "n_trials": 3
+    },
+    {
+      "mission": "sentinel-6a",
+      "window": "quiet",
+      "n_trials": 6
+    },
+    {
+      "mission": "sentinel-6a",
+      "window": "storm",
+      "n_trials": 1
+    },
+    {
+      "mission": "swarm-a",
+      "window": "quiet",
+      "n_trials": 1
+    },
+    {
+      "mission": "swarm-b",
+      "window": "august",
+      "n_trials": 5
+    },
+    {
+      "mission": "swarm-b",
+      "window": "quiet",
+      "n_trials": 6
+    },
+    {
+      "mission": "swarm-b",
+      "window": "storm",
+      "n_trials": 8
+    }
+  ],
+  "eligibility_counts": {
+    "nominal_below_horizon": 9829,
+    "nominal_below_15_degrees": 369,
+    "eligible": 112
+  },
+  "all_curve_hashes_verified": true,
+  "by_observation": [
+    {
+      "observation": "ends_at_centre",
+      "n_cases": 6048,
+      "n_trials": 112,
+      "false_crossing": 567,
+      "missed_crossing": 257,
+      "both_crossed": 2152,
+      "true_negative": 3072,
+      "observation_edge_mismatch": 449,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 3,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 3,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 566,
+        "missed_crossing": 256,
+        "both_crossed": 2152,
+        "true_negative": 3071
+      },
+      "closest_time_error_s": {
+        "n": 6048,
+        "median": -0.04702837482270785,
+        "median_abs": 0.05860548722531045,
+        "q95_abs_linear": 1.3915709153784404,
+        "max_abs": 12.553108630318036
+      },
+      "entry_time_error_s": {
+        "n": 2152,
+        "median": -0.02541635883332155,
+        "median_abs": 0.0813823909492639,
+        "q95_abs_linear": 0.8028517412227756,
+        "max_abs": 5.7635132997161085
+      },
+      "exit_time_error_s": {
+        "n": 2152,
+        "median": -0.054471970384283946,
+        "median_abs": 0.0923735922468327,
+        "q95_abs_linear": 0.8033470537252194,
+        "max_abs": 4.7808412511161125
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 6048,
+        "median": 0.0150168719124733,
+        "median_abs": 0.0150168719124733,
+        "q95_abs_linear": 0.3647569910907663,
+        "max_abs": 3.516112073705377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 6048,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "observation": "full",
+      "n_cases": 6048,
+      "n_trials": 112,
+      "false_crossing": 687,
+      "missed_crossing": 53,
+      "both_crossed": 2671,
+      "true_negative": 2637,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 3,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 3,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 685,
+        "missed_crossing": 53,
+        "both_crossed": 2670,
+        "true_negative": 2637
+      },
+      "closest_time_error_s": {
+        "n": 6048,
+        "median": -0.04702837482270785,
+        "median_abs": 0.05860548722531045,
+        "q95_abs_linear": 1.3915709153784404,
+        "max_abs": 12.553108630318036
+      },
+      "entry_time_error_s": {
+        "n": 2671,
+        "median": -0.0255920917615231,
+        "median_abs": 0.1028427796519929,
+        "q95_abs_linear": 1.1034997788191203,
+        "max_abs": 12.682403119790829
+      },
+      "exit_time_error_s": {
+        "n": 2671,
+        "median": -0.0799947722151719,
+        "median_abs": 0.1122502742859854,
+        "q95_abs_linear": 1.1918016559055644,
+        "max_abs": 13.984040257718924
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 6048,
+        "median": 0.0150168719124733,
+        "median_abs": 0.0150168719124733,
+        "q95_abs_linear": 0.3647569910907663,
+        "max_abs": 3.516112073705377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 6048,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "observation": "starts_at_centre",
+      "n_cases": 6048,
+      "n_trials": 112,
+      "false_crossing": 429,
+      "missed_crossing": 397,
+      "both_crossed": 2226,
+      "true_negative": 2996,
+      "observation_edge_mismatch": 411,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 3,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 3,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 428,
+        "missed_crossing": 397,
+        "both_crossed": 2225,
+        "true_negative": 2995
+      },
+      "closest_time_error_s": {
+        "n": 6048,
+        "median": -0.04702837482270785,
+        "median_abs": 0.05860548722531045,
+        "q95_abs_linear": 1.3915709153784404,
+        "max_abs": 12.553108630318036
+      },
+      "entry_time_error_s": {
+        "n": 2226,
+        "median": -0.03862564832436805,
+        "median_abs": 0.0895843289077129,
+        "q95_abs_linear": 0.9732504306706115,
+        "max_abs": 12.682403119790829
+      },
+      "exit_time_error_s": {
+        "n": 2226,
+        "median": -0.06564659312826629,
+        "median_abs": 0.09530000836970536,
+        "q95_abs_linear": 0.9571285704571953,
+        "max_abs": 13.984040257718924
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 6048,
+        "median": 0.0150168719124733,
+        "median_abs": 0.0150168719124733,
+        "q95_abs_linear": 0.3647569910907663,
+        "max_abs": 3.516112073705377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 6048,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    }
+  ],
+  "full_by_window": [
+    {
+      "window": "august",
+      "n_cases": 1620,
+      "n_trials": 30,
+      "false_crossing": 179,
+      "missed_crossing": 1,
+      "both_crossed": 721,
+      "true_negative": 719,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 1,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 1,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 178,
+        "missed_crossing": 1,
+        "both_crossed": 721,
+        "true_negative": 719
+      },
+      "closest_time_error_s": {
+        "n": 1620,
+        "median": -0.02611867657019335,
+        "median_abs": 0.03485023719677245,
+        "q95_abs_linear": 0.2144108986814606,
+        "max_abs": 0.4965984268428485
+      },
+      "entry_time_error_s": {
+        "n": 721,
+        "median": -0.0031591736103312,
+        "median_abs": 0.0990697950225405,
+        "q95_abs_linear": 0.4827215763698794,
+        "max_abs": 1.1029105132631123
+      },
+      "exit_time_error_s": {
+        "n": 721,
+        "median": -0.0804482156763108,
+        "median_abs": 0.1058271053734529,
+        "q95_abs_linear": 0.496035547784811,
+        "max_abs": 1.332611224941654
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1620,
+        "median": 0.01080282602045705,
+        "median_abs": 0.01080282602045705,
+        "q95_abs_linear": 0.0610564688736544,
+        "max_abs": 0.1121603905269517
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1620,
+        "median": 0.013164632811915999,
+        "median_abs": 0.013164632811915999,
+        "q95_abs_linear": 0.1021834906439405,
+        "max_abs": 0.1416979875906513
+      }
+    },
+    {
+      "window": "held-out",
+      "n_cases": 1188,
+      "n_trials": 22,
+      "false_crossing": 152,
+      "missed_crossing": 34,
+      "both_crossed": 507,
+      "true_negative": 495,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 152,
+        "missed_crossing": 34,
+        "both_crossed": 507,
+        "true_negative": 495
+      },
+      "closest_time_error_s": {
+        "n": 1188,
+        "median": -0.20825451110459375,
+        "median_abs": 0.20825451110459375,
+        "q95_abs_linear": 5.450905084798631,
+        "max_abs": 12.553108630318036
+      },
+      "entry_time_error_s": {
+        "n": 507,
+        "median": -0.1744669101002326,
+        "median_abs": 0.2195426672390245,
+        "q95_abs_linear": 5.390179337941206,
+        "max_abs": 12.682403119790829
+      },
+      "exit_time_error_s": {
+        "n": 507,
+        "median": -0.2943653839147095,
+        "median_abs": 0.2991254462110744,
+        "q95_abs_linear": 5.787803302558918,
+        "max_abs": 13.984040257718924
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1188,
+        "median": 0.0791597322806761,
+        "median_abs": 0.0791597322806761,
+        "q95_abs_linear": 1.5740263252002595,
+        "max_abs": 3.516112073705377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1188,
+        "median": 0.0891060372158117,
+        "median_abs": 0.0891060372158117,
+        "q95_abs_linear": 1.9380085155704747,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "window": "quiet",
+      "n_cases": 1998,
+      "n_trials": 37,
+      "false_crossing": 213,
+      "missed_crossing": 8,
+      "both_crossed": 896,
+      "true_negative": 881,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 1,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 1,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 212,
+        "missed_crossing": 8,
+        "both_crossed": 896,
+        "true_negative": 881
+      },
+      "closest_time_error_s": {
+        "n": 1998,
+        "median": -0.034368651102280254,
+        "median_abs": 0.0448774163715759,
+        "q95_abs_linear": 1.051104868039235,
+        "max_abs": 1.3918032077392857
+      },
+      "entry_time_error_s": {
+        "n": 896,
+        "median": -0.01574152956785535,
+        "median_abs": 0.08208600187445655,
+        "q95_abs_linear": 1.0516044192034295,
+        "max_abs": 1.5116874639448872
+      },
+      "exit_time_error_s": {
+        "n": 896,
+        "median": -0.050412768588005946,
+        "median_abs": 0.09279228409324065,
+        "q95_abs_linear": 1.0495522418367962,
+        "max_abs": 1.8869179743169688
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1998,
+        "median": 0.0125046181704938,
+        "median_abs": 0.0125046181704938,
+        "q95_abs_linear": 0.23276004037113127,
+        "max_abs": 0.353684431542093
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1998,
+        "median": 0.0164332851536936,
+        "median_abs": 0.0164332851536936,
+        "q95_abs_linear": 0.3847045840222761,
+        "max_abs": 0.7289387269780973
+      }
+    },
+    {
+      "window": "storm",
+      "n_cases": 1242,
+      "n_trials": 23,
+      "false_crossing": 143,
+      "missed_crossing": 10,
+      "both_crossed": 547,
+      "true_negative": 542,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 1,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 1,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 143,
+        "missed_crossing": 10,
+        "both_crossed": 546,
+        "true_negative": 542
+      },
+      "closest_time_error_s": {
+        "n": 1242,
+        "median": -0.03662829110513855,
+        "median_abs": 0.059657208301951994,
+        "q95_abs_linear": 0.896173932423276,
+        "max_abs": 3.698768803602944
+      },
+      "entry_time_error_s": {
+        "n": 547,
+        "median": -0.0210865480092328,
+        "median_abs": 0.0803834616316416,
+        "q95_abs_linear": 1.3264931679686933,
+        "max_abs": 5.7635132997161085
+      },
+      "exit_time_error_s": {
+        "n": 547,
+        "median": -0.059284488105165,
+        "median_abs": 0.1012880988322018,
+        "q95_abs_linear": 0.9362441673644291,
+        "max_abs": 3.715318633062535
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1242,
+        "median": 0.022770629786857698,
+        "median_abs": 0.022770629786857698,
+        "q95_abs_linear": 0.19603067584067838,
+        "max_abs": 0.570309461855736
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1242,
+        "median": 0.0262588661688545,
+        "median_abs": 0.0262588661688545,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.046333767514608
+      }
+    }
+  ],
+  "full_by_beam": [
+    {
+      "beam": "meerkat_L_1284.000000MHz",
+      "frequency_mhz": 1284.0,
+      "n_cases": 1008,
+      "n_trials": 112,
+      "false_crossing": 110,
+      "missed_crossing": 6,
+      "both_crossed": 449,
+      "true_negative": 443,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 1,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 1,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 110,
+        "missed_crossing": 6,
+        "both_crossed": 448,
+        "true_negative": 443
+      },
+      "closest_time_error_s": {
+        "n": 1008,
+        "median": -0.0469110130240724,
+        "median_abs": 0.0585773539105319,
+        "q95_abs_linear": 1.391480038900441,
+        "max_abs": 12.551777971387851
+      },
+      "entry_time_error_s": {
+        "n": 449,
+        "median": -0.0255920917615231,
+        "median_abs": 0.1076690039233575,
+        "q95_abs_linear": 1.0889128356628275,
+        "max_abs": 12.604690634651403
+      },
+      "exit_time_error_s": {
+        "n": 449,
+        "median": -0.0831068024480172,
+        "median_abs": 0.1132763721976233,
+        "q95_abs_linear": 1.197160848256104,
+        "max_abs": 13.700361129688162
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1008,
+        "median": 0.0150168719124733,
+        "median_abs": 0.0150168719124733,
+        "q95_abs_linear": 0.3647569360253721,
+        "max_abs": 3.5160971739072937
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1008,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "beam": "meerkat_L_1712.000000MHz",
+      "frequency_mhz": 1711.1640625,
+      "n_cases": 1008,
+      "n_trials": 112,
+      "false_crossing": 107,
+      "missed_crossing": 8,
+      "both_crossed": 453,
+      "true_negative": 440,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 107,
+        "missed_crossing": 8,
+        "both_crossed": 453,
+        "true_negative": 440
+      },
+      "closest_time_error_s": {
+        "n": 1008,
+        "median": -0.0468614894001994,
+        "median_abs": 0.0586195745505173,
+        "q95_abs_linear": 1.3915754030560354,
+        "max_abs": 12.551339238059176
+      },
+      "entry_time_error_s": {
+        "n": 453,
+        "median": -0.0278063091599483,
+        "median_abs": 0.1022084923008844,
+        "q95_abs_linear": 1.13625908184504,
+        "max_abs": 12.613706528881668
+      },
+      "exit_time_error_s": {
+        "n": 453,
+        "median": -0.0766647814339679,
+        "median_abs": 0.1070179111773446,
+        "q95_abs_linear": 1.1141068528027316,
+        "max_abs": 13.475199548634878
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1008,
+        "median": 0.015016871834193351,
+        "median_abs": 0.015016871834193351,
+        "q95_abs_linear": 0.36475696587721307,
+        "max_abs": 3.5160922590723365
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1008,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "beam": "meerkat_S0_2187.500000MHz",
+      "frequency_mhz": 2187.5,
+      "n_cases": 1008,
+      "n_trials": 112,
+      "false_crossing": 117,
+      "missed_crossing": 8,
+      "both_crossed": 443,
+      "true_negative": 440,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 1,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 1,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 116,
+        "missed_crossing": 8,
+        "both_crossed": 443,
+        "true_negative": 440
+      },
+      "closest_time_error_s": {
+        "n": 1008,
+        "median": -0.04685921555531645,
+        "median_abs": 0.05855660721235765,
+        "q95_abs_linear": 1.3915701108123726,
+        "max_abs": 12.551144056998558
+      },
+      "entry_time_error_s": {
+        "n": 443,
+        "median": -0.0247874935898283,
+        "median_abs": 0.1049806076513841,
+        "q95_abs_linear": 1.0886409795296406,
+        "max_abs": 12.631103267438023
+      },
+      "exit_time_error_s": {
+        "n": 443,
+        "median": -0.0799947722151719,
+        "median_abs": 0.1135825513526448,
+        "q95_abs_linear": 1.1660429941091115,
+        "max_abs": 13.496684897988215
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1008,
+        "median": 0.01501687151927025,
+        "median_abs": 0.01501687151927025,
+        "q95_abs_linear": 0.36475698473492746,
+        "max_abs": 3.5160900712800376
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1008,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "beam": "meerkat_S4_3062.500000MHz",
+      "frequency_mhz": 3062.5,
+      "n_cases": 1008,
+      "n_trials": 112,
+      "false_crossing": 123,
+      "missed_crossing": 12,
+      "both_crossed": 437,
+      "true_negative": 436,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 123,
+        "missed_crossing": 12,
+        "both_crossed": 437,
+        "true_negative": 436
+      },
+      "closest_time_error_s": {
+        "n": 1008,
+        "median": -0.0467286317569181,
+        "median_abs": 0.0585706945375645,
+        "q95_abs_linear": 1.3915667100499622,
+        "max_abs": 12.55055331444128
+      },
+      "entry_time_error_s": {
+        "n": 437,
+        "median": -0.0257182449948151,
+        "median_abs": 0.1016140271549365,
+        "q95_abs_linear": 1.0751088652589988,
+        "max_abs": 12.649689701042377
+      },
+      "exit_time_error_s": {
+        "n": 437,
+        "median": -0.080770210408932,
+        "median_abs": 0.1142985208786319,
+        "q95_abs_linear": 1.095058332136192,
+        "max_abs": 13.325213507643806
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1008,
+        "median": 0.015016870149865101,
+        "median_abs": 0.015016870149865101,
+        "q95_abs_linear": 0.3647570131165026,
+        "max_abs": 3.5160834446480647
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1008,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "beam": "meerkat_S4_3500.000000MHz",
+      "frequency_mhz": 3499.1455078125,
+      "n_cases": 1008,
+      "n_trials": 112,
+      "false_crossing": 123,
+      "missed_crossing": 15,
+      "both_crossed": 437,
+      "true_negative": 433,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 123,
+        "missed_crossing": 15,
+        "both_crossed": 437,
+        "true_negative": 433
+      },
+      "closest_time_error_s": {
+        "n": 1008,
+        "median": -0.04672724577427615,
+        "median_abs": 0.0585706945375645,
+        "q95_abs_linear": 1.3915598872242376,
+        "max_abs": 12.550485378141074
+      },
+      "entry_time_error_s": {
+        "n": 437,
+        "median": -0.0255499958252552,
+        "median_abs": 0.0957093757442586,
+        "q95_abs_linear": 1.0616636886445199,
+        "max_abs": 12.682403119790829
+      },
+      "exit_time_error_s": {
+        "n": 437,
+        "median": -0.0785217429911988,
+        "median_abs": 0.1127957329874906,
+        "q95_abs_linear": 1.060693455163785,
+        "max_abs": 13.228642522295718
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1008,
+        "median": 0.01501686970996745,
+        "median_abs": 0.01501686970996745,
+        "q95_abs_linear": 0.3647570351317265,
+        "max_abs": 3.516082673955162
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1008,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "beam": "meerkat_U_816.000000MHz",
+      "frequency_mhz": 816.0,
+      "n_cases": 1008,
+      "n_trials": 112,
+      "false_crossing": 107,
+      "missed_crossing": 4,
+      "both_crossed": 452,
+      "true_negative": 445,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 1,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 1,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 106,
+        "missed_crossing": 4,
+        "both_crossed": 452,
+        "true_negative": 445
+      },
+      "closest_time_error_s": {
+        "n": 1008,
+        "median": -0.04708311001367235,
+        "median_abs": 0.05857163459326375,
+        "q95_abs_linear": 1.3916184846581154,
+        "max_abs": 12.553108630318036
+      },
+      "entry_time_error_s": {
+        "n": 452,
+        "median": -0.0250462490171139,
+        "median_abs": 0.10776472213549901,
+        "q95_abs_linear": 1.1053772452663526,
+        "max_abs": 12.593113503884572
+      },
+      "exit_time_error_s": {
+        "n": 452,
+        "median": -0.0831476209402357,
+        "median_abs": 0.11234402754695891,
+        "q95_abs_linear": 1.305504541904047,
+        "max_abs": 13.984040257718924
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 1008,
+        "median": 0.0150168694872777,
+        "median_abs": 0.0150168694872777,
+        "q95_abs_linear": 0.36475694386970037,
+        "max_abs": 3.516112073705377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 1008,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    }
+  ],
+  "full_by_offset": [
+    {
+      "offset_fraction": -1.5,
+      "n_cases": 672,
+      "n_trials": 112,
+      "false_crossing": 0,
+      "missed_crossing": 1,
+      "both_crossed": 0,
+      "true_negative": 671,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 0,
+        "missed_crossing": 1,
+        "both_crossed": 0,
+        "true_negative": 671
+      },
+      "closest_time_error_s": {
+        "n": 672,
+        "median": -0.0471948282202105,
+        "median_abs": 0.05853561714500975,
+        "q95_abs_linear": 1.3916308497064824,
+        "max_abs": 12.553108630318036
+      },
+      "entry_time_error_s": {
+        "n": 0,
+        "median": null,
+        "median_abs": null,
+        "q95_abs_linear": null,
+        "max_abs": null
+      },
+      "exit_time_error_s": {
+        "n": 0,
+        "median": null,
+        "median_abs": null,
+        "q95_abs_linear": null,
+        "max_abs": null
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 672,
+        "median": 0.0150168714037727,
+        "median_abs": 0.0150168714037727,
+        "q95_abs_linear": 0.36475687190448125,
+        "max_abs": 3.516112073705377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 672,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "offset_fraction": -1.05,
+      "n_cases": 672,
+      "n_trials": 112,
+      "false_crossing": 0,
+      "missed_crossing": 19,
+      "both_crossed": 0,
+      "true_negative": 653,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 0,
+        "missed_crossing": 19,
+        "both_crossed": 0,
+        "true_negative": 653
+      },
+      "closest_time_error_s": {
+        "n": 672,
+        "median": -0.04705888187828845,
+        "median_abs": 0.0585773539105319,
+        "q95_abs_linear": 1.3915836582587728,
+        "max_abs": 12.55203305559863
+      },
+      "entry_time_error_s": {
+        "n": 0,
+        "median": null,
+        "median_abs": null,
+        "q95_abs_linear": null,
+        "max_abs": null
+      },
+      "exit_time_error_s": {
+        "n": 0,
+        "median": null,
+        "median_abs": null,
+        "q95_abs_linear": null,
+        "max_abs": null
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 672,
+        "median": 0.01501687141884515,
+        "median_abs": 0.01501687141884515,
+        "q95_abs_linear": 0.3647569407674633,
+        "max_abs": 3.516100030573813
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 672,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "offset_fraction": -1.0,
+      "n_cases": 672,
+      "n_trials": 112,
+      "false_crossing": 350,
+      "missed_crossing": 2,
+      "both_crossed": 320,
+      "true_negative": 0,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 1,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 1,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 349,
+        "missed_crossing": 2,
+        "both_crossed": 320,
+        "true_negative": 0
+      },
+      "closest_time_error_s": {
+        "n": 672,
+        "median": -0.04703731617695805,
+        "median_abs": 0.05854276979478985,
+        "q95_abs_linear": 1.3915914251930561,
+        "max_abs": 12.55191904239021
+      },
+      "entry_time_error_s": {
+        "n": 320,
+        "median": 0.10892683734853781,
+        "median_abs": 0.13363280613770695,
+        "q95_abs_linear": 0.9060503915534605,
+        "max_abs": 11.87451419842164
+      },
+      "exit_time_error_s": {
+        "n": 320,
+        "median": -0.2030039138736316,
+        "median_abs": 0.21411038980824365,
+        "q95_abs_linear": 1.2607536031774635,
+        "max_abs": 13.984040257718924
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 672,
+        "median": 0.0150168716437691,
+        "median_abs": 0.0150168716437691,
+        "q95_abs_linear": 0.3647569607761061,
+        "max_abs": 3.516098753800161
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 672,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "offset_fraction": -0.95,
+      "n_cases": 672,
+      "n_trials": 112,
+      "false_crossing": 28,
+      "missed_crossing": 0,
+      "both_crossed": 644,
+      "true_negative": 0,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 28,
+        "missed_crossing": 0,
+        "both_crossed": 644,
+        "true_negative": 0
+      },
+      "closest_time_error_s": {
+        "n": 672,
+        "median": -0.04701460121302,
+        "median_abs": 0.058537644558440155,
+        "q95_abs_linear": 1.3915907233233797,
+        "max_abs": 12.551805728712033
+      },
+      "entry_time_error_s": {
+        "n": 644,
+        "median": -0.06315861790343075,
+        "median_abs": 0.1018540284083467,
+        "q95_abs_linear": 1.04563074041854,
+        "max_abs": 12.084180069012309
+      },
+      "exit_time_error_s": {
+        "n": 644,
+        "median": -0.04751743577184,
+        "median_abs": 0.1058899943377157,
+        "q95_abs_linear": 0.9810634058566695,
+        "max_abs": 13.375007332185788
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 672,
+        "median": 0.0150168719124733,
+        "median_abs": 0.0150168719124733,
+        "q95_abs_linear": 0.36475698095915,
+        "max_abs": 3.5160974847805635
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 672,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "offset_fraction": 0.0,
+      "n_cases": 672,
+      "n_trials": 112,
+      "false_crossing": 0,
+      "missed_crossing": 0,
+      "both_crossed": 672,
+      "true_negative": 0,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 0,
+        "missed_crossing": 0,
+        "both_crossed": 672,
+        "true_negative": 0
+      },
+      "closest_time_error_s": {
+        "n": 672,
+        "median": -0.046660075690833094,
+        "median_abs": 0.0585706945375645,
+        "q95_abs_linear": 1.3916373358139122,
+        "max_abs": 12.549608447276508
+      },
+      "entry_time_error_s": {
+        "n": 672,
+        "median": -0.0469579747066204,
+        "median_abs": 0.058598112267100905,
+        "q95_abs_linear": 1.3903426644177685,
+        "max_abs": 12.682403119790829
+      },
+      "exit_time_error_s": {
+        "n": 672,
+        "median": -0.0468461466780222,
+        "median_abs": 0.05860427810113835,
+        "q95_abs_linear": 1.391546558514312,
+        "max_abs": 12.53091308848036
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 672,
+        "median": 0.01501687029097925,
+        "median_abs": 0.01501687029097925,
+        "q95_abs_linear": 0.3647569206394688,
+        "max_abs": 3.5160722046817448
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 672,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "offset_fraction": 0.95,
+      "n_cases": 672,
+      "n_trials": 112,
+      "false_crossing": 17,
+      "missed_crossing": 0,
+      "both_crossed": 655,
+      "true_negative": 0,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 17,
+        "missed_crossing": 0,
+        "both_crossed": 655,
+        "true_negative": 0
+      },
+      "closest_time_error_s": {
+        "n": 672,
+        "median": -0.0466335681713693,
+        "median_abs": 0.0586302474782791,
+        "q95_abs_linear": 1.3915427456109795,
+        "max_abs": 12.548957842086068
+      },
+      "entry_time_error_s": {
+        "n": 655,
+        "median": -0.0480248997046058,
+        "median_abs": 0.1039059774966481,
+        "q95_abs_linear": 1.074591588165824,
+        "max_abs": 5.825686170802263
+      },
+      "exit_time_error_s": {
+        "n": 655,
+        "median": -0.0578099372706946,
+        "median_abs": 0.092593398956758,
+        "q95_abs_linear": 1.023121040710345,
+        "max_abs": 5.718572136730333
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 672,
+        "median": 0.01501686995248165,
+        "median_abs": 0.01501686995248165,
+        "q95_abs_linear": 0.364757177521261,
+        "max_abs": 3.5160655554911178
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 672,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "offset_fraction": 1.0,
+      "n_cases": 672,
+      "n_trials": 112,
+      "false_crossing": 292,
+      "missed_crossing": 0,
+      "both_crossed": 380,
+      "true_negative": 0,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 2,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 2,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 291,
+        "missed_crossing": 0,
+        "both_crossed": 379,
+        "true_negative": 0
+      },
+      "closest_time_error_s": {
+        "n": 672,
+        "median": -0.0466343508357302,
+        "median_abs": 0.058624625480846654,
+        "q95_abs_linear": 1.391548048380583,
+        "max_abs": 12.54912497150256
+      },
+      "entry_time_error_s": {
+        "n": 380,
+        "median": 0.22645851851893117,
+        "median_abs": 0.29892996130451943,
+        "q95_abs_linear": 1.4763826758536422,
+        "max_abs": 5.7635132997161085
+      },
+      "exit_time_error_s": {
+        "n": 380,
+        "median": -0.3021311410891424,
+        "median_abs": 0.3290575463824602,
+        "q95_abs_linear": 1.7855711208441079,
+        "max_abs": 6.151445700326653
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 672,
+        "median": 0.0150168696119399,
+        "median_abs": 0.0150168696119399,
+        "q95_abs_linear": 0.364757181040952,
+        "max_abs": 3.516067404594982
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 672,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "offset_fraction": 1.05,
+      "n_cases": 672,
+      "n_trials": 112,
+      "false_crossing": 0,
+      "missed_crossing": 31,
+      "both_crossed": 0,
+      "true_negative": 641,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 0,
+        "missed_crossing": 31,
+        "both_crossed": 0,
+        "true_negative": 641
+      },
+      "closest_time_error_s": {
+        "n": 672,
+        "median": -0.04651532056184205,
+        "median_abs": 0.05855999407303015,
+        "q95_abs_linear": 1.391552449838322,
+        "max_abs": 12.549082306460903
+      },
+      "entry_time_error_s": {
+        "n": 0,
+        "median": null,
+        "median_abs": null,
+        "q95_abs_linear": null,
+        "max_abs": null
+      },
+      "exit_time_error_s": {
+        "n": 0,
+        "median": null,
+        "median_abs": null,
+        "q95_abs_linear": null,
+        "max_abs": null
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 672,
+        "median": 0.01501687167102885,
+        "median_abs": 0.01501687167102885,
+        "q95_abs_linear": 0.3647571847187368,
+        "max_abs": 3.5160669333360377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 672,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "offset_fraction": 1.5,
+      "n_cases": 672,
+      "n_trials": 112,
+      "false_crossing": 0,
+      "missed_crossing": 0,
+      "both_crossed": 0,
+      "true_negative": 672,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 0,
+        "missed_crossing": 0,
+        "both_crossed": 0,
+        "true_negative": 672
+      },
+      "closest_time_error_s": {
+        "n": 672,
+        "median": -0.0464796930681978,
+        "median_abs": 0.05864296436210875,
+        "q95_abs_linear": 1.3915461119862995,
+        "max_abs": 12.548739142322589
+      },
+      "entry_time_error_s": {
+        "n": 0,
+        "median": null,
+        "median_abs": null,
+        "q95_abs_linear": null,
+        "max_abs": null
+      },
+      "exit_time_error_s": {
+        "n": 0,
+        "median": null,
+        "median_abs": null,
+        "q95_abs_linear": null,
+        "max_abs": null
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 672,
+        "median": 0.015016869731975451,
+        "median_abs": 0.015016869731975451,
+        "q95_abs_linear": 0.3647572014840851,
+        "max_abs": 3.516063125830616
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 672,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    }
+  ],
+  "by_observation_without_exact_boundary_offsets": [
+    {
+      "observation": "ends_at_centre",
+      "n_cases": 4704,
+      "n_trials": 112,
+      "false_crossing": 179,
+      "missed_crossing": 12,
+      "both_crossed": 1837,
+      "true_negative": 2676,
+      "observation_edge_mismatch": 134,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 179,
+        "missed_crossing": 12,
+        "both_crossed": 1837,
+        "true_negative": 2676
+      },
+      "closest_time_error_s": {
+        "n": 4704,
+        "median": -0.04702837482270785,
+        "median_abs": 0.05860548722531045,
+        "q95_abs_linear": 1.3915712045933841,
+        "max_abs": 12.553108630318036
+      },
+      "entry_time_error_s": {
+        "n": 1837,
+        "median": -0.0405955461694781,
+        "median_abs": 0.0767309199535448,
+        "q95_abs_linear": 0.747343531176454,
+        "max_abs": 4.80061178720434
+      },
+      "exit_time_error_s": {
+        "n": 1837,
+        "median": -0.0386630198934085,
+        "median_abs": 0.0796483160237071,
+        "q95_abs_linear": 0.7982087496146861,
+        "max_abs": 4.7808412511161125
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 4704,
+        "median": 0.0150168719124733,
+        "median_abs": 0.0150168719124733,
+        "q95_abs_linear": 0.36475698791833366,
+        "max_abs": 3.516112073705377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 4704,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "observation": "full",
+      "n_cases": 4704,
+      "n_trials": 112,
+      "false_crossing": 45,
+      "missed_crossing": 51,
+      "both_crossed": 1971,
+      "true_negative": 2637,
+      "observation_edge_mismatch": 0,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 45,
+        "missed_crossing": 51,
+        "both_crossed": 1971,
+        "true_negative": 2637
+      },
+      "closest_time_error_s": {
+        "n": 4704,
+        "median": -0.04702837482270785,
+        "median_abs": 0.05860548722531045,
+        "q95_abs_linear": 1.3915712045933841,
+        "max_abs": 12.553108630318036
+      },
+      "entry_time_error_s": {
+        "n": 1971,
+        "median": -0.0493752934965305,
+        "median_abs": 0.0814608382731544,
+        "q95_abs_linear": 1.0534984718092262,
+        "max_abs": 12.682403119790829
+      },
+      "exit_time_error_s": {
+        "n": 1971,
+        "median": -0.0486337225780921,
+        "median_abs": 0.0864707494279477,
+        "q95_abs_linear": 1.0494484167988902,
+        "max_abs": 13.375007332185788
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 4704,
+        "median": 0.0150168719124733,
+        "median_abs": 0.0150168719124733,
+        "q95_abs_linear": 0.36475698791833366,
+        "max_abs": 3.516112073705377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 4704,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    },
+    {
+      "observation": "starts_at_centre",
+      "n_cases": 4704,
+      "n_trials": 112,
+      "false_crossing": 89,
+      "missed_crossing": 43,
+      "both_crossed": 1927,
+      "true_negative": 2645,
+      "observation_edge_mismatch": 44,
+      "prediction_closest_time_censored": 0,
+      "prediction_peak_time_censored": 0,
+      "prediction_entry_censored": 0,
+      "prediction_exit_censored": 0,
+      "prediction_tangential_contact": 0,
+      "prediction_near_boundary": 0,
+      "reference_closest_time_censored": 0,
+      "reference_peak_time_censored": 0,
+      "reference_entry_censored": 0,
+      "reference_exit_censored": 0,
+      "reference_tangential_contact": 0,
+      "reference_near_boundary": 0,
+      "any_near_boundary": 0,
+      "outcomes_away_from_boundary": {
+        "false_crossing": 89,
+        "missed_crossing": 43,
+        "both_crossed": 1927,
+        "true_negative": 2645
+      },
+      "closest_time_error_s": {
+        "n": 4704,
+        "median": -0.04702837482270785,
+        "median_abs": 0.05860548722531045,
+        "q95_abs_linear": 1.3915712045933841,
+        "max_abs": 12.553108630318036
+      },
+      "entry_time_error_s": {
+        "n": 1927,
+        "median": -0.0507837368652813,
+        "median_abs": 0.0801569515191043,
+        "q95_abs_linear": 0.9662622898172465,
+        "max_abs": 12.682403119790829
+      },
+      "exit_time_error_s": {
+        "n": 1927,
+        "median": -0.0508181002424379,
+        "median_abs": 0.0833851004865873,
+        "q95_abs_linear": 0.9486931361365919,
+        "max_abs": 13.375007332185788
+      },
+      "instantaneous_error_at_reference_closest_deg": {
+        "n": 4704,
+        "median": 0.0150168719124733,
+        "median_abs": 0.0150168719124733,
+        "q95_abs_linear": 0.36475698791833366,
+        "max_abs": 3.516112073705377
+      },
+      "max_sampled_instantaneous_error_deg": {
+        "n": 4704,
+        "median": 0.020554221507739702,
+        "median_abs": 0.020554221507739702,
+        "q95_abs_linear": 0.7813631307210722,
+        "max_abs": 3.981128766393812
+      }
+    }
+  ]
+}

@@ -1,4 +1,6 @@
-"""What the viewer needs for storm mode and for the May 2024 replay (Phase 3, Step 5).
+"""Sensitivity analysis on the baseline event set and epoch-based weather replay.
+
+Candidate discovery is not repeated; overlays do not establish full-scenario completeness.
 
 Two exports, and they are separate on purpose.
 
@@ -348,6 +350,8 @@ def build_overlays(run: RunDirectory, bundle: dict[str, Any]) -> dict[str, Any]:
         rows["tca"] = pd.to_datetime(rows["tca"], utc=True)
         detail = rows[rows["event_id"].isin(set(event_ids))]
         scenarios[name] = {
+            "analysis_scope": "sensitivity analysis on the baseline event set",
+            "candidate_rediscovery": False,
             "events": event_overlay(detail, event_ids),
             "pairs": pair_overlay(rows, keys),
             "summary": scenario_summary(rows),
@@ -357,6 +361,8 @@ def build_overlays(run: RunDirectory, bundle: dict[str, Any]) -> dict[str, Any]:
     info = run.read_run()
     return {
         "overlay_version": OVERLAY_VERSION,
+        "analysis_scope": "sensitivity analysis on the baseline event set",
+        "candidate_rediscovery": False,
         "generator": f"driftwatch {__version__}",
         "run_id": info.get("run_id"),
         "n_events": len(event_ids),

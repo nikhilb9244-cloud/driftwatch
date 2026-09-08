@@ -3,6 +3,23 @@
 All on-disk products live under `data/` (git-ignored) except the viewer bundle, which is
 written into `web/public/data/` so Vite serves it. Times are UTC throughout.
 
+## Time semantics in snapshot schema 2
+
+`epoch` is retained for compatibility and `state_epoch` names its meaning explicitly.
+`provider_created_at`, `published_at` and `retrieved_at` are separate nullable timestamps;
+creation never substitutes for publication. `fetched_at` is the legacy alias for actual
+acquisition, not the historical target. `epoch_selection_as_of` records the reconstruction
+cutoff; `reconstructed_at` records when that reconstruction was made. `selection_kind`
+labels an `epoch-based reconstruction` or a `retrieval snapshot`.
+
+Old epoch reconstructions stored their target in `fetched_at`; readers clear that fabricated
+acquisition value and preserve it as unknown. They cannot recover publication or retrieval
+from epoch. Current SATCAT/group metadata does not establish historical membership.
+History files retain available provider creation/publication/retrieval fields; absent fields
+in older files remain null. OEM local analysis retains creation and originator, records local
+import separately, and leaves provider retrieval and publication unknown unless supplied.
+The late-publication operational replay acceptance test remains open in [the roadmap](../ROADMAP.md).
+
 ## Cache: `data/cache/celestrak/`
 
 Raw downloads, kept verbatim so a snapshot can be rebuilt offline.
@@ -378,7 +395,7 @@ The parquet metadata records the run id and the NRLMSIS version.
 | `storm_source_primary`, `storm_source_secondary` | string | Where each object's ballistic coefficient came from: `history` (fitted from its own decay), `bstar`, `typical`, or `none` (no coefficient, so no shift). A `!extrapolated` suffix means the scenario's implied decay for that object passed `STORM_MAX_DECAY_FRACTION`; that is a statement about the size of the decay, not about the coefficient. **`operator-controlled/<reason>`** (2026-09-05) means the object was given no mean shift: `served` (the event's geometry is the operator's published states), `operator-ephemeris` (the element set is CelesTrak's fit to the operator's ephemeris) — no term at all in either case, since the excess over SGP4's atmosphere is undefined — or `known` / `observed` (a manoeuvring object on a tracking-derived set: mean zero, in-track variance kept). |
 | `storm_validity` | string | How far Step 4's validation reaches this event, from the **weaker** of the two sources above: `validated` (both `history`), `indicative` (anything resting on a B\* inversion, a stand-in, or no coefficient), `operator-controlled` (both objects given no mean shift, so no displacement was applied; 2026-09-05), `none` (no storm layer at all — `quiet`, and any plain labelled rescore). An operator-controlled side is neutral: an event with one is judged on its free-flying side alone. The storm term is predictive at r = 0.88 for objects with a measured coefficient and has no demonstrated skill otherwise, so **every aggregate over these rows is reported both ways**. Nothing is weighted or withheld by the label; the numbers are identical either way. Added at the Step 4 review (2026-09-03) and filled on read for runs scored before it. See `docs/methods.md`, "Storm-term validity". |
 | `scoreable`, `unscoreable_reason` | bool, string | False, with the reason, when either object's in-track displacement passed `STORM_MAX_SHIFT_REVOLUTIONS` of its orbit's circumference. Such an event carries **NaN in every probability column**, `unscoreable` as region and flag, `none` as confidence, and is excluded from every aggregate. The geometry, the covariance and the shift all stay. |
-| `slow_encounter` | bool | True below 0.1 km/s relative, where the two-dimensional method's straight-line assumption no longer holds and the probability is a **known underestimate**. The flag rests on that assumption, not on any measured error: no comparison driftwatch has run can size the bias, because ESA's own risk column shares the approximation. Not a correction either: nothing rescales `pc`. See `driftwatch.risk.pc.slow_encounters`. |
+| `slow_encounter` | bool | Flags an encounter transit long relative to orbital period. Curved motion can invalidate the two-dimensional approximation; the error direction and magnitude are unmeasured. No correction rescales `pc`. |
 | `computed_at` | timestamp[us, UTC] | When this scenario was scored. |
 
 ### `conjunctions.parquet`
@@ -437,7 +454,7 @@ index for a question the run archive still answers.
 | `pc`, `pc_max` | float32 | The scenario's probability and the maximum over the covariance-scale sweep. |
 | `flag` | string | `red`, `yellow` or `none`, as the run published it. |
 | `scoreable`, `unscoreable_reason` | boolean, string | An unscoreable event is indexed with a null probability and its reason, never as a zero. |
-| `slow_encounter` | boolean | The geometry the two-dimensional probability is known to underestimate, carried so a series can be read with that caveat attached. |
+| `slow_encounter` | boolean | Carries the slow-encounter validity flag; no fixed probability-bias direction is established. |
 | `storm_validity` | string | `validated`, `indicative` or `no-storm-term` for that scenario. |
 | `cov_source_primary`, `cov_source_secondary` | string | Where each covariance came from. |
 | `primary_trajectory`, `secondary_trajectory` | string | `sgp4` or `spacex-ephemeris`; null for a run screened before Phase 4 Step 1, which is still a real observation of the same encounter. |
@@ -494,7 +511,7 @@ ignores a bundle whose `bundle_version` it does not know.
 A pair row carries the event count, the number inside the box, the first time of closest
 approach, the closest miss, the highest probability with the miss of the event that
 produced it (`miss_at_max_pc_km`, which is not always the closest pass), the cumulative
-probability (an upper bound; the events are not independent), the maximum probability,
+probability (an independence-form ranking summary; dependence is unmodelled), the maximum probability,
 the region, the flag,
 the confidence, the manoeuvre level, the ephemeris source and the covariance source. An
 event row carries the geometry, the encounter-plane covariance (`enc_cov_*`), the

@@ -20,7 +20,7 @@ Physics note: an element set is a fit to tracking data over a few days, tagged w
 epoch. Two element sets for the same object with different epochs are two different
 fits, and the difference between them after propagating one to the other's epoch is how
 much the fits disagree, not how far either is from the truth. ``docs/screening.md``
-explains why that is a floor on the error rather than a measurement of it.
+explains why consistency bounds absolute accuracy in neither direction.
 """
 
 from __future__ import annotations
@@ -50,7 +50,14 @@ from driftwatch.orbit.time import parse_utc, stamp
 
 log = logging.getLogger(__name__)
 
-HISTORY_COLUMNS: tuple[str, ...] = (*OMM_FIELDS.values(), "source", "fetched_at")
+HISTORY_COLUMNS: tuple[str, ...] = (
+    *OMM_FIELDS.values(),
+    "source",
+    "fetched_at",
+    "provider_created_at",
+    "published_at",
+    "retrieved_at",
+)
 HISTORY_SCHEMA = pa.schema([SNAPSHOT_SCHEMA.field(name) for name in HISTORY_COLUMNS])
 INDEX_SCHEMA = pa.schema(
     [
@@ -74,10 +81,13 @@ def _utc(t: datetime) -> pd.Timestamp:
 
 def _normalise(df: pd.DataFrame) -> pd.DataFrame:
     """Common dtypes so frames from different sources concatenate cleanly."""
-    df = df.loc[:, list(HISTORY_COLUMNS)].copy()
+    df = df.reindex(columns=list(HISTORY_COLUMNS)).copy()
     df["norad_id"] = df["norad_id"].astype("int64")
     df["epoch"] = pd.to_datetime(df["epoch"], utc=True).astype("datetime64[us, UTC]")
     df["fetched_at"] = pd.to_datetime(df["fetched_at"], utc=True).astype("datetime64[us, UTC]")
+    for name in ("provider_created_at", "published_at", "retrieved_at"):
+        df[name] = pd.to_datetime(df[name], utc=True).astype("datetime64[us, UTC]")
+    df["retrieved_at"] = df["retrieved_at"].fillna(df["fetched_at"])
     df["source"] = df["source"].astype("string")
     return df
 
@@ -88,13 +98,14 @@ def frame_from_records(
     """Turn raw OMM records (Space-Track ``gp_history`` or ``gp``) into a history frame.
 
     Space-Track may return the same epoch twice for an object (re-issued element sets);
-    the last one in ``records`` is kept.
+    the last one in ``records`` is kept. ``fetched_at`` must be an actual provider
+    retrieval time; omission preserves unknown acquisition time for local files.
     """
     if not records:
         return _empty_frame()
     df = records_to_frame(records)
     df["source"] = source
-    df["fetched_at"] = pd.Timestamp(fetched_at or datetime.now(UTC)).tz_convert("UTC")
+    df["fetched_at"] = pd.to_datetime(fetched_at, utc=True) if fetched_at is not None else pd.NaT
     df = _normalise(df)
     df = df.sort_values(["norad_id", "epoch"]).drop_duplicates(["norad_id", "epoch"], keep="last")
     return df.reset_index(drop=True)

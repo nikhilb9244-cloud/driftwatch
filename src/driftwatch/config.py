@@ -113,7 +113,7 @@ SPACEX_MAX_OBJECTS = 300
 # chain; that is the first Phase 4 item in ROADMAP.md.
 SPACEX_SGP4_FIT_RMS_KM = 0.20
 # CelesTrak publishes that residual as one scalar. An SGP4 fit to an ephemeris misses mostly
-# along track, so the scalar is split in the shape of the base model's own measured floor
+# along track, so the scalar is split in the shape of the base model's fitted short-lead consistency offset
 # where there is one, and in this shape -- the shortest supplemental bin's measured
 # disagreement, unit-normed -- where there is not.
 SPACEX_FIT_RMS_SHARE = (0.099, 0.994, 0.055)

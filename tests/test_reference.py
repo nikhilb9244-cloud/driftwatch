@@ -283,7 +283,9 @@ def test_mean_altitude_from_mean_motion_and_the_summary_shape():
     band = summary["by_band"]["1000-1400 km"]["quiet"]
     assert band["n_sets"] == 3 and band["missions"] == ["jason-3"]
     assert band["by_lead_h"]["72"]["n"] == 2, "the manoeuvre trial is out"
-    assert band["horizon"]["last_lead_h_within"] == 72.0 and band["horizon"]["first_lead_h_beyond"] is None
+    assert band["horizon"]["last_lead_h_within"] == 6.0
+    assert band["horizon"]["first_lead_h_beyond"] is None
+    assert band["horizon"]["termination"] == "coverage_censored", "the unobserved twelve-hour bin cannot imply a pass"
     assert "jason-3" in summary["by_mission"]
     statement = reference_run.population_statement([reference.MISSIONS["jason-3"]], list(reference.WINDOWS), trials)
     assert "1000-1400 km: Jason-3 (3 element sets" in statement and "4 windows" in statement

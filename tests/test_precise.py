@@ -1,10 +1,11 @@
 """The calibration against precise orbits: the SP3 reader, the interpolation and its gaps, the residual's sign,
-one trial per element set, the coverage arithmetic, the horizon rule, the manoeuvre detector, and the promise
-that the held-out window is held out."""
+one trial per element set, the coverage arithmetic, the horizon rule, the manoeuvre detector, and the retained
+historical window definitions (all have now been inspected)."""
 
 from __future__ import annotations
 
 from datetime import date, timedelta
+from types import SimpleNamespace
 
 import numpy as np
 import pandas as pd
@@ -144,6 +145,34 @@ def test_the_in_track_residual_is_positive_when_the_satellite_is_ahead_of_the_se
     r_sgp4 = r_true - np.array([[0.0, 1.0, 0.0]])  # the set put the satellite a kilometre behind
     delta = to_ric(ric_basis(r_true, v_true), r_true - r_sgp4)
     assert delta[0, 1] == pytest.approx(1.0) and abs(delta[0, 0]) < 1e-9 and abs(delta[0, 2]) < 1e-9
+
+
+def test_trial_coverage_uses_truth_basis_sigmas(monkeypatch):
+    sets = pd.DataFrame({"norad_id": [39452], "epoch": [pd.Timestamp("2024-04-20T00:00:00")]})
+    covariance = SimpleNamespace(
+        covariance_ric=lambda *args: SimpleNamespace(cov_km2=np.array([np.diag([1.0, 100.0, 9.0])]))
+    )
+    inputs = SimpleNamespace(
+        norad_id=39452,
+        category="payload",
+        altitude_band="leo",
+        trial_sets=sets,
+        covariance=covariance,
+        covariance_source="synthetic",
+        label="test",
+    )
+    state = SimpleNamespace(
+        r_teme=np.array([[[10.0, 0.0, 0.0]]]), v_teme=np.array([[[0.0, 1.0, 0.0]]]), error=np.zeros((1, 1), dtype=int)
+    )
+    orbit = SimpleNamespace(
+        states_teme=lambda at: (np.array([[0.0, 10.0, 0.0]]), np.array([[-1.0, 0.0, 0.0]]), np.array([True]))
+    )
+    monkeypatch.setattr(precise, "build_satrecs", lambda one: None)
+    monkeypatch.setattr(precise, "propagate_satrecs", lambda *args: state)
+    result = precise.satellite_trials(inputs, orbit, precise.WINDOWS[0], None, leads_hours=(6,), detected=[])
+    np.testing.assert_allclose(result[["sigma_r_km", "sigma_i_km", "sigma_c_km"]], [[10.0, 1.0, 3.0]])
+    assert result.radial_inside_2s.iloc[0]
+    assert not result.in_track_inside_2s.iloc[0]
 
 
 def designed_trials() -> pd.DataFrame:

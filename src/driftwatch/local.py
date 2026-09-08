@@ -13,7 +13,7 @@ their own files without a byte leaving the machine:
    received;
 3. the **calibration against the operator's ephemeris**, the Swarm benchmark's machinery with
    the operator's own orbit as a declared reference (``driftwatch.storm.precise``): for every public
-   element set issued while the ephemeris runs, the residual by lead in the satellite's RIC
+   element set selected by state epoch while the ephemeris runs, the residual by lead in the satellite's RIC
    frame, the coverage of the covariance the screening would have carried, the storm term's
    effect if the weather is cached, and the horizon for the screening box. The operator's own
    manoeuvre record, if supplied, decides the exclusion; the project's detection is reported
@@ -43,7 +43,7 @@ import urllib.request
 from collections.abc import Iterator
 from contextlib import contextmanager
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -134,15 +134,39 @@ class OemSegment:
     states: pd.DataFrame
     source: str = ""
     comments: list[str] = field(default_factory=list)
+    provider_created_at: pd.Timestamp | None = None
+    published_at: pd.Timestamp | None = None
+    retrieved_at: pd.Timestamp | None = None
+    imported_at: pd.Timestamp | None = None
+    originator: str | None = None
+
+    def temporal_metadata(self) -> dict[str, Any]:
+        def iso(value):
+            return None if value is None or pd.isna(value) else pd.Timestamp(value).isoformat()
+
+        return {
+            "source": self.source,
+            "state_epoch_start": iso(self.states.t.min()) if len(self.states) else None,
+            "state_epoch_end": iso(self.states.t.max()) if len(self.states) else None,
+            "state_time_system": self.time_system,
+            "provider_created_at": iso(self.provider_created_at),
+            "published_at": iso(self.published_at),
+            "retrieved_at": iso(self.retrieved_at),
+            "imported_at": iso(self.imported_at),
+            "originator": self.originator,
+        }
 
 
 _KV = re.compile(r"^\s*([A-Z0-9_]+)\s*=\s*(.*?)\s*$")
 
 
-def parse_oem(text: str, *, source: str = "") -> list[OemSegment]:
+def parse_oem(
+    text: str, *, source: str = "", published_at: datetime | None = None, retrieved_at: datetime | None = None
+) -> list[OemSegment]:
     """An OEM in KVN, as a list of segments; the covariance blocks, if any, are skipped.
 
-    The header (``CCSDS_OEM_VERS``, ``CREATION_DATE``, ``ORIGINATOR``) is read past; each
+    Header creation time and originator are preserved separately from publication,
+    retrieval and local import time. Unknown publication/retrieval stay unknown. Each
     ``META_START`` to ``META_STOP`` block names the object, the centre, the frame and the time
     system; every data line after it with seven or ten numbers is a state (acceleration, when
     given, is dropped). A ``COVARIANCE_START`` block ends the segment's states.
@@ -153,6 +177,8 @@ def parse_oem(text: str, *, source: str = "") -> list[OemSegment]:
     comments: list[str] = []
     in_meta = False
     in_cov = False
+    header: dict[str, str] = {}
+    imported_at = pd.Timestamp(datetime.now(UTC))
 
     def close() -> None:
         nonlocal meta, rows, comments
@@ -171,6 +197,11 @@ def parse_oem(text: str, *, source: str = "") -> list[OemSegment]:
                 states=frame,
                 source=source,
                 comments=comments,
+                provider_created_at=parse_epoch(header["CREATION_DATE"]) if header.get("CREATION_DATE") else None,
+                published_at=parse_epoch(str(published_at)) if published_at is not None else None,
+                retrieved_at=parse_epoch(str(retrieved_at)) if retrieved_at is not None else None,
+                imported_at=imported_at,
+                originator=header.get("ORIGINATOR"),
             )
         )
         meta, rows, comments = None, [], []
@@ -202,6 +233,9 @@ def parse_oem(text: str, *, source: str = "") -> list[OemSegment]:
                 meta[m.group(1)] = m.group(2)
             continue
         if in_cov or meta is None:
+            match = _KV.match(line)
+            if not in_cov and match and match[1] in {"CREATION_DATE", "ORIGINATOR"}:
+                header[match[1]] = match[2]
             continue
         parts = line.split()
         if len(parts) in (7, 10):
@@ -259,6 +293,7 @@ def oem_to_precise_orbit(
     # An OEM metadata boundary is a discontinuity even when its timestamps are close.
     # Build each segment separately so Hermite interpolation never bridges that seam.
     orbit.segments.clear()
+    orbit.table.attrs["source_time_metadata"] = [s.temporal_metadata() for s in segments]
     previous_end = None
     for t in sorted(tables, key=lambda x: x["t"].iloc[0] if len(x) else pd.Timestamp.max):
         if not len(t):
@@ -318,7 +353,7 @@ def ephemeris_benchmark(
 ) -> EphemerisBenchmark:
     """The Swarm benchmark's four outputs with the operator's declared reference ephemeris.
 
-    The trials are the public element sets issued while the ephemeris runs and at least the
+    The trials are selected by state epoch while the ephemeris runs and at least the
     shortest lead before it ends; the covariance and the coefficient are fitted from the local
     history before the first of them, exactly as for Swarm.
     """
@@ -346,6 +381,20 @@ def ephemeris_benchmark(
         raise ValueError(f"no public element set for {norad_id} is held locally inside {first} to {sets_to}")
     trials = precise.satellite_trials(inputs, orbit, window, grid, leads_hours=leads_hours, published=published)
     summary = precise.summarise(trials, tolerance_km=tolerance_km)
+    summary["selection_kind"] = "epoch-based reconstruction"
+    summary["source_time_metadata"] = orbit.table.attrs.get("source_time_metadata", [])
+    summary["element_set_time_metadata"] = [
+        {
+            "norad_id": int(row.norad_id),
+            "state_epoch": pd.Timestamp(row.epoch).isoformat(),
+            **{
+                key: None if pd.isna(getattr(row, key, None)) else pd.Timestamp(getattr(row, key)).isoformat()
+                for key in ("provider_created_at", "published_at", "retrieved_at")
+            },
+        }
+        for row in inputs.trial_sets.itertuples()
+    ]
+    summary["availability_claim"] = False
     return EphemerisBenchmark(window, inputs, trials, summary)
 
 
@@ -412,6 +461,14 @@ def to_markdown(report: dict[str, Any]) -> str:
         )
         lines.append("")
         w = eph["summary"]["windows"]["ephemeris"]
+        lines.append(
+            "Epoch-based reconstruction: sets are selected by state epoch; "
+            "publication-time availability is not established."
+        )
+        for metadata in eph["summary"].get("source_time_metadata", []):
+            lines.append("Source times (unknown fields remain null): " + json.dumps(metadata))
+        lines.append("Element-set state and availability times are retained separately in the analysis JSON.")
+        lines.append("")
         lines.append(
             f"{w['n_sets']} element sets, {w['n_trial_leads']} set-lead pairs; excluded {w['n_excluded_gap']} for an "
             f"ephemeris gap, {w['n_excluded_manoeuvre']} for a manoeuvre, {w['n_excluded_sgp4_error']} for an SGP4 "

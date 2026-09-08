@@ -2,112 +2,59 @@
 
 [![ci](https://github.com/nikhilb9244-cloud/driftwatch/actions/workflows/ci.yml/badge.svg)](https://github.com/nikhilb9244-cloud/driftwatch/actions/workflows/ci.yml)
 [![licence: MIT](https://img.shields.io/badge/licence-MIT-blue.svg)](LICENSE)
-[![benchmark: swarm-benchmark-2026-09](https://img.shields.io/badge/benchmark-swarm--benchmark--2026--09-informational)](https://github.com/nikhilb9244-cloud/driftwatch/releases/tag/swarm-benchmark-2026-09)
 
-driftwatch screens a satellite fleet against the public orbital catalogue, estimates collision
-probability from an uncertainty model fitted to how successive element sets for the same object
-disagree, and adds a storm term that displaces objects and widens their covariance under a
-geomagnetic scenario.
+driftwatch compares public and supplied orbit products and screens a baseline catalogue for close approaches. Storm outputs are a sensitivity analysis on the baseline event set. Candidate discovery is not repeated for perturbed trajectories.
 
 ## The horizon
 
-Against public reconstructed orbits for fifteen spacecraft in five altitude bands, a public element
-set keeps the satellite inside the 25 km in-track half-width of the screening box, at the 95th
-percentile of trials, for:
+<!-- BEGIN CLAIMS:horizons -->
+15 spacecraft in 5 altitude bands across 4 inspected windows; 1,249 raw element sets, 1,193 usable at some lead and 10,310 usable set/lead pairs. These are epoch-based reconstructions; historical publication availability is not established.
 
-| Altitude band | Spacecraft | Quiet week, 20 to 27 April 2024 | May 2024 storm | October 2024 storm (held out) | August 2024 storm (held out) |
-| --- | --- | --- | --- | --- | --- |
-| 460 to 507 km | Swarm A, B, C; GRACE-FO 1, 2 | **5 d** | **2 d** | **24 h** | **2 d** |
-| 696 to 719 km | Sentinel-1A, CryoSat-2 | 5 d | 5 d | 7 d | 5 d |
-| 783 to 803 km | SARAL, Sentinel-3A, 3B | 7 d | 7 d | 5 d | 7 d |
-| 893 to 952 km | SWOT, HY-2C, 2D | 7 d | 7 d | 7 d | 7 d |
-| 1,338 km | Jason-3, Sentinel-6A | 7 d | 7 d | 7 d | 7 d |
+A lead passes when at least 95% of finite usable absolute in-track residuals are within 25 km. Brackets are observed bins; passing through the longest tested lead is right censoring, not a guarantee beyond it.
 
-Those four windows, one week of element sets each, are the whole of the evidence; this is the
-measured population, and every page that attaches a horizon to an object attaches its band's. A
-probability computed from an element set propagated past its horizon is arithmetic on a position
-the set no longer predicts, so the quiet scenario is the default everywhere and a storm scenario is
-an explicit choice. Laser ranging puts the reconstructed orbits and the element sets on the same
-page: the two references agree at the metre level; the element sets do not. Nothing is measured for
-debris, eccentric orbits, station-kept constellations or above 1,340 km. Detail:
-[docs/calibration-benchmark.md](docs/calibration-benchmark.md) (Swarm, the first three windows) and
-[docs/reference-benchmark.md](docs/reference-benchmark.md) (all fifteen spacecraft, four windows).
+| Band | Window | Observed endpoints | Usable n at last pass | Composition at last pass |
+| --- | --- | --- | --- | --- |
+| 400-600 km | April 2024 control | 120 h pass / 144 h fail | 95 | GRACE-FO 1 (C): 19; GRACE-FO 2 (D): 19; Swarm A: 19; Swarm B: 19; Swarm C: 19 |
+| 400-600 km | May 2024 | 48 h pass / 72 h fail | 91 | GRACE-FO 1 (C): 18; GRACE-FO 2 (D): 19; Swarm A: 18; Swarm B: 19; Swarm C: 17 |
+| 400-600 km | August 2024 held out | 48 h pass / 72 h fail | 93 | GRACE-FO 1 (C): 18; GRACE-FO 2 (D): 18; Swarm A: 19; Swarm B: 19; Swarm C: 19 |
+| 400-600 km | October 2024 held out | 24 h pass / 36 h fail | 100 | GRACE-FO 1 (C): 19; GRACE-FO 2 (D): 20; Swarm A: 21; Swarm B: 19; Swarm C: 21 |
+| 600-750 km | April 2024 control | 120 h pass / 144 h fail | 35 | CryoSat-2: 4; Sentinel-1A: 31 |
+| 600-750 km | May 2024 | passes through the longest tested lead (168 h) | 12 | CryoSat-2: 12 |
+| 600-750 km | August 2024 held out | 120 h last pass; unavailable at 144 h | 4 | CryoSat-2: 3; Sentinel-1A: 1 |
+| 600-750 km | October 2024 held out | 96 h pass / 120 h fail | 22 | CryoSat-2: 6; Sentinel-1A: 16 |
+| 750-850 km | April 2024 control | passes through the longest tested lead (168 h) | 29 | SARAL: 19; Sentinel-3A: 8; Sentinel-3B: 2 |
+| 750-850 km | May 2024 | passes through the longest tested lead (168 h) | 25 | SARAL: 19; Sentinel-3B: 6 |
+| 750-850 km | August 2024 held out | passes through the longest tested lead (168 h) | 18 | SARAL: 18 |
+| 750-850 km | October 2024 held out | 120 h pass / 144 h fail | 41 | SARAL: 17; Sentinel-3A: 20; Sentinel-3B: 4 |
+| 850-1000 km | April 2024 control | passes through the longest tested lead (168 h) | 77 | HY-2C: 30; HY-2D: 27; SWOT: 20 |
+| 850-1000 km | May 2024 | passes through the longest tested lead (168 h) | 48 | HY-2C: 10; HY-2D: 19; SWOT: 19 |
+| 850-1000 km | August 2024 held out | passes through the longest tested lead (168 h) | 39 | HY-2C: 22; SWOT: 17 |
+| 850-1000 km | October 2024 held out | passes through the longest tested lead (168 h) | 15 | HY-2C: 12; HY-2D: 2; SWOT: 1 |
+| 1000-1400 km | April 2024 control | passes through the longest tested lead (168 h) | 37 | Jason-3: 19; Sentinel-6A: 18 |
+| 1000-1400 km | May 2024 | passes through the longest tested lead (168 h) | 20 | Jason-3: 5; Sentinel-6A: 15 |
+| 1000-1400 km | August 2024 held out | passes through the longest tested lead (168 h) | 35 | Jason-3: 17; Sentinel-6A: 18 |
+| 1000-1400 km | October 2024 held out | passes through the longest tested lead (168 h) | 32 | Jason-3: 17; Sentinel-6A: 15 |
 
-## Provenance findings
+Unsupported: identity, reference coverage, measured age or manoeuvre-excluded scope is not established. Altitude overlap alone does not transfer calibration.
+<!-- END CLAIMS:horizons -->
 
-Each was measured, and each is stated with the correction it forced.
+Mission and whole-set deletion sensitivity, exclusions and every usable denominator are in the [v2 paper](docs/paper.md) and [complete tables](docs/benchmark-v2-tables.md). The [claims manifest](docs/assets/claims-v2.json) supplies this section and the application labels; [findings](docs/findings.md) includes covariance, radio, September and learned-propagator results.
 
-1. **A public SGP4 fit drifts from the operator's own ephemeris by two orders of magnitude more
-   than its published fit residual.** CelesTrak's supplemental Starlink sets carry a residual near
-   0.20 km; measured against the published states on nineteen matched files (2026-09-03), the
-   median separation runs from 0.30 km under 12 hours to **82.9 km at 60–72 hours**, almost all
-   along track. Qualified: one lead bin of six, nineteen satellites, one date, against the
-   operator's published *prediction* rather than the realised orbit.
+## Scope and review
 
-2. **A frame or clock error can survive internally consistent calculations.** SpaceX's published states are MEME (J2000), 0.36 degrees from TEME by
-   2026: on six satellites' files (2026-09-03), compared at the ephemeris start with the fit to
-   the same file, they sit a median **36.2 km** away read as TEME and a median 0.356 km when
-   rotated. The same class of error in the time system put ESA's Swarm orbits **137 km** along
-   track when their GPS epochs were read as UTC. The independent comparison exposed an error that the existing internal checks had missed.
+The software performs no independent orbit determination and supplies no calibrated operational collision probabilities. The measured population does not establish warning completeness or applicability to a new spacecraft. The local comparison workspace and recorded examples show software behaviour; receiver-log validation, real conjunction-message cases and operational adoption remain open.
 
-3. **A covariance fit labelled with one window had read outside it.** The 3 September 2026 run's
-   fit, labelled 21 July to 3 September, had read 2,714,544 element sets of which **615,648 lay
-   before the window**, most from the 2024 solar maximum. Refitted under the bound, the in-track
-   one-day sigma changed on 21,644 of 22,039 objects (median −5 per cent) and the flagged events
-   under `quiet` went from 21 to 12.
+Independent comparisons exposed clock, frame, covariance-fitting-window and station-reference-point errors. The [paper](docs/paper.md) records their implications and the [dated covariance correction](docs/covariance-basis-correction.md) records every moved cell. Epoch-selected histories are epoch-based reconstructions; their element epochs do not establish publication-time availability.
 
-4. **A station's coordinates locate its marker, not its telescope.** The laser-ranging comparison
-   placed each station at its SLRF2020 position and showed **−1 to −3.5 m** at the four NASA MOBLAS
-   stations on every satellite, growing with elevation; the telescope's offset from the marker
-   (3.18 m up at Yarragadee) lives in a separate ILRS file. Exposed only by comparing the two
-   independent references per station; applied, the residual is −0.1 to −0.6 m per mission.
+The [September status page](docs/protocols/september-2024-execution-status.md) is generated from its attestation, access and completion metadata. September is a retrospective physical diagnostic and will not be reused as a hold-out for another recipe. All earlier benchmark windows have also been inspected.
 
-## Scope and limits
+The [radio branch](docs/radio-lane.md) remains research and partner-dependent. Measured MeerKAT beams are CC BY-NC and used for research only; commercial use requires an appropriate rights-cleared data path.
 
-- **Absolute probabilities are indicative, not operational.** They combine a predicted separation,
-  assumed object sizes and an uncertainty estimate, and each can change the answer.
-- **The uncertainty model measures consistency, not accuracy.** It is fitted from how an object's
-  successive element sets disagree; those sets share observations and assumptions, so their
-  agreement bounds the true error in neither direction. The Swarm A/B/C comparison across the three stated windows found it over-covering from one to five days in a quiet week and under-covering at
-  every lead in a storm; at 1,338 km it under-covers in the quiet week as well, because the sets
-  agree with one another better than with the truth (findings item 9).
-- **There is no independent orbit determination.** Positions come from public element sets, published operator predictions or supplied orbit products,
-  no sensor, and no tracking of any kind in this project.
-- **The storm term has demonstrated skill for one population, at one end of the window, on one
-  storm**, and its effect depends on the period: it helps at longer leads in October's sample and
-  hurts May's 12–72 hour sample and the quiet 1–6 day sample.
-- **A flag is reported with its region and confidence before its colour.** A red in the dilution
-  region is a statement about the size of the covariance, not about the encounter.
-- **No operator has used this tool**, and no organisation has adopted it or agreed to be named in
-  connection with it. Nothing here has been exercised against operational practice.
-- The conjunction-message reconciler and the contact planner ship no example and **have not been
-  exercised on real data**.
-
-## Archived screening result
-
-**Robust region, standard confidence: 16 flagged events. Dilution region, low confidence:
-17 of 33 flags (51.5%).** These counts belong to the quiet scenario of the archived
-`demo_20260905T000400Z` run: 5,766 events across six fleet objects over 5–12 September 2026.
-The robust flags comprise one red and 15 yellow; the dilution flags are 17 yellow.
-Robust describes a covariance region; it does not certify position accuracy or authorise a manoeuvre.
-The [catalogue](https://driftwatch-coral.vercel.app/catalogue.html) labels its own run and scenario.
+The paper awaits author review. Nothing is deposited before that review, and no outreach letter is sent before the README matches the current evidence. The [roadmap](ROADMAP.md) records decisions and acceptance tests, not completed products or customer demand.
 
 ## Software and examples
 
-The [analysis workspace](https://driftwatch-coral.vercel.app/) compares orbit products, evaluates
-the historical Swarm benchmark and predicts ground contacts. The public site serves recorded
-examples. The local engine processes supplied files in memory on the same computer.
-
-The Swarm A orbit example compares two Space-Track element sets with an ESA reconstructed orbit:
-median differences **0.544 km and 32.845 km**, over **1,440 samples** on 13 May 2024. The ISS
-example is a separate contact calculation: **three predicted passes** on 11 May 2024, with
-acquisition differences of **1.06–1.33 seconds** between two element sets. It has nine plot samples
-around the first pass, not 1,440 orbit-reference trials. Assigning the Swarm figures to the ISS
-was a reporting error; the shipped inputs and computed outputs are distinct.
-
-Neither example establishes general refresh-policy performance. The ISS example has no measured
-receiver log or independent orbit reference. The surveyed station marker does not establish
-antenna availability. [Workspace limits and provenance](docs/workspace.md).
+The [public workspace](https://driftwatch-coral.vercel.app/) serves recorded examples. The local engine compares supplied products on the same computer. Orbit comparison and contact examples have distinct inputs and denominators; their [provenance and limits](docs/workspace.md) must accompany reuse. The archived catalogue is an illustrative screening output, not a current reference calibration.
 
 ## Installation and recorded replay
 
@@ -143,23 +90,9 @@ The production gate remains in place. [Pipeline and retention limits](docs/pipel
 
 ## Methods, sources and citation
 
-- [Findings and corrections](docs/findings.md): the bounded measurements and withdrawn claims.
-- [Calibration benchmark](docs/calibration-benchmark.md): all three windows, populations and lead bins.
-- [Reference benchmark](docs/reference-benchmark.md): fifteen spacecraft in five altitude bands, four windows,
-  laser ranging as the second truth, and what was not obtainable without an account.
-- [dSGP4 evaluation](docs/dsgp4-evaluation.md): ESA's differentiable SGP4 and its ML-dSGP4 hybrid on the same
-  trials, trained on the tuning-visible windows only.
-- [Radio lane](docs/radio-lane.md): the benchmark's residuals as angles on the sky for a 13.5 m dish over the
-  Karoo, the [radio horizon](docs/radio-horizon.md) by receiver as two quantities (a crossing horizon and a
-  position horizon), the [declared-emission table](docs/radio-emissions.md),
-  and two retrospective period reports on the catalogue as it stood. Geometry only; no received power anywhere.
-- [Methods and approximations](docs/methods.md), [screening](docs/screening.md), [frames and time](docs/frames-and-time.md).
-- [Data sources and redistribution](docs/data-sources.md): attribution and analysis-only inputs.
-- [Input formats](docs/input-formats.md), [commands](docs/commands.md), [remaining validation](ROADMAP.md).
-- [Claims audit](docs/claims-audit.md): scope corrections and unresolved evidence.
+- [Current paper](docs/paper.md), [findings](docs/findings.md), [reference benchmark](docs/reference-benchmark.md) and [component calibration](docs/calibration-benchmark.md).
+- [Learned-propagator evaluation](docs/dsgp4-evaluation.md) and [radio geometry](docs/radio/track-benchmark-v2.md).
+- [Methods](docs/methods.md), [frames and time](docs/frames-and-time.md), [input formats](docs/input-formats.md) and [commands](docs/commands.md).
+- [Data sources and redistribution](docs/data-sources.md), [claims audit](docs/claims-audit.md) and [remaining acceptance tests](ROADMAP.md).
 
-The [tagged Swarm benchmark](https://github.com/nikhilb9244-cloud/driftwatch/releases/tag/swarm-benchmark-2026-09)
-contains the frozen measurements. [CITATION.cff](CITATION.cff) supplies citation metadata.
-Source code is [MIT licensed](LICENSE); the code licence grants no rights over third-party data.
-
-_Last updated 7 September 2026._
+[CITATION.cff](CITATION.cff) supplies citation metadata. The [v1 archive](docs/archive/README.md) preserves superseded measurements. Source code is [MIT licensed](LICENSE); this grants no rights over third-party data.

@@ -251,7 +251,7 @@ permanently attached.
 **Why sustained separation and not relative speed.** A near-zero relative speed would catch
 these pairs too, and more cheaply. It would also catch the **slow encounters between genuinely
 distinct objects**, which is precisely the population the two-dimensional probability is known
-to underestimate (see "Slow encounters, where the straight line fails") and which
+to require additional validation (see "Slow encounters, where the straight line fails") and which
 `docs/methods.md` records as the largest error in this project that no comparison available to
 it can size. Removing the events the method is worst at, on a criterion that cannot tell them
 apart from docked hardware, would be the wrong kind of tidying. Separation can tell them apart:
@@ -698,103 +698,14 @@ from the fleet file is left alone.
 
 ### Slow encounters, where the straight line fails
 
-The projection onto one plane holds because the pair passes in a straight line at constant
-velocity: at 13 km/s a 10 km separation is crossed in under a second, in which a low Earth
-orbit turns through a twentieth of a degree. Two objects in nearly the same orbit — two
-members of one constellation, a satellite and its own upper stage — pass at metres per
-second instead, and then the passage takes minutes, the relative path curves through it,
-and the two can re-approach. More of the uncertainty is in play than one plane sees, so the
-probability comes out **too low**.
-
-Every event below 0.1 km/s relative carries `slow_encounter` in the risk table, and the
-report says how many there are and whether any is flagged. It is a flag and not a
-correction: nothing rescales the probability, and the fix is a three-dimensional
-integration over the encounter, which is not in this phase. The demo run has 10 such events
-out of 5,704, the slowest at 23 m/s, none of them flagged.
-
-A large in-track uncertainty is *not* the same problem, and is deliberately not flagged. A
-seven-day-old element set can be hundreds of kilometres uncertain along track, but that is
-mostly a timing error — the object is on the same track, early or late — and projecting onto
-the plane perpendicular to the relative velocity discards exactly that component. The
-method survives a large in-track sigma and fails on a low relative speed.
-
-The reproduction of ESA's risk column cannot measure the size of the underestimate, and it
-is worth being clear about why: ESA's own column is computed the same way, so the residual
-binned by relative speed shows nothing at the slow end (`docs/kelvins-reproduction.md`).
-The two share the approximation exactly. The flag therefore comes from the method rather
-than from the comparison.
-
-## Probability of collision, three ways
-
-The same integral is evaluated by three methods in `risk/pc.py`; the export carries all
-three so the reader can see where they agree.
-
-- **Foster (`pc`).** Foster and Estes' numerical integration on a polar grid over the
-  disc: Gauss-Legendre in radius, a uniform grid in angle (spectrally accurate for a
-  periodic integrand). At least 24 radial and 72 angular nodes, more when the disc is
-  large against the smaller standard deviation. This is the value the flags use.
-- **Alfano (`pc_alfano`).** The disc integral reduced to one dimension along a
-  principal axis of the covariance, the other dimension in closed form with error
-  functions; with the substitution `x = R sin(phi)` the integrand is smooth and a few
-  dozen nodes give ten digits. The arithmetic cross-check: it must agree with Foster
-  within one percent, and a test asserts that over aspect ratios up to 100, misses up
-  to six sigma and discs up to twice the smaller sigma (they agree to about 1e-8).
-- **Chan (`pc_chan`).** Chan's analytical series after replacing the ellipse of equal
-  probability by a circle of equal area. Exact for an isotropic covariance and within
-  one percent when the disc is under a tenth of the smaller standard deviation; it
-  drifts by tens of percent when the disc is comparable to it, which a test records
-  rather than hides. It is a third value, not a check that has to pass.
-
-Two closed forms anchor all three. Zero miss with an isotropic sigma gives
-`1 - exp(-R^2 / 2 sigma^2)`; a miss `d` with an isotropic sigma gives the non-central
-chi-square with two degrees of freedom, `P(chi^2_2(d^2 / sigma^2) <= R^2 / sigma^2)`.
-Anisotropic cases are checked against brute-force two-dimensional quadrature.
-
-## The maximum probability and dilution
-
-For a fixed miss the probability is not monotonic in the uncertainty. Shrink the
-covariance and the Gaussian pulls away from the disc; inflate it and the mass spreads
-thin; the maximum lies where the standard deviation is of the order of the miss
-distance. For a small disc and an isotropic sigma_0 the probability at a scale factor
-`k` on the covariance is about `(R^2 / 2 k sigma_0^2) exp(-d^2 / 2 k sigma_0^2)`, with
-its maximum at `k* = d^2 / (2 sigma_0^2)`, and a test recovers that.
-
-`pc_max` is the largest probability over scale factors from 0.1 to 10 on the combined
-covariance (61 log-spaced steps, the maximum refined by a parabola through its
-neighbours), and `pc_max_scale` the factor at which it occurs. Because the empirical
-covariance measures consistency and not accuracy, `pc_max` is the honest companion to `pc`: a
-`pc_max_scale` above one says the risk could be higher than `pc` if the fits are more
-consistent than they are accurate, which is the common case though not a bound; a scale below one says
-the uncertainty already dilutes the probability, so that shrinking the covariance at the
-same miss would raise it. This is Alfano's dilution, and it is what the Phase 3 storm
-term will move.
-
-The sweep scales the covariance and holds the miss fixed, which is an arithmetic
-operation on the numbers in hand and not a forecast of what a better orbit would give.
-A better orbit changes both: the covariance shrinks and the nominal miss moves, by a
-distance of the order of the uncertainty that was removed, in a direction nothing here
-can predict. Every statement about dilution below is a statement about the sweep.
-
-## The two regions, and what a flag is worth in each
-
-That scale classifies every event, and the classification is the difference between a
-number worth acting on and a number that only describes the uncertainty:
-
-- **Robust** (`pc_max_scale` at or above one). The probability is limited by the
-  geometry. Shrinking the covariance would lower it, so the value in hand is not being
-  propped up by the size of the uncertainty.
-- **Dilution** (`pc_max_scale` below one). Shrinking the covariance at the same miss
-  would *raise* the probability: the event sits on the falling side of Alfano's curve,
-  where the uncertainty is already large enough to spread the distribution thin. The
-  number says the trajectories are uncertain, not that the objects are likely to meet,
-  and equally not that they are unlikely to: the data cannot support a judgement either
-  way.
-
-Every event carries `region`, and the flag carries a `confidence`: `standard` in the
-robust region, `low` everywhere else. **A red or yellow flag with low confidence is
-never actionable**, and the report and the viewer say so wherever it appears. This is
-not a way of dismissing awkward results; it is the honest reading of a probability whose
-maximum lies below the covariance that produced it.
+The two-dimensional probability calculation assumes rectilinear relative motion and negligible
+velocity uncertainty during the encounter. A long transit relative to orbital period can
+invalidate those assumptions. The `slow_encounter` flag uses that duration ratio and marks
+cases requiring curved-trajectory validation. The direction and magnitude of the probability
+error have not been measured here; either sign is possible, and no correction is applied.
+Agreement with the Kelvins risk column does not measure this error when the reference shares
+the approximation. The candidate-rediscovery and short-window Cartesian acceptance tests
+remain open in [the roadmap](../ROADMAP.md).
 
 ### Why the ISS red at 11.5 km is a dilution-region flag
 
@@ -973,13 +884,8 @@ approach, and the individual events underneath on demand. The parquet and the JS
 every event.
 
 **A pair also gets a cumulative probability**, one minus the product of the complements
-over its events. It is an upper bound, not a probability: the events of one pair are
-repeated passes of the same two objects propagated from the same two element sets, so a
-position error that puts them close on one pass puts them close on the next. Their
-errors are strongly correlated and the true combined probability is lower than the
-product formula gives. It is reported because a reader comparing a pair seen 130 times
-with a pair seen once needs some measure of the difference, and it is labelled as not
-independent wherever it appears.
+over its events. The expression assumes independence; shared orbit errors are unmodelled.
+It is a ranking summary, with no established bound on the true combined probability.
 
 **The report** leads with the flagged pairs, split by region: the robust ones first, as
 the pairs worth a second look, then the dilution-region ones under a heading that says

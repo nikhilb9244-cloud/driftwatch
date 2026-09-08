@@ -1,5 +1,7 @@
 # Validating the storm term against the record
 
+Current scope: sensitivity analysis on the baseline event set. Candidate discovery is not repeated for perturbed trajectories; a full-scenario rerun remains an open acceptance item in [the roadmap](../ROADMAP.md).
+
 Phase 3 Step 4. Everything before this step is internally consistent and unvalidated: the
 closed form was checked against a numerical integration of *itself*, the density model against
 published quiet-time tables, the ballistic coefficients against the objects' own decay. A chain
@@ -222,7 +224,7 @@ wrong. Only a comparison against an independent truth would calibrate it. One ha
 on three satellites (`docs/calibration-benchmark.md`, 2026-09-05): against ESA's precise orbits for
 Swarm A, B and C the storm term with the observed ap reduces the in-track residual in the May 2024
 storm only from four days of lead (+20 to +48 per cent on the median at four to seven days) and
-increases it from twelve hours to three days; in the October 2024 storm, held out from every tuning,
+increases it from twelve hours to three days; in October 2024 held out (now inspected),
 it helps from six hours to five days and hurts at six and seven; and in a quiet week it makes the
 residual worse from one to six days, because the excess it integrates is not zero without a storm.
 Its magnitude runs about 1.5 times the actual shift at seven days in May. That is the lead-time

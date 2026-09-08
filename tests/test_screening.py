@@ -487,6 +487,18 @@ def test_default_start_is_the_fetch_time_to_the_minute():
     assert default_start(snap) == START
 
 
+def test_reconstruction_start_uses_cutoff_while_retrieval_remains_unknown():
+    snap = snapshot_from({PRIMARY_ID: (primary_satrec(), "PRIMARY", PRIMARY_EPOCH)})
+    snap["selection_kind"] = "epoch-based reconstruction"
+    snap["epoch_selection_as_of"] = pd.Timestamp(START)
+    snap["fetched_at"] = pd.NaT
+    snap["retrieved_at"] = pd.NaT
+    assert default_start(snap) == START
+    snap["epoch_selection_as_of"] = pd.NaT
+    with pytest.raises(ValueError, match="unknown reconstruction cutoff"):
+        default_start(snap)
+
+
 def test_event_ids_are_stable_and_disambiguate_the_same_minute():
     tca = np.array(["2026-09-03T08:57:12.5", "2026-09-03T08:57:40.0", "2026-09-03T08:58:00"], dtype="datetime64[us]")
     ids = event_ids(np.array([1, 1, 1]), np.array([2, 2, 2]), tca, "20260901T204841Z")

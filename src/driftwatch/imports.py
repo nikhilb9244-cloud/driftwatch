@@ -106,6 +106,13 @@ def oem_xml(root):
     if len(messages) != 1:
         raise ValueError("Upload one OEM message at a time.")
     lines = ["CCSDS_OEM_VERS = 2.0"]
+    header = messages[0].find("header")
+    if header is not None:
+        for key, value in leaves(header).items():
+            if key in {"CREATION_DATE", "ORIGINATOR"}:
+                if "\n" in value or "\r" in value:
+                    raise ValueError("OEM header values must occupy one line.")
+                lines.append(f"{key} = {value}")
     segments = list(messages[0].iter("segment"))
     if not segments:
         raise ValueError("OEM XML has no segments.")

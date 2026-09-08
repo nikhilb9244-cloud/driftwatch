@@ -179,7 +179,7 @@ and provenance rather than about new physics, and it is meant to be read as one.
   it *would* fire on a genuine close formation flown within a kilometre for days, which no run
   has yet contained. The rule is on sustained separation and deliberately not on relative speed,
   because a speed rule would also delete the slow encounters this project's probability method is
-  known to underestimate. Every exclusion is listed in the run and in the report, and
+  not validated for curved relative trajectories. Every exclusion is listed in the run and in the report, and
   `--keep-attached` reverses it. `docs/screening.md`.
 - **Events are geometry; probability is a separate layer.** An event is kept when the
   miss vector lies inside the 2 x 25 x 25 km box or within the 25 km watch radius, and
@@ -199,24 +199,18 @@ and provenance rather than about new physics, and it is meant to be read as one.
   successive fits *less* consistent than either is accurate (a set fitted across a manoeuvre, a
   change of tracking geometry between two fits, SGP4's own re-initialisation drift in the next
   bullet), so the consistency is not a lower bound either. Without independent calibration it is
-  a scale, and the honest reading is `pc_max` and its scale factor beside the number. **What
+  a scale; `pc_max` reports only a finite scalar sweep at the fixed miss and covariance shape,
+  with no bound over unknown bias, correlations or dynamics. **What
   independent calibration would require:** a truth that does not come from the same fits — laser
   ranging normal points on retroreflector-carrying objects, GNSS precise orbits from operators that
   publish them, or a special-perturbations orbit determination from raw observations — compared
   with the propagated public set over the same lead times and the same orbit classes, in enough
   objects to give the ratio of actual error to consistency per class and its dependence on
   geomagnetic conditions, with a storm inside the calibration period, since the shared error this
-  project cares about is the one a storm creates. **One such comparison has now been made**
-  (2026-09-05; `docs/calibration-benchmark.md`, findings page item 6): Swarm A, B and C against
-  ESA's precise science orbits, one trial per public element set, over a quiet week, the May 2024
-  storm and the October 2024 storm held out from every tuning. What it found about this covariance:
-  in the quiet week it over-covers from one to five days (82 to 96 per cent of in-track residuals
-  inside one sigma against the 68 claimed) and under-covers inside twelve hours, where it sits on
-  its half-day floor; in both storms it under-covers at every lead (two sigma holds 65 to 80 and 62
-  to 75 per cent against 95). Three satellites, two altitudes near 460 and 500 km, one orbit class;
-  the ratio of actual error to consistency elsewhere is not measured. The precedent cited above is
-  cited for the consistency method, not as a calibration of it; and the Kelvins reproduction
-  validates the probability arithmetic on ESA's inputs, not this covariance.
+  project cares about is the one a storm creates. The current corrected population, component coverage and deletion checks are in
+  [the v2 paper](paper.md) and [complete tables](benchmark-v2-tables.md). All four benchmark
+  windows have been inspected. Consistency does not establish absolute accuracy, and the
+  Kelvins reproduction checks probability arithmetic on supplied inputs rather than this covariance.
 - **SGP4 is not invariant under re-initialisation with drag.** A set fitted at a later
   epoch with the same `B*` drifts in-track by about 0.07 km per day at `B* = 1e-4`
   (measured on a 500 km orbit; zero with `B* = 0`). That drift sits inside the
@@ -260,22 +254,12 @@ and provenance rather than about new physics, and it is meant to be read as one.
   relative velocity through the encounter and no velocity uncertainty, which holds for
   crossings at kilometres per second and fails for co-orbital pairs at metres per second
   (long encounters).
-- **A slow encounter's probability is a known underestimate, and is flagged as one.** Below
-  0.1 km/s relative the pair takes minutes rather than a second to cross its separation, the
-  relative path curves through the passage and the two can re-approach, so more of the
-  uncertainty is in play than the one-plane integral sees. `slow_encounter` marks those
-  events in every risk table and the report counts them; **nothing rescales the
-  probability**, and the fix is a three-dimensional integration, which is not in this phase.
-  **The flag rests on the method's straight-line assumption, not on a measured error.** The
-  size of the underestimate is unmeasured here, and the flag would stand at this threshold
-  whether it turned out to be a factor of two or a factor of ten.
-  Ten of the demo run's 5,704 events qualify, the slowest at 23 m/s, none flagged. Note two
-  things. A large in-track uncertainty is not this problem — it is mostly a timing error and
-  the projection discards it, which is why the method survives hundreds of kilometres of
-  in-track sigma. And the Kelvins reproduction cannot measure the size of the underestimate,
-  because ESA's own risk column uses the same two-dimensional method: the residual binned by
-  relative speed is flat at the slow end, which says the two share the approximation, not
-  that there is no error.
+- **Slow encounters require additional dynamical validation.** The flag uses encounter transit
+  relative to orbital period, not speed alone. Curved relative motion and velocity uncertainty
+  can invalidate a single-plane approximation; the sign and size of probability error are
+  unmeasured here and may vary by encounter. No rescaling is applied. Agreement with a reference
+  calculation that shares the approximation cannot establish its accuracy. The open Cartesian
+  dynamical and candidate-rediscovery tests are recorded in [the roadmap](../ROADMAP.md).
 - **Three integrators, one value.** Foster's polar grid (the reported `pc`) and Alfano's
   one-dimensional form agree to about 1e-8 over the tested range and must agree within
   one percent; Chan's series is exact for an isotropic covariance and drifts by tens of
@@ -303,11 +287,9 @@ and provenance rather than about new physics, and it is meant to be read as one.
   uncertainty being removed. The dilution region means the data in hand cannot support a
   judgement either way, not that a judgement is coming. `docs/screening.md` works that
   example through.
-- **A pair's cumulative probability is an upper bound.** One minus the product of the
-  complements over the pair's events assumes the events are independent. They are
-  repeated passes of the same two objects propagated from the same two element sets, so
-  an error that puts them close on one pass puts them close on the next; the true
-  combined probability is lower. It is labelled as such everywhere it appears.
+- **A pair's cumulative value assumes independence.** One minus the product of the
+  complements combines repeated events without modelling their shared orbit errors.
+  It is a ranking summary, with no established bound on the true combined probability.
 - **The Kelvins reconstruction makes two approximations.** The chaser's RTN frame is
   built from the target's with the target's velocity taken as circular, and the
   covariances are used as position-only matrices. With those two, and with the combined
@@ -508,10 +490,11 @@ and provenance rather than about new physics, and it is meant to be read as one.
   (300 km, seven days, doubled density), better than 0.05 % at 400 km and above. The error is
   the closed form holding `v` fixed while the real orbit decays, and it grows with the decay,
   exactly as it should.
-- **The term is applied at the *stored* time of closest approach, and this is exact rather
-  than approximate.** The encounter plane is perpendicular to the relative velocity, and the
-  component of a shift along that direction is precisely the part that moves the TCA rather
-  than the miss at it; the projection removes it. Nothing rescreens.
+- **Sensitivity analysis on the baseline event set.** The term is applied at the stored
+  closest-approach time with stored velocities. The projected miss is exact only for that
+  frozen rectilinear geometry. Candidate discovery is not repeated, so newly appearing pairs,
+  changed orbital closest approach and disappearing pairs are not established by this output.
+  A full-scenario rerun and its candidate-rediscovery acceptance test remain open in the roadmap.
 - **The excess is measured against SGP4's own atmosphere**, through the element set's B\*,
   which the entry above describes as noisy. An object whose B\* is nonsense has a nonsense
   implied density and therefore a nonsense excess. The coefficient's source label travels with

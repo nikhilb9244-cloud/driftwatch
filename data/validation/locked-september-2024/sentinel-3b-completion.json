@@ -1,0 +1,17 @@
+{
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+  "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+  "gp_manifest_sha256": "5a36a1093ac33a14effe606fb8e5c9cf38b013f4e7f164620498696d60e39e08",
+  "mission": "sentinel-3b",
+  "inputs_manifest_sha256": "d43d1d133c5f5d02d800120297baef016d83dc84aeec3a213ea8a6bc7d8b9881",
+  "trials": "mission-results/sentinel-3b/20260908T105851-c831ebc22446/trials.parquet",
+  "events": "mission-results/sentinel-3b/20260908T105851-c831ebc22446/events.json",
+  "coverage": "mission-results/sentinel-3b/20260908T105851-c831ebc22446/coverage.json",
+  "completed_at": "2026-09-08T11:42:00.405999+00:00",
+  "files": {
+    "mission-results/sentinel-3b/20260908T105851-c831ebc22446/trials.parquet": "700e15ff41320c889524d8831f31486a2ad2f06a8eba21100861f1a28550b1a7",
+    "mission-results/sentinel-3b/20260908T105851-c831ebc22446/events.json": "464075b68ba376964fa19c9013f8b849e30e52469add4011e38a7b977847265e",
+    "mission-results/sentinel-3b/20260908T105851-c831ebc22446/coverage.json": "a910d4c94ed0fbfc1a067b4fa20d8b6defab5c5934eee4f24b86d7a731569627"
+  }
+}

@@ -84,6 +84,7 @@ step never propagates an orbit and a scenario can be rescored without rescreenin
 
 from __future__ import annotations
 
+import hashlib
 import logging
 import time
 from collections.abc import Callable, Mapping, Sequence
@@ -533,7 +534,7 @@ def attached_pairs(
     relative speed would catch these too -- the ISS and its docked vehicles close at 0.3 mm/s --
     but it would also catch the slow encounters between genuinely distinct objects that
     ``docs/methods.md`` records as this project's largest unsized error, and dropping those
-    would hide the very events the two-dimensional probability is known to underestimate. A pair
+    would hide events for which the two-dimensional probability has unmeasured error of either sign. A pair
     that is never more than a kilometre apart over seven days is one object as far as any
     screening is concerned; a pair that passes slowly is two.
     """
@@ -1206,8 +1207,17 @@ class ScreeningResult:
 
 
 def default_start(snapshot: pd.DataFrame) -> datetime:
-    """The screening start a snapshot implies: its fetch time, floored to the minute."""
+    """Use the declared epoch-selection cutoff for a reconstruction, retrieval for a live snapshot."""
+    if "selection_kind" in snapshot and snapshot.selection_kind.eq("epoch-based reconstruction").any():
+        cutoffs = pd.to_datetime(snapshot["epoch_selection_as_of"], utc=True)
+        if not snapshot.selection_kind.eq("epoch-based reconstruction").all() or cutoffs.isna().any():
+            raise ValueError("Mixed or unknown reconstruction cutoff; give an explicit screening start")
+        if cutoffs.nunique() != 1:
+            raise ValueError("Multiple reconstruction cutoffs; give an explicit screening start")
+        return cutoffs.iloc[0].to_pydatetime().replace(second=0, microsecond=0)
     fetched = pd.to_datetime(snapshot["fetched_at"], utc=True).max().to_pydatetime()
+    if pd.isna(fetched):
+        raise ValueError("Unknown snapshot retrieval time; give an explicit screening start")
     return fetched.replace(second=0, microsecond=0)
 
 
@@ -1293,7 +1303,15 @@ def annotate_events(
     fleet_names = {m.norad_id: m.name for m in fleet}
     pri_category = by_id["category"].reindex(p).to_numpy()
     sec_category = by_id["category"].reindex(s).to_numpy()
-    snapshot_stamp = stamp(pd.to_datetime(snapshot["fetched_at"], utc=True).max().to_pydatetime())
+    fetched = pd.to_datetime(snapshot["fetched_at"], utc=True).max()
+    reconstruction = "selection_kind" in snapshot and snapshot.selection_kind.eq("epoch-based reconstruction").any()
+    if reconstruction or pd.isna(fetched):
+        # A content identifier does not pretend that an epoch cutoff was a fetch.
+        identity = pd.util.hash_pandas_object(snapshot[["norad_id", "epoch"]], index=False).to_numpy().tobytes()
+        prefix = "epoch-reconstruction" if reconstruction else "unknown-retrieval"
+        snapshot_stamp = prefix + "-" + hashlib.sha256(identity).hexdigest()[:16]
+    else:
+        snapshot_stamp = stamp(fetched.to_pydatetime())
     out = events.copy()
     out["event_id"] = event_ids(p, s, events["tca"].to_numpy(), snapshot_stamp)
     out["primary_name"] = [fleet_names.get(int(n), by_id["name"].get(n, "")) for n in p]

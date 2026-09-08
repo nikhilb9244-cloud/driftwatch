@@ -134,15 +134,20 @@ The MeerKAT array phase centre, dish diameter and receiver bands come from SARAO
 [MeerKAT specifications](https://skaafrica.atlassian.net/wiki/spaces/ESDKB/pages/277315585/MeerKAT+specifications),
 and the space-based interference list from SARAO's
 [Radio Frequency Interference](https://skaafrica.atlassian.net/wiki/spaces/ESDKB/pages/305332225/Radio+Frequency+Interference+RFI)
-page. The primary beam width is Mauch et al. 2020 (ApJ 888, 61) scaled by wavelength as
-de Villiers 2023 (AJ 165, 78) reports. These describe the instrument; they imply no use of, or
-agreement with, the observatory.
+page. The corrected full topocentric comparisons use selected array-average Jones channels from
+de Villiers' [measured MeerKAT primary-beam release](https://doi.org/10.48479/wdb0-h061), including
+3062.5 and 3499.1455078125 MHz above 3 GHz. The above-3-GHz primary scalar diagnostic also uses
+widths derived from these measured patterns, with the width convention and channel/file hashes
+recorded in `data/radio/measured-beam-provenance.json`. The wavelength-scaled Mauch et al. 2020
+width remains explicitly labelled in the historical circular-aperture illustration and the
+below-3-GHz scalar comparison. The full-track calculation uses measured patterns at all six
+selected channels. These describe an instrument model, not an observatory validation or endorsement.
 
 Archived MeerKAT observations are read from public records, each row of an observation CSV naming
 its source. The one record used is GCN Circular 36362 with the pointing from GCN Circular 36105.
 The [SARAO archive](https://archive.sarao.ac.za/) holds every released observation's pointing,
 start, duration and band after the proprietary period. Its documented route for reading them is a
-GraphQL API behind a logged-in account's token (`docs/radio-lane.md`, "The archive's route");
+GraphQL API behind a logged-in account's token (see [the public-record illustration](radio-lane.md#the-public-record-illustration));
 `driftwatch radio archive` uses that route, read-only and paced, and keeps only records the
 archive marks public. Without a token the archive is not queried.
 

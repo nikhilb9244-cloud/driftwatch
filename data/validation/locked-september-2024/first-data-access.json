@@ -1,0 +1,24 @@
+{
+  "started_at": "2026-09-08T10:58:51.516097+00:00",
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+  "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+  "attestation": {
+    "path": "C:\\Users\\Nikhil\\Desktop\\space\\docs\\protocols\\september-2024-author-attestation.json",
+    "sha256": "9bbee0af9b83874e91576cdfbfa3612881b1e3759fd8f5e2043db86e4728fd5b",
+    "record": {
+      "statement": "September reference residuals and post-burn outcomes never inspected",
+      "author": "Nikhil Bhana",
+      "attested_at": "2026-09-08T10:58:47.798959+00:00",
+      "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+      "author_verbatim": "I have never inspected September 2024 reference residuals or post-burn outcomes outside this repository, in any tool or session. Record that in the protocol and run the experiment.",
+      "recorded_from": "Explicit author message in this Codex task",
+      "local_evidence": {
+        "path": "output/referee/september_readiness_audit.md",
+        "sha256": "a22154b25c3fd4b7ca308e00f18db45de34173a216b6e9cff12ebc267234277f",
+        "finding": "No prior September residual evaluation was found in the bounded local audit; this is combined with the author statement about inspection outside the repository."
+      },
+      "prior_exposure_qualification": "September GP and weather informed earlier October fits; late-September orbit-product overlap was cached. The claim concerns reference residuals and post-burn outcomes, not all inputs."
+    }
+  }
+}

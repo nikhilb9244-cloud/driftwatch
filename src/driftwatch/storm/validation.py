@@ -24,22 +24,13 @@ coefficients or in the linearisation rather than in the weather.
 
 ## 2. Did it move the objects where we say it did? (:func:`in_track_errors`)
 
-The test that matters for screening, and it is a *forecast* test, run the way an operator
-would have run it. Take each object's last element set issued **before** the storm, propagate
-it with SGP4 through 10 to 13 May, and compare against the element sets issued during those
-days. The along-track component of that disagreement is the error a screening run made on
-those days -- the thing driftwatch exists to predict.
-
-Two disciplines make it a test rather than a demonstration:
-
-* **Nothing after the pivot is used to make the prediction.** The predicted shift is computed
-  from the pre-storm element set, its own pre-storm ballistic coefficient and the observed ap.
-  An element set issued on 12 May already contains the storm's effect; propagating one would
-  "predict" the drag it was fitted to.
-* **A quiet control window with the same lead times.** SGP4 accumulates along-track error
-  without any storm at all, from the fit noise and from ordinary mismodelled drag, and it does
-  so quadratically too. Without the control, that error would be read as the storm's. The
-  storm's contribution is what the storm window has *beyond* the control at the same lead.
+This is an epoch-based reconstruction using observed weather. Select each object's
+latest stored state epoch before the pivot, propagate it through 10 to 13 May, and
+compare with later-epoch element sets. State epochs do not establish publication
+or availability at the historical decision time; provider creation and retrieval
+are separate facts. Observed ap after the pivot makes this a hindcast diagnostic,
+not a test of issued forecasts. A quiet control uses the same lead times to expose
+baseline fit disagreement and ordinary drag-model error.
 
 The residual is ``observed - predicted``, and it is reported as a distribution against lead
 time and altitude rather than as one number, because a term that is right on average and
@@ -47,12 +38,10 @@ wrong at 400 km is not right.
 
 ## What the truth is here, and what it is not
 
-The later element set is not truth. It is another fit, with its own error of hundreds of
-metres to kilometres (``docs/screening.md``). What is measured is the disagreement between
-two fits, which is a **floor** on the propagation error rather than a measurement of it. Over
-a storm the disagreement runs to tens of kilometres, so the floor is far below the signal and
-the comparison is meaningful; in the quiet control it is not far below, and the control's
-numbers are reported as an upper bound on what SGP4 alone contributes.
+The later element set is another fit with its own error. Their disagreement
+measures consistency and can contain fit noise or miss shared bias; it bounds
+absolute propagation error in neither direction. No comparison here establishes
+an operational forecast, independent truth or a calibrated probability.
 """
 
 from __future__ import annotations

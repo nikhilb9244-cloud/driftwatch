@@ -7,12 +7,10 @@ cross-track frame. Do that for every pair of sets between half a day and seven d
 apart and the scatter of the disagreement, as a function of the propagation time, is a
 model of how fast the position error grows.
 
-Why that is a floor, not a measure. Every element set is a fit to the same tracking
-network with the same force model, so two sets share whatever error the network and the
-model have in common (a biased drag model during a storm, a sparse tracking geometry)
-and the difference between them cannot see it. Consistency measures the part of the
-error that changes from fit to fit. The true error is at least that large and
-sometimes much larger; the probabilities built on it are indicative, not operational.
+Consistency measures repeatability between fits, not absolute accuracy. Shared tracking
+or model bias can disappear from differences, while independent fit noise can enlarge
+them. Consistency is therefore neither a lower nor an upper bound on true error;
+probabilities built on it require independent calibration for their intended use.
 
 The model. Per object and per RIC component, the standard deviation of the
 disagreement is fitted as a power law in the propagation time, ``sigma(dt) = s1 dt^p``
@@ -38,7 +36,8 @@ the GP one in four ways:
 * Its pairs are binned by lead time, so that the thousands of pairs a few hours apart do
   not outweigh the few days apart, and a bin is used only when it holds enough pairs for
   its root-mean-square to mean anything.
-* Every component is **a floor plus a growth term**. The floor is what the disagreement
+* Every component has **an offset plus a growth term** (the implementation calls the offset
+  a floor; it is not a lower bound on absolute error). The offset is what the disagreement
   already is at the shortest lead the store resolves, or CelesTrak's published RMS of the
   fit to the operator ephemeris, whichever is larger; the growth is fitted to what is left
   over that floor, so the model lands on the bin it is anchored at instead of standing
@@ -570,7 +569,7 @@ class FlooredGrowth:
     """A per-component floor with a growth term over it: ``sigma_k(dt)^2 = floor_k^2 + (s_k dt^p_k)^2``.
 
     Every component is a floor plus a growth term, and the two come from different
-    measurements. The floor is what the error is at essentially no lead: the
+    measurements. This model offset describes short-lead fit disagreement, not a bound on absolute error: the
     root-mean-square disagreement of the shortest lead-time bin the store resolves, and
     CelesTrak's published RMS of the fit of this element set to the operator ephemeris,
     whichever is larger. Those two are not independent — the disagreement between two
@@ -1114,7 +1113,7 @@ def fit_supplemental_covariance(
     :data:`SUPPLEMENTAL_MIN_SPAN_RATIO`, at which point the in-track exponent is fitted and
     clipped into ``[SUPPLEMENTAL_P_MIN, SUPPLEMENTAL_P_MAX]``. Every object then gets that
     growth over its own published RMS as a floor. Objects with no stored history at all get
-    the floor alone, which is a lower bound and is labelled so.
+    the offset alone, which is an uncalibrated fit-disagreement model.
 
     Pairs that span a detected manoeuvre are kept here, unlike the GP fit: a supplemental
     set is fitted to an ephemeris that already contains the planned burns, so the
@@ -1159,7 +1158,7 @@ def fit_supplemental_covariance(
     # The floor per component: what the disagreement already is at the shortest lead the
     # store resolves. A prior exponent anchored at the longest bin is steeper than the
     # residuals actually grow, so it matches at the anchor and falls below everything
-    # earlier; the covariance is meant to be a floor on the error, so the shortest bin's
+    # earlier; this anchors a repeatability model, not a bound on absolute error. The shortest bin's
     # measured consistency holds it up and no growth law can undercut it.
     pool_floor = (
         used.iloc[0][["rms_r_km", "rms_i_km", "rms_c_km"]].to_numpy(dtype=float)

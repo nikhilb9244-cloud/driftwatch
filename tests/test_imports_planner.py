@@ -68,6 +68,24 @@ def xml_oem(text):
     )
 
 
+def test_local_xml_keeps_provider_creation_separate_from_unknown_availability():
+    text = xml_oem(fixture_text("reference.oem")).replace(
+        "<body>",
+        "<header><CREATION_DATE>2024-06-01T00:00:00Z</CREATION_DATE>"
+        "<ORIGINATOR>Example provider</ORIGINATOR></header><body>",
+        1,
+    )
+    orbit = workbench.trajectory(("reference.xml", text), 90001)
+    metadata = orbit.metadata["source_time_metadata"][0]
+    assert metadata["provider_created_at"].startswith("2024-06-01")
+    assert metadata["originator"] == "Example provider"
+    assert metadata["published_at"] is None and metadata["retrieved_at"] is None
+    row = {**record(), "CREATION_DATE": "2024-05-11T00:00:00Z"}
+    imported = frame_from_records([row], source="local-upload")
+    assert imported.provider_created_at.iloc[0] == pd.Timestamp("2024-05-11T00:00:00Z")
+    assert imported.fetched_at.isna().all() and imported.retrieved_at.isna().all()
+
+
 def test_oem_xml_and_mapped_metre_csv_match_kvn_without_unit_guessing():
     text = fixture_text("reference.oem")
     orbit = workbench.trajectory(("reference.oem", text), 90001)

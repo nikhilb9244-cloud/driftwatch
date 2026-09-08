@@ -1,5 +1,6 @@
 /**
- * Storm mode: the same events under every scenario, switched in the panel and nowhere else.
+ * Sensitivity analysis on the baseline event set; candidate discovery is not repeated.
+ * Storm mode rescales stored events, switched in the panel and nowhere else.
  *
  * Phase 3 Step 5. The rule that governs this whole file is the Phase 1 one: **the scenario
  * control changes numbers in the panel, not the point cloud.** Nothing here touches the
@@ -162,31 +163,7 @@ export const SCENARIO_HELP: Record<string, string> = {
   "storm-g5": "The May 2024 sequence very nearly unscaled — a peak Kp of 9, as May 2024 itself reached.",
 };
 
-/**
- * The benchmark's calibration (2026-09-05; docs/calibration-benchmark.md, README item 6), shown beside
- * every storm number. Quoted, not computed: it is a stored measurement on Swarm A, B and C against
- * ESA's precise orbits, and the report carries the same text.
- */
-/** The benchmark's horizon, shown ahead of any probability; the report opens with the same sentence. */
-export const HORIZON_HEADLINE =
-  "In the measured Swarm A/B/C sample, the last tested leads before the 95th-percentile along-track error " +
-  "exceeded 25 km were 120 hours in the quiet week, 48 in May 2024 and 24 in October. These are sample " +
-  "results for three related spacecraft, not validated horizons for this demo fleet. Treat its probabilities as indicative.";
-
-export const STORM_CALIBRATION_NOTE =
-  "Read every storm number against the benchmark: against ESA's precise orbits for Swarm A, B and C, the " +
-  "covariance under-covers in a storm (two sigma held 65 to 80 per cent of the May 2024 residuals and 62 to " +
-  "75 per cent of the October 2024 ones, against the 95 it claims) and nothing here scales it. The storm term " +
-  "helps May's sample from about four days but hurts at twelve to seventy-two hours; it helps October's " +
-  "sample from six to 120 hours. It hurts from one to six days " +
-  "in a quiet week because its excess is not zero without a storm, and over-corrects at seven days, about 1.5 " +
-  "times the actual in May. The horizon at 25 km is five days quiet, two in May, one in October.";
-
-/** One sentence of the same calibration, for the places a paragraph would push the numbers below the fold. */
-export const STORM_CALIBRATION_SHORT =
-  "Measured against ESA's Swarm A/B/C orbits: uncertainty bands under-cover during storms. The correction " +
-  "hurts May's 12–72 hour sample but helps October's 6–120 hour sample, and hurts the quiet 1–6 day sample. " +
-  "The result depends on the period and lead; it is not a universal correction.";
+export { HORIZON_HEADLINE, STORM_CALIBRATION_NOTE, STORM_CALIBRATION_SHORT } from './claims.generated';
 
 export function decode(column: Encoded | undefined, i: number): string {
   if (!column || !column.i) return "";
@@ -324,7 +301,7 @@ export class ScenarioState {
 
   /**
    * Fetch the overlays. Called once, after first paint. A failure is not fatal: the viewer
-   * carries on showing the bundle's own scenario, which is a complete and honest answer.
+   * carries on showing the bundle's own scenario, with the baseline-event sensitivity scope still attached.
    */
   async load(base = "data/"): Promise<void> {
     if (this.overlays || this.loading) return;

@@ -1,23 +1,9 @@
-"""The period report and the machine-readable export.
+"""Predicted-passage reports and the proposed SatChecker-shaped metadata export.
 
-The export follows the shape of the IAU CPS SatChecker field-of-view response
-(``GET /fov/satellite-passes/``, synchronous form, documented at
-satchecker.readthedocs.io): a list holding one object with ``data.satellites`` keyed by
-``"NAME (NORAD)"``, each with ``name``, ``norad_id`` and ``positions`` carrying ``altitude``,
-``angle``, ``azimuth``, ``date_time``, ``dec``, ``julian_date``, ``ra``, ``tle_epoch`` and
-``range_km``, plus ``total_position_results`` and ``total_satellites``, ``source`` and
-``version``. Seven fields are added to every position: ``cross_track_uncertainty_deg`` and
-``crossing_horizon`` (the cross-track uncertainty at the set's age, and whether the crossing is
-inside the crossing horizon), ``along_track_shift_s`` and ``position_horizon`` (the along-track
-time shift, and whether the position at an instant is inside the position horizon), and
-``hours_since_manoeuvre`` and ``fit_arc_spanned_manoeuvre`` (a lower bound on the time since the
-last manoeuvre the element-set jump detector finds in the object's own sets, and whether the
-set's likely fit arc reached it) and ``next_set_shows_jump`` (retrospective: whether the following set
-shows a jump this set may omit), with the benchmark's measured post-burn error and the mechanism
-stated once under ``post_manoeuvre``. Those seven are the whole of what this lane would offer
-upstream; everything
-else driftwatch adds sits under its own keys beside ``data`` and can be ignored by a SatChecker
-reader.
+Schema 2 withdraws the former crossing/position accuracy labels. Epoch-age and
+calibration applicability, declared emission-band evidence and candidate element
+discontinuities are separate metadata objects. They are not accepted upstream
+fields or operational accuracy, transmitter-state or manoeuvre guarantees.
 """
 
 from __future__ import annotations
@@ -32,7 +18,6 @@ import pandas as pd
 
 from driftwatch import __version__
 from driftwatch.radio import emissions
-from driftwatch.radio import horizon as horizon_mod
 from driftwatch.radio.crossings import (
     CATALOGUE_MAX_AGE_DAYS,
     ELEVATION_CUTOFF_DEG,
@@ -43,67 +28,70 @@ from driftwatch.radio.crossings import (
 )
 from driftwatch.radio.site import MEERKAT, RECEIVERS, Site, beam_fwhm_deg
 
-ADDED_FIELDS = (
-    "cross_track_uncertainty_deg",
-    "crossing_horizon",
-    "along_track_shift_s",
-    "position_horizon",
-    "hours_since_manoeuvre",
-    "fit_arc_spanned_manoeuvre",
-    "next_set_shows_jump",
-)
-# The consequence of a spanned fit arc, as the reference benchmark measured it (docs/reference-benchmark.md, the
-# post-burn table, 2026-09-08). Quoted once in the export rather than per position.
+ADDED_FIELDS = ("orbit_quality", "radio_band", "candidate_discontinuity")
 POST_MANOEUVRE_CONSEQUENCE = (
-    "The first element set issued after a detected burn may be a pre-burn fit with its epoch advanced past the burn: "
-    "it then omits the burn and is wrong along track by the part of the burn it omits, growing with lead at three "
-    "halves of the mean motion times the omitted change in semi-major axis, and nothing in the set itself says which "
-    "kind it is. In the reference benchmark (docs/reference-benchmark.md, twelve burns on six spacecraft at 700 to "
-    "950 km in four windows of 2024, re-measured whenever a window is added) four of the twelve first post-burn sets "
-    "were pre-burn fits re-epoched past the burn and seven contained it; the first set after a burn was wrong along "
-    "track at four days by 2.3 to 33 km, 19 to 33 km on the four re-epoched sets, and the next set after every burn "
-    "by under 5.3 km. Which sets are re-epoched differs by object, not by how soon after the burn they were issued. "
-    "When the following set shows the jump, the earlier set is marked retrospectively (next_set_shows_jump); on the "
-    "catalogue as it stood at an observation start no following set exists yet and the mark is null. Nothing is "
-    "measured for station-kept objects or debris."
+    "The benchmark found first post-burn element epochs whose fitted orbit remained consistent with the "
+    "pre-burn orbit. The catalogue does not expose the tracking or fit provenance needed to identify why. "
+    "A later element discontinuity is retrospective evidence of a change, not confirmation of a manoeuvre "
+    "or a known pre-burn fit. See the corrected post-burn analysis in docs/reference-benchmark.md."
 )
 POST_MANOEUVRE_DETECTOR = (
-    "the element-set jump detector on the object's own sets at or before the set's epoch, so a burn after the "
-    "newest set is invisible at the time; the burn lies between the two set epochs reported in the crossing record, "
-    "hours_since_manoeuvre counts from the later of them, and fit_arc_spanned_manoeuvre is true when that interval "
-    "reaches into the arc_hours before the set's epoch. next_set_shows_jump is the retrospective mark: the detector "
-    "run again with the two sets that follow, true when the interval from this set to the next is flagged, false "
-    "when it is not, null while no following set is held"
+    "Candidate changes come from the element-set jump detector. Epoch order is not publication order. "
+    "The interval endpoints are element epochs, the exclusion arc is an assumed 24-hour analysis rule, "
+    "and no actual catalogue fit arc is known. next_set_shows_jump uses later archived elements; null "
+    "means the evidence is absent. False does not establish that no manoeuvre occurred."
 )
 SATCHECKER_FORMAT = (
-    "IAU CPS SatChecker /fov/satellite-passes/ synchronous response "
-    "(satchecker.readthedocs.io, Field of View endpoints)"
+    "Proposed metadata in the IAU CPS SatChecker /fov/satellite-passes/ response shape; "
+    "not an accepted upstream schema (https://satchecker.readthedocs.io/en/latest/fov.html)"
 )
-EXPORT_SOURCE = (
-    "driftwatch radio lane, on public element sets; response shape after the IAU CPS SatChecker field-of-view endpoint"
-)
+EXPORT_SOURCE = "driftwatch epoch-based reconstruction, latest archived element epoch before observation start"
 EXPORT_LIMITS = [
-    "Positions come from public element sets propagated with SGP4; no tracking, no orbit determination.",
-    "cross_track_uncertainty_deg is the 95th percentile of the calibration benchmark's cross-track residual at "
-    "the element set's age, projected on the sky at the crossing's range, and crossing_horizon says whether "
-    "95 per cent of the benchmark's trials at that age keep it under a third of the beam (inside) or not "
-    "(outside): whether the object crossed the beam.",
-    "along_track_shift_s is the 95th percentile of the benchmark's along-track residual at that age as a time "
-    "shift at the orbital speed, and position_horizon says whether the along-track angular error keeps the "
-    "same coverage (inside) or not (outside): where the object is at an instant. Both horizons are null where "
-    "the object is outside the benchmark's population, and both say so. The population is the altitude-band "
-    "table of docs/radio-horizon.md: near-circular, free-flying spacecraft with a public reconstructed orbit, "
-    "in bands from 400 to 1400 km, each object scored against its own band's trials; nothing is measured for "
-    "debris, eccentric orbits or station-kept objects through a burn.",
-    "hours_since_manoeuvre, fit_arc_spanned_manoeuvre and next_set_shows_jump come from the element-set jump "
-    "detector on the object's own sets: a lower bound on the time since the last detected burn, whether the set's "
-    "likely fit arc, the benchmark's 24-hour exclusion arc before its epoch, reaches that burn, and, retrospectively, "
-    "whether the following set shows a jump this set may omit. The first two are null where fewer than two sets are "
-    "held at or before the epoch; the third is null while no following set is held. A burn the detector misses is "
-    "not reported. The consequence of a spanned arc or a jump shown by the next set is the benchmark's measured "
-    "post-burn error, stated under post_manoeuvre.",
-    "Nothing here is a received power, an occupancy fraction or a sensitivity loss.",
+    "These are modelled passages through the stated pointing; there is no measured satellite detection here.",
+    "Schema 2 removes crossing_horizon and position_horizon: orbital component errors do not determine "
+    "beam-entry or timing classification. A full-vector topocentric comparison is required.",
+    "orbit_quality requires an eligible reference mission, explicit manoeuvre-excluded public-GP scope "
+    "and measured age. Altitude overlap alone never supplies a calibrated uncertainty.",
+    "Epoch-based reconstruction: epoch age is not publication age. "
+    "Catalogue availability at observation start is not established.",
+    "radio_band is declared emission-frequency evidence, not the beam frequency, actual transmission, "
+    "received power or interference. Per-object capability and historical operation may be unknown.",
+    "candidate_discontinuity is an element-change heuristic. The former fit_arc_spanned_manoeuvre "
+    "field is withdrawn: the assumed exclusion arc is not a published fit arc.",
 ]
+
+
+def radio_band_record(c: Crossing, obs) -> dict[str, Any]:
+    evidence = [
+        {
+            "constellation": e.constellation,
+            "signal": e.signal,
+            "low_mhz": e.lo_mhz,
+            "high_mhz": e.hi_mhz,
+            "direction": e.direction,
+            "source": e.source,
+            "url": e.url,
+            "note": e.note,
+            "source_publication_date": "2024-11-26"
+            if e.constellation == "Starlink" and "direct-to-cell" in e.signal
+            else None,
+            "operation_valid_from": None,
+            "operation_valid_until": None,
+            "historical_validity": "unknown; an order publication date is not local operational authorisation",
+        }
+        for e in emissions.EMISSIONS
+        if e.constellation == c.constellation and e.emits and obs.receiver.overlaps(e.lo_mhz, e.hi_mhz)
+    ]
+    return {
+        "receiver": obs.receiver.name,
+        "receiver_range_mhz": [obs.receiver.lo_mhz, obs.receiver.hi_mhz],
+        "declaration_status": c.emission_status,
+        "detail": c.emission_detail,
+        "evidence": evidence,
+        "object_transmitting": None,
+        "historical_operation_established": False,
+        "interpretation": "declared frequency overlap only; unknown is not absence",
+    }
 
 
 def _iso(t: datetime) -> str:
@@ -132,13 +120,9 @@ def satchecker_export(
                     "ra": s.ra_deg,
                     "tle_epoch": c.set_epoch_utc,
                     "range_km": s.range_km,
-                    "cross_track_uncertainty_deg": c.cross_track_uncertainty_deg,
-                    "crossing_horizon": c.crossing_horizon,
-                    "along_track_shift_s": c.along_track_shift_s,
-                    "position_horizon": c.position_horizon,
-                    "hours_since_manoeuvre": c.hours_since_manoeuvre,
-                    "fit_arc_spanned_manoeuvre": c.fit_arc_spanned_manoeuvre,
-                    "next_set_shows_jump": c.next_set_shows_jump,
+                    "orbit_quality": dict(c.orbit_quality),
+                    "radio_band": radio_band_record(c, obs),
+                    "candidate_discontinuity": c.record(with_samples=False)["candidate_discontinuity"],
                 }
             )
             n_positions += 1
@@ -151,6 +135,7 @@ def satchecker_export(
             },
             "source": EXPORT_SOURCE,
             "version": __version__,
+            "metadata_schema_version": 2,
             "format": SATCHECKER_FORMAT,
             "added_fields": list(ADDED_FIELDS),
             "post_manoeuvre": {
@@ -162,14 +147,16 @@ def satchecker_export(
                 "ra_deg": obs.ra_deg,
                 "dec_deg": obs.dec_deg,
                 "radius_deg": obs.fwhm_deg / 2.0,
-                "radius_is": "half of the primary beam's half-power width at the observation's centre frequency",
+                "radius_is": "historical analytic circular FWHM/2 at the stated frequency; "
+                "not a measured-beam validation",
                 "start_time_utc": _iso(obs.start),
                 "duration_s": obs.duration_s,
             },
             "observation": obs.record(),
             "site": site_record(site),
             "catalogue": {
-                "as_of": result.catalogue_at,
+                "epoch_cutoff": result.catalogue_at,
+                "availability_as_of_known": False,
                 "n_objects": result.n_catalogue,
                 "max_set_age_days": CATALOGUE_MAX_AGE_DAYS,
             },
@@ -228,42 +215,21 @@ def _counts_table(counts: Iterable[Any]) -> list[str]:
 
 def _crossings_table(crossings: list[Crossing]) -> list[str]:
     if not crossings:
-        return ["No catalogued object's predicted track passed inside the half-power radius during this observation."]
+        return ["No catalogued object's predicted track entered the assumed circular aperture during this interval."]
     lines = [
-        "| Object | Type | Closest approach (UTC) | Angle from boresight | Elevation | Range | Set age "
-        "| Since last detected manoeuvre | Cross-track uncertainty (p95) | Along-track shift (p95) "
-        "| Trials inside beam/3, crossing / position | Crossing horizon | Position horizon | Emission in this band |",
-        "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | ---: | ---: | ---: | --- | --- | --- |",
+        "| Object | Type | Predicted closest approach (UTC) | Angle | Elevation | Range | Element epoch age "
+        "| Calibration applicability | Candidate element change | Declared emission evidence |",
+        "| --- | --- | --- | ---: | ---: | ---: | ---: | --- | --- | --- |",
     ]
     kinds = {"DEB": "debris", "R/B": "rocket body", "PAY": "payload"}
     for c in crossings:
         kind = c.constellation or kinds.get(c.object_type, c.object_type)
-        frac = (
-            "-"
-            if c.crossing_fraction_inside is None or c.position_fraction_inside is None
-            else f"{100 * c.crossing_fraction_inside:.0f}% / {100 * c.position_fraction_inside:.0f}%"
-        )
-        unc = "-" if c.cross_track_uncertainty_deg is None else f"{60 * c.cross_track_uncertainty_deg:.1f}'"
-        shift = "-" if c.along_track_shift_s is None else f"{c.along_track_shift_s:.1f} s"
-        if c.population == "measured":
-            crossing_h, position_h = c.crossing_horizon, c.position_horizon
-        else:
-            crossing_h = f"no measured horizon ({c.population_reason})"
-            position_h = "no measured horizon"
-        partial = " (in progress at the edge)" if c.partial else ""
-        if c.hours_since_manoeuvre is None:
-            since = "none found" if c.fit_arc_spanned_manoeuvre is False else "no detection"
-        else:
-            arc = "fit arc spans it" if c.fit_arc_spanned_manoeuvre else "fit arc clear"
-            since = f"{c.hours_since_manoeuvre / 24:.1f} d or more, {arc}"
-        if c.next_set_shows_jump:
-            since += "; next set shows a jump"
-        when = c.t_ca_utc[:19].replace("T", " ") + partial
+        when = c.t_ca_utc[:19].replace("T", " ") + (" (interval edge)" if c.partial else "")
+        candidate = c.manoeuvre_detection
         lines.append(
-            f"| {c.name} ({c.norad_id}) | {kind} | {when} | {60 * c.separation_deg:.1f}' | {c.elevation_deg:.1f} deg "
-            f"| {c.range_km:.0f} km | {c.set_age_days:.2f} d | {since} | {unc} | {shift} | {frac} | {crossing_h} "
-            f"| {position_h} "
-            f"| {c.emission_status}: {c.emission_detail} |"
+            f"| {c.name} ({c.norad_id}) | {kind} | {when} | {60 * c.separation_deg:.1f}' | "
+            f"{c.elevation_deg:.1f} deg | {c.range_km:.0f} km | {c.set_age_days:.2f} d | "
+            f"{c.population}: {c.population_reason} | {candidate} | {c.emission_status}: {c.emission_detail} |"
         )
     return lines
 
@@ -285,10 +251,11 @@ def _observation_section(r: ObservationResult, elevation_deg: float) -> list[str
         "",
         f"Pointing {o.ra_deg:.5f}, {o.dec_deg:+.5f} (J2000); {_iso(o.start)} for {o.duration_s:.0f} s; "
         f"receiver {o.receiver.name} ({o.receiver.lo_mhz:g}-{o.receiver.hi_mhz:g} MHz digitised), centre frequency "
-        f"{o.centre_mhz:g} MHz, half-power width {o.fwhm_deg:.2f} deg, so the beam radius used is "
+        f"{o.centre_mhz:g} MHz, historical analytic circular width {o.fwhm_deg:.2f} deg; illustrative aperture radius "
         f"{radius_arcmin:.1f} arcmin. Record: {o.source}." + (f" {o.note}" if o.note else ""),
         "",
-        f"Catalogue as of {r.catalogue_at}: {r.n_catalogue:,} objects.",
+        f"Archived element-epoch cutoff {r.catalogue_at}: {r.n_catalogue:,} objects. "
+        "Publication-time availability is unknown.",
         "",
         f"**Product one: in the sky above {elevation_deg:g} degrees during the observation, by constellation.**",
         "",
@@ -313,18 +280,11 @@ NO_RECORD = (
     "products the moment an observation list is exported from the archive."
 )
 
-LIMITS = [
-    "- No received power, occupancy fraction or sensitivity loss: those need a measurement at the site, and the "
-    "statistics of satellite interference have been modelled elsewhere.",
-    "- Constellation counts include retired members still catalogued; the catalogue does not say who is transmitting.",
-    "- The measured horizons, crossing and position, rest on the reference benchmark's free-flying spacecraft, "
-    "by altitude band and window (the band table on `docs/radio-horizon.md`); a station-kept constellation "
-    "satellite or a piece of debris in a measured band carries the label by altitude, not by a measurement of "
-    "its own error.",
-    "- Where the archive's phase centre is not public, the target position stands in for it and the report says "
-    "so per observation.",
-    "- Scan boundaries inside an observation are not public; a crossing is reported against the whole "
-    "observation, so a crossing during a calibrator scan or a slew is counted with the rest.",
+LIMITS = ["- " + x for x in EXPORT_LIMITS] + [
+    "- Where the archive phase centre is unavailable, a target position stands in for it. Scan boundaries, "
+    "calibrator scans and slews are unknown, so the assumed pointing is not an actual schedule.",
+    "- Historical circular-aperture passages are retained as illustrations. The measured-beam comparison "
+    "uses constructed fixed celestial pointings, explicitly separate from this public-record example.",
 ]
 
 
@@ -345,13 +305,13 @@ def period_report(
     left empty, the report points at the band table on the horizon page.
     """
     lines = [
-        f"# Satellite crossings over the Karoo: {period.label}",
+        f"# Predicted satellite passages over the Karoo: {period.label}",
         "",
         f"Retrospective for {period.label} ({period.why}), at the {site.name} ({site.latitude_deg:.4f}, "
         f"{site.longitude_deg:.4f}, {site.height_m:.0f} m; {site.dish_diameter_m:g} m dish). Positions are public "
-        "element sets propagated with SGP4, each object's newest set at or before the moment in question and none "
-        f"later, no older than {CATALOGUE_MAX_AGE_DAYS:g} days. Element-set error is read from the calibration "
-        f"benchmark's *{period.benchmark_window}* window (`docs/radio-horizon.md`). Nothing here is a received "
+        "element sets propagated with SGP4, selected by latest archived epoch before the cutoff, "
+        f"no older than {CATALOGUE_MAX_AGE_DAYS:g} days. Publication timestamps were not reconstructed. "
+        "No beam classification accuracy has been calibrated by the component table. Nothing here is a received "
         "power, an occupancy fraction or a sensitivity loss.",
         "",
         f"**Population and limits.** {provenance['n_sets']:,} element sets for {provenance['n_objects']:,} objects "
@@ -359,11 +319,11 @@ def period_report(
         "gp_history. Constellation membership is by catalogue name (GLONASS by owner and orbit) and includes "
         "retired members, because the catalogue does not carry transmit status. Emissions are declarations from "
         "public filings, dated in `docs/radio-emissions.md`; a declaration made after these observations "
-        "(Starlink direct-to-cell, November 2024) is still listed, as a capability, and says so. The measured "
-        "horizons, crossing and position, apply only to objects in the benchmark's measured altitude bands, each "
-        "scored against its own band's trials: "
-        + (population or "the band table on `docs/radio-horizon.md`")
-        + "; every other object carries *no measured horizon* for both and the reason.",
+        "(Starlink direct-to-cell, November 2024) is still listed as later declared capability, not demonstrated "
+        "operation in April or May. Component diagnostics require an eligible reference mission, explicit "
+        "manoeuvre-excluded scope and an age from 6 to 168 h; altitude alone does not establish eligibility. "
+        + (population or "The reference population is listed in docs/radio-horizon.md.")
+        + " No crossing or beam-timing guarantee is attached to these catalogue passages.",
         "",
         "## Observations",
         "",
@@ -377,9 +337,9 @@ def period_report(
     lines += [
         "## The sky over the whole period, hour by hour (product one without a pointing)",
         "",
-        "For every hour of the period, the catalogue as it stood at that hour, sampled every minute: how many "
+        "For each hour, the latest archived element epoch before that hour, sampled every minute: how many "
         f"members of each constellation were above {elevation_deg:g} degrees at once, averaged over the period, "
-        "and at the peak minute. This is the aggregate a sidelobe sees whatever the dish points at, and it needs "
+        "and at the peak minute. This geometric visibility count has no sidelobe gain or power estimate and needs "
         "no schedule.",
     ]
     for rx_name, summary in hourly_summary.items():
@@ -403,56 +363,28 @@ def period_report(
                 f"| {s['constellation']} | {int(s['n_catalogued'])} | {s['mean_simultaneous']:.1f} "
                 f"| {int(s['max_simultaneous'])} | {s['status']}: {s['detail']} |"
             )
-    lines += ["", f"## The two horizons for this period's window ({period.benchmark_window})", ""]
+    lines += [
+        "",
+        f"## Reference component scales ({period.benchmark_window})",
+        "",
+        "These are orbital C and I scales at representative mean-altitude range. They do not predict "
+        "beam-entry, closest-approach or boundary timing errors. See docs/radio-horizon.md for "
+        "definitions, population and unavailable lead bins.",
+        "",
+    ]
     w = horizon_table[horizon_table["window"] == period.benchmark_window]
-    cols = [c for c in horizon_mod.table_columns() if c.receiver in ("UHF", "L", "S0")]
     if w.empty:
         lines.append("No benchmark trials for this window.")
     else:
-        bands = horizon_mod.bands_present(w)
         lines += [
-            "The **crossing horizon** is governed by the cross-track error and answers whether an object crossed the "
-            "beam during an observation, with the crossing's time known to the along-track shift beside it; the "
-            "**position horizon** is governed by the along-track error and answers where an object is at an instant, "
-            "to within a third of the beam. Each is the longest lead through which 95 per cent of this window's "
-            "benchmark trials in the object's altitude band keep the named angular error under a third of the beam "
-            "width.",
-            "",
-            "| Altitude band | Receiver, frequency | Crossing horizon | Position horizon |",
-            "| --- | --- | --- | --- |",
+            "| Band | Lead | n | Orbital C p95 | Orbital I p95 | Orbital phase-time p95 |",
+            "| --- | ---: | ---: | ---: | ---: | ---: |",
         ]
-        for band in bands:
-            for c in cols:
-                crossing = horizon_mod.horizon_hours(w, c, which="crossing", band=band)
-                position = horizon_mod.horizon_hours(w, c, which="position", band=band)
-                lines.append(
-                    f"| {band} | {c.label} | {horizon_mod.format_lead(crossing.get(period.benchmark_window))} "
-                    f"| {horizon_mod.format_lead(position.get(period.benchmark_window))} |"
-                )
-        for band in bands:
-            lines += [
-                "",
-                f"{band}, per lead:",
-                "",
-                "| Lead | n | cross-track p95 (overhead) | along-track p95 (overhead) | along-track shift p95 | "
-                + " | ".join(f"{c.label}, crossing / position" for c in cols)
-                + " |",
-                "| ---: | ---: | ---: | ---: | ---: | " + " | ".join("---:" for _ in cols) + " |",
-            ]
-            for _, r in w[w["band"] == band].iterrows():
-                lines.append(
-                    f"| {horizon_mod.format_lead(float(r['lead_h']))} | {int(r['n'])} | {r['cross_p95_arcmin']:.1f}' "
-                    f"| {r['along_p95_arcmin']:.1f}' | {r['along_shift_p95_s']:.2f} s | "
-                    + " | ".join(f"{100 * r[c.crossing_key]:.0f}% / {100 * r[c.position_key]:.0f}%" for c in cols)
-                    + " |"
-                )
-        lines += [
-            "",
-            "Fractions are the share of the band's benchmark trials whose angular error, with the satellite overhead, "
-            "is under a third of the beam width: the crossing horizon's test (cross-track) then the position "
-            "horizon's test (along-track). The full table with every receiver, and the statements per band on "
-            "S-band position prediction, are in `docs/radio-horizon.md`.",
-        ]
+        for _, r in w.iterrows():
+            lines.append(
+                f"| {r['band']} | {r['lead_h']:g} h | {int(r['n'])} | {r['cross_p95_arcmin']:.2f}' | "
+                f"{r['along_p95_arcmin']:.2f}' | {r['along_shift_p95_s']:.2f} s |"
+            )
     lines += ["", "## What this does not show", "", *LIMITS, "", f"_Last updated {datetime.now(UTC):%d %B %Y}._"]
     return "\n".join(lines).rstrip() + "\n"
 

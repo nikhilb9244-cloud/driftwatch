@@ -48,9 +48,10 @@
         <p class="inline-note">Stored screening results for a selected fleet. Probabilities are indicative and do not support manoeuvre decisions.</p>
         <div id="conjunctions" hidden>
           <div id="conjunctions-summary"></div>
-          <details id="storm" class="disclosure" hidden><summary>Compare space weather <span id="scenario-current" class="summary-hint">Quiet</span></summary>
+          <details id="storm" class="disclosure" hidden><summary>Space-weather sensitivity <span id="scenario-current" class="summary-hint">Quiet</span></summary>
+            <p class="caveat">Sensitivity analysis on the baseline event set. Candidate discovery is not repeated; changed trajectories may produce other encounters.</p>
             <p class="caveat">Changes the stored estimates below. The globe and drawn paths keep their original geometry.</p>
-            <div id="storm-segments" class="storm-segments" role="group" aria-label="Storm scenario"></div><label class="storm-dropdown"><span class="field-label">Storm scenario</span><select id="storm-select" aria-label="Storm scenario"></select></label>
+            <div id="storm-segments" class="storm-segments" role="group" aria-label="Storm sensitivity"></div><label class="storm-dropdown"><span class="field-label">Storm sensitivity</span><select id="storm-select" aria-label="Storm sensitivity"></select></label>
             <div id="storm-note" class="muted storm-note"></div><details><summary>Evidence and population breakdown</summary><div id="storm-summary"></div></details><details id="storm-unscoreable" class="storm-unscoreable-box" hidden></details>
           </details>
           <div class="conjunction-search"><label class="field-label" for="conjunction-filter">Find a pair</label><input id="conjunction-filter" type="search" placeholder="Name or catalogue number"/><label class="checkbox"><input id="conjunction-flagged" type="checkbox" /> Show flagged pairs only</label></div>

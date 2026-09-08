@@ -1,43 +1,22 @@
-"""The two products for an observation, on the catalogue as it stood at the observation's start.
+"""Predicted passages and paired topocentric track comparisons.
 
-**Product one: what is in the sky.** Every catalogued object that belongs to a constellation
-with a declared emission, counted by constellation, that rises above a chosen elevation at any
-time during the observation, with how many are up at once. This is the aggregate that a
-sidelobe sees: a GNSS satellite need not cross the beam to be received, and the number of them
-above the horizon at once is the size of that problem. It is a count, not a power.
+Historical catalogue displays select the latest archived element epoch before a
+cutoff; publication-time availability is unknown. Their circular analytic beam
+finder is a modelled-passage illustration, not an observed detection or accuracy
+validation. Scalar component diagnostics require reference-mission identity,
+calibration scope and measured age; they never establish crossing guarantees.
 
-**Product two: what crosses the beam.** Every catalogued object whose predicted track passes
-inside the primary beam's half-power radius, with its closest approach to the boresight, the
-time, the element set's age at that time, the cross-track angular uncertainty and along-track
-time shift the calibration benchmark gives that age and geometry, and the two horizons: the
-*crossing horizon*, governed by the cross-track error (whether the crossing happens), and the
-*position horizon*, governed by the along-track error (where the object is at an instant), each
-inside or outside. Objects outside the benchmark's population carry *no measured horizon* and
-the reason for both. Each object also carries the time since the last manoeuvre the element-set
-jump detector finds in its own sets, as a lower bound, and whether the set's likely fit arc, the
-benchmark's exclusion arc before its epoch, spanned it: the benchmark measured what such a set
-does (the post-burn table on the reference page), and the export states it beside the flag. The first
-set after a burn may be a pre-burn fit with its epoch advanced past the burn, which the set itself
-does not reveal; when the following set shows the jump, the earlier set is marked retrospectively.
-
-Both are geometry from public element sets. Nothing here is a received power, an occupancy or
-a sensitivity loss.
-
-Method for product two. The whole catalogue is propagated on a ten-second grid over the
-observation and every object that comes within reach of the beam -- its angle from the
-boresight at some sample under the half-power radius plus what it could move between samples
-at its range -- is propagated again on a one-second grid. Each local minimum of the angle on that
-grid is refined by a bounded scalar minimisation of the continuous function (SGP4, Earth rotation,
-the boresight interpolated between its one-second samples), and the crossing is reported if the
-refined closest approach is inside the half-power radius. An angle that is already inside the
-beam at the first or last sample is a crossing in progress at the observation's edge and is
-labelled partial.
+The corrected comparison API uses both complete orbit vectors, the rotating
+observer, a fixed celestial boresight and an explicit measured beam response. It
+evaluates nominal entrants and near misses and distinguishes timing across an
+observation edge from beam-entry disagreement over the whole search interval.
 """
 
 from __future__ import annotations
 
+import hashlib
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
@@ -45,16 +24,17 @@ from typing import Any, NamedTuple
 
 import numpy as np
 import pandas as pd
-from scipy.optimize import minimize_scalar
+from scipy.interpolate import CubicSpline
+from scipy.optimize import brentq, minimize_scalar
 
-from driftwatch import config
+from driftwatch import claims, config
 from driftwatch.catalogue import history, snapshot
 from driftwatch.orbit.propagator import build_satrecs, propagate_satrecs
 from driftwatch.orbit.time import julian_dates
 from driftwatch.radio import emissions
 from driftwatch.radio import horizon as horizon_mod
 from driftwatch.radio import site as site_mod
-from driftwatch.radio.horizon import COVERAGE, CrossingUncertainty
+from driftwatch.radio.horizon import ComponentDiagnostic
 from driftwatch.radio.observations import Observation
 from driftwatch.radio.site import Site, boresight, look_from, separation_deg, sky_projection, teme_to_pef
 from driftwatch.screening.ric import ric_basis
@@ -64,19 +44,24 @@ log = logging.getLogger(__name__)
 
 # The population the reference benchmark measured: near-circular, free-flying spacecraft in the
 # altitude bands of ``storm/reference.py``. An object is scored against its own band's trials;
-# outside every band it carries no measured horizon. The bands with trials are read from the
+# identity and scope are required in addition to an altitude band. The bands with trials are read from the
 # trials themselves at run time; this tuple is the full set the benchmark defines.
 MEASURED_BANDS: tuple[str, ...] = horizon_mod.BAND_ORDER
 MEASURED_MAX_ECCENTRICITY = 0.02
 MEASURED_MAX_AGE_DAYS = 7.0
+MEASURED_MIN_AGE_DAYS = 6.0 / 24.0
+REFERENCE_SCOPE = "public_gp_manoeuvre_excluded_reference_mission"
+ELIGIBLE_MISSIONS = {
+    m.norad_id: m.key for m in horizon_mod.reference.MISSIONS.values() if m.truth != horizon_mod.reference.TRUTH_NONE
+}
 
 # The elevation above which an object counts as in the sky for product one. MeerKAT observes
 # above 15 degrees; a sidelobe has no such limit, and the local horizon is a degree or two.
 ELEVATION_CUTOFF_DEG = 10.0
 # Newest set at or before the observation, no older than this, or the object is not in the catalogue that day.
 CATALOGUE_MAX_AGE_DAYS = 7.0
-# The tracking arc an element set is likely to have been fitted from: the benchmark's exclusion arc. A
-# detected burn inside it means the set was fitted across the burn and is wrong from its epoch on.
+# An assumed exclusion interval used by the historical diagnostic. This is not a known fit arc,
+# and a candidate element jump does not establish that an operator manoeuvre occurred.
 FIT_ARC_HOURS = precise.MANOEUVRE_ARC_HOURS
 
 COARSE_STEP_S = 10.0
@@ -85,6 +70,272 @@ FINE_STEP_S = 1.0
 # the circular speed at the Earth's surface, an upper bound for any bound orbit's transverse speed.
 MAX_TRANSVERSE_SPEED_KM_S = 7.9
 CHUNK_OBJECTS = 4000
+
+
+@dataclass
+class SkyTrack:
+    """A sampled complete topocentric direction curve and a fixed celestial pointing.
+
+    Interpolation is only inside the supplied, gap-free time span. The directions
+    must already include observer rotation at every sample; scalar R/I/C errors
+    cannot construct this object. Cadence is retained for convergence checks.
+    """
+
+    seconds: np.ndarray
+    sightline_enu: np.ndarray
+    boresight_enu: np.ndarray
+    _sight: CubicSpline = field(init=False, repr=False)
+    _bore: CubicSpline = field(init=False, repr=False)
+
+    def __post_init__(self) -> None:
+        t = np.asarray(self.seconds, dtype=float)
+        if t.ndim != 1 or len(t) < 4 or not np.isfinite(t).all() or not np.all(np.diff(t) > 0):
+            raise ValueError("a sky track needs at least four increasing finite times")
+        for values in (self.sightline_enu, self.boresight_enu):
+            a = np.asarray(values, dtype=float)
+            if a.shape != (len(t), 3) or not np.isfinite(a).all() or np.any(np.linalg.norm(a, axis=1) == 0):
+                raise ValueError("a sky track needs finite three-dimensional directions at every time")
+        self.seconds = t
+        self._sight = CubicSpline(t, self.sightline_enu, axis=0, extrapolate=False)
+        self._bore = CubicSpline(t, self.boresight_enu, axis=0, extrapolate=False)
+
+    def directions(self, seconds) -> tuple[np.ndarray, np.ndarray]:
+        t = np.asarray(seconds, dtype=float)
+        if np.any((t < self.seconds[0]) | (t > self.seconds[-1])):
+            raise ValueError("sky-track extrapolation is not permitted")
+        sight, bore = self._sight(t), self._bore(t)
+        return sight / np.linalg.norm(sight, axis=-1, keepdims=True), bore / np.linalg.norm(
+            bore, axis=-1, keepdims=True
+        )
+
+    def separation(self, seconds) -> np.ndarray:
+        return separation_deg(*self.directions(seconds))
+
+    def power(self, seconds, response: Callable) -> np.ndarray:
+        x, y = site_mod.beam_offsets_deg(*self.directions(seconds))
+        return np.asarray(response(x, y), dtype=float)
+
+
+@dataclass(frozen=True)
+class BeamInterval:
+    entry_s: float
+    exit_s: float
+    entry_censored: bool = False
+    exit_censored: bool = False
+
+
+@dataclass
+class TrackMeasurement:
+    closest_time_s: float
+    closest_separation_deg: float
+    peak_time_s: float
+    peak_normalized_power: float
+    intervals: list[BeamInterval]
+    observation_crossed: bool
+    observation_entry_s: float | None
+    observation_exit_s: float | None
+    observation_start_inside: bool
+    observation_end_inside: bool
+    input_max_step_s: float
+    closest_time_censored: bool
+    peak_time_censored: bool
+    half_power_peak_margin: float
+    tangential_contact: bool
+
+
+@dataclass
+class TrackComparison:
+    prediction: TrackMeasurement
+    reference: TrackMeasurement
+    false_crossing: bool
+    missed_crossing: bool
+    both_crossed: bool
+    observation_edge_mismatch: bool
+    closest_time_error_s: float
+    closest_separation_error_deg: float
+    entry_time_error_s: float | None
+    exit_time_error_s: float | None
+    instantaneous_error_at_reference_closest_deg: float
+    max_sampled_instantaneous_error_deg: float
+    beam: dict[str, Any]
+    observation_interval_s: tuple[float, float]
+
+    def record(self) -> dict[str, Any]:
+        return asdict(self)
+
+
+def _measure_track(
+    track: SkyTrack,
+    response: Callable,
+    observation_interval_s: tuple[float, float],
+    *,
+    time_tolerance_s: float,
+) -> TrackMeasurement:
+    """Find minima, beam peaks, and half-power entry/exit roots, including near misses."""
+    t = track.seconds
+    separation = track.separation(t)
+    power = track.power(t, response)
+    if not np.isfinite(power).all():
+        raise ValueError("beam response contains unknown values on the supplied track")
+    minima = np.flatnonzero(
+        (separation <= np.r_[np.inf, separation[:-1]]) & (separation <= np.r_[separation[1:], np.inf])
+    )
+    maxima = np.flatnonzero((power >= np.r_[-np.inf, power[:-1]]) & (power >= np.r_[power[1:], -np.inf]) & (power > 0))
+    angular_candidates = [float(t[0]), float(t[-1])]
+    peak_candidates = [float(t[0]), float(t[-1])]
+    for k in np.unique(np.r_[minima, maxima]):
+        lo, hi = float(t[max(0, k - 1)]), float(t[min(len(t) - 1, k + 1)])
+        if hi <= lo:
+            continue
+        angular = minimize_scalar(
+            lambda s: float(track.separation(s)), bounds=(lo, hi), method="bounded", options={"xatol": time_tolerance_s}
+        )
+        peak = minimize_scalar(
+            lambda s: -float(track.power(s, response)),
+            bounds=(lo, hi),
+            method="bounded",
+            options={"xatol": time_tolerance_s},
+        )
+        angular_candidates.append(float(angular.x))
+        peak_candidates.extend([float(peak.x), float(angular.x)])
+    closest = min(angular_candidates, key=lambda s: float(track.separation(s)))
+    peak_time = max(peak_candidates, key=lambda s: float(track.power(s, response)))
+    # Inserting refined peaks catches brief crossings between the original samples.
+    knots = np.unique(np.r_[t, angular_candidates, peak_candidates])
+    values = track.power(knots, response) - 0.5
+    roots: list[float] = []
+    for left, right, a, b in zip(knots[:-1], knots[1:], values[:-1], values[1:], strict=True):
+        if a == 0:
+            roots.append(float(left))
+        if a * b < 0:
+            roots.append(
+                float(brentq(lambda s: float(track.power(s, response)) - 0.5, left, right, xtol=time_tolerance_s))
+            )
+    if values[-1] == 0:
+        roots.append(float(knots[-1]))
+    edges = np.unique(np.r_[t[0], roots, t[-1]])
+    intervals: list[BeamInterval] = []
+    for lo, hi in zip(edges[:-1], edges[1:], strict=True):
+        if float(track.power((lo + hi) / 2.0, response)) >= 0.5:
+            intervals.append(
+                BeamInterval(
+                    float(lo), float(hi), bool(lo == t[0] and power[0] >= 0.5), bool(hi == t[-1] and power[-1] >= 0.5)
+                )
+            )
+    obs_lo, obs_hi = observation_interval_s
+    clipped = [
+        (max(i.entry_s, obs_lo), min(i.exit_s, obs_hi))
+        for i in intervals
+        if min(i.exit_s, obs_hi) > max(i.entry_s, obs_lo)
+    ]
+    return TrackMeasurement(
+        closest_time_s=float(closest),
+        closest_separation_deg=float(track.separation(closest)),
+        peak_time_s=float(peak_time),
+        peak_normalized_power=float(track.power(peak_time, response)),
+        intervals=intervals,
+        observation_crossed=bool(clipped),
+        observation_entry_s=clipped[0][0] if clipped else None,
+        observation_exit_s=clipped[-1][1] if clipped else None,
+        observation_start_inside=bool(float(track.power(obs_lo, response)) >= 0.5),
+        observation_end_inside=bool(float(track.power(obs_hi, response)) >= 0.5),
+        input_max_step_s=float(np.max(np.diff(t))),
+        closest_time_censored=bool(min(closest - t[0], t[-1] - closest) <= time_tolerance_s),
+        peak_time_censored=bool(min(peak_time - t[0], t[-1] - peak_time) <= time_tolerance_s),
+        half_power_peak_margin=float(track.power(peak_time, response)) - 0.5,
+        tangential_contact=bool(not intervals and abs(float(track.power(peak_time, response)) - 0.5) < 1e-8),
+    )
+
+
+def compare_sky_tracks(
+    prediction: SkyTrack,
+    reference: SkyTrack,
+    response: Callable,
+    *,
+    beam_record: dict[str, Any],
+    observation_interval_s: tuple[float, float] | None = None,
+    time_tolerance_s: float = 0.001,
+) -> TrackComparison:
+    """Paired crossing classification, timing and complete angular errors.
+
+    Both curves are always evaluated, including predicted misses. Input curves
+    must span the same times and identical pointing. A shorter observation inside
+    the search interval distinguishes timing across an observation edge from a
+    geometric miss. This function does not infer a population coverage guarantee.
+    """
+    if not np.array_equal(prediction.seconds, reference.seconds):
+        raise ValueError("prediction and reference must use the same time samples")
+    if not np.allclose(prediction.boresight_enu, reference.boresight_enu, atol=1e-12, rtol=0):
+        raise ValueError("prediction and reference must use the same fixed celestial pointing")
+    t = prediction.seconds
+    interval = observation_interval_s or (float(t[0]), float(t[-1]))
+    if interval[0] < t[0] or interval[1] > t[-1] or interval[0] >= interval[1]:
+        raise ValueError("observation interval must lie inside the common search span")
+    p = _measure_track(prediction, response, interval, time_tolerance_s=time_tolerance_s)
+    r = _measure_track(reference, response, interval, time_tolerance_s=time_tolerance_s)
+    false, missed = (
+        p.observation_crossed and not r.observation_crossed,
+        r.observation_crossed and not p.observation_crossed,
+    )
+    entry = exit_ = None
+    if len(p.intervals) == len(r.intervals) == 1:
+        pi, ri = p.intervals[0], r.intervals[0]
+        if not pi.entry_censored and not ri.entry_censored:
+            entry = pi.entry_s - ri.entry_s
+        if not pi.exit_censored and not ri.exit_censored:
+            exit_ = pi.exit_s - ri.exit_s
+    pred_at, _ = prediction.directions(r.closest_time_s)
+    ref_at, _ = reference.directions(r.closest_time_s)
+    instant = separation_deg(prediction.directions(t)[0], reference.directions(t)[0])
+    return TrackComparison(
+        p,
+        r,
+        bool(false),
+        bool(missed),
+        p.observation_crossed and r.observation_crossed,
+        bool((false or missed) and p.intervals and r.intervals),
+        p.closest_time_s - r.closest_time_s,
+        p.closest_separation_deg - r.closest_separation_deg,
+        entry,
+        exit_,
+        float(separation_deg(pred_at, ref_at)),
+        float(np.max(instant)),
+        dict(beam_record),
+        interval,
+    )
+
+
+def compare_orbit_tracks(
+    times,
+    prediction_teme_km: np.ndarray,
+    reference_teme_km: np.ndarray,
+    site: Site,
+    ra_deg: float,
+    dec_deg: float,
+    beam: site_mod.MeasuredBeam,
+    *,
+    observation_interval_s: tuple[float, float] | None = None,
+) -> TrackComparison:
+    """The corrected end-to-end comparison, using a measured beam and full positions.
+
+    Inputs are positions at explicit UTC times from SGP4 and the independently
+    reconstructed orbit. No data fetching, orbit selection or scoring of stored
+    trials occurs implicitly. Report actual element age and constructed-pointing
+    provenance alongside each returned measurement in the benchmark runner.
+    """
+    dates = np.asarray(times, dtype="datetime64[us]")
+    seconds = (dates - dates[0]) / np.timedelta64(1, "s")
+    predicted = site_mod.look_from_teme(site, prediction_teme_km, dates)
+    reconstructed = site_mod.look_from_teme(site, reference_teme_km, dates)
+    with site_mod.iers.conf.set_temp("auto_download", False):
+        _, _, bore = boresight(site, ra_deg, dec_deg, dates)
+    return compare_sky_tracks(
+        SkyTrack(seconds, predicted.enu, bore),
+        SkyTrack(seconds, reconstructed.enu, bore),
+        beam.power,
+        beam_record=beam.record(),
+        observation_interval_s=observation_interval_s,
+    )
 
 
 @dataclass(frozen=True)
@@ -128,7 +379,7 @@ PERIODS: dict[str, Period] = {
 
 
 # --------------------------------------------------------------------------------------
-# The catalogue as it stood
+# The archived catalogue selected by element epoch
 
 
 def load_sets(
@@ -166,7 +417,7 @@ def load_sets(
 def catalogue_at(
     sets: pd.DataFrame, satcat_frame: pd.DataFrame | None, at: datetime, *, max_age_days: float = CATALOGUE_MAX_AGE_DAYS
 ) -> pd.DataFrame:
-    """The catalogue at ``at``: each object's newest set at or before it, classified, with its constellation."""
+    """Epoch-based reconstruction at ``at``; membership and publication availability are not established."""
     df = snapshot.snapshot_as_of(sets, satcat_frame, as_of=at, groups={}, max_age_days=max_age_days)
     df["mean_altitude_km"] = df["semi_major_axis_km"].to_numpy() - site_mod.EARTH_RADIUS_KM
     owners = df["owner"].astype(object).where(df["owner"].notna(), None)
@@ -274,7 +525,7 @@ def hourly_constellation_view(
     elevation_deg: float = ELEVATION_CUTOFF_DEG,
     step_s: float = 60.0,
 ) -> pd.DataFrame:
-    """Product one over a whole period, hour by hour, on the catalogue as it stood at each hour.
+    """Product one over a whole period, hour by hour, using the archived element-epoch cutoff at each hour.
 
     Constellation membership is read once, from the catalogue at the period's start; a member
     launched inside the period is missed, which for these constellations is rare and is stated.
@@ -331,10 +582,6 @@ class Crossing:
     projection_along: float
     population: str
     population_reason: str
-    crossing_horizon: str  # cross-track: whether the crossing happens; inside, outside or no measured horizon
-    position_horizon: str  # along-track: where the object is at an instant; the same three values
-    crossing_fraction_inside: float | None
-    position_fraction_inside: float | None
     cross_track_uncertainty_deg: float | None
     along_track_uncertainty_deg: float | None
     along_track_shift_s: float | None
@@ -343,43 +590,81 @@ class Crossing:
     benchmark_n_trials: int | None
     emission_status: str
     emission_detail: str
-    manoeuvre_detected_between: list[str] | None = None  # the two set epochs the last detected burn lies between
-    hours_since_manoeuvre: float | None = None  # from the later of those to the crossing: a lower bound
-    fit_arc_spanned_manoeuvre: bool | None = None  # the likely fit arc, FIT_ARC_HOURS before the epoch, reaches it
+    manoeuvre_detected_between: list[str] | None = (
+        None  # the two element epochs around the last candidate discontinuity
+    )
+    hours_since_manoeuvre: float | None = None  # time since the later element epoch, not since a known burn
+    fit_arc_spanned_manoeuvre: bool | None = None  # the assumed exclusion interval before the epoch overlaps it
     manoeuvre_detection: str = "no detection"  # what was searched, and what it found
     next_set_shows_jump: bool | None = None  # retrospective: the set after this one shows a jump it may omit
     samples: list[Sample] = field(default_factory=list)
+    orbit_quality: dict[str, Any] = field(default_factory=dict)
 
     def record(self, with_samples: bool = True) -> dict[str, Any]:
         d = asdict(self)
+        d["component_error_diagnostics"] = {
+            "cross_track_p95_deg": d.pop("cross_track_uncertainty_deg", None),
+            "in_track_p95_deg": d.pop("along_track_uncertainty_deg", None),
+            "orbital_phase_time_p95_s": d.pop("along_track_shift_s", None),
+            "interpretation": "orbital-component scales only; not a crossing or beam-timing guarantee",
+        }
+        d["candidate_discontinuity"] = {
+            "between_element_epochs": d.pop("manoeuvre_detected_between", None),
+            "hours_since_later_element_epoch": d.pop("hours_since_manoeuvre", None),
+            "overlaps_assumed_exclusion_arc": d.pop("fit_arc_spanned_manoeuvre", None),
+            "next_set_shows_jump": d.pop("next_set_shows_jump", None),
+            "evidence": d.pop("manoeuvre_detection", None),
+            "fit_arc_known": False,
+            "publication_time_known": False,
+        }
         if not with_samples:
             d.pop("samples")
         return d
 
 
 def population_label(
-    mean_altitude_km: float, eccentricity: float, age_days: float, bands: Iterable[str] = MEASURED_BANDS
+    mean_altitude_km: float,
+    eccentricity: float,
+    age_days: float,
+    bands: Iterable[str] = MEASURED_BANDS,
+    *,
+    norad_id: int | None = None,
+    object_type: str = "PAY",
+    scope: str | None = None,
 ) -> tuple[str, str]:
-    """Whether a measured horizon applies to an object and, if so, which altitude band's; if not, why not."""
+    """Eligibility for reference-population component diagnostics, never generic altitude transfer.
+
+    Identity, an explicitly qualified manoeuvre-excluded public-GP scope and a
+    measured age are all required. Even an eligible mission has no calibrated
+    beam-crossing guarantee from the scalar component table.
+    """
     measured = list(bands)
+    if not np.isfinite(mean_altitude_km) or not np.isfinite(eccentricity) or eccentricity < 0:
+        return "unsupported", "altitude and non-negative eccentricity must be finite"
     band = horizon_mod.band_of(mean_altitude_km)
     if band is None or band not in measured:
         return (
-            "no measured horizon",
+            "unsupported",
             f"mean altitude {mean_altitude_km:.0f} km is outside the measured altitude bands "
             f"({', '.join(measured) or 'none'})",
         )
     if eccentricity > MEASURED_MAX_ECCENTRICITY:
         return (
-            "no measured horizon",
+            "unsupported",
             f"eccentricity {eccentricity:.3f} is beyond the near-circular benchmark population",
         )
     if age_days > MEASURED_MAX_AGE_DAYS:
         return (
-            "no measured horizon",
+            "unsupported",
             f"element set {age_days:.1f} days old, beyond the benchmark's {MEASURED_MAX_AGE_DAYS:.0f}-day range",
         )
-    return "measured", band
+    if age_days < MEASURED_MIN_AGE_DAYS or not np.isfinite(age_days):
+        return "unsupported", "element age is outside the measured 6 to 168 hour range"
+    if norad_id not in ELIGIBLE_MISSIONS or object_type != "PAY":
+        return "unsupported", "object identity or class is outside the fifteen reference missions"
+    if scope != REFERENCE_SCOPE:
+        return "unsupported", "manoeuvre-excluded public-GP calibration scope is not established"
+    return "reference_component_diagnostics", band
 
 
 def _object_emission(object_type: str, constellation: str | None, rx: site_mod.Receiver) -> tuple[str, str]:
@@ -391,9 +676,9 @@ def _object_emission(object_type: str, constellation: str | None, rx: site_mod.R
 class ManoeuvreContext(NamedTuple):
     """What the object's own element sets say about its last burn, for one crossing."""
 
-    between: list[str] | None  # the two set epochs the last detected burn lies between
-    hours_since: float | None  # from the later of those to the crossing: a lower bound
-    fit_arc_spanned: bool | None  # the set's likely fit arc, FIT_ARC_HOURS before its epoch, reaches the interval
+    between: list[str] | None  # the two element epochs around the last candidate discontinuity
+    hours_since: float | None  # time since the later element epoch, not since a known burn
+    fit_arc_spanned: bool | None  # the assumed exclusion interval reaches the candidate epoch interval
     next_set_shows_jump: bool | None  # retrospective: the set after this one shows a jump this one may omit
     detection: str  # what was searched, and what it found
 
@@ -401,21 +686,14 @@ class ManoeuvreContext(NamedTuple):
 def last_manoeuvre(
     own_sets: pd.DataFrame | None, epoch: pd.Timestamp, t_ca: pd.Timestamp, *, arc_hours: float = FIT_ARC_HOURS
 ) -> ManoeuvreContext:
-    """The last manoeuvre the set-jump detector finds in the object's own sets at or before ``epoch``, and
-    whether the set that follows shows a jump the set at ``epoch`` may omit.
+    """A candidate element discontinuity, plus a retrospective next-set mark.
 
-    The interval is the one between the two sets either side of the burn (the sets do not say
-    when inside it the burn was); the hours since run from the interval's end to ``t_ca``, a
-    lower bound; the fit-arc flag says whether the set's likely fit arc, ``arc_hours`` before
-    its epoch, reaches the interval. Only sets at or before the epoch are read for those three.
-
-    The first set after a burn may be a pre-burn fit with its epoch advanced past the burn: it
-    then omits the burn and is wrong by the part it omits, and nothing in the set says so; the
-    jump appears only when a later set contains the burn. So ``next_set_shows_jump`` is
-    retrospective: the detector is run again over the sets at or before the epoch and the two
-    that follow, and the mark is true when the interval from this set to the next is flagged,
-    false when it is not, and null while no following set is held, which is the case on the
-    catalogue as it stood at an observation start. ``epoch`` and ``t_ca`` are naive UTC.
+    Endpoints are element epochs, not a known burn interval or publication times.
+    ``hours_since`` counts from the later epoch. ``fit_arc_spanned`` is retained
+    internally for compatibility but means overlap with an assumed exclusion
+    interval, not knowledge of the catalogue's fit arc. A true next-set mark is
+    evidence of an element change; false does not establish absence of a burn.
+    ``epoch`` and ``t_ca`` are naive UTC.
     """
     if own_sets is None or not len(own_sets):
         return ManoeuvreContext(None, None, None, None, "no detection: no element-set history held")
@@ -647,22 +925,27 @@ def _describe(
     mean_alt = float(row["mean_altitude_km"])
     ecc = float(row["eccentricity"])
     measured_bands = bands if bands is not None else tuple(horizon_mod.bands_present(trials))
-    population, reason = population_label(mean_alt, ecc, age_days, measured_bands)
-    unc: CrossingUncertainty | None = None
-    crossing_horizon = position_horizon = "no measured horizon"
-    if population == "measured":
+    scope = row.get("benchmark_scope")
+    population, reason = population_label(
+        mean_alt,
+        ecc,
+        age_days,
+        measured_bands,
+        norad_id=int(row["norad_id"]),
+        object_type=str(row["object_type"]),
+        scope=scope,
+    )
+    unc: ComponentDiagnostic | None = None
+    if population == "reference_component_diagnostics":
         # The object's own band's trials, projected onto this crossing's line of sight.
-        unc = horizon_mod.crossing_uncertainty(
+        unc = horizon_mod.component_diagnostic(
             trials, period.benchmark_window, age_days * 24.0, range_km, g_c, g_i, obs.fwhm_deg, band=reason
         )
         if unc is None:
             population, reason = (
-                "no measured horizon",
+                "unsupported",
                 f"element set {age_days:.1f} days old, beyond the benchmark's leads",
             )
-        else:
-            crossing_horizon = "inside" if unc.crossing_fraction_inside >= COVERAGE else "outside"
-            position_horizon = "inside" if unc.position_fraction_inside >= COVERAGE else "outside"
     else:
         # The geometry is still reported against the matching window, for the reader's scale, but no label rests on it.
         unc = None
@@ -670,6 +953,28 @@ def _describe(
     samples = _in_beam_samples(refiner, site, t_ca_s, range_km, obs.fwhm_deg / 2.0, t_end_s)
     status, detail = _object_emission(str(row["object_type"]), row["constellation"], obs.receiver)
     context = last_manoeuvre(own_sets, epoch.tz_convert(None), t_ca_dt.tz_convert(None))
+    estimate = None
+    if unc is not None:
+        group = trials[
+            (trials["window"] == unc.window) & (trials["lead_h"] == unc.lead_h) & (trials["altitude_band"] == unc.band)
+        ]
+        estimate = {
+            "method_version": "reference_orbital_component_projection_v2",
+            "scope": REFERENCE_SCOPE,
+            "window": unc.window,
+            "lead_bin_h": unc.lead_h,
+            "n_trials": unc.n_trials,
+            "n_missions": int(group["mission"].nunique()),
+            "n_element_sets": int(len(group[["norad_id", "set_epoch"]].drop_duplicates())),
+            "reference_rows_sha256": hashlib.sha256(
+                pd.util.hash_pandas_object(group, index=False).values.tobytes()
+            ).hexdigest(),
+            "cross_track_component_p95_deg": unc.cross_p95_deg,
+            "in_track_component_p95_deg": unc.along_p95_deg,
+            "orbital_phase_time_p95_s": unc.along_shift_p95_s,
+            "interpretation": "conditional reference-population component estimates; "
+            "no per-object sky-position, beam-entry or beam-timing coverage",
+        }
     return Crossing(
         norad_id=int(row["norad_id"]),
         name=str(row["name"]),
@@ -692,10 +997,6 @@ def _describe(
         projection_along=g_i,
         population=population,
         population_reason=reason,
-        crossing_horizon=crossing_horizon,
-        position_horizon=position_horizon,
-        crossing_fraction_inside=unc.crossing_fraction_inside if unc else None,
-        position_fraction_inside=unc.position_fraction_inside if unc else None,
         cross_track_uncertainty_deg=unc.cross_p95_deg if unc else None,
         along_track_uncertainty_deg=unc.along_p95_deg if unc else None,
         along_track_shift_s=unc.along_shift_p95_s if unc else None,
@@ -710,6 +1011,31 @@ def _describe(
         manoeuvre_detection=context.detection,
         next_set_shows_jump=context.next_set_shows_jump,
         samples=samples,
+        orbit_quality={
+            "schema_version": 2,
+            "status": "reference_component_diagnostics"
+            if population == "reference_component_diagnostics"
+            else "unsupported",
+            "applicability_label": claims.wording(
+                "applicability:eligible"
+                if population == "reference_component_diagnostics"
+                else "applicability:unsupported"
+            ),
+            "claim": claims.identity(
+                "applicability:eligible"
+                if population == "reference_component_diagnostics"
+                else "applicability:unsupported"
+            ),
+            "mission": ELIGIBLE_MISSIONS.get(int(row["norad_id"])),
+            "scope": scope if isinstance(scope, str) else None,
+            "epoch_age_h": age_days * 24.0,
+            "measured_age_range_h": [6.0, 168.0],
+            "band": horizon_mod.band_of(mean_alt),
+            "reason": reason,
+            "crossing_classification_calibrated": False,
+            "publication_age_h": None,
+            "reference_population_estimate": estimate,
+        },
     )
 
 
@@ -738,7 +1064,7 @@ def run_observation(
 ) -> ObservationResult:
     cat = catalogue_at(sets, satcat_frame, obs.start)
     log.info(
-        "%s: catalogue as of %s holds %d objects (newest set at or before, no older than %g days)",
+        "%s: archived epoch cutoff %s holds %d objects (latest element epoch, no older than %g days)",
         obs.observation_id,
         obs.start.isoformat(),
         len(cat),
@@ -774,8 +1100,9 @@ def sets_provenance(sets: pd.DataFrame, history_dir: Path = config.HISTORY_DIR) 
         "epoch_min": pd.to_datetime(sets["epoch"], utc=True).min().isoformat(),
         "epoch_max": pd.to_datetime(sets["epoch"], utc=True).max().isoformat(),
         "history_dir": horizon_mod.repo_relative(history_dir),
-        "source": "Space-Track gp_history through driftwatch's history store; each object's newest set at or before "
-        "the observation start, none later",
+        "source": "Space-Track gp_history; latest archived element epoch before observation start, "
+        "not reconstructed publication-time availability",
+        "publication_time_availability_known": False,
     }
 
 

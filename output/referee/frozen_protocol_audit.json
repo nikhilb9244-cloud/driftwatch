@@ -1,0 +1,9 @@
+{
+  "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+  "source_files_verified": 75,
+  "prior_corrected_inputs_verified": 9,
+  "method_and_classifier_hashes": "verified",
+  "attestation": "absent",
+  "experiment_access_markers": [],
+  "status": "passed"
+}

@@ -1,0 +1,1554 @@
+{
+  "schema_version": 1,
+  "interpretation": "Selected measured Jones inputs; no orbit comparison results in this file",
+  "beams": [
+    {
+      "schema_version": 1,
+      "doi": "https://doi.org/10.48479/wdb0-h061",
+      "source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_U_band_primary_beam.npz",
+      "source_bytes": 34896620743,
+      "source_last_modified": "Mon, 10 Apr 2023 16:10:49 GMT",
+      "source_shape": [
+        4,
+        65,
+        1024,
+        128,
+        128
+      ],
+      "source_dtype": "complex64",
+      "source_byte_ranges": [
+        {
+          "start": 34896620721,
+          "end": 34896620742,
+          "sha256": "90a881f5b5eec5475f2ee3f41b9276bf0f5feecdf482a4a25443ad434c762f9d"
+        },
+        {
+          "start": 34896620701,
+          "end": 34896620720,
+          "sha256": "6b428fd5a24e79e693e1d42c54a509ef9445357b18bd500d8601b8ba302ccf91"
+        },
+        {
+          "start": 34896620645,
+          "end": 34896620700,
+          "sha256": "3db66d0ada3601e70c9eecb37eb50be750be476dc7e0a144909f66f65b96c4dc"
+        },
+        {
+          "start": 34896620293,
+          "end": 34896620644,
+          "sha256": "dbd4dbfdde336d0beffdb39e2c272e52b8d34d69300bd62835d2a2b90317644f"
+        },
+        {
+          "start": 34896610695,
+          "end": 34896610724,
+          "sha256": "1ee2cd143a49367e7eebe38dd26f96f165dea72295caa64198cd6941cb56c364"
+        },
+        {
+          "start": 34896610725,
+          "end": 34896610736,
+          "sha256": "90f9c7db5c0bddc9cec99009a659feab0ca70d5da2604e215c1115a3bf05cef6"
+        },
+        {
+          "start": 34896610757,
+          "end": 34896619076,
+          "sha256": "67402f85243bb072d4f8a5e98b5c52dd3e018ba9ca465cbc6611e632d6b8aab0"
+        },
+        {
+          "start": 34896619077,
+          "end": 34896619106,
+          "sha256": "257a2591baee4f5ea97d2a04eed170ece06704d1fb9a31d40da7ca86ce2e0a4e"
+        },
+        {
+          "start": 34896619107,
+          "end": 34896619120,
+          "sha256": "97d2da60ed4bb358e9dc94744c68e80543ebb8cd63000ec4835f224aa965e8b5"
+        },
+        {
+          "start": 34896619141,
+          "end": 34896620292,
+          "sha256": "cef94dc886dfec0b8e01111c699c146fb1d704de2b78c9f3c5b4f476893f6301"
+        },
+        {
+          "start": 34896609660,
+          "end": 34896609689,
+          "sha256": "502582128e180f0c1d9c10dd29c53f674d139a5721187198893f015350782bcc"
+        },
+        {
+          "start": 34896609690,
+          "end": 34896609701,
+          "sha256": "fd59d3a520144d088bd21f2bfcfc040f25a5b1bc45a26370fcdc3c00c28b0135"
+        },
+        {
+          "start": 34896609722,
+          "end": 34896610694,
+          "sha256": "5b4168ec9336b9de508f20a3a9916deaeadb81cd3bc8561d9fe96c36fbb7a325"
+        },
+        {
+          "start": 34896609466,
+          "end": 34896609495,
+          "sha256": "df50bb878f6a741acf2f2297dd96c994a395afbe2bb34dc551308ed9984ec51e"
+        },
+        {
+          "start": 34896609496,
+          "end": 34896609503,
+          "sha256": "1c3c0263e77e4bde4f56143a7ae791682a61453b56d8ba977a62f8bc9fd0eacf"
+        },
+        {
+          "start": 34896609524,
+          "end": 34896609659,
+          "sha256": "7e7606cade9127464707e37cd19a2e2ae44cabd940d4be98a4ab884b2d0c1f68"
+        },
+        {
+          "start": 0,
+          "end": 29,
+          "sha256": "4db29030a3a35aef7db856eb402732cfb4a17ab3a5e39607b9c6fb8e67d5066b"
+        },
+        {
+          "start": 58,
+          "end": 1081,
+          "sha256": "0048d513b9b6bbca318fc4144b86b90056d2e4609195352883b43372faa47524"
+        },
+        {
+          "start": 8657043642,
+          "end": 8657174713,
+          "sha256": "c85ae1e0d8de97b51e27e7360cac4e5a718feec300f1cf2e2d065eef942f0c16"
+        },
+        {
+          "start": 17381195962,
+          "end": 17381327033,
+          "sha256": "4649bb01c25cef83d5d497419edfc31ef95b154bd6a3b39594de4af67a3f7175"
+        },
+        {
+          "start": 26105348282,
+          "end": 26105479353,
+          "sha256": "5df180a660c30cb2d397f8851d94a451839bb45ff23c93b75049a511e713ae07"
+        },
+        {
+          "start": 34829500602,
+          "end": 34829631673,
+          "sha256": "21b9542b99f5e28d29041559a3d815e2f0f16b910fec965c02d3151c1e37813a"
+        }
+      ],
+      "metric_source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_U_band_primary_beam_metrics.npz",
+      "metric_source_byte_ranges": [
+        {
+          "start": 28235118,
+          "end": 28235139,
+          "sha256": "aa51ed4690f6b1de781f4edc0710e891c2ed2a6deaac5a2efe23b80aeeddd226"
+        },
+        {
+          "start": 28235098,
+          "end": 28235117,
+          "sha256": "f4201436db7050539892ba1112139bac7fc946eb3933fbed73501a57aa7d87a0"
+        },
+        {
+          "start": 28231909,
+          "end": 28235117,
+          "sha256": "52d54ae49d1a69ca29958efddd9d3159fbe4592310f25c77a18c6348aa16729e"
+        },
+        {
+          "start": 6391998,
+          "end": 6392027,
+          "sha256": "19fd9527ceb8f3581d7fe023629c62f4104ab6fddf029d2a1c595fa5aa9f577d"
+        },
+        {
+          "start": 6392058,
+          "end": 6393081,
+          "sha256": "4b1514bd23ee936b12f367588f58599ae0b46a0d789217833e48725067551cda"
+        },
+        {
+          "start": 6920570,
+          "end": 6920577,
+          "sha256": "73b26d04d9e93b1f5ba4434e2be777efce677fd3fba9acc0f6c732aefad63eef"
+        },
+        {
+          "start": 6924666,
+          "end": 6924695,
+          "sha256": "d93d0c1813343a683dd8d08243fdd65d88a684d4abfe3c992356472a1fa880d2"
+        },
+        {
+          "start": 6924726,
+          "end": 6925749,
+          "sha256": "f84c669a373eb7f6bf3690985832e275a70a785335f1081583f69c5bc76f6f02"
+        },
+        {
+          "start": 7453238,
+          "end": 7453245,
+          "sha256": "9a83aa42bd4d476c925d8de1e571b0b86469a7d87412e914ff860368e6185674"
+        },
+        {
+          "start": 7457334,
+          "end": 7457363,
+          "sha256": "ce21ee8f4b6d6e16b107b0489472ca48cc09bc99b781fb03fde256293ac9e18e"
+        },
+        {
+          "start": 7457394,
+          "end": 7458417,
+          "sha256": "6e50364a0d05862b59c102ba049f3b12b24484dd6dfb3f649d36c56f9a868a70"
+        },
+        {
+          "start": 7985906,
+          "end": 7985913,
+          "sha256": "a0c0adc96729c0b2291c29ae60d0c6eb6c43c827ba48c0f17f0078ad4c5940a8"
+        },
+        {
+          "start": 5326668,
+          "end": 5326697,
+          "sha256": "20a0534af54f9ef38186105d98de3d5ddd6eda64130673b77d5c1ac08dcb4b0c"
+        },
+        {
+          "start": 5326725,
+          "end": 5327748,
+          "sha256": "98bd99b02621ac69655da8a3538f2dd65cb8be204c1e498851c49d99a34633d7"
+        },
+        {
+          "start": 5855237,
+          "end": 5855244,
+          "sha256": "03b689482f7b91c41edc82374dd1b86ab2b19cabc391f034cc529ce9318d4445"
+        },
+        {
+          "start": 5859333,
+          "end": 5859362,
+          "sha256": "025d7d1f96adc0dd6738938d3cda7819cb20ad5f0bfcfc376054c1bb1fbcc12b"
+        },
+        {
+          "start": 5859390,
+          "end": 5860413,
+          "sha256": "51e4081fd6983685879facf5f749bfe840086ee2e601eed610d5a66f7cc262c4"
+        },
+        {
+          "start": 6387902,
+          "end": 6387909,
+          "sha256": "ca432e4ce1250a5bf2ef98151d8f570104180becf76e5d2a176a322e9602a354"
+        }
+      ],
+      "requested_frequency_mhz": 816.0,
+      "frequency_mhz": 816.0,
+      "channel_index": 512,
+      "channel_spacing_mhz": 0.53125,
+      "antenna_index": 64,
+      "antenna": "array_average",
+      "polarizations": [
+        "HH",
+        "HV",
+        "VH",
+        "VV"
+      ],
+      "measured_metrics": {
+        "Imajor": 54.209250055515604,
+        "Iminor": 51.907440778347436,
+        "Iangle": -0.0793863550341691,
+        "Ix0": 0.1020364511216801,
+        "Iy0": -0.5472901706812531
+      },
+      "orientation_source": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/beam_orientation_diagram.pdf",
+      "orientation": "source axes Y,X; supplied pattern flips vertically onto upward sky coordinates",
+      "measurement_conditions": "60 degree elevation, 15 Celsius; 2020-2022 average (S: 2021-2022)",
+      "licence": "CC BY-NC 4.0; third-party data, not the repository's MIT code licence",
+      "retrieved_at": "2026-09-08T09:32:09.704904+00:00",
+      "cache_sha256": "9ac72453a90c9ae59437a4e0eff440ce6f40fc88243b1cd04ba4b5acd3493259",
+      "derived_half_power_widths": {
+        "method_version": "measured_jones_peak_diametric_cuts_v1",
+        "response": "unpolarised Stokes I = 0.5 sum |Jones|^2, normalised to sampled image peak",
+        "peak_horizontal_deg": 0.0,
+        "peak_vertical_deg": -0.0,
+        "orientation_step_deg": 0.5,
+        "orientation_count": 360,
+        "minimum_diametric_width_deg": 1.727932425205081,
+        "maximum_diametric_width_deg": 1.807287831967948,
+        "minimum_width_orientation_deg": 177.0,
+        "maximum_width_orientation_deg": 90.0,
+        "coordinate_convention": "straight cuts in measured horizontal/vertical angular plane through the sampled peak"
+      }
+    },
+    {
+      "schema_version": 1,
+      "doi": "https://doi.org/10.48479/wdb0-h061",
+      "source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_L_band_primary_beam.npz",
+      "source_bytes": 34896620743,
+      "source_last_modified": "Mon, 10 Apr 2023 16:10:48 GMT",
+      "source_shape": [
+        4,
+        65,
+        1024,
+        128,
+        128
+      ],
+      "source_dtype": "complex64",
+      "source_byte_ranges": [
+        {
+          "start": 34896620721,
+          "end": 34896620742,
+          "sha256": "90a881f5b5eec5475f2ee3f41b9276bf0f5feecdf482a4a25443ad434c762f9d"
+        },
+        {
+          "start": 34896620701,
+          "end": 34896620720,
+          "sha256": "6b428fd5a24e79e693e1d42c54a509ef9445357b18bd500d8601b8ba302ccf91"
+        },
+        {
+          "start": 34896620645,
+          "end": 34896620700,
+          "sha256": "3db66d0ada3601e70c9eecb37eb50be750be476dc7e0a144909f66f65b96c4dc"
+        },
+        {
+          "start": 34896620293,
+          "end": 34896620644,
+          "sha256": "71e9d4588d7dc656a0b79a468561a209d842337888de42f0c6676ec9e7785628"
+        },
+        {
+          "start": 34896610695,
+          "end": 34896610724,
+          "sha256": "eee87810fd9d89073ac353de7affe15e22b89d4f240a7a3a6801fe8d2ebd59de"
+        },
+        {
+          "start": 34896610725,
+          "end": 34896610736,
+          "sha256": "90f9c7db5c0bddc9cec99009a659feab0ca70d5da2604e215c1115a3bf05cef6"
+        },
+        {
+          "start": 34896610757,
+          "end": 34896619076,
+          "sha256": "3e01963406c9c3b93a66e589be7f9acd98afebaadff3ec75eb6cfd6633f350fe"
+        },
+        {
+          "start": 34896619077,
+          "end": 34896619106,
+          "sha256": "5b231ce2cb3235fc41b710b1379e705efc050e71c98dfa27892f68c3a4fdcbdd"
+        },
+        {
+          "start": 34896619107,
+          "end": 34896619120,
+          "sha256": "97d2da60ed4bb358e9dc94744c68e80543ebb8cd63000ec4835f224aa965e8b5"
+        },
+        {
+          "start": 34896619141,
+          "end": 34896620292,
+          "sha256": "50696e2926f13b4c07f017eb3bf3faf3ac4e32fd5375b492e9d4c8b989c71c35"
+        },
+        {
+          "start": 34896609660,
+          "end": 34896609689,
+          "sha256": "502582128e180f0c1d9c10dd29c53f674d139a5721187198893f015350782bcc"
+        },
+        {
+          "start": 34896609690,
+          "end": 34896609701,
+          "sha256": "fd59d3a520144d088bd21f2bfcfc040f25a5b1bc45a26370fcdc3c00c28b0135"
+        },
+        {
+          "start": 34896609722,
+          "end": 34896610694,
+          "sha256": "5b4168ec9336b9de508f20a3a9916deaeadb81cd3bc8561d9fe96c36fbb7a325"
+        },
+        {
+          "start": 34896609466,
+          "end": 34896609495,
+          "sha256": "df50bb878f6a741acf2f2297dd96c994a395afbe2bb34dc551308ed9984ec51e"
+        },
+        {
+          "start": 34896609496,
+          "end": 34896609503,
+          "sha256": "1c3c0263e77e4bde4f56143a7ae791682a61453b56d8ba977a62f8bc9fd0eacf"
+        },
+        {
+          "start": 34896609524,
+          "end": 34896609659,
+          "sha256": "7e7606cade9127464707e37cd19a2e2ae44cabd940d4be98a4ab884b2d0c1f68"
+        },
+        {
+          "start": 0,
+          "end": 29,
+          "sha256": "d3255eed6626a494d1b9d3a3bcc66d3ff52872b1ae551be9aa43bb08c61712b0"
+        },
+        {
+          "start": 58,
+          "end": 1081,
+          "sha256": "179cabbf8e4ef464da27ab81ef6977678818bc6030825aa059c238c099897c23"
+        },
+        {
+          "start": 8657043642,
+          "end": 8657174713,
+          "sha256": "7cbd6fcf086f56f5b09cf8c281095dd44a777b7414334588fda4558e84b330de"
+        },
+        {
+          "start": 17381195962,
+          "end": 17381327033,
+          "sha256": "256d28ac7d411b7d923a91467339535cb24342d619fede9877641ec4ffd37b07"
+        },
+        {
+          "start": 26105348282,
+          "end": 26105479353,
+          "sha256": "b61dcdc0856ab19977b3cc216d858ac757cc309a0a3abbeb9a32720cae4902ec"
+        },
+        {
+          "start": 34829500602,
+          "end": 34829631673,
+          "sha256": "c6f3aea70a5541db87585fd9f31b8429bf21a82fb77f327535f5ad632bbafee5"
+        }
+      ],
+      "metric_source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_L_band_primary_beam_metrics.npz",
+      "metric_source_byte_ranges": [
+        {
+          "start": 28235118,
+          "end": 28235139,
+          "sha256": "aa51ed4690f6b1de781f4edc0710e891c2ed2a6deaac5a2efe23b80aeeddd226"
+        },
+        {
+          "start": 28235098,
+          "end": 28235117,
+          "sha256": "f4201436db7050539892ba1112139bac7fc946eb3933fbed73501a57aa7d87a0"
+        },
+        {
+          "start": 28231909,
+          "end": 28235117,
+          "sha256": "d8188954515c7b28f7fdca7273098618a4ef7a4f973fce31b5f7ec03a861c97b"
+        },
+        {
+          "start": 6391998,
+          "end": 6392027,
+          "sha256": "43907843c6d8fffd105aec3b4d04c227ffdac387fc8b4d945b31a3fd20bb72e9"
+        },
+        {
+          "start": 6392058,
+          "end": 6393081,
+          "sha256": "bdb0d5ad03b87f628d5a15ae71761637406106d9302ee00d3937eeeee9c0a79f"
+        },
+        {
+          "start": 6920570,
+          "end": 6920577,
+          "sha256": "dbaeb4b36478f6aa1275600a5b0d8b97a89cd8c8948a1cf828ff8c0749d8eb1c"
+        },
+        {
+          "start": 6924666,
+          "end": 6924695,
+          "sha256": "ea8204421581884f34dff50b79f22acbbcb195ec1e10450644619c7f332f3798"
+        },
+        {
+          "start": 6924726,
+          "end": 6925749,
+          "sha256": "f1e47a5bef9c164a2b983685d5dc200d9a82fa479a0e8475bfe2cf930bfb43e0"
+        },
+        {
+          "start": 7453238,
+          "end": 7453245,
+          "sha256": "eddb5e90b623ff2d6f2bfe8fba815db6c485e08e076097929ac5efe299bf3f65"
+        },
+        {
+          "start": 7457334,
+          "end": 7457363,
+          "sha256": "6f5bfd627c6e3c380fef6396ad14cc5256410f7161b1a391ab8078f30bfa9205"
+        },
+        {
+          "start": 7457394,
+          "end": 7458417,
+          "sha256": "5916a4053e6b76da50634bbaaaa5d6f308c160a7b6176cfaf671b96a0ddba9a9"
+        },
+        {
+          "start": 7985906,
+          "end": 7985913,
+          "sha256": "e2db42c8281c06e7bcdcb308ac7f9ad22f54a16d53a4fd82f936e6ccc71b669b"
+        },
+        {
+          "start": 5326668,
+          "end": 5326697,
+          "sha256": "d8969386b0378dc6b9f12aeea58f61d567aaa971473032c71a1b6fffd04f7edf"
+        },
+        {
+          "start": 5326725,
+          "end": 5327748,
+          "sha256": "d3972e32dfa136c62f83644071726e1081f5aabc2ef1adec1cebf2ba76a4d3be"
+        },
+        {
+          "start": 5855237,
+          "end": 5855244,
+          "sha256": "c2c0dbc7e9172e7628f724864491262fffdd275a91f45a7a1c4618f48ed6b600"
+        },
+        {
+          "start": 5859333,
+          "end": 5859362,
+          "sha256": "591d8b824e8122acc5d98aaefebb23407a7c1fa2a5c59021b9939c48358a5f34"
+        },
+        {
+          "start": 5859390,
+          "end": 5860413,
+          "sha256": "5c9c3fe49939c16ee80061d765e28ae3d48884ce013d3e35d3930901038d20c2"
+        },
+        {
+          "start": 6387902,
+          "end": 6387909,
+          "sha256": "9e76fa7d1c747dae140e9570f64a458541ae1ee9aadb83a4ec849e76a938cc95"
+        }
+      ],
+      "requested_frequency_mhz": 1284.0,
+      "frequency_mhz": 1284.0,
+      "channel_index": 512,
+      "channel_spacing_mhz": 0.8359375,
+      "antenna_index": 64,
+      "antenna": "array_average",
+      "polarizations": [
+        "HH",
+        "HV",
+        "VH",
+        "VV"
+      ],
+      "measured_metrics": {
+        "Imajor": 33.95094597900524,
+        "Iminor": 32.5734481784801,
+        "Iangle": -1.2168461603927776,
+        "Ix0": -0.07973172257441154,
+        "Iy0": -0.4221708256187545
+      },
+      "orientation_source": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/beam_orientation_diagram.pdf",
+      "orientation": "source axes Y,X; supplied pattern flips vertically onto upward sky coordinates",
+      "measurement_conditions": "60 degree elevation, 15 Celsius; 2020-2022 average (S: 2021-2022)",
+      "licence": "CC BY-NC 4.0; third-party data, not the repository's MIT code licence",
+      "retrieved_at": "2026-09-08T09:32:12.139554+00:00",
+      "cache_sha256": "610a80c80d5ab2d3870c039266b525ac126e65891046e7eb87a939f730c4f4cf",
+      "derived_half_power_widths": {
+        "method_version": "measured_jones_peak_diametric_cuts_v1",
+        "response": "unpolarised Stokes I = 0.5 sum |Jones|^2, normalised to sampled image peak",
+        "peak_horizontal_deg": 0.0,
+        "peak_vertical_deg": -0.0,
+        "orientation_step_deg": 0.5,
+        "orientation_count": 360,
+        "minimum_diametric_width_deg": 1.082804649736286,
+        "maximum_diametric_width_deg": 1.1315686731762027,
+        "minimum_width_orientation_deg": 3.0,
+        "maximum_width_orientation_deg": 90.0,
+        "coordinate_convention": "straight cuts in measured horizontal/vertical angular plane through the sampled peak"
+      }
+    },
+    {
+      "schema_version": 1,
+      "doi": "https://doi.org/10.48479/wdb0-h061",
+      "source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_L_band_primary_beam.npz",
+      "source_bytes": 34896620743,
+      "source_last_modified": "Mon, 10 Apr 2023 16:10:48 GMT",
+      "source_shape": [
+        4,
+        65,
+        1024,
+        128,
+        128
+      ],
+      "source_dtype": "complex64",
+      "source_byte_ranges": [
+        {
+          "start": 34896620721,
+          "end": 34896620742,
+          "sha256": "90a881f5b5eec5475f2ee3f41b9276bf0f5feecdf482a4a25443ad434c762f9d"
+        },
+        {
+          "start": 34896620701,
+          "end": 34896620720,
+          "sha256": "6b428fd5a24e79e693e1d42c54a509ef9445357b18bd500d8601b8ba302ccf91"
+        },
+        {
+          "start": 34896620645,
+          "end": 34896620700,
+          "sha256": "3db66d0ada3601e70c9eecb37eb50be750be476dc7e0a144909f66f65b96c4dc"
+        },
+        {
+          "start": 34896620293,
+          "end": 34896620644,
+          "sha256": "71e9d4588d7dc656a0b79a468561a209d842337888de42f0c6676ec9e7785628"
+        },
+        {
+          "start": 34896610695,
+          "end": 34896610724,
+          "sha256": "eee87810fd9d89073ac353de7affe15e22b89d4f240a7a3a6801fe8d2ebd59de"
+        },
+        {
+          "start": 34896610725,
+          "end": 34896610736,
+          "sha256": "90f9c7db5c0bddc9cec99009a659feab0ca70d5da2604e215c1115a3bf05cef6"
+        },
+        {
+          "start": 34896610757,
+          "end": 34896619076,
+          "sha256": "3e01963406c9c3b93a66e589be7f9acd98afebaadff3ec75eb6cfd6633f350fe"
+        },
+        {
+          "start": 34896619077,
+          "end": 34896619106,
+          "sha256": "5b231ce2cb3235fc41b710b1379e705efc050e71c98dfa27892f68c3a4fdcbdd"
+        },
+        {
+          "start": 34896619107,
+          "end": 34896619120,
+          "sha256": "97d2da60ed4bb358e9dc94744c68e80543ebb8cd63000ec4835f224aa965e8b5"
+        },
+        {
+          "start": 34896619141,
+          "end": 34896620292,
+          "sha256": "50696e2926f13b4c07f017eb3bf3faf3ac4e32fd5375b492e9d4c8b989c71c35"
+        },
+        {
+          "start": 34896609660,
+          "end": 34896609689,
+          "sha256": "502582128e180f0c1d9c10dd29c53f674d139a5721187198893f015350782bcc"
+        },
+        {
+          "start": 34896609690,
+          "end": 34896609701,
+          "sha256": "fd59d3a520144d088bd21f2bfcfc040f25a5b1bc45a26370fcdc3c00c28b0135"
+        },
+        {
+          "start": 34896609722,
+          "end": 34896610694,
+          "sha256": "5b4168ec9336b9de508f20a3a9916deaeadb81cd3bc8561d9fe96c36fbb7a325"
+        },
+        {
+          "start": 34896609466,
+          "end": 34896609495,
+          "sha256": "df50bb878f6a741acf2f2297dd96c994a395afbe2bb34dc551308ed9984ec51e"
+        },
+        {
+          "start": 34896609496,
+          "end": 34896609503,
+          "sha256": "1c3c0263e77e4bde4f56143a7ae791682a61453b56d8ba977a62f8bc9fd0eacf"
+        },
+        {
+          "start": 34896609524,
+          "end": 34896609659,
+          "sha256": "7e7606cade9127464707e37cd19a2e2ae44cabd940d4be98a4ab884b2d0c1f68"
+        },
+        {
+          "start": 0,
+          "end": 29,
+          "sha256": "d3255eed6626a494d1b9d3a3bcc66d3ff52872b1ae551be9aa43bb08c61712b0"
+        },
+        {
+          "start": 58,
+          "end": 1081,
+          "sha256": "179cabbf8e4ef464da27ab81ef6977678818bc6030825aa059c238c099897c23"
+        },
+        {
+          "start": 8724021434,
+          "end": 8724152505,
+          "sha256": "c4f3cac7ef33ed8a6068b4ee070d2b777e2627860aae411eedf4b1d6804f7abb"
+        },
+        {
+          "start": 17448173754,
+          "end": 17448304825,
+          "sha256": "24e48b009d3d1665e9bd47ef8e683fd9fd2056304594693c57af1e68b74c32ec"
+        },
+        {
+          "start": 26172326074,
+          "end": 26172457145,
+          "sha256": "d0f96f95161768b82cf21033b7d59a57edb8ce8debd9371c5d9a6896fe0a3e21"
+        },
+        {
+          "start": 34896478394,
+          "end": 34896609465,
+          "sha256": "cb5cf9ecbbde90278dc93f974d56895eb14f959b4ae9589818229e82a976a2b0"
+        }
+      ],
+      "metric_source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_L_band_primary_beam_metrics.npz",
+      "metric_source_byte_ranges": [
+        {
+          "start": 28235118,
+          "end": 28235139,
+          "sha256": "aa51ed4690f6b1de781f4edc0710e891c2ed2a6deaac5a2efe23b80aeeddd226"
+        },
+        {
+          "start": 28235098,
+          "end": 28235117,
+          "sha256": "f4201436db7050539892ba1112139bac7fc946eb3933fbed73501a57aa7d87a0"
+        },
+        {
+          "start": 28231909,
+          "end": 28235117,
+          "sha256": "d8188954515c7b28f7fdca7273098618a4ef7a4f973fce31b5f7ec03a861c97b"
+        },
+        {
+          "start": 6391998,
+          "end": 6392027,
+          "sha256": "43907843c6d8fffd105aec3b4d04c227ffdac387fc8b4d945b31a3fd20bb72e9"
+        },
+        {
+          "start": 6392058,
+          "end": 6393081,
+          "sha256": "bdb0d5ad03b87f628d5a15ae71761637406106d9302ee00d3937eeeee9c0a79f"
+        },
+        {
+          "start": 6924658,
+          "end": 6924665,
+          "sha256": "472a3b31d742c83fffaae4744a46f58d9365b5cd0b41c5cba06808a7d2a02cc7"
+        },
+        {
+          "start": 6924666,
+          "end": 6924695,
+          "sha256": "ea8204421581884f34dff50b79f22acbbcb195ec1e10450644619c7f332f3798"
+        },
+        {
+          "start": 6924726,
+          "end": 6925749,
+          "sha256": "f1e47a5bef9c164a2b983685d5dc200d9a82fa479a0e8475bfe2cf930bfb43e0"
+        },
+        {
+          "start": 7457326,
+          "end": 7457333,
+          "sha256": "9348786b3aa0d829eedaa05feea9d19366d15a7e68332b98e1f61b33b4c298aa"
+        },
+        {
+          "start": 7457334,
+          "end": 7457363,
+          "sha256": "6f5bfd627c6e3c380fef6396ad14cc5256410f7161b1a391ab8078f30bfa9205"
+        },
+        {
+          "start": 7457394,
+          "end": 7458417,
+          "sha256": "5916a4053e6b76da50634bbaaaa5d6f308c160a7b6176cfaf671b96a0ddba9a9"
+        },
+        {
+          "start": 7989994,
+          "end": 7990001,
+          "sha256": "5f9108d4f56a3f8a9af29ce024c87c9336be34ecbd9fb4a21c77b1d22c8c63cb"
+        },
+        {
+          "start": 5326668,
+          "end": 5326697,
+          "sha256": "d8969386b0378dc6b9f12aeea58f61d567aaa971473032c71a1b6fffd04f7edf"
+        },
+        {
+          "start": 5326725,
+          "end": 5327748,
+          "sha256": "d3972e32dfa136c62f83644071726e1081f5aabc2ef1adec1cebf2ba76a4d3be"
+        },
+        {
+          "start": 5859325,
+          "end": 5859332,
+          "sha256": "a7dd90299cff7ffd4d461481fdad572c10decb2d6aec6462167011ddae7245df"
+        },
+        {
+          "start": 5859333,
+          "end": 5859362,
+          "sha256": "591d8b824e8122acc5d98aaefebb23407a7c1fa2a5c59021b9939c48358a5f34"
+        },
+        {
+          "start": 5859390,
+          "end": 5860413,
+          "sha256": "5c9c3fe49939c16ee80061d765e28ae3d48884ce013d3e35d3930901038d20c2"
+        },
+        {
+          "start": 6391990,
+          "end": 6391997,
+          "sha256": "f878f6d5f109bd13cb56d4f335a16c23dcec845f851de61bc19e07406233f6ac"
+        }
+      ],
+      "requested_frequency_mhz": 1712.0,
+      "frequency_mhz": 1711.1640625,
+      "channel_index": 1023,
+      "channel_spacing_mhz": 0.8359375,
+      "antenna_index": 64,
+      "antenna": "array_average",
+      "polarizations": [
+        "HH",
+        "HV",
+        "VH",
+        "VV"
+      ],
+      "measured_metrics": {
+        "Imajor": 26.863686744092416,
+        "Iminor": 25.45383290510179,
+        "Iangle": -179.17935770505437,
+        "Ix0": 1.4969717296756868,
+        "Iy0": 0.0004429376754231314
+      },
+      "orientation_source": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/beam_orientation_diagram.pdf",
+      "orientation": "source axes Y,X; supplied pattern flips vertically onto upward sky coordinates",
+      "measurement_conditions": "60 degree elevation, 15 Celsius; 2020-2022 average (S: 2021-2022)",
+      "licence": "CC BY-NC 4.0; third-party data, not the repository's MIT code licence",
+      "retrieved_at": "2026-09-08T09:32:14.119734+00:00",
+      "cache_sha256": "451c06bb2b467e1fd66c9ecb04c356c435efab2aaf2c382e68ee40f818eb55fe",
+      "derived_half_power_widths": {
+        "method_version": "measured_jones_peak_diametric_cuts_v1",
+        "response": "unpolarised Stokes I = 0.5 sum |Jones|^2, normalised to sampled image peak",
+        "peak_horizontal_deg": 0.0,
+        "peak_vertical_deg": -0.0,
+        "orientation_step_deg": 0.5,
+        "orientation_count": 360,
+        "minimum_diametric_width_deg": 0.8484498343263152,
+        "maximum_diametric_width_deg": 0.8959229000184922,
+        "minimum_width_orientation_deg": 176.0,
+        "maximum_width_orientation_deg": 90.0,
+        "coordinate_convention": "straight cuts in measured horizontal/vertical angular plane through the sampled peak"
+      }
+    },
+    {
+      "schema_version": 1,
+      "doi": "https://doi.org/10.48479/wdb0-h061",
+      "source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_S0_band_primary_beam.npz",
+      "source_bytes": 34896620743,
+      "source_last_modified": "Mon, 10 Apr 2023 16:10:45 GMT",
+      "source_shape": [
+        4,
+        65,
+        1024,
+        128,
+        128
+      ],
+      "source_dtype": "complex64",
+      "source_byte_ranges": [
+        {
+          "start": 34896620721,
+          "end": 34896620742,
+          "sha256": "90a881f5b5eec5475f2ee3f41b9276bf0f5feecdf482a4a25443ad434c762f9d"
+        },
+        {
+          "start": 34896620701,
+          "end": 34896620720,
+          "sha256": "6b428fd5a24e79e693e1d42c54a509ef9445357b18bd500d8601b8ba302ccf91"
+        },
+        {
+          "start": 34896620645,
+          "end": 34896620700,
+          "sha256": "3db66d0ada3601e70c9eecb37eb50be750be476dc7e0a144909f66f65b96c4dc"
+        },
+        {
+          "start": 34896620293,
+          "end": 34896620644,
+          "sha256": "905d88edf85e0f07f23239ad3eacf8bf4ddf883cdba6dea88cd1fd4188db3b0d"
+        },
+        {
+          "start": 34896610695,
+          "end": 34896610724,
+          "sha256": "afa819a36e51f565c586c81a51e4e4da47f2a1bc09c3a3b0af2f71b7d5232bc9"
+        },
+        {
+          "start": 34896610725,
+          "end": 34896610736,
+          "sha256": "90f9c7db5c0bddc9cec99009a659feab0ca70d5da2604e215c1115a3bf05cef6"
+        },
+        {
+          "start": 34896610757,
+          "end": 34896619076,
+          "sha256": "dc698afbf346ee15dde82ec4d22366c7802f62c5a28d3d71aee8da536b2b65bb"
+        },
+        {
+          "start": 34896619077,
+          "end": 34896619106,
+          "sha256": "e40477b3a5357011a391007f2db5135fa7d1adf3841a3f416b5121905d2c0ae1"
+        },
+        {
+          "start": 34896619107,
+          "end": 34896619120,
+          "sha256": "97d2da60ed4bb358e9dc94744c68e80543ebb8cd63000ec4835f224aa965e8b5"
+        },
+        {
+          "start": 34896619141,
+          "end": 34896620292,
+          "sha256": "19bf9736321eca9ebae3d6b895ac3757a11e89d2f8d750f94f5e4f177433ecba"
+        },
+        {
+          "start": 34896609660,
+          "end": 34896609689,
+          "sha256": "502582128e180f0c1d9c10dd29c53f674d139a5721187198893f015350782bcc"
+        },
+        {
+          "start": 34896609690,
+          "end": 34896609701,
+          "sha256": "fd59d3a520144d088bd21f2bfcfc040f25a5b1bc45a26370fcdc3c00c28b0135"
+        },
+        {
+          "start": 34896609722,
+          "end": 34896610694,
+          "sha256": "5b4168ec9336b9de508f20a3a9916deaeadb81cd3bc8561d9fe96c36fbb7a325"
+        },
+        {
+          "start": 34896609466,
+          "end": 34896609495,
+          "sha256": "df50bb878f6a741acf2f2297dd96c994a395afbe2bb34dc551308ed9984ec51e"
+        },
+        {
+          "start": 34896609496,
+          "end": 34896609503,
+          "sha256": "1c3c0263e77e4bde4f56143a7ae791682a61453b56d8ba977a62f8bc9fd0eacf"
+        },
+        {
+          "start": 34896609524,
+          "end": 34896609659,
+          "sha256": "7e7606cade9127464707e37cd19a2e2ae44cabd940d4be98a4ab884b2d0c1f68"
+        },
+        {
+          "start": 0,
+          "end": 29,
+          "sha256": "fc450317345f3589244417abb45faedb202181019e152eb435193c2fef8fbfe3"
+        },
+        {
+          "start": 58,
+          "end": 1081,
+          "sha256": "5416cc236fdb6470a405de54a8dd294899dc78d6d5761e40cbba9e177ad5e62e"
+        },
+        {
+          "start": 8657043642,
+          "end": 8657174713,
+          "sha256": "083ac5de45c7461f6fad010ddbd3bf99e1223a778a2b7985781e640c6010ee35"
+        },
+        {
+          "start": 17381195962,
+          "end": 17381327033,
+          "sha256": "157347da890e500af62fbce6f973cff2aaa53e8f53a9289e81b9594cc3864045"
+        },
+        {
+          "start": 26105348282,
+          "end": 26105479353,
+          "sha256": "c0e2d65b274eb36ea6b4d833b6e1a4cb087853ad6056d597dbeaf49117fa0679"
+        },
+        {
+          "start": 34829500602,
+          "end": 34829631673,
+          "sha256": "42e89a58e14da6fe15b652ff87e106bda29fafd02dc365bf2ee00a41dd6b3ffe"
+        }
+      ],
+      "metric_source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_S0_band_primary_beam_metrics.npz",
+      "metric_source_byte_ranges": [
+        {
+          "start": 28235118,
+          "end": 28235139,
+          "sha256": "aa51ed4690f6b1de781f4edc0710e891c2ed2a6deaac5a2efe23b80aeeddd226"
+        },
+        {
+          "start": 28235098,
+          "end": 28235117,
+          "sha256": "f4201436db7050539892ba1112139bac7fc946eb3933fbed73501a57aa7d87a0"
+        },
+        {
+          "start": 28231909,
+          "end": 28235117,
+          "sha256": "9afc70d1b371cd81680997d57181accb4111fb05e47575dcc94f41a0806c6756"
+        },
+        {
+          "start": 6391998,
+          "end": 6392027,
+          "sha256": "ff7829ecb3f8c45fe3838c03c9b1d9c6677d5331fca0d5dab5ec57ddeabaccf6"
+        },
+        {
+          "start": 6392058,
+          "end": 6393081,
+          "sha256": "ff61dae2ba764dcf5f6c9f7c885ae52fc361b31e0b4db490939e1736b9f03325"
+        },
+        {
+          "start": 6920570,
+          "end": 6920577,
+          "sha256": "60cbbc8553429aee07b2fd587f069d22549af85ed3f9d592296a4476a90c8185"
+        },
+        {
+          "start": 6924666,
+          "end": 6924695,
+          "sha256": "a6ce1ecfefb452c022f3d56b72b04bc44b3db3b7faa3508d5022703869774249"
+        },
+        {
+          "start": 6924726,
+          "end": 6925749,
+          "sha256": "acbb373cdff3f68c9723173a5b5f58fc91338640980f9f354bb459e7482b100a"
+        },
+        {
+          "start": 7453238,
+          "end": 7453245,
+          "sha256": "432a12f7468438b0e3a99ae65371dd2bf19a004a22d58b733f00e3ea5d94b236"
+        },
+        {
+          "start": 7457334,
+          "end": 7457363,
+          "sha256": "4f023b5c68fcc0e2f638deb563f87c41bc9dca7aabbf79d369be046c01dfb9a9"
+        },
+        {
+          "start": 7457394,
+          "end": 7458417,
+          "sha256": "2655ebfceef3568f9497876d3a7d27ec7ba46dc5c0622b13b609ead0306b5829"
+        },
+        {
+          "start": 7985906,
+          "end": 7985913,
+          "sha256": "69fb41fb5196286ea41617998b8fa94f46f204d84e58b13cce47be1bc8055efa"
+        },
+        {
+          "start": 5326668,
+          "end": 5326697,
+          "sha256": "8921c4aa8613cb928e6732e0165537a16c1230834baf6868986c170dbedc74f7"
+        },
+        {
+          "start": 5326725,
+          "end": 5327748,
+          "sha256": "4d604ff4f8eaae4c4bd07a7a053c21106f49289c7af1ab3ec424f69ecefe4f5d"
+        },
+        {
+          "start": 5855237,
+          "end": 5855244,
+          "sha256": "e4fb3986c6b90a9fe83cb96d7d7fe0307f7806fcee05c03ae18acc5444dcf647"
+        },
+        {
+          "start": 5859333,
+          "end": 5859362,
+          "sha256": "0b3dd04fb650f0208d3dfe8ad5e62a62ddf3dc45a8a60cd976db4cf91de153fb"
+        },
+        {
+          "start": 5859390,
+          "end": 5860413,
+          "sha256": "2a5e989c9b634a1f95d2faac357d3b0a34a4159e853976061cfa9f8f944c6285"
+        },
+        {
+          "start": 6387902,
+          "end": 6387909,
+          "sha256": "ca825dd3428ab0ef7172026022b128c78ec56fbfe2510f39cf81e4bf371e197e"
+        }
+      ],
+      "requested_frequency_mhz": 2187.5,
+      "frequency_mhz": 2187.5,
+      "channel_index": 512,
+      "channel_spacing_mhz": 0.8544921875,
+      "antenna_index": 64,
+      "antenna": "array_average",
+      "polarizations": [
+        "HH",
+        "HV",
+        "VH",
+        "VV"
+      ],
+      "measured_metrics": {
+        "Imajor": 22.711564189787943,
+        "Iminor": 22.0363649743238,
+        "Iangle": -1.3688763375763506,
+        "Ix0": -0.02800483360175959,
+        "Iy0": 0.24221884250180623
+      },
+      "orientation_source": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/beam_orientation_diagram.pdf",
+      "orientation": "source axes Y,X; supplied pattern flips vertically onto upward sky coordinates",
+      "measurement_conditions": "60 degree elevation, 15 Celsius; 2020-2022 average (S: 2021-2022)",
+      "licence": "CC BY-NC 4.0; third-party data, not the repository's MIT code licence",
+      "retrieved_at": "2026-09-08T09:32:16.695203+00:00",
+      "cache_sha256": "699c252c6de041f52577275084bc93b9aede89afb67388d39ab57dba3830578d",
+      "derived_half_power_widths": {
+        "method_version": "measured_jones_peak_diametric_cuts_v1",
+        "response": "unpolarised Stokes I = 0.5 sum |Jones|^2, normalised to sampled image peak",
+        "peak_horizontal_deg": 0.0,
+        "peak_vertical_deg": -0.0,
+        "orientation_step_deg": 0.5,
+        "orientation_count": 360,
+        "minimum_diametric_width_deg": 0.733611998740568,
+        "maximum_diametric_width_deg": 0.7569447917439919,
+        "minimum_width_orientation_deg": 2.5,
+        "maximum_width_orientation_deg": 90.0,
+        "coordinate_convention": "straight cuts in measured horizontal/vertical angular plane through the sampled peak"
+      }
+    },
+    {
+      "schema_version": 1,
+      "doi": "https://doi.org/10.48479/wdb0-h061",
+      "source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_S4_band_primary_beam.npz",
+      "source_bytes": 34896620743,
+      "source_last_modified": "Mon, 10 Apr 2023 16:10:48 GMT",
+      "source_shape": [
+        4,
+        65,
+        1024,
+        128,
+        128
+      ],
+      "source_dtype": "complex64",
+      "source_byte_ranges": [
+        {
+          "start": 34896620721,
+          "end": 34896620742,
+          "sha256": "90a881f5b5eec5475f2ee3f41b9276bf0f5feecdf482a4a25443ad434c762f9d"
+        },
+        {
+          "start": 34896620701,
+          "end": 34896620720,
+          "sha256": "6b428fd5a24e79e693e1d42c54a509ef9445357b18bd500d8601b8ba302ccf91"
+        },
+        {
+          "start": 34896620645,
+          "end": 34896620700,
+          "sha256": "3db66d0ada3601e70c9eecb37eb50be750be476dc7e0a144909f66f65b96c4dc"
+        },
+        {
+          "start": 34896620293,
+          "end": 34896620644,
+          "sha256": "90e353f108fc458f79ee73081045c61da1e078c0f52722966e9d4adfe1511591"
+        },
+        {
+          "start": 34896610695,
+          "end": 34896610724,
+          "sha256": "6b3f49382434949fe382e6db9a59988173c45fc33d131a6310d8fa00f36762b6"
+        },
+        {
+          "start": 34896610725,
+          "end": 34896610736,
+          "sha256": "90f9c7db5c0bddc9cec99009a659feab0ca70d5da2604e215c1115a3bf05cef6"
+        },
+        {
+          "start": 34896610757,
+          "end": 34896619076,
+          "sha256": "3a99f949ff235c94a828a0731c3d54cf8f0e5a925d4bf8e833842f37089e9b01"
+        },
+        {
+          "start": 34896619077,
+          "end": 34896619106,
+          "sha256": "e40477b3a5357011a391007f2db5135fa7d1adf3841a3f416b5121905d2c0ae1"
+        },
+        {
+          "start": 34896619107,
+          "end": 34896619120,
+          "sha256": "97d2da60ed4bb358e9dc94744c68e80543ebb8cd63000ec4835f224aa965e8b5"
+        },
+        {
+          "start": 34896619141,
+          "end": 34896620292,
+          "sha256": "19bf9736321eca9ebae3d6b895ac3757a11e89d2f8d750f94f5e4f177433ecba"
+        },
+        {
+          "start": 34896609660,
+          "end": 34896609689,
+          "sha256": "502582128e180f0c1d9c10dd29c53f674d139a5721187198893f015350782bcc"
+        },
+        {
+          "start": 34896609690,
+          "end": 34896609701,
+          "sha256": "fd59d3a520144d088bd21f2bfcfc040f25a5b1bc45a26370fcdc3c00c28b0135"
+        },
+        {
+          "start": 34896609722,
+          "end": 34896610694,
+          "sha256": "5b4168ec9336b9de508f20a3a9916deaeadb81cd3bc8561d9fe96c36fbb7a325"
+        },
+        {
+          "start": 34896609466,
+          "end": 34896609495,
+          "sha256": "df50bb878f6a741acf2f2297dd96c994a395afbe2bb34dc551308ed9984ec51e"
+        },
+        {
+          "start": 34896609496,
+          "end": 34896609503,
+          "sha256": "1c3c0263e77e4bde4f56143a7ae791682a61453b56d8ba977a62f8bc9fd0eacf"
+        },
+        {
+          "start": 34896609524,
+          "end": 34896609659,
+          "sha256": "7e7606cade9127464707e37cd19a2e2ae44cabd940d4be98a4ab884b2d0c1f68"
+        },
+        {
+          "start": 0,
+          "end": 29,
+          "sha256": "c69238e2f10a0e3d2e963ec0111813231cb5c590158312676060087ee5883820"
+        },
+        {
+          "start": 58,
+          "end": 1081,
+          "sha256": "d4a18cc6066afddd9f937bfd08aee645f5e97ad3812f5bb475cd19588f7d17d6"
+        },
+        {
+          "start": 8657043642,
+          "end": 8657174713,
+          "sha256": "7a3c5e5a96992cc342b55a023842954e337baffcb67cd0118beed1799131e641"
+        },
+        {
+          "start": 17381195962,
+          "end": 17381327033,
+          "sha256": "5574471ea623f4bf73f3c5b98458633030ca98751f4cfcb77f643424020df65d"
+        },
+        {
+          "start": 26105348282,
+          "end": 26105479353,
+          "sha256": "58dd343c23fba613a33d1a4f8d94fcd8f6c85f3e77ea2404584416215c37b1e3"
+        },
+        {
+          "start": 34829500602,
+          "end": 34829631673,
+          "sha256": "394c127279438ec34f69520a515741bc1b36ae0e4b602a69c4b2f893432e59a0"
+        }
+      ],
+      "metric_source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_S4_band_primary_beam_metrics.npz",
+      "metric_source_byte_ranges": [
+        {
+          "start": 28235118,
+          "end": 28235139,
+          "sha256": "aa51ed4690f6b1de781f4edc0710e891c2ed2a6deaac5a2efe23b80aeeddd226"
+        },
+        {
+          "start": 28235098,
+          "end": 28235117,
+          "sha256": "f4201436db7050539892ba1112139bac7fc946eb3933fbed73501a57aa7d87a0"
+        },
+        {
+          "start": 28231909,
+          "end": 28235117,
+          "sha256": "e09d6b53dae62df2d9c21f0134fede93d05a67974f52fae14a38acac6b1a5a57"
+        },
+        {
+          "start": 6391998,
+          "end": 6392027,
+          "sha256": "1ba8f93c2b16d7f5aee0245649840cc9a281ac1fd97d0cb41808b1830e021a69"
+        },
+        {
+          "start": 6392058,
+          "end": 6393081,
+          "sha256": "9b8a8075a1f5e7b2f8caabe4a0fa96180be5d9033af54d4bbbb0a6bd15fefa0a"
+        },
+        {
+          "start": 6920570,
+          "end": 6920577,
+          "sha256": "fbaf964cd95e7c664a756854ae63e780a896b64182e57b2eb5a795a885408093"
+        },
+        {
+          "start": 6924666,
+          "end": 6924695,
+          "sha256": "eb32ac61609a9dbdba4ee60d30558b112084e34f67a70e6c8029e04aa9d3d2bf"
+        },
+        {
+          "start": 6924726,
+          "end": 6925749,
+          "sha256": "fdfa76192da416fcba9e55c63ffdf2a0ae877bf244db80b6d5e614514224aa93"
+        },
+        {
+          "start": 7453238,
+          "end": 7453245,
+          "sha256": "a166c7485a075ce81c87bebda112c88a55f03b0347fe99eb457b8dd052a567af"
+        },
+        {
+          "start": 7457334,
+          "end": 7457363,
+          "sha256": "d35a1b9b55f5a132a6c70e2a27a266fdbc1f2db91f7497c0011a1d8e7ba545b7"
+        },
+        {
+          "start": 7457394,
+          "end": 7458417,
+          "sha256": "ba4f5f1850ffe6fbdc2c27fae375aad637347c68a20bda736b8a48ab25868345"
+        },
+        {
+          "start": 7985906,
+          "end": 7985913,
+          "sha256": "379f230c5422db3f5ec2103bbcedc2ba9f4eb02e6ef7d9c0e2e4b81c2c8b9831"
+        },
+        {
+          "start": 5326668,
+          "end": 5326697,
+          "sha256": "0cd8c493c8e070e20bea38eecf6cfc219a30e913f2e7dc9a59fa9ca392f6d5e5"
+        },
+        {
+          "start": 5326725,
+          "end": 5327748,
+          "sha256": "a6e89376d6642a2bb47579950cb841a508665821a7312782b4314770824bb450"
+        },
+        {
+          "start": 5855237,
+          "end": 5855244,
+          "sha256": "7bec9db7ad015fa8868fb7639f75bccdbbfe4062ad7f0f950eeb18081be3d49e"
+        },
+        {
+          "start": 5859333,
+          "end": 5859362,
+          "sha256": "519df7a980409dba6d67920c7247c30ee54f56d64f8b3c349de1ef9805ad3eca"
+        },
+        {
+          "start": 5859390,
+          "end": 5860413,
+          "sha256": "2632879730fb05b024db21e0d36203fd2f20a0d36ad733cf2a24a9f0df81fcc3"
+        },
+        {
+          "start": 6387902,
+          "end": 6387909,
+          "sha256": "ae81a535ee018547c2ab082a4037c8c6e3e71188a85154af20c7300961e2bbd4"
+        }
+      ],
+      "requested_frequency_mhz": 3062.5,
+      "frequency_mhz": 3062.5,
+      "channel_index": 512,
+      "channel_spacing_mhz": 0.8544921875,
+      "antenna_index": 64,
+      "antenna": "array_average",
+      "polarizations": [
+        "HH",
+        "HV",
+        "VH",
+        "VV"
+      ],
+      "measured_metrics": {
+        "Imajor": 17.113008595306248,
+        "Iminor": 16.753204323423578,
+        "Iangle": -0.9291457637216017,
+        "Ix0": 0.04813990996087866,
+        "Iy0": 0.11914945540084618
+      },
+      "orientation_source": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/beam_orientation_diagram.pdf",
+      "orientation": "source axes Y,X; supplied pattern flips vertically onto upward sky coordinates",
+      "measurement_conditions": "60 degree elevation, 15 Celsius; 2020-2022 average (S: 2021-2022)",
+      "licence": "CC BY-NC 4.0; third-party data, not the repository's MIT code licence",
+      "retrieved_at": "2026-09-08T09:32:18.953628+00:00",
+      "cache_sha256": "9186d29d524183aaae00af8eff2e5e18fafa82964eea21df86d8f0c3f0dbeba8",
+      "derived_half_power_widths": {
+        "method_version": "measured_jones_peak_diametric_cuts_v1",
+        "response": "unpolarised Stokes I = 0.5 sum |Jones|^2, normalised to sampled image peak",
+        "peak_horizontal_deg": 0.0,
+        "peak_vertical_deg": -0.0,
+        "orientation_step_deg": 0.5,
+        "orientation_count": 360,
+        "minimum_diametric_width_deg": 0.5574454134671865,
+        "maximum_diametric_width_deg": 0.570187492183123,
+        "minimum_width_orientation_deg": 3.0,
+        "maximum_width_orientation_deg": 90.0,
+        "coordinate_convention": "straight cuts in measured horizontal/vertical angular plane through the sampled peak"
+      }
+    },
+    {
+      "schema_version": 1,
+      "doi": "https://doi.org/10.48479/wdb0-h061",
+      "source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_S4_band_primary_beam.npz",
+      "source_bytes": 34896620743,
+      "source_last_modified": "Mon, 10 Apr 2023 16:10:48 GMT",
+      "source_shape": [
+        4,
+        65,
+        1024,
+        128,
+        128
+      ],
+      "source_dtype": "complex64",
+      "source_byte_ranges": [
+        {
+          "start": 34896620721,
+          "end": 34896620742,
+          "sha256": "90a881f5b5eec5475f2ee3f41b9276bf0f5feecdf482a4a25443ad434c762f9d"
+        },
+        {
+          "start": 34896620701,
+          "end": 34896620720,
+          "sha256": "6b428fd5a24e79e693e1d42c54a509ef9445357b18bd500d8601b8ba302ccf91"
+        },
+        {
+          "start": 34896620645,
+          "end": 34896620700,
+          "sha256": "3db66d0ada3601e70c9eecb37eb50be750be476dc7e0a144909f66f65b96c4dc"
+        },
+        {
+          "start": 34896620293,
+          "end": 34896620644,
+          "sha256": "90e353f108fc458f79ee73081045c61da1e078c0f52722966e9d4adfe1511591"
+        },
+        {
+          "start": 34896610695,
+          "end": 34896610724,
+          "sha256": "6b3f49382434949fe382e6db9a59988173c45fc33d131a6310d8fa00f36762b6"
+        },
+        {
+          "start": 34896610725,
+          "end": 34896610736,
+          "sha256": "90f9c7db5c0bddc9cec99009a659feab0ca70d5da2604e215c1115a3bf05cef6"
+        },
+        {
+          "start": 34896610757,
+          "end": 34896619076,
+          "sha256": "3a99f949ff235c94a828a0731c3d54cf8f0e5a925d4bf8e833842f37089e9b01"
+        },
+        {
+          "start": 34896619077,
+          "end": 34896619106,
+          "sha256": "e40477b3a5357011a391007f2db5135fa7d1adf3841a3f416b5121905d2c0ae1"
+        },
+        {
+          "start": 34896619107,
+          "end": 34896619120,
+          "sha256": "97d2da60ed4bb358e9dc94744c68e80543ebb8cd63000ec4835f224aa965e8b5"
+        },
+        {
+          "start": 34896619141,
+          "end": 34896620292,
+          "sha256": "19bf9736321eca9ebae3d6b895ac3757a11e89d2f8d750f94f5e4f177433ecba"
+        },
+        {
+          "start": 34896609660,
+          "end": 34896609689,
+          "sha256": "502582128e180f0c1d9c10dd29c53f674d139a5721187198893f015350782bcc"
+        },
+        {
+          "start": 34896609690,
+          "end": 34896609701,
+          "sha256": "fd59d3a520144d088bd21f2bfcfc040f25a5b1bc45a26370fcdc3c00c28b0135"
+        },
+        {
+          "start": 34896609722,
+          "end": 34896610694,
+          "sha256": "5b4168ec9336b9de508f20a3a9916deaeadb81cd3bc8561d9fe96c36fbb7a325"
+        },
+        {
+          "start": 34896609466,
+          "end": 34896609495,
+          "sha256": "df50bb878f6a741acf2f2297dd96c994a395afbe2bb34dc551308ed9984ec51e"
+        },
+        {
+          "start": 34896609496,
+          "end": 34896609503,
+          "sha256": "1c3c0263e77e4bde4f56143a7ae791682a61453b56d8ba977a62f8bc9fd0eacf"
+        },
+        {
+          "start": 34896609524,
+          "end": 34896609659,
+          "sha256": "7e7606cade9127464707e37cd19a2e2ae44cabd940d4be98a4ab884b2d0c1f68"
+        },
+        {
+          "start": 0,
+          "end": 29,
+          "sha256": "c69238e2f10a0e3d2e963ec0111813231cb5c590158312676060087ee5883820"
+        },
+        {
+          "start": 58,
+          "end": 1081,
+          "sha256": "d4a18cc6066afddd9f937bfd08aee645f5e97ad3812f5bb475cd19588f7d17d6"
+        },
+        {
+          "start": 8724021434,
+          "end": 8724152505,
+          "sha256": "525bff0b51e846fd027e339412fe59c5d8b63c02d997428eae23e2aa61b403d5"
+        },
+        {
+          "start": 17448173754,
+          "end": 17448304825,
+          "sha256": "1b0e2f3fc059e4909f23f0cb71e8b2155e6155c8d331b69a41cdd17d9e50c10e"
+        },
+        {
+          "start": 26172326074,
+          "end": 26172457145,
+          "sha256": "c441f5c7fbff55ed6b8b243394a2ada1e85e2d2e517324883941c96282ce4be9"
+        },
+        {
+          "start": 34896478394,
+          "end": 34896609465,
+          "sha256": "eae42c341694077ccd14a1f118fd9a32d6bbe753cde34ca2d107f623b4ffb849"
+        }
+      ],
+      "metric_source_url": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/data/MeerKAT_S4_band_primary_beam_metrics.npz",
+      "metric_source_byte_ranges": [
+        {
+          "start": 28235118,
+          "end": 28235139,
+          "sha256": "aa51ed4690f6b1de781f4edc0710e891c2ed2a6deaac5a2efe23b80aeeddd226"
+        },
+        {
+          "start": 28235098,
+          "end": 28235117,
+          "sha256": "f4201436db7050539892ba1112139bac7fc946eb3933fbed73501a57aa7d87a0"
+        },
+        {
+          "start": 28231909,
+          "end": 28235117,
+          "sha256": "e09d6b53dae62df2d9c21f0134fede93d05a67974f52fae14a38acac6b1a5a57"
+        },
+        {
+          "start": 6391998,
+          "end": 6392027,
+          "sha256": "1ba8f93c2b16d7f5aee0245649840cc9a281ac1fd97d0cb41808b1830e021a69"
+        },
+        {
+          "start": 6392058,
+          "end": 6393081,
+          "sha256": "9b8a8075a1f5e7b2f8caabe4a0fa96180be5d9033af54d4bbbb0a6bd15fefa0a"
+        },
+        {
+          "start": 6924658,
+          "end": 6924665,
+          "sha256": "2a46b528de223fdb2328ab687859a058f979b33beb61402607c32a1ce39e734a"
+        },
+        {
+          "start": 6924666,
+          "end": 6924695,
+          "sha256": "eb32ac61609a9dbdba4ee60d30558b112084e34f67a70e6c8029e04aa9d3d2bf"
+        },
+        {
+          "start": 6924726,
+          "end": 6925749,
+          "sha256": "fdfa76192da416fcba9e55c63ffdf2a0ae877bf244db80b6d5e614514224aa93"
+        },
+        {
+          "start": 7457326,
+          "end": 7457333,
+          "sha256": "7505051ee093166be5f1721525e0a71e898b6fc6cd66e251f231be26281b7226"
+        },
+        {
+          "start": 7457334,
+          "end": 7457363,
+          "sha256": "d35a1b9b55f5a132a6c70e2a27a266fdbc1f2db91f7497c0011a1d8e7ba545b7"
+        },
+        {
+          "start": 7457394,
+          "end": 7458417,
+          "sha256": "ba4f5f1850ffe6fbdc2c27fae375aad637347c68a20bda736b8a48ab25868345"
+        },
+        {
+          "start": 7989994,
+          "end": 7990001,
+          "sha256": "94baa1a17c54b45086231a147eb4eebd29dc4f77b578cc44771fb609e334a82b"
+        },
+        {
+          "start": 5326668,
+          "end": 5326697,
+          "sha256": "0cd8c493c8e070e20bea38eecf6cfc219a30e913f2e7dc9a59fa9ca392f6d5e5"
+        },
+        {
+          "start": 5326725,
+          "end": 5327748,
+          "sha256": "a6e89376d6642a2bb47579950cb841a508665821a7312782b4314770824bb450"
+        },
+        {
+          "start": 5859325,
+          "end": 5859332,
+          "sha256": "b0a24b4ef70178213377aaab46e855d929a4b86d11dd59d66c4fbf7154075b4b"
+        },
+        {
+          "start": 5859333,
+          "end": 5859362,
+          "sha256": "519df7a980409dba6d67920c7247c30ee54f56d64f8b3c349de1ef9805ad3eca"
+        },
+        {
+          "start": 5859390,
+          "end": 5860413,
+          "sha256": "2632879730fb05b024db21e0d36203fd2f20a0d36ad733cf2a24a9f0df81fcc3"
+        },
+        {
+          "start": 6391990,
+          "end": 6391997,
+          "sha256": "4731c5878717bff2657a012e6c0e659cfa7b7d7ff2f543a657b4b2e38e8efaee"
+        }
+      ],
+      "requested_frequency_mhz": 3500.0,
+      "frequency_mhz": 3499.1455078125,
+      "channel_index": 1023,
+      "channel_spacing_mhz": 0.8544921875,
+      "antenna_index": 64,
+      "antenna": "array_average",
+      "polarizations": [
+        "HH",
+        "HV",
+        "VH",
+        "VV"
+      ],
+      "measured_metrics": {
+        "Imajor": 13.633143239302651,
+        "Iminor": 13.247346090949327,
+        "Iangle": -0.5744583027398563,
+        "Ix0": 0.19833467674294727,
+        "Iy0": 0.28829739887608086
+      },
+      "orientation_source": "https://archive-gw-1.kat.ac.za/public/repository/10.48479/wdb0-h061/beam_orientation_diagram.pdf",
+      "orientation": "source axes Y,X; supplied pattern flips vertically onto upward sky coordinates",
+      "measurement_conditions": "60 degree elevation, 15 Celsius; 2020-2022 average (S: 2021-2022)",
+      "licence": "CC BY-NC 4.0; third-party data, not the repository's MIT code licence",
+      "retrieved_at": "2026-09-08T09:32:20.617010+00:00",
+      "cache_sha256": "fada00cf20f370e4068840d2c9cba13ba54799c0a7b05e29aa4de42b35da005c",
+      "derived_half_power_widths": {
+        "method_version": "measured_jones_peak_diametric_cuts_v1",
+        "response": "unpolarised Stokes I = 0.5 sum |Jones|^2, normalised to sampled image peak",
+        "peak_horizontal_deg": 0.0,
+        "peak_vertical_deg": -0.0,
+        "orientation_step_deg": 0.5,
+        "orientation_count": 360,
+        "minimum_diametric_width_deg": 0.44035181402715246,
+        "maximum_diametric_width_deg": 0.4547002761739844,
+        "minimum_width_orientation_deg": 4.0,
+        "maximum_width_orientation_deg": 90.0,
+        "coordinate_convention": "straight cuts in measured horizontal/vertical angular plane through the sampled peak"
+      }
+    }
+  ]
+}

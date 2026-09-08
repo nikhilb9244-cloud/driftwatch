@@ -10,9 +10,9 @@ use them.
 
 The fit is not perfect and the ephemeris is a prediction. CelesTrak publishes the RMS of
 each fit in the ``RMS`` field of every record: a median of 0.20 km, a 90th percentile of
-0.27 km and a worst case of 10.8 km when read on 2026-09-02. Step 3 uses that as the floor
-under a supplemental object's covariance. So a supplemental set is better than the GP set
-for a Starlink secondary, and is still not the truth; the output records which set was
+0.27 km and a worst case of 10.8 km when read on 2026-09-02. Step 3 uses that as a fitted offset
+in a supplemental object's covariance; it does not bound absolute error. A supplemental set
+can represent a published plan, but does not establish realised accuracy; the output records which set was
 used (``secondary_ephemeris`` in the events).
 
 This module fetches the file with the same cache and two-hour floor as the GP groups,

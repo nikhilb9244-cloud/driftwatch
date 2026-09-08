@@ -34,7 +34,7 @@ counts carry the dilution numerator, denominator and proportion.
   along-track offset. Internally consistent computations did not expose those source errors.
 - The ISS's attached hardware was counted as independent conjunctions. Excluding co-orbiting
   pairs corrects that population; it does not remove unresolved slow encounters, for which the
-  two-dimensional probability approximation remains a known underestimate.
+  two-dimensional probability approximation has unmeasured error direction and magnitude in slow encounters.
 - Storm displacement was applied to operator-controlled objects. Their means now remain fixed
   under that term; only appropriate uncertainty widening remains. The resulting large mean-shift
   headline and the common-mode-cancellation explanation were withdrawn.

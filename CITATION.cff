@@ -1,7 +1,7 @@
 cff-version: 1.2.0
 title: >-
-  Public element sets against reconstructed orbits through the storms of 2024:
-  what was measured, what was corrected, and what it does not show
+  Public element sets against reconstructed orbits:
+  a record-controlled reference benchmark
 message: >-
   Cite this frozen paper and supporting-code release when using its measurements.
   The paper states the measured population, independent checks and limitations.
@@ -14,16 +14,18 @@ authors:
     city: "Cape Town"
     country: "ZA"
 repository-code: "https://github.com/nikhilb9244-cloud/driftwatch"
-url: "https://github.com/nikhilb9244-cloud/driftwatch/releases/tag/paper-2026-09-v1"
-doi: "10.5281/zenodo.22656992"
+url: "https://github.com/nikhilb9244-cloud/driftwatch/releases/tag/paper-2026-09-v2"
+# Version DOI will be added after Zenodo archives this release.
 abstract: >-
   Public SGP4 element sets are compared with reconstructed orbits for fifteen
-  spacecraft at 460 to 1,338 km over a quiet window and three storm windows,
-  with 1,201 usable sets and laser ranging as a further reference. The paper
-  reports prediction horizons, covariance calibration, observed-ap storm-term
-  skill, the held-out dSGP4 evaluation, post-burn fit errors, radio horizons,
-  and convention and provenance faults exposed by independent checks. These
-  are measurements on the stated population, not operational guarantees.
+  spacecraft at 460 to 1,338 km, with 1,193 usable sets and laser ranging as a
+  further reference. The April 2024 control, May 2024, August 2024 held out and
+  October 2024 held out windows have all been inspected. The paper reports
+  record-controlled residual horizons, component coverage after covariance-basis
+  transport, the completed September retrospective physical diagnostic,
+  constructed topocentric crossing comparisons and two rejected learned
+  propagators. It supersedes v1 at doi:10.5281/zenodo.22656992. These are
+  measurements on the stated population, not operational guarantees.
 keywords:
   - conjunction assessment
   - space situational awareness
@@ -32,7 +34,7 @@ keywords:
   - thermospheric drag
   - orbit uncertainty
 license: MIT
-version: paper-2026-09-v1
+version: paper-2026-09-v2
 date-released: "2026-09-08"
 references:
   - type: data

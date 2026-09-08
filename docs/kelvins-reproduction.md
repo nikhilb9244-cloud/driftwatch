@@ -36,7 +36,7 @@ The obvious suspect for a one-sided disagreement is the two-dimensional method i
 
 The null result is worth reading carefully, because it does **not** clear the method. This comparison is against ESA's own operational risk column, and the reconstruction reproduces it to a fraction of a percent overall -- including on the slow rows. That agreement is itself the evidence: if ESA had integrated the slow encounters in three dimensions and driftwatch had not, the slow bin would stand out, and it does not. Both are computing the same two-dimensional integral, so a bias they share is invisible here whatever its size.
 
-So the slow-encounter underestimate remains a known property of the method rather than a measured disagreement, and driftwatch flags it directly instead of inferring it from these rows: `slow_encounter` in every risk table marks the events whose transit takes more than a hundredth of an orbital period, and their probability is reported as a known underestimate. See `driftwatch.risk.pc.encounter_duration_ratio`.
+The comparison does not establish the sign or size of error in slow encounters. The `slow_encounter` flag marks events whose transit takes more than a hundredth of an orbital period and calls for curved-trajectory validation; the two-dimensional approximation can err in either direction. See `driftwatch.risk.pc.encounter_duration_ratio`.
 
 ### Confirmed on a held-out split
 

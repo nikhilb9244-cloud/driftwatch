@@ -6,7 +6,7 @@ Everything driftwatch says about the accuracy of a public element set rests on t
 element set is compared with an independent truth. ESA's Swarm satellites carry GPS receivers
 and ESA publishes a reduced-dynamic precise science orbit for each of them (product
 ``SW_OPER_SP3xCOM_2_``, ten-second states in the ITRF, centre of mass), so for every public
-element set issued in a window the propagated SGP4 position can be measured against where the
+element set selected by epoch in a window the propagated SGP4 position can be measured against where the
 satellite actually was, in the satellite's own radial, in-track, cross-track frame, at leads
 from six hours to seven days.
 
@@ -23,11 +23,10 @@ are not independent of each other:
 4. the lead beyond which the residual exceeds a tolerance for a named task -- here the in-track
    half-width of the screening box, 25 km -- so the output reads as a horizon.
 
-Three windows: the May 2024 storm, a quiet control before it, and one further disturbed
-interval (10 to 11 October 2024) that is **held out from every tuning**. Nothing in this module
-takes a parameter from the held-out window: the covariance and the ballistic coefficient used
-on each window are fitted from history that ends where that window's element sets begin, and
-no threshold anywhere was chosen by looking at the October result.
+The original windows are April 2024 control, May 2024 and October 2024 held out;
+the expansion adds August 2024 held out. All four have been inspected. The retained
+held-out names are historical roles, not untouched evaluation populations. Each
+window's covariance and coefficient fit uses history ending before its trial epochs.
 
 Manoeuvres. ESA's thruster record for these satellites is the Level 1b spacecraft-dynamics
 product (``SW_OPER_SC_xDYN_1B``, a daily CDF: per-second on-times for the twelve cold-gas
@@ -79,7 +78,7 @@ from driftwatch.orbit.frames import itrs_to_teme, j2000_to_teme
 from driftwatch.orbit.propagator import build_satrecs, propagate_satrecs
 from driftwatch.orbit.time import parse_utc
 from driftwatch.risk.covariance import EmpiricalCovariance, ObjectRef, fit_covariance, osculating_semi_major_axis_km
-from driftwatch.screening.ric import ric_basis, to_ric
+from driftwatch.screening.ric import ric_basis, to_ric, transport_covariance
 from driftwatch.storm import validation
 
 log = logging.getLogger(__name__)
@@ -169,7 +168,7 @@ WINDOWS: tuple[BenchmarkWindow, ...] = (
         parse_utc("2024-10-06T00:00:00Z"),
         parse_utc("2024-10-13T00:00:00Z"),
         (parse_utc("2024-10-10T12:00:00Z"), parse_utc("2024-10-12T00:00:00Z")),
-        "the 10 to 11 October 2024 storm (Kp 9-), held out from every tuning; nothing was chosen by looking at it",
+        "October 2024 held out: historical role; inspected during the corrections",
     ),
 )
 
@@ -678,7 +677,9 @@ def manoeuvre_intervals_from_orbit(
     return intervals
 
 
-def orbit_mean_semi_major_axis(orbit: PreciseOrbit) -> tuple[np.ndarray, np.ndarray, int]:
+def orbit_mean_semi_major_axis(
+    orbit: PreciseOrbit, *, period_min: int | None = None
+) -> tuple[np.ndarray, np.ndarray, int]:
     """The reconstructed orbit's semi-major axis on a minute grid, averaged over one revolution.
 
     Returns the grid, the one-revolution rolling mean of the osculating semi-major axis (km; NaN
@@ -697,7 +698,10 @@ def orbit_mean_semi_major_axis(orbit: PreciseOrbit) -> tuple[np.ndarray, np.ndar
         return np.array([], dtype="datetime64[us]"), np.array([]), 0
     a_km = np.full(t.size, np.nan)
     a_km[ok] = osculating_semi_major_axis_km(r[ok], v[ok])
-    period_min = int(round(2.0 * np.pi * np.sqrt(np.nanmedian(a_km) ** 3 / 398600.4418) / 60.0))
+    if period_min is None:
+        period_min = int(round(2.0 * np.pi * np.sqrt(np.nanmedian(a_km) ** 3 / 398600.4418) / 60.0))
+    elif period_min < 1:
+        raise ValueError("period_min must be positive")
     series = pd.Series(a_km)
     # Full windows only: a partial window at the table's edge does not cancel the J2 short-period term
     # in the osculating semi-major axis, and reads as a step of hundreds of metres.
@@ -737,8 +741,8 @@ def _mean_a_at(t: np.ndarray, mean_a: np.ndarray, when: pd.Timestamp) -> float:
 
 
 # The first sets after a burn, classified by how much of the burn their semi-major axis contains. The
-# fraction is one plus the set's error at its own epoch over the burn; the class thresholds and the
-# resolvability rule were fixed before any set was classified.
+# fraction is one plus the set's error at its own epoch over the burn. The author reports choosing
+# these thresholds before execution; their first recorded commit also contained results. Keep them frozen.
 POST_BURN_FIT_SETS = 3
 POST_BURN_FRACTION_PRE = 0.25
 POST_BURN_FRACTION_POST = 0.75
@@ -991,6 +995,8 @@ def satellite_trials(
     reference run does so that it can record them beside the result; left ``None`` they are
     computed here.
     """
+    if record is not None and (not getattr(record, "authoritative", True) or record.days_missing):
+        raise ValueError("incomplete published manoeuvre coverage cannot be treated as an empty burn record")
     if detected is None:
         detected = manoeuvre_intervals_from_orbit(orbit) + manoeuvre_intervals_from_sets(inputs.sets)
     if record is not None:
@@ -1018,7 +1024,7 @@ def satellite_trials(
         r_sgp4 = state.r_teme[0]
         err = state.error[0]
         r_true, v_true, covered = orbit.states_teme(at)
-        sigma = np.sqrt(np.einsum("nii->ni", inputs.covariance.covariance_ric(ref, epoch.to_pydatetime(), at).cov_km2))
+        covariance = inputs.covariance.covariance_ric(ref, epoch.to_pydatetime(), at).cov_km2
         shift = np.full(leads.size, np.nan)
         b_source = "none"
         if grid is not None and inputs.coefficient is not None:
@@ -1031,6 +1037,11 @@ def satellite_trials(
                 shift = predicted["predicted_shift_km"].to_numpy(dtype=float)
                 b_source = str(predicted["b_source"].iloc[0])
         basis = ric_basis(np.where(covered[:, None], r_true, 1.0), np.where(covered[:, None], v_true, 1.0))
+        # The model is in predicted-state RIC; residuals are in truth RIC.
+        # Transport the full matrix at each comparison epoch before taking sigmas.
+        predicted_basis = ric_basis(r_sgp4, state.v_teme[0])
+        covariance = transport_covariance(covariance, predicted_basis, basis)
+        sigma = np.sqrt(np.diagonal(covariance, axis1=-2, axis2=-1))
         delta = to_ric(basis, r_true - r_sgp4)
         for k, lead in enumerate(leads):
             t_k = pd.Timestamp(at[k])
@@ -1361,9 +1372,8 @@ def to_markdown(
         )
     lines += [
         "",
-        "The held-out window was held out: the covariance and the coefficient used on it are fitted from the "
-        "history before it, exactly as on the other two, and no threshold in this module was chosen by "
-        "looking at its result.",
+        "All benchmark windows have been inspected. Historical held-out labels do not establish untouched "
+        "evaluation populations; each window's covariance and coefficient fit still uses earlier history.",
         "",
     ]
     for name, w in summary["windows"].items():

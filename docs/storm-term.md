@@ -1,5 +1,7 @@
 # The storm term
 
+Current scope: sensitivity analysis on the baseline event set. Candidate discovery is not repeated for perturbed trajectories; a full-scenario rerun remains an open acceptance item in [the roadmap](../ROADMAP.md).
+
 What an unmodelled density excess does to where an object is, why it is an *along-track*
 problem rather than an altitude one, and how the five scenarios are built. Phase 3 Step 3.
 The code is `src/driftwatch/storm/`; the density and the ballistic coefficient it multiplies

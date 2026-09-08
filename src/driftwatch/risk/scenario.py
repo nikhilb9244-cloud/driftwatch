@@ -1,4 +1,7 @@
-"""Covariance and probability over stored events, once per scenario.
+"""Sensitivity analysis on the baseline event set, once per perturbation recipe.
+
+Candidate discovery is not repeated. Stored velocities and encounter times are
+unchanged, so these outputs do not establish full-scenario encounter completeness.
 
 The design rule for Phase 3: geometry and probability are separate. Stages A to C run
 once per snapshot and write the events with both objects' TEME states at the time of
@@ -13,11 +16,10 @@ rotated into TEME and applied to the stored positions, which moves the relative 
 therefore the miss; the uncertainty of each displacement is already in the in-track element of
 its covariance by the time it arrives here.
 
-Applying the shift at the *stored* time of closest approach rather than searching for a new
-one is exact for what the probability depends on, not an approximation. The encounter plane is
-perpendicular to the relative velocity, and the component of a shift along that direction is
-precisely the part that moves the time of closest approach rather than the miss at it; the
-projection removes it. What survives the projection is what changes the answer.
+The projected miss is exact only conditional on frozen rectilinear relative geometry.
+Applying a shift at the stored closest-approach time does not find a new orbital closest
+approach, update velocities or discover new candidate pairs. Curvature, slow encounters,
+seams and multiple minima require a separate trajectory-level validation.
 
 **Three probabilities, side by side.** A scenario does two things at once and they pull in
 opposite directions often enough that one number hides both, so every row carries all three:
@@ -79,6 +81,7 @@ from driftwatch.screening.stages import STATE_COLUMNS
 from driftwatch.storm.term import event_validities, is_operator_controlled
 
 log = logging.getLogger(__name__)
+ANALYSIS_SCOPE = "sensitivity analysis on the baseline event set"
 
 # Hard-body radius for secondaries: the circumscribing sphere of a typical member of the
 # category in metres, and whether the objects in it have a known envelope at all.
@@ -320,6 +323,8 @@ RISK_COLUMNS: tuple[str, ...] = (
     "model_version",
     "supplemental_version",
     "scenario",
+    "analysis_scope",
+    "candidate_rediscovery",
     "event_id",
     "sigma_r_primary_km",
     "sigma_i_primary_km",
@@ -557,6 +562,8 @@ def run_risk(
             "model_version": model_version_string(model),
             "supplemental_version": supplemental_version,
             "scenario": scenario,
+            "analysis_scope": ANALYSIS_SCOPE,
+            "candidate_rediscovery": False,
             "event_id": events["event_id"].to_numpy(),
             "sigma_r_primary_km": sig[:, 0],
             "sigma_i_primary_km": sig[:, 1],
@@ -662,7 +669,7 @@ def run_risk(
     if slow.any():
         log.info(
             "Slow encounters (%s): %d of %d events are below %g km/s relative, %d of them flagged; "
-            "their probability is a known underestimate of the two-dimensional method",
+            "their two-dimensional probability has unmeasured approximation error of either sign",
             scenario,
             int(slow.sum()),
             n,

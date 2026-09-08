@@ -50,6 +50,17 @@ def to_ric(basis: np.ndarray, vec: np.ndarray) -> np.ndarray:
     return np.einsum("nij,nj->ni", basis, np.asarray(vec, dtype=float))
 
 
+def transport_covariance(covariance: np.ndarray, source_basis: np.ndarray, target_basis: np.ndarray) -> np.ndarray:
+    """Express a covariance in a new orthonormal basis (basis vectors are rows).
+
+    Both bases must refer to the same Cartesian frame and epoch. This changes
+    coordinates, not the physical uncertainty: C_target = Q C_source Q.T,
+    with Q = B_target B_source.T. Invalid bases propagate NaNs.
+    """
+    rotation = np.asarray(target_basis) @ np.swapaxes(source_basis, -1, -2)
+    return rotation @ covariance @ np.swapaxes(rotation, -1, -2)
+
+
 def relative_ric(r_primary: np.ndarray, v_primary: np.ndarray, r_other: np.ndarray) -> np.ndarray:
     """Position of ``r_other`` relative to the primary, in the primary's RIC frame, ``(n, 3)``."""
     basis = ric_basis(r_primary, v_primary)

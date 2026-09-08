@@ -66,8 +66,13 @@ def test_parse_oem_reads_segments_states_time_systems_and_skips_covariance():
     assert [s.time_system for s in segments] == ["UTC", "GPS"] and segments[0].object_name == "DESIGNED-1"
     assert len(segments[0].states) == 2 and len(segments[1].states) == 1
     assert segments[0].states["vy_kms"].iloc[0] == 7.6 and segments[0].comments == ["two states, then a gap"]
+    assert segments[0].provider_created_at == pd.Timestamp("2024-05-08T00:00:00Z")
+    assert segments[0].published_at is None and segments[0].retrieved_at is None
+    assert segments[0].imported_at > segments[0].provider_created_at
+    assert segments[0].originator == "TEST OPERATOR"
     orbit = local.oem_to_precise_orbit(segments, norad_id=90001)
     assert orbit.frame == "TEME" and orbit.files == ["test.oem"] and len(orbit.table) == 3
+    assert orbit.table.attrs["source_time_metadata"][0]["published_at"] is None
     # The GPS-time segment moved 18 s earlier when read as UTC.
     assert orbit.table["t"].iloc[-1] == pd.Timestamp("2024-05-06T12:59:42")
     with pytest.raises(ValueError, match="unsupported ephemeris frame"):

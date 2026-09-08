@@ -16,13 +16,44 @@
        "ra": 191.36348521622438,
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.1615940081754,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 1.2480155941666666,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "850-1000 km",
+        "reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 66.91662344245493,
@@ -34,13 +65,44 @@
        "ra": 191.40044695584987,
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.2129889290368,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 1.2480155941666666,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "850-1000 km",
+        "reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 66.9034128989463,
@@ -52,13 +114,44 @@
        "ra": 191.4374061991105,
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.2647525314223,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 1.2480155941666666,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "850-1000 km",
+        "reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 66.89015619869767,
@@ -70,13 +163,44 @@
        "ra": 191.47436292185333,
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.3168847681804,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 1.2480155941666666,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "850-1000 km",
+        "reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 66.87685344318687,
@@ -88,13 +212,44 @@
        "ra": 191.51131709986416,
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.3693855915876,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 1.2480155941666666,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "850-1000 km",
+        "reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 66.86350473402906,
@@ -106,13 +261,44 @@
        "ra": 191.54826870902775,
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.4222549537849,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 1.2480155941666666,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "850-1000 km",
+        "reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 66.85011017303904,
@@ -124,13 +310,44 @@
        "ra": 191.58521772516278,
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.4754928063387,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 1.2480155941666666,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "850-1000 km",
+        "reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 66.83666986216474,
@@ -142,13 +359,44 @@
        "ra": 191.62216412418394,
        "tle_epoch": "2024-04-23T19:12:39.561696Z",
        "range_km": 1079.5290991006766,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 1.2480155941666666,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "850-1000 km",
+        "reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       }
      ]
     },
@@ -166,13 +414,44 @@
        "ra": 191.57227486732694,
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 731.1392352750801,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 83.02773494611111,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "750-850 km",
+        "reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 69.14246693485933,
@@ -184,13 +463,44 @@
        "ra": 191.55823262900475,
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 731.3617864570066,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 83.02773494611111,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "750-850 km",
+        "reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 69.08866972861112,
@@ -202,13 +512,44 @@
        "ra": 191.54420393171486,
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 731.5849984411024,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 83.02773494611111,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "750-850 km",
+        "reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 69.03488432177357,
@@ -220,13 +561,44 @@
        "ra": 191.53018875400213,
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 731.8088706224015,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 83.02773494611111,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "750-850 km",
+        "reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 68.98111095858735,
@@ -238,13 +610,44 @@
        "ra": 191.5161870743046,
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 732.0334023964656,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 83.02773494611111,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "750-850 km",
+        "reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 68.92734988138577,
@@ -256,13 +659,44 @@
        "ra": 191.5021988712581,
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 732.2585931566067,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 83.02773494611111,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "750-850 km",
+        "reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 68.87360133033441,
@@ -274,13 +708,44 @@
        "ra": 191.48822412347087,
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 732.4844422950639,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 83.02773494611111,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "750-850 km",
+        "reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       },
       {
        "altitude": 68.81986554315496,
@@ -292,13 +757,44 @@
        "ra": 191.4742628094886,
        "tle_epoch": "2024-04-20T09:59:40.837632Z",
        "range_km": 732.7109492042686,
-       "cross_track_uncertainty_deg": null,
-       "crossing_horizon": "no measured horizon",
-       "along_track_shift_s": null,
-       "position_horizon": "no measured horizon",
-       "hours_since_manoeuvre": null,
-       "fit_arc_spanned_manoeuvre": false,
-       "next_set_shows_jump": false
+       "orbit_quality": {
+        "schema_version": 2,
+        "status": "unsupported",
+        "mission": null,
+        "scope": null,
+        "epoch_age_h": 83.02773494611111,
+        "measured_age_range_h": [
+         6,
+         168
+        ],
+        "band": "750-850 km",
+        "reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
+        "crossing_classification_calibrated": false,
+        "publication_age_h": null,
+        "reference_population_estimate": null
+       },
+       "radio_band": {
+        "receiver": "S4",
+        "receiver_range_mhz": [
+         2625.0,
+         3500.0
+        ],
+        "declaration_status": "none expected",
+        "detail": "debris or rocket body",
+        "evidence": [],
+        "object_transmitting": null,
+        "historical_operation_established": false,
+        "interpretation": "declared frequency overlap only; unknown is not absence"
+       },
+       "candidate_discontinuity": {
+        "between_element_epochs": null,
+        "hours_since_later_element_epoch": null,
+        "overlaps_assumed_exclusion_arc": false,
+        "next_set_shows_jump": false,
+        "evidence": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+        "fit_arc_known": false,
+        "publication_time_known": false
+       }
       }
      ]
     }
@@ -306,28 +802,25 @@
    "total_position_results": 16,
    "total_satellites": 2
   },
-  "source": "driftwatch radio lane, on public element sets; response shape after the IAU CPS SatChecker field-of-view endpoint",
+  "source": "driftwatch predicted passages, latest archived element epoch before observation start",
   "version": "0.1.0",
-  "format": "IAU CPS SatChecker /fov/satellite-passes/ synchronous response (satchecker.readthedocs.io, Field of View endpoints)",
+  "metadata_schema_version": 2,
+  "format": "Proposed metadata in the IAU CPS SatChecker /fov/satellite-passes/ response shape; not an accepted upstream schema (https://satchecker.readthedocs.io/en/latest/fov.html)",
   "added_fields": [
-   "cross_track_uncertainty_deg",
-   "crossing_horizon",
-   "along_track_shift_s",
-   "position_horizon",
-   "hours_since_manoeuvre",
-   "fit_arc_spanned_manoeuvre",
-   "next_set_shows_jump"
+   "orbit_quality",
+   "radio_band",
+   "candidate_discontinuity"
   ],
   "post_manoeuvre": {
    "arc_hours": 24.0,
-   "detector": "the element-set jump detector on the object's own sets at or before the set's epoch, so a burn after the newest set is invisible at the time; the burn lies between the two set epochs reported in the crossing record, hours_since_manoeuvre counts from the later of them, and fit_arc_spanned_manoeuvre is true when that interval reaches into the arc_hours before the set's epoch. next_set_shows_jump is the retrospective mark: the detector run again with the two sets that follow, true when the interval from this set to the next is flagged, false when it is not, null while no following set is held",
-   "measured_consequence": "The first element set issued after a detected burn may be a pre-burn fit with its epoch advanced past the burn: it then omits the burn and is wrong along track by the part of the burn it omits, growing with lead at three halves of the mean motion times the omitted change in semi-major axis, and nothing in the set itself says which kind it is. In the reference benchmark (docs/reference-benchmark.md, twelve burns on six spacecraft at 700 to 950 km in four windows of 2024, re-measured whenever a window is added) four of the twelve first post-burn sets were pre-burn fits re-epoched past the burn and seven contained it; the first set after a burn was wrong along track at four days by 2.3 to 33 km, 19 to 33 km on the four re-epoched sets, and the next set after every burn by under 5.3 km. Which sets are re-epoched differs by object, not by how soon after the burn they were issued. When the following set shows the jump, the earlier set is marked retrospectively (next_set_shows_jump); on the catalogue as it stood at an observation start no following set exists yet and the mark is null. Nothing is measured for station-kept objects or debris."
+   "detector": "Candidate changes come from the element-set jump detector. Epoch order is not publication order. The interval endpoints are element epochs, the exclusion arc is an assumed 24-hour analysis rule, and no actual catalogue fit arc is known. next_set_shows_jump uses later archived elements; null means the evidence is absent. False does not establish that no manoeuvre occurred.",
+   "measured_consequence": "The benchmark found first post-burn element epochs whose fitted orbit remained consistent with the pre-burn orbit. The catalogue does not expose the tracking or fit provenance needed to identify why. A later element discontinuity is retrospective evidence of a change, not confirmation of a manoeuvre or a known pre-burn fit. See the corrected post-burn analysis in docs/reference-benchmark.md."
   },
   "fov": {
    "ra_deg": 191.50695833333336,
    "dec_deg": -9.719111111111111,
    "radius_deg": 0.23469387755102042,
-   "radius_is": "half of the primary beam's half-power width at the observation's centre frequency",
+   "radius_is": "historical analytic circular FWHM/2 at the stated frequency; not a measured-beam validation",
    "start_time_utc": "2024-04-23T20:19:25Z",
    "duration_s": 3743.0
   },
@@ -342,6 +835,7 @@
    "band": "S4",
    "centre_mhz": 3062.5,
    "beam_fwhm_deg": 0.46938775510204084,
+   "beam_model": "historical analytic circular scale, not a measured Jones pattern",
    "source": "GCN Circular 36362 (J. Bright, F. Carotenuto, P. G. Jonker, R. Fender, S. Smartt): MeerKAT observed the field of EP240414a with the S-band receiver (S4) at a central frequency of about 3 GHz between 20:19:25 and 21:21:48 UTC on 23 April 2024, https://gcn.nasa.gov/circulars/36362; pointing taken as the optical counterpart position 12:46:01.67 -09:43:08.8 (J2000) from GCN Circular 36105, https://gcn.nasa.gov/circulars/36105",
    "note": "The circular gives no phase centre, so the counterpart position stands in for it. The S4 band centre, 3062.5 MHz, is used for the beam width; the circular says about 3 GHz."
   },
@@ -354,7 +848,8 @@
    "source": "SARAO, MeerKAT specifications (skaafrica.atlassian.net, ESDKB page 277315585): array phase centre 30d42m39.8s S, 21d26m38.0s E, 1086.6 m; dish 13.5 m nominal"
   },
   "catalogue": {
-   "as_of": "2024-04-23T20:19:25Z",
+   "epoch_cutoff": "2024-04-23T20:19:25Z",
+   "availability_as_of_known": false,
    "n_objects": 24746,
    "max_set_age_days": 7.0
   },
@@ -486,25 +981,44 @@
     "partial": false,
     "projection_cross": 0.9502746992440859,
     "projection_along": 0.9916482972869147,
-    "population": "no measured horizon",
+    "population": "unsupported",
     "population_reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
-    "crossing_horizon": "no measured horizon",
-    "position_horizon": "no measured horizon",
-    "crossing_fraction_inside": null,
-    "position_fraction_inside": null,
-    "cross_track_uncertainty_deg": null,
-    "along_track_uncertainty_deg": null,
-    "along_track_shift_s": null,
     "benchmark_window": "quiet",
     "benchmark_lead_h": null,
     "benchmark_n_trials": null,
     "emission_status": "none expected",
     "emission_detail": "debris or rocket body",
-    "manoeuvre_detected_between": null,
-    "hours_since_manoeuvre": null,
-    "fit_arc_spanned_manoeuvre": false,
-    "manoeuvre_detection": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
-    "next_set_shows_jump": false
+    "orbit_quality": {
+     "schema_version": 2,
+     "status": "unsupported",
+     "mission": null,
+     "scope": null,
+     "epoch_age_h": 1.2480155941666666,
+     "measured_age_range_h": [
+      6,
+      168
+     ],
+     "band": "850-1000 km",
+     "reason": "eccentricity 0.052 is beyond the near-circular benchmark population",
+     "crossing_classification_calibrated": false,
+     "publication_age_h": null,
+     "reference_population_estimate": null
+    },
+    "component_error_diagnostics": {
+     "cross_track_p95_deg": null,
+     "in_track_p95_deg": null,
+     "orbital_phase_time_p95_s": null,
+     "interpretation": "orbital-component scales only; not a crossing or beam-timing guarantee"
+    },
+    "candidate_discontinuity": {
+     "between_element_epochs": null,
+     "hours_since_later_element_epoch": null,
+     "overlaps_assumed_exclusion_arc": false,
+     "next_set_shows_jump": false,
+     "evidence": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+     "fit_arc_known": false,
+     "publication_time_known": false
+    }
    },
    {
     "norad_id": 39231,
@@ -526,33 +1040,55 @@
     "partial": false,
     "projection_cross": 0.9958265500312503,
     "projection_along": 0.9514439469351353,
-    "population": "no measured horizon",
+    "population": "unsupported",
     "population_reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
-    "crossing_horizon": "no measured horizon",
-    "position_horizon": "no measured horizon",
-    "crossing_fraction_inside": null,
-    "position_fraction_inside": null,
-    "cross_track_uncertainty_deg": null,
-    "along_track_uncertainty_deg": null,
-    "along_track_shift_s": null,
     "benchmark_window": "quiet",
     "benchmark_lead_h": null,
     "benchmark_n_trials": null,
     "emission_status": "none expected",
     "emission_detail": "debris or rocket body",
-    "manoeuvre_detected_between": null,
-    "hours_since_manoeuvre": null,
-    "fit_arc_spanned_manoeuvre": false,
-    "manoeuvre_detection": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
-    "next_set_shows_jump": false
+    "orbit_quality": {
+     "schema_version": 2,
+     "status": "unsupported",
+     "mission": null,
+     "scope": null,
+     "epoch_age_h": 83.02773494611111,
+     "measured_age_range_h": [
+      6,
+      168
+     ],
+     "band": "750-850 km",
+     "reason": "eccentricity 0.025 is beyond the near-circular benchmark population",
+     "crossing_classification_calibrated": false,
+     "publication_age_h": null,
+     "reference_population_estimate": null
+    },
+    "component_error_diagnostics": {
+     "cross_track_p95_deg": null,
+     "in_track_p95_deg": null,
+     "orbital_phase_time_p95_s": null,
+     "interpretation": "orbital-component scales only; not a crossing or beam-timing guarantee"
+    },
+    "candidate_discontinuity": {
+     "between_element_epochs": null,
+     "hours_since_later_element_epoch": null,
+     "overlaps_assumed_exclusion_arc": false,
+     "next_set_shows_jump": false,
+     "evidence": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+     "fit_arc_known": false,
+     "publication_time_known": false
+    }
    }
   ],
   "limits": [
-   "Positions come from public element sets propagated with SGP4; no tracking, no orbit determination.",
-   "cross_track_uncertainty_deg is the 95th percentile of the calibration benchmark's cross-track residual at the element set's age, projected on the sky at the crossing's range, and crossing_horizon says whether 95 per cent of the benchmark's trials at that age keep it under a third of the beam (inside) or not (outside): whether the object crossed the beam.",
-   "along_track_shift_s is the 95th percentile of the benchmark's along-track residual at that age as a time shift at the orbital speed, and position_horizon says whether the along-track angular error keeps the same coverage (inside) or not (outside): where the object is at an instant. Both horizons are null where the object is outside the benchmark's population, and both say so. The population is the altitude-band table of docs/radio-horizon.md: near-circular, free-flying spacecraft with a public reconstructed orbit, in bands from 400 to 1400 km, each object scored against its own band's trials; nothing is measured for debris, eccentric orbits or station-kept objects through a burn.",
-   "hours_since_manoeuvre, fit_arc_spanned_manoeuvre and next_set_shows_jump come from the element-set jump detector on the object's own sets: a lower bound on the time since the last detected burn, whether the set's likely fit arc, the benchmark's 24-hour exclusion arc before its epoch, reaches that burn, and, retrospectively, whether the following set shows a jump this set may omit. The first two are null where fewer than two sets are held at or before the epoch; the third is null while no following set is held. A burn the detector misses is not reported. The consequence of a spanned arc or a jump shown by the next set is the benchmark's measured post-burn error, stated under post_manoeuvre.",
-   "Nothing here is a received power, an occupancy fraction or a sensitivity loss."
-  ]
+   "These are modelled passages through the stated pointing; there is no measured satellite detection here.",
+   "Schema 2 removes crossing_horizon and position_horizon: orbital component errors do not determine beam-entry or timing classification. A full-vector topocentric comparison is required.",
+   "orbit_quality requires an eligible reference mission, explicit manoeuvre-excluded public-GP scope and measured age. Altitude overlap alone never supplies a calibrated uncertainty.",
+   "Epoch age is not publication age. Catalogue availability at observation start is not reconstructed.",
+   "radio_band is declared emission-frequency evidence, not the beam frequency, actual transmission, received power or interference. Per-object capability and historical operation may be unknown.",
+   "candidate_discontinuity is an element-change heuristic. The former fit_arc_spanned_manoeuvre field is withdrawn: the assumed exclusion arc is not a published fit arc."
+  ],
+  "schema_correction": "Existing predicted samples retained; metadata corrected without a new orbit run",
+  "original_geometry_built_at": "2026-09-08T00:26:29.376662+00:00"
  }
 ]

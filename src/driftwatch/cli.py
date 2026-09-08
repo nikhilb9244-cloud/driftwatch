@@ -322,12 +322,12 @@ def select_historical_objects(
 
 
 def cmd_snapshot_as_of(args: argparse.Namespace) -> int:
-    """Rebuild the catalogue as it stood on a past date, from gp_history. Cached permanently."""
+    """Build an epoch-based reconstruction from stored gp_history; availability is unknown."""
     as_of = parse_utc(args.date)
     path = snapshot.as_of_path(as_of, config.AS_OF_SNAPSHOT_DIR)
     if path.exists() and not args.force:
         df = snapshot.read_snapshot(path)
-        log.info("Using the cached historical snapshot %s: %d objects", path.name, len(df))
+        log.info("Using cached epoch-based reconstruction %s: %d objects", path.name, len(df))
         print(path)
         return 0
     now = datetime.now(UTC)
@@ -342,7 +342,7 @@ def cmd_snapshot_as_of(args: argparse.Namespace) -> int:
     if not ids:
         log.error("no objects selected; pass --ids, --launch, --fleet or an altitude range")
         return 2
-    log.info("Historical snapshot for %s: %d objects selected (%s)", as_of.date(), len(ids), why)
+    log.info("Epoch-based reconstruction for %s: %d objects selected (%s)", as_of.date(), len(ids), why)
 
     # The pull has to reach back far enough that every object has a set *before* the date.
     end = as_of + timedelta(days=1)
@@ -402,7 +402,9 @@ def cmd_snapshot_as_of(args: argparse.Namespace) -> int:
         float(ages.quantile(0.9)),
         float(ages.max()),
     )
-    print(f"{len(df)} objects as of {as_of.isoformat()}")
+    print(
+        f"{len(df)} objects in an epoch-based reconstruction at {as_of.isoformat()}; publication availability unknown"
+    )
     print("by category:", df["category"].value_counts().to_dict())
     print(
         f"perigee km: min {df['perigee_km'].min():.0f}, median {df['perigee_km'].median():.0f}, "
@@ -702,24 +704,29 @@ def check_run(
             problems.append(f"{run_dir.name}: recorded snapshot {name!r} is not a catalogue snapshot -- {problem}")
         else:
             fetched_at = snapshot.snapshot_fetched_at(path)
-            age_hours = (now - fetched_at).total_seconds() / 3600.0
-            # The screening window starts at the snapshot's fetch time floored to the minute
-            # (`default_start`), so more than a minute of disagreement means the run was screened
-            # from a different snapshot than the one it names.
-            start = info.get("start")
-            if start:
-                drift_s = abs((parse_utc(start) - fetched_at).total_seconds())
-                if drift_s > 60.0:
-                    warnings.append(
-                        f"{run_dir.name}: start {start} is {drift_s / 60.0:.1f} min from the snapshot's "
-                        f"fetch time {fetched_at.isoformat()}; --start was given, "
-                        "or the snapshot is not the one screened"
+            if fetched_at is None:
+                warnings.append(f"{run_dir.name}: actual snapshot retrieval time is unknown")
+                if max_snapshot_age_hours is not None:
+                    problems.append(f"{run_dir.name}: cannot establish snapshot freshness with unknown retrieval time")
+            else:
+                age_hours = (now - fetched_at).total_seconds() / 3600.0
+                # Live screening defaults to retrieval time; an epoch-based reconstruction
+                # or an explicit --start can use a different analysis time. This difference
+                # is not evidence of when a historical product was published.
+                start = info.get("start")
+                if start:
+                    drift_s = abs((parse_utc(start) - fetched_at).total_seconds())
+                    if drift_s > 60.0:
+                        warnings.append(
+                            f"{run_dir.name}: start {start} is {drift_s / 60.0:.1f} min from the snapshot's "
+                            f"fetch time {fetched_at.isoformat()}; --start was given, "
+                            "or the snapshot is not the one screened"
+                        )
+                if max_snapshot_age_hours is not None and age_hours > float(max_snapshot_age_hours):
+                    problems.append(
+                        f"{run_dir.name}: snapshot {path.name} was fetched {age_hours:.1f} h ago, "
+                        f"past the {float(max_snapshot_age_hours):g} h limit -- EXPIRED, do not publish"
                     )
-            if max_snapshot_age_hours is not None and age_hours > float(max_snapshot_age_hours):
-                problems.append(
-                    f"{run_dir.name}: snapshot {path.name} was fetched {age_hours:.1f} h ago, "
-                    f"past the {float(max_snapshot_age_hours):g} h limit -- EXPIRED, do not publish"
-                )
 
     for entry in info.get("supplemental") or []:
         supplemental_path = Path(config.SUPPLEMENTAL_DIR) / str(entry.get("file", ""))
@@ -998,6 +1005,7 @@ def print_scenario_comparison(run_dir: RunDirectory, scenario: str, show: int) -
 
 def print_risk_summary(joined: pd.DataFrame, scenario: str, show: int) -> None:
     """The top events by probability and a per-primary table for one scenario of a run."""
+    print("Sensitivity analysis on the baseline event set; candidate discovery is not repeated.")
     rows = joined[joined["scenario"] == scenario]
     if rows.empty:
         print(f"No events to score for scenario {scenario!r}.")
@@ -1138,6 +1146,7 @@ def cmd_screen(args: argparse.Namespace) -> int:
         log.error("%s", exc)
         return 1
     summary = result.summary()
+    summary["catalogue_selection_kind"] = sorted(df.selection_kind.dropna().unique())
     log.info("Summary: %s", json.dumps(summary))
 
     # Geometry first: the events are written before anything about uncertainty is known.
@@ -1479,7 +1488,7 @@ def resolve_run(arg: str, out_dir: Path | None = None) -> RunDirectory:
 
 
 def cmd_risk(args: argparse.Namespace) -> int:
-    """Rescore the stored events of a run for one scenario: covariance and probability only, no rescreening."""
+    """Sensitivity analysis on the baseline event set; no candidate rediscovery."""
     try:
         run_dir = resolve_run(args.run)
     except FileNotFoundError as exc:
@@ -2427,6 +2436,12 @@ def cmd_validate_reference(args: argparse.Namespace) -> int:
         "weather_sources": weather_used,
     }
     (out / "reference_benchmark.json").write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    failures = result.summary.get("execution", {}).get("failed_mission_windows", [])
+    if failures:
+        log.error(
+            "Reference benchmark incomplete: %d failed mission/window cells; diagnostic result saved", len(failures)
+        )
+        return 2
     page = args.page
     if page == "docs/calibration-benchmark.md":
         page = "docs/reference-benchmark.md"
@@ -2450,24 +2465,33 @@ def cmd_validate_reference(args: argparse.Namespace) -> int:
 
 def cmd_validate_dsgp4(args: argparse.Namespace) -> int:
     """ESA's dSGP4 and the ML-dSGP4 hybrid on the reference benchmark's trials; see ``storm/dsgp4_eval.py``."""
-    import dsgp4
-    import torch
-
-    from driftwatch.storm import dsgp4_eval, precise, reference, reference_run
+    from driftwatch.radio.track_benchmark import IDENTITY_COLUMNS, load_selected_elements, validate_trials
+    from driftwatch.storm import dsgp4_eval, dsgp4_run, reference
 
     now = datetime.now(UTC)
     out = Path(args.out or config.DATA_DIR / "validation")
     trials_path = out / "reference_benchmark.parquet"
-    if not trials_path.exists():
-        log.error("no %s; run `driftwatch validate reference` first", trials_path)
+    metadata_path = out / "reference_benchmark.json"
+    if not trials_path.exists() or not metadata_path.exists():
+        log.error("reference trials and exclusion metadata are required; run `driftwatch validate reference` first")
         return 2
+    allowed = {*dsgp4_eval.TRAINING_WINDOWS, *dsgp4_eval.HELD_OUT_WINDOWS}
+    labels = pd.read_parquet(trials_path, columns=["window"])
+    if not set(labels["window"].unique()) <= allowed:
+        log.error("ML correction accepts only the existing quiet/May/October/August windows")
+        return 2
+    # Guard actual epochs/targets before opening any residual columns, then load
+    # only the exact element epochs needed by this already inspected benchmark.
+    validate_trials(pd.read_parquet(trials_path, columns=list(IDENTITY_COLUMNS)))
     trials = pd.read_parquet(trials_path)
+    coverage = json.loads(metadata_path.read_text(encoding="utf-8"))["summary"]["coverage"]
     keys = (
         sorted(trials["mission"].unique()) if args.missions == "all" else [k.strip() for k in args.missions.split(",")]
     )
     missions = [reference.MISSIONS[k] for k in keys if k in reference.MISSIONS]
-    windows = list(reference.WINDOWS)
-    sets = reference_run.load_sets(missions, windows)
+    trials = trials[trials["mission"].isin([m.key for m in missions])].copy()
+    windows = [w for w in reference.WINDOWS if w.name in allowed]
+    sets = load_selected_elements(trials, config.HISTORY_DIR)
     orbits = {}
     for m in missions:
         if m.truth == reference.TRUTH_NONE:
@@ -2477,81 +2501,20 @@ def cmd_validate_dsgp4(args: argparse.Namespace) -> int:
             orbit, _ = reference.load_truth(m, day_from, w.truth_to.date(), offline=True, records=False)
             if orbit is not None and len(orbit.table):
                 orbits[(m.key, w.name)] = orbit
-    items = dsgp4_eval.trial_sets(trials[trials["mission"].isin([m.key for m in missions])], sets, orbits)
-    training = [i for i in items if i.window in dsgp4_eval.TRAINING_WINDOWS]
-    swarm_keys = {k for k in reference.MISSIONS if k.startswith("swarm")}
-    populations = {"ML-dSGP4 (Swarm)": [i for i in training if i.mission in swarm_keys]}
-    if any(i.mission not in swarm_keys for i in training):
-        populations["ML-dSGP4 (all missions)"] = training
-    log.info("dSGP4: %d trial sets, %d in the training windows", len(items), len(training))
-    keep = dsgp4_eval.usable_pairs(trials)
-    frames = [dsgp4_eval.storm_term_residuals(trials, items)]
-    frames.append(
-        dsgp4_eval.residuals_at_leads(
-            items, lambda o, t: dsgp4_eval.dsgp4_states(o, t, gravity="wgs-72"), method="dsgp4 (WGS72)", keep=keep
-        )
-    )
-    frames.append(
-        dsgp4_eval.residuals_at_leads(
-            items, lambda o, t: dsgp4_eval.dsgp4_states(o, t, gravity="wgs-84"), method="dsgp4 (WGS-84)", keep=keep
-        )
-    )
-    training_records = {}
-    for name, pop in populations.items():
-        if not pop:
-            continue
-        omms, tsince, states = dsgp4_eval.training_samples(pop)
-        model = dsgp4_eval.new_hybrid(args.hidden_size, seed=args.seed)
-        rec = dsgp4_eval.train_hybrid(
-            model,
-            omms,
-            tsince,
-            states,
+    record, _ = dsgp4_run.run_corrected_evaluation(
+        trials,
+        sets,
+        orbits,
+        coverage,
+        out,
+        config=dsgp4_run.TrainingConfig(
+            seed=args.seed,
+            hidden_size=args.hidden_size,
             epochs=args.epochs,
             batch_size=args.batch_size,
             learning_rate=args.lr,
-            seed=args.seed,
-        )
-        training_records[name] = rec.__dict__
-        frames.append(
-            dsgp4_eval.residuals_at_leads(
-                items, lambda o, t, _m=model: dsgp4_eval.hybrid_states(_m, o, t), method=name, keep=keep
-            )
-        )
-    residuals = pd.concat(frames, ignore_index=True)
-    summary = dsgp4_eval.summarise(residuals)
-    plain = "sgp4 (library, WGS72)"
-    improvement = dsgp4_eval.improvement_over_plain(summary, plain)
-    methods = [plain, "dsgp4 (WGS72)", "dsgp4 (WGS-84)", *populations.keys(), "sgp4 + storm term (observed ap)"]
-    methods = [m for m in methods if m in set(residuals["method"])]
-    record = {
-        "built_at": now.isoformat(),
-        "dsgp4_version": getattr(dsgp4, "__version__", "unknown"),
-        "torch_version": torch.__version__,
-        "citation": dsgp4_eval.CITATION,
-        "published_training": dsgp4_eval.PUBLISHED_TRAINING,
-        "what_was_done": (
-            f"{len(items)} trial sets from {len(missions)} mission(s) over {len(windows)} windows; the hybrids trained "
-            f"on the {len(training)} sets of the quiet and May windows only, with the reconstructed orbit sampled "
-            f"hourly to seven days, corrections starting at zero, hidden size {args.hidden_size}; scored at the "
-            "benchmark's leads in the truth's radial, in-track, cross-track frame against plain SGP4, dsgp4 with "
-            "both gravity constants, and the storm term with the observed ap."
         ),
-        "training_windows": list(dsgp4_eval.TRAINING_WINDOWS),
-        "held_out_windows": list(dsgp4_eval.HELD_OUT_WINDOWS),
-        "missions": [m.key for m in missions],
-        "training": training_records,
-        "plain": plain,
-        "methods": methods,
-        "summary": summary,
-        "improvement": improvement,
-        "recommendations": [
-            dsgp4_eval.recommendation(improvement, name) for name in populations if name in training_records
-        ],
-    }
-    out.mkdir(parents=True, exist_ok=True)
-    residuals.to_parquet(out / "dsgp4_residuals.parquet", index=False)
-    (out / "dsgp4_evaluation.json").write_text(json.dumps(record, indent=2, default=str), encoding="utf-8")
+    )
     page = args.page
     if page == "docs/calibration-benchmark.md":
         page = "docs/dsgp4-evaluation.md"
@@ -2564,7 +2527,6 @@ def cmd_validate_dsgp4(args: argparse.Namespace) -> int:
             + "; ".join(f"{w} {v[w]}" for w in dsgp4_eval.HELD_OUT_WINDOWS if v.get(w))
         )
     print(f"\n{out / 'dsgp4_evaluation.json'}")
-    _ = precise
     return 0
 
 
@@ -2659,7 +2621,7 @@ def cmd_local(args: argparse.Namespace) -> int:
                     return 2
                 if args.sets:
                     records = json.loads(Path(args.sets).read_text(encoding="utf-8"))
-                    sets = history.frame_from_records(records, source="local", fetched_at=now)
+                    sets = history.frame_from_records(records, source="local")
                     sets_origin = f"{len(sets)} OMM records from {args.sets}"
                 else:
                     sets = history.load_history(
@@ -3450,15 +3412,15 @@ def cmd_radio_horizon(args: argparse.Namespace) -> int:
         )
         log.info("Wrote %s", args.json)
     log.info("Trials exported to %s (%d usable trials from %s)", csv_path, len(trials), source)
-    both = radio_horizon.horizons(table)
+    both = radio_horizon.component_thresholds(table)
     for band in radio_horizon.bands_present(table):
         for c in radio_horizon.table_columns():
             log.info(
-                "Horizons %s %s: crossing %s; position %s",
+                "Component thresholds %s %s: orbital C %s; orbital I %s",
                 band,
                 c.key,
-                both["crossing"][band][c.key],
-                both["position"][band][c.key],
+                both["cross_track"][band][c.key],
+                both["in_track"][band][c.key],
             )
     return 0
 
@@ -3526,7 +3488,7 @@ def cmd_radio_archive(args: argparse.Namespace) -> int:
 
 
 def cmd_radio_period(args: argparse.Namespace) -> int:
-    """Run both products for one period on the catalogue as it stood; see ``radio/crossings.py``."""
+    """Illustrate catalogue passages selected by archived element epoch; see ``radio/crossings.py``."""
     from driftwatch.radio import crossings as radio_crossings
     from driftwatch.radio import horizon as radio_horizon
     from driftwatch.radio import observations as radio_obs
@@ -3594,7 +3556,8 @@ def cmd_radio_period(args: argparse.Namespace) -> int:
         "observations": [
             {
                 "observation": r.observation.record(),
-                "catalogue_as_of": r.catalogue_at,
+                "catalogue_epoch_cutoff": r.catalogue_at,
+                "publication_time_availability_known": False,
                 "n_catalogue": r.n_catalogue,
                 "constellations_in_view": [c.__dict__ for c in r.counts],
                 "crossings": [c.record(with_samples=False) for c in r.crossings],
@@ -3766,9 +3729,7 @@ def build_parser() -> argparse.ArgumentParser:
     add_risk_options(screen, scenario_default="quiet")
     screen.set_defaults(func=cmd_screen)
 
-    risk = sub.add_parser(
-        "risk", help="rescore a stored run's events for a scenario (covariance and probability only, no rescreening)"
-    )
+    risk = sub.add_parser("risk", help="sensitivity analysis on the baseline event set (no candidate rediscovery)")
     risk.add_argument("run", help="run directory, its name under data/conjunctions, or 'latest'")
     risk.add_argument("--refit", action="store_true", help="refit the covariance from history before scoring")
     risk.add_argument(
@@ -3949,7 +3910,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     asof = sub.add_parser(
         "snapshot-as-of",
-        help="rebuild the catalogue as it stood on a past date from gp_history, and cache it permanently",
+        help="build an epoch-based reconstruction from gp_history; publication availability is unknown",
     )
     asof.add_argument("--date", required=True, help="the date to reconstruct, ISO 8601 UTC")
     asof.add_argument("--ids", help="comma-separated NORAD ids")
@@ -4168,10 +4129,10 @@ def build_parser() -> argparse.ArgumentParser:
     local.set_defaults(func=cmd_local)
 
     radio = sub.add_parser(
-        "radio", help="satellite crossings of a dish's beam over the Karoo, with the accuracy attached"
+        "radio", help="radio component diagnostics, declared emissions and illustrative catalogue passages"
     )
     radio_sub = radio.add_subparsers(dest="radio_command", required=True)
-    rh = radio_sub.add_parser("horizon", help="the radio horizon table from the calibration benchmark's stored trials")
+    rh = radio_sub.add_parser("horizon", help="component angular thresholds from the stored reference trials")
     rh.add_argument(
         "--out", default="docs/radio-horizon.md", help="markdown page (default docs/radio-horizon.md; empty to skip)"
     )
@@ -4183,7 +4144,7 @@ def build_parser() -> argparse.ArgumentParser:
     re_.add_argument("--out", default="docs/radio-emissions.md")
     re_.set_defaults(func=cmd_radio_emissions)
     rp = radio_sub.add_parser(
-        "period", help="both products for one period, on the catalogue as it stood at each observation start"
+        "period", help="illustrative passages using latest archived element epochs before each observation"
     )
     rp.add_argument("period", help="quiet-2024-04 or storm-2024-05")
     rp.add_argument("--observations", help="CSV of archived observations (data/radio/observations/<period>.csv)")

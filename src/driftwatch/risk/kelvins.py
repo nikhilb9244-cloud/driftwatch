@@ -861,11 +861,11 @@ def to_markdown(
                 "driftwatch had not, the slow bin would stand out, and it does not. Both are computing the "
                 "same two-dimensional integral, so a bias they share is invisible here whatever its size.",
                 "",
-                "So the slow-encounter underestimate remains a known property of the method rather than a "
+                "The slow-encounter approximation remains a limitation with unmeasured error of either sign, not a "
                 "measured disagreement, and driftwatch flags it directly instead of inferring it from these "
                 "rows: `slow_encounter` in every risk table marks the events whose transit takes more than "
-                "a hundredth of an orbital period, and their probability is reported as a known "
-                "underestimate. See `driftwatch.risk.pc.encounter_duration_ratio`.",
+                "a hundredth of an orbital period, and their probability requires a time-dependent "
+                "assessment. See `driftwatch.risk.pc.encounter_duration_ratio`.",
                 "",
             ]
 

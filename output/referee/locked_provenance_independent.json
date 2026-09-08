@@ -1,0 +1,228 @@
+{
+  "audited_at": "2026-09-08T11:51:30.655336+00:00",
+  "scope": "Metadata and file-hash validation only; no residual/event values deserialized",
+  "status": "pass",
+  "frozen_at": "2026-09-08T10:42:57.285144+00:00",
+  "attested_at": "2026-09-08T10:58:47.798959+00:00",
+  "first_data_access_at": "2026-09-08T10:58:51.516097+00:00",
+  "completed_at": "2026-09-08T11:42:50.556302+00:00",
+  "source_files_verified": 75,
+  "prior_corrected_input_hashes_verified": 9,
+  "bindings": {
+    "protocol_sha256": "11f4b680049b6573dee9227943f619f53b5781fc0f0f2b1f4a7c7784eaf0f0ae",
+    "source_manifest_sha256": "6015a2227cd1a25b544942e6aca6ade548acff8d2566cdce2360a9774812f81c",
+    "attestation_sha256": "67ac109b4b1c165a7899f25e503f7b9699b6e8d27bfe5599eb8a698d6b236967",
+    "gp_manifest_sha256": "5a36a1093ac33a14effe606fb8e5c9cf38b013f4e7f164620498696d60e39e08"
+  },
+  "first_data_access_sha256": "804ca6fc77e7566f8730b98edead7d8d746c481d932b483d85804a17ff85d0fa",
+  "missions_complete": 14,
+  "missions": [
+    {
+      "mission": "swarm-a",
+      "input_manifest_sha256": "29449e91d253d537ca661c231cd0651e71e9d732826a3cecbd4cc4e308111138",
+      "input_files": 102,
+      "completion_manifest_sha256": "38bc6299dee62d7aa04039fb3ccac20647fafb06afbebbcafbb63b15d871e7f3",
+      "completed_at": "2026-09-08T11:11:44.473386+00:00"
+    },
+    {
+      "mission": "swarm-b",
+      "input_manifest_sha256": "e8f40b025721700850a8d9f51cd2949e3913b17b2033224fa968fc4fe67ec6cd",
+      "input_files": 102,
+      "completion_manifest_sha256": "cd599112818704a5d6c6017e06c66a5a321d50261829d6f074e597166863b555",
+      "completed_at": "2026-09-08T11:24:33.752403+00:00"
+    },
+    {
+      "mission": "swarm-c",
+      "input_manifest_sha256": "4340c44fc5c7444fa6123e68e93de8967b9d683076d9a660faeb60cffb5a2033",
+      "input_files": 102,
+      "completion_manifest_sha256": "2200a248a5c8298ae41d892e989f97459f83c1d1b9673e42ba2b0b072987f95d",
+      "completed_at": "2026-09-08T11:41:10.594035+00:00"
+    },
+    {
+      "mission": "gracefo-c",
+      "input_manifest_sha256": "8c5162ce21eeafd90446030891244b503061fddc92c9adf4cc6793ad7a0a54c0",
+      "input_files": 52,
+      "completion_manifest_sha256": "a1ffc5cf06c3f6073b8313cc6e443b6da7acf931ddaa5966b3b59ec9a0bdfe0f",
+      "completed_at": "2026-09-08T11:41:19.068679+00:00"
+    },
+    {
+      "mission": "gracefo-d",
+      "input_manifest_sha256": "b23faf29599aa542f5bfdc74fdf14670e61d53e52d2f1451c9be8887b5451806",
+      "input_files": 52,
+      "completion_manifest_sha256": "d8f0ae80098f132cc7f4b82de10cd1f32a0fe68fb27d59060a332df5ad402142",
+      "completed_at": "2026-09-08T11:41:27.661657+00:00"
+    },
+    {
+      "mission": "cryosat-2",
+      "input_manifest_sha256": "dc00cb03e98b8ef054222ed9faa44d610e21b61054669ae0a43252161392ccf2",
+      "input_files": 12,
+      "completion_manifest_sha256": "f3e1358f5c89f4bb3345066e3ab26a3854419a95c5d359a8310769c6c9db6999",
+      "completed_at": "2026-09-08T11:41:35.562655+00:00"
+    },
+    {
+      "mission": "saral",
+      "input_manifest_sha256": "f96bdace830730be8bb621a9e33a3ac5ae692de8aae2124e63d1f725dcf2f05e",
+      "input_files": 11,
+      "completion_manifest_sha256": "ab787310399a4038919f5f41ff6d991daa67d383a64390fedede90115f4a5d4a",
+      "completed_at": "2026-09-08T11:41:43.568590+00:00"
+    },
+    {
+      "mission": "sentinel-3a",
+      "input_manifest_sha256": "bf025f2ffc0a08d27cd224329727987768181d301987abf0f6e85729220df38b",
+      "input_files": 10,
+      "completion_manifest_sha256": "dfadca8845ac07b0f881579ae5c6e32039cb337d4ed4e5640ee7ef009f91e496",
+      "completed_at": "2026-09-08T11:41:52.590038+00:00"
+    },
+    {
+      "mission": "sentinel-3b",
+      "input_manifest_sha256": "d43d1d133c5f5d02d800120297baef016d83dc84aeec3a213ea8a6bc7d8b9881",
+      "input_files": 10,
+      "completion_manifest_sha256": "7c28af52a59c5330f7d8670f3235e7293f7fc8a16585f296506a5f96fea152e1",
+      "completed_at": "2026-09-08T11:42:00.405999+00:00"
+    },
+    {
+      "mission": "swot",
+      "input_manifest_sha256": "9cd09e911ddcbbdf887c3f121108e8463fd0bed11e16bbc329ec1842dc552767",
+      "input_files": 11,
+      "completion_manifest_sha256": "44879cb3a32871f01c9568b9695168247360319062b098eff67c5319227e62f7",
+      "completed_at": "2026-09-08T11:42:08.353243+00:00"
+    },
+    {
+      "mission": "hy-2c",
+      "input_manifest_sha256": "ce02bb0389243d07898c60eb95e877f7b9069f1bbb94a5d070121e65a6c29aae",
+      "input_files": 9,
+      "completion_manifest_sha256": "5188f527833f7a7f79efafd0e3fc71b729a2fbe38887745b9419ba0e6265b39a",
+      "completed_at": "2026-09-08T11:42:16.745345+00:00"
+    },
+    {
+      "mission": "hy-2d",
+      "input_manifest_sha256": "e31aa8c165cfb743e24a3a92952d96f7b609cea053854413aabb4f8e6a47380f",
+      "input_files": 9,
+      "completion_manifest_sha256": "659f95c2427a8bc1b7b6416a33620c0e5cd7720983b14943ec65843f24ed7c04",
+      "completed_at": "2026-09-08T11:42:25.191726+00:00"
+    },
+    {
+      "mission": "jason-3",
+      "input_manifest_sha256": "6f171c325105990c566609d8825fe8f645309266df5e107ecc17c3a992bda926",
+      "input_files": 9,
+      "completion_manifest_sha256": "1a5712dfeaee266aff5a8deb201c2ff9bdf2ff748ae859eab70fd6fadb45c541",
+      "completed_at": "2026-09-08T11:42:32.964535+00:00"
+    },
+    {
+      "mission": "sentinel-6a",
+      "input_manifest_sha256": "939c70724c32619a4f5045c2159d90d739430582b829419d87287c50c609d909",
+      "input_files": 9,
+      "completion_manifest_sha256": "7c8eba8fa8c40a9c3349f62b898ab02d7a3b162ad0f7bb391cac11e28d8ea0d2",
+      "completed_at": "2026-09-08T11:42:40.493529+00:00"
+    }
+  ],
+  "verified_manifest_target_files": 645,
+  "acquisition_operations": [
+    {
+      "path": "data\\validation\\locked-september-2024\\acquisition-operations\\20260908T111847-input-acquisition-cf7c8f7ed1dd.json",
+      "sha256": "843f1f358f160d6247c0abd443c0a6ad3676f5644eae8c8e836397791024f25b",
+      "started_at": "2026-09-08T11:18:47.590064+00:00",
+      "completed_at": "2026-09-08T11:19:02.798008+00:00",
+      "missions": [
+        "jason-3",
+        "sentinel-6a"
+      ]
+    },
+    {
+      "path": "data\\validation\\locked-september-2024\\acquisition-operations\\20260908T113216-input-acquisition-e7de48a5d489.json",
+      "sha256": "960de34596fee3a6bdd8b0578ca80d3ecf8f54ee466d8a0696e1723813da12c5",
+      "started_at": "2026-09-08T11:32:16.172457+00:00",
+      "completed_at": "2026-09-08T11:33:45.726459+00:00",
+      "missions": [
+        "cryosat-2",
+        "saral",
+        "sentinel-3a",
+        "sentinel-3b",
+        "swot",
+        "hy-2c",
+        "hy-2d"
+      ]
+    }
+  ],
+  "grace_acquisition_log_sha256": "b5a7f63f390e917e5270cb729b53ac4a3581287ad097fea67bcfa8385c0982d9",
+  "main_grace_coordination_log_sha256": "93e7b4062157b763fb9e5f6ab1118a606f43668f8b9dddf4f50bc09f06e7453f",
+  "main_pause_at": "2026-09-08T11:35:40.311686+00:00",
+  "main_resume_at": "2026-09-08T11:41:02.500483+00:00",
+  "supporting_grace": [
+    {
+      "mission": "gracefo-c",
+      "gnv_parquet_files_verified": 50,
+      "thr_parquet_files_verified": 50,
+      "thr_manifest_sha256": "ae99f0f89ddb00b5b1d9b87913b80bf2f0d7dd27cf7f44020616bb464c7b0db7",
+      "preserved_at": "2026-09-08T11:41:23.289614+00:00",
+      "scope": "Additional supporting evidence; does not modify frozen mission snapshots or scoring",
+      "filename_limitation": "Frozen GRACE mission record.files duplicates the GNV orbit filenames and omits THR input filenames. Recorded intervals remain in the frozen metadata.",
+      "retention_convention": "The established loader parses GNV1B and THR1B products to Parquet and deletes each large daily raw archive. These exact parsed THR products are retained here; this is not retention of original raw text archives."
+    },
+    {
+      "mission": "gracefo-d",
+      "gnv_parquet_files_verified": 50,
+      "thr_parquet_files_verified": 50,
+      "thr_manifest_sha256": "9d1376cbd4928b2e9a44021261e704d2c5afaba55dd4a5a8ff38881f7c732c3f",
+      "preserved_at": "2026-09-08T11:41:23.649531+00:00",
+      "scope": "Additional supporting evidence; does not modify frozen mission snapshots or scoring",
+      "filename_limitation": "Frozen GRACE mission record.files duplicates the GNV orbit filenames and omits THR input filenames. Recorded intervals remain in the frozen metadata.",
+      "retention_convention": "The established loader parses GNV1B and THR1B products to Parquet and deletes each large daily raw archive. These exact parsed THR products are retained here; this is not retention of original raw text archives."
+    }
+  ],
+  "grace_storage_operations": [
+    {
+      "path": "output\\referee\\grace-acquisition-storage-pause.json",
+      "sha256": "27f7985636839a72bf485386f07a9093051d2bfc5433bf25399c0cdd0796cba0",
+      "metadata": {
+        "at": "2026-09-08T11:22:25.567293+00:00",
+        "process_id": 56072,
+        "action": "suspended",
+        "reason": "root requested disk-capacity guard before remaining acquisition and source snapshots",
+        "last_reported_stage": "gracefo-c acquisition, fetching 2024-08-31 daily archive; before input snapshot commit",
+        "science_or_protocol_changed": false
+      }
+    },
+    {
+      "path": "output\\referee\\grace-acquisition-storage-resume.json",
+      "sha256": "db9dd4e1f3c45a4050d5de82adebab8f9f5546eb57af5fbbd2a1a2e419cc2742",
+      "metadata": {
+        "at": "2026-09-08T11:24:22.590891+00:00",
+        "process_id": 56072,
+        "action": "resumed",
+        "correction": "frozen gracefo_day_files deletes each raw daily archive after extracting small Parquet products; snapshots copy those small files, so multi-GB duplicate archive estimate was wrong",
+        "cache_bytes_at_resume": 120744461,
+        "source_evidence": "src/driftwatch/storm/reference.py:574-619",
+        "science_or_protocol_changed": false
+      }
+    },
+    {
+      "path": "output\\referee\\grace-acquisition-storage-inventory.json",
+      "sha256": "24bfba5bb5bc785981e6412209f4ed5d502ca092e3358877e6aceef6b7dfb078",
+      "metadata": {
+        "required_days": 50,
+        "present_days": 1,
+        "present_bytes": 34807887,
+        "missing_days": 49,
+        "estimated_remaining_download_bytes": 1705586463,
+        "estimated_full_source_bytes_per_mission": 1740394350,
+        "present_names": [
+          "gracefo_1B_2024-09-01_RL04.ascii.noLRI.tgz"
+        ],
+        "superseded": true,
+        "correction": "This archive-only estimate was invalid: reference.gracefo_day_files deletes each large archive after parsing four small Parquets. Use grace-acquisition-storage-resume.json and actual Parquet metadata instead."
+      }
+    }
+  ],
+  "final_completion_manifest_sha256": "1626edbfd11709b85c2862ef269dec4a2c3e51ea2fa54d05c8fb8cdaab5fc7d1",
+  "final_result_sha256": "07e42aa832b6c789de04d01f1bd3b1c3e64b71a9c794189d6a848dd5f37a8757",
+  "raw_grace_daily_archives_retained_in_expected_cache_range": 0,
+  "prior_exposure_qualification": "September GP and weather informed earlier October fits; late-September orbit-product overlap was cached. The claim concerns reference residuals and post-burn outcomes, not all inputs.",
+  "limitations": [
+    "Local timestamps and author attestation document the ordering; no external timestamp authority establishes it.",
+    "First data access is the locked run marker, not a claim that every input was first seen then.",
+    "September GP/weather and some late-September orbit inputs had prior exposure; the attestation concerns residuals/post-burn outcomes.",
+    "GRACE raw transport archives/text products were not retained by the frozen loader; parsed GNV and THR products are preserved.",
+    "THR products are separate supplemental evidence, bound to normal input manifests, not retroactively added to the frozen scoring manifests."
+  ]
+}

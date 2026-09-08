@@ -1,89 +1,80 @@
-# Remaining validation and scope
+# Decisions recorded for review — 2026-09-08
 
-The software screens public orbital products and supports local comparison of supplied files.
-It performs no independent orbit determination and has no operational adoption evidence.
+This replaces the previous feature plan with the strategy report's five decisions. The offers and experiments below are recorded, not built or launched. The current repository is a research benchmark and local comparison tool. It has no customer acceptance, operational warning-completeness evidence or independent orbit determination.
 
-The measured calibration covers Swarm A/B/C, one orbit class at approximately 460 and 506 km,
-three windows and two storm periods. The covariance measures consistency, not accuracy.
-The October window contains two disturbed intervals; it is not a single isolated storm.
-The 25 km horizon results establish no operating horizon for another spacecraft.
+## 1. Repair and maintain the evidence contract
 
-Remaining evidence includes calibration on debris, higher orbits and less frequently tracked
-objects; independent validation of warning completeness; real CDM comparisons; receiver logs;
-and a real contact-request week with an accepted baseline. The CDM reconciler and planner ship
-no real example because those inputs are absent. No organisation has adopted the software or
-agreed to be named as a prospective customer.
+The dated covariance-basis correction, reader-edited paper, current September status and shared public-claims record are implemented for review. The [claims manifest](docs/assets/claims-v2.json) binds each published claim to its result hash, method, population, denominator, reference type, censoring and permitted wording. [Every component-coverage change](docs/covariance-basis-correction.md) remains inspectable. Joint covariance calibration, reference dependence and causal availability remain separate unresolved questions.
 
-A flight-dynamics workflow compares two orbit products with the same declared reference and
-manoeuvre exclusions. A station-engineering workflow compares refresh policies using measured
-acquisition records and explicit feasibility constraints. Neither workflow has produced
-operational validation or willingness-to-pay evidence in this repository.
+All four windows have been inspected: April 2024 control, May 2024, August 2024 held out and October 2024 held out. The latter names retain their historical roles only. No new recipe may fit on one of these windows and claim another as an untouched adoption test. September's locally frozen protocol is a retrospective physical diagnostic and will not be reused as a hold-out for any new recipe. Any new recipe needs a prospectively frozen population, endpoint, baseline and decision rule before its outcomes are inspected.
 
-The Office of Space Commerce conjunction dataset comparison remains unperformed. Kelvins checks
-probability arithmetic on supplied encounter inputs; it does not validate catalogue screening,
-driftwatch's covariance or real warning recall. A fitted hard-body-radius lookup is an approximation.
+## 2. Offer an orbit-product and adapter acceptance review
 
-Quiet applies no storm displacement. Any future adjustment of storm magnitude requires a
-separate fitting population and held-out evaluation. The current term hurts the quiet 1–6 day
-sample and May 12–72 hour sample, while helping October 6–120 hours. A universal short-lead
-improvement or failure claim is unsupported. Forecast skill requires archived forecast issue
-times; a hindcast with observed weather cannot establish it.
+The proposed paid offer is a bounded review of an orbit product and its software adapter against a customer-agreed acceptance criterion. Agree the integration decision, responsible owner, reference conventions, input rights, baseline workflow, exclusions and tolerance before work starts. Report accepted and failed cases with their practical consequences; passing a parser is not a standards or operational certification.
 
-Local application network guards do not establish security certification or operating-system
-isolation. Second-computer installation, real-handset, other-browser-engine, browser-zoom and
-assistive-technology evaluation remain incomplete. Synthetic tests establish specified software
-behaviour, not operational utility. Export previews and download requests do not prove that an
-operating-system save completed. No hardware command path, service guarantee, payment system or
-multi-user deployment is provided.
+The deliverable is a reopenable case bundle: supplied files and rights record, hashes, time/frame/unit/origin conventions, selected adapters, exact software environment, baseline and candidate outputs, signed differences, acceptance result and limitations. Acceptance requires a second person to open the bundle on a second machine and reproduce the decision without relying on the author's session. Save/open persistence, portable installation and a rights-cleared customer case remain open work. No price, customer agreement, delivery date or outreach is implied by recording this offer.
 
-The radio lane ([docs/radio-lane.md](docs/radio-lane.md)) turns the benchmark's residuals into
-angles on the sky for one 13.5 m dish and runs two geometric products on the catalogue as it
-stood. It computes no received power, occupancy or sensitivity loss, ingests no schedule beyond
-an observation CSV, and ran on one public observation record. Validating a crossing list needs
-the observatory's own monitoring data, and the archive's observation list needs an account;
-neither exists in this repository. No organisation has asked for this or agreed to be named.
+## 3. Use a TLE-to-OMM migration audit as the entry offer
 
-The reference expansion ([docs/reference-benchmark.md](docs/reference-benchmark.md)) extends the
-calibration benchmark from Swarm to every public reconstructed orbit an anonymous server hands out
-for spacecraft between 460 and 1,340 km, adds laser ranging as a second truth and a fourth,
-disturbed window in August 2024, and states which missions asked for are not obtainable without an
-account. The dSGP4 evaluation ([docs/dsgp4-evaluation.md](docs/dsgp4-evaluation.md)) runs ESA's
-differentiable SGP4 and its ML-dSGP4 hybrid on the same trials, trained on the tuning-visible
-windows only, with adoption decided by the held-out storms.
+The entry offer checks whether a customer's existing TLE path and proposed OMM path preserve the same intended orbit and downstream behaviour. The explicit compatibility matrix below defines the planned review. Every row is **unverified for a customer adapter** until a supplied case is exercised; this is not a claim of general OMM conformance.
 
-## Next candidates, recorded and not begun
+| Compatibility axis | TLE path to record | OMM path to record | Acceptance evidence required |
+| --- | --- | --- | --- |
+| Object identity | Legacy catalogue field, Alpha-5 handling, joins | Numeric/extended identifiers, designators, joins | Identity survives import, storage, browser display and export without truncation or collision |
+| Time and availability | State epoch and separately known acquisition history | EPOCH, TIME_SYSTEM, CREATION_DATE and separate publication/retrieval times | Same declared instant; unknown availability stays unknown; epoch is not publication |
+| Frame, centre and units | SGP4/TEME conventions and implicit units | REF_FRAME, CENTER_NAME and declared units | Supported conversions agree; unsupported combinations fail explicitly |
+| Mean-element theory | SGP4 constants, drag fields and conventions | MEAN_ELEMENT_THEORY, constants and drag conventions | Matched supported settings reproduce the baseline within the agreed tolerance |
+| Optional and missing data | Absent metadata and fixed-width limits | Optional metadata, covariance and missing fields | No invented values; covariance basis and units remain attached to the matrix |
+| Full adapter path | Parser through propagation and downstream joins | Parser through propagation and downstream joins | Round-trip fields and signed state differences remain reproducible through storage, browser and export |
 
-None of these begins until the expanded reference benchmark exists and the outreach replies are in.
-Each carries the label it would wear on every page, and the validation rule it must pass before
-anything downstream may cite it.
+A review must distinguish format compatibility, numerical propagation agreement and product accuracy. An adapter audit establishes only the criteria actually tested. The second-person reopenable-bundle test from decision two also applies here.
 
-1. **Covariance realism modelling.** Label: *storm-conditional covariance scale*. A scale on the
-   empirical covariance as a function of the observed ap over the propagation, fitted so that the
-   68 and 95 per cent contours contain what they claim. Validation rule: fitted on the May 2024
-   window only; scored on October and August 2024, held out, per altitude band, by the coverage
-   table of the reference benchmark; adopted only if the held-out two-sigma coverage moves toward
-   95 per cent in every band without the quiet week's falling.
-2. **Density correction from catalogue decay.** Label: *catalogue-decay density ratio*. The ratio
-   of the density the free-flying population's own decay implies to NRLMSIS 2.1's, per three-hour
-   interval, as a correction to the storm term's density. Validation rule: measured on the May 2024
-   storm; validated on October and August, held out, by the storm term's improvement table of the
-   reference benchmark; the untuned NRLMSIS prior stays the default until the held-out improvement
-   is positive at three days and beyond and not negative inside two.
-3. **Manoeuvre classifier.** Label: *burn or drag, by record*. A classifier that separates a
-   manoeuvre from storm drag in an element-set jump, trained on the published thruster records
-   (Swarm, GRACE-FO) and the precise-orbit steps. Validation rule: trained on quiet and May; scored
-   on October and August against the published records (recall and false alarms per
-   satellite-day) and against the count of storm-time trials it would exclude, which is the
-   detector's known failure; adopted only if it excludes no storm-time interval the record keeps.
-4. **Coefficient regression.** Label: *ballistic coefficient from the fit, not the decay*. A
-   regression from the catalogue's fit parameters (B\*, the mean-motion derivatives, altitude,
-   object class) to the coefficient measured from decay, for objects whose decay is not measurable.
-   Validation rule: fitted on objects with a measured coefficient in the quiet window; scored by the
-   storm term's improvement in the held-out windows of the reference benchmark, per altitude band;
-   adopted only if the term with the regressed coefficient improves the held-out storms where the
-   measured one did.
+## 4. Advance one bounded scientific experiment at a time
 
-Current limitations and corrections are in [methods.md](docs/methods.md) and
-[findings.md](docs/findings.md).
+The two learned-propagator checkpoints remain negative findings under their stored rule. They are not candidates for deployment or evidence that a new training recipe will work.
 
-_Last updated 7 September 2026._
+The density lane begins with a bounded replication of [Johlander and colleagues (2026), *Thermospheric mass density derived in near real time from space debris*](https://doi.org/10.1051/swsc/2026005). Freeze a limited population, time span, reference, preprocessing, availability cutoff and scoring rule before running it. First reproduce the published estimator within declared replication limits; then compare against persistence, the uncorrected model and [WAM-IPE issued forecasts](https://www.spaceweather.gov/products/wam-ipe) at matched lead times using only information available by each issue time. Observed-weather hindcasts must be distinguished from issued forecasts. Record estimator latency, data gaps, manoeuvre treatment and ballistic-coefficient/density identifiability. No new density or forecast-skill claim is permitted before this baseline comparison succeeds on a newly frozen evaluation population. The replication and comparison are open, not implemented.
+
+New covariance scaling, manoeuvre classification, ballistic-coefficient regression and differential-drag recipes have no adoption decision from the inspected windows. Any timing or short-lead application also depends on the open Cartesian dynamical gate below.
+
+## 5. Keep radio research dependent on a partner and the beam licence
+
+The radio branch remains research and partner-dependent. The measured beam data are CC BY-NC 4.0 and used for research only; a commercial offer using them is gated on a licence permitting the intended use or a suitable replacement. Constructed pointings on inspected windows do not demonstrate recovered observing time, interference detection or an operational observing schedule.
+
+A partner pilot would need rights-cleared beam information, actual schedules, acquisition/monitoring records and coordination logs; an agreed baseline and useful decision; and explicit instrument response, cadence and boundary checks. No partner, data access or commercial permission is presumed. Do not build a radio product or send an outreach letter on the strength of the geometric benchmark alone.
+
+## Open acceptance tests from the report
+
+### G1 — Causal availability and late publication (open)
+
+Construct a record whose state epoch precedes a decision time but whose known publication is later. An explicitly epoch-based reconstruction may include it and must say so; a causal replay at the decision time must exclude it. Provider creation time, known publication time, actual retrieval time and state epoch must remain distinct, and unknown values must remain unknown. Reopening the result must preserve those fields and the original acquisition provenance. Repeat the test for historical catalogue membership and a manoeuvre record published after the event. The implemented epoch-selection labelling and time separation do not yet establish a publication-aware causal replay or historical membership reconstruction.
+
+### G2 — Full scenario with candidate rediscovery (open)
+
+The current output is a **sensitivity analysis on the baseline event set**. It rescores stored encounters and cannot discover pairs that a perturbed trajectory brings into the gate.
+
+For a full-scenario acceptance test, construct a pair outside the baseline candidate gate that enters it under the perturbation. The perturbed run must rediscover that pair, recompute closest approach, relative velocity and covariance at the new event, and account for both appearing and disappearing encounters. Compare against an independent dense-trajectory search, including slow encounters, gate seams and multiple local minima. An Office of Space Commerce dataset comparison remains open when suitable data are obtained; synthetic checks alone do not establish catalogue warning recall. Until this test passes, no output may be described as a full perturbed scenario or a complete warning set.
+
+### G7 — Short-window Cartesian dynamical validation (open)
+
+Start controlled Cartesian integrations from the same initial state and perturb each force separately. Over 1–180 minutes and separately over multiple orbital periods, compare the integrated relative position and velocity with the linear relative-motion and secular approximations. Retain signed component errors and zero crossings, including their times; do not score only unsigned maxima or orbit-averaged displacement. Fix tolerances and the force cases before evaluation. Passing this test for the relevant regime gates any timing, short-lead control or differential-drag application. Failure over short windows does not by itself invalidate a separately supported multi-day mean displacement result.
+
+## Current results from the claims manifest
+
+<!-- BEGIN CLAIMS:results -->
+15 spacecraft in 5 altitude bands across 4 inspected windows; 1,249 raw element sets, 1,193 usable at some lead and 10,310 usable set/lead pairs. These are epoch-based reconstructions; historical publication availability is not established.
+
+Consistency covariance bounds absolute accuracy in neither direction. Component coverage varies by mission, window and lead; storm residuals and Sentinel-6A in April 2024 control expose undercoverage. Storm output is a sensitivity analysis on the baseline event set; candidate discovery is not repeated.
+
+Both local learned-propagator checkpoints remain negative findings: 0/40 pooled paired medians improve; 3/40 tails improve. The stored adoption rule rejects both checkpoints.
+
+September retrospective physical diagnostic: prediction MAE 4.284 km versus 17.254 km for zero prediction. 11/13 events beat zero; SWOT and one Sentinel-3A event do not. September will not be reused as a hold-out for any new recipe.
+
+Other declared offsets: crossing agreement 4608/4704 (98.0%); false crossings 45/2016; missed crossings 51/2022. Constructed pointings on inspected windows; measured beams are CC BY-NC and used for research only.
+
+Exact boundary offsets: crossing agreement 700/1344 (52.1%); false crossings 642/1342; missed crossings 2/702. Constructed pointings on inspected windows; measured beams are CC BY-NC and used for research only.
+<!-- END CLAIMS:results -->
+
+## Review and release gates
+
+The rewritten [paper](docs/paper.md), dated correction and public claim wording stop here for the author's review. Nothing is deposited before the author has read the rewritten paper. No outreach letter goes out before the README matches v2; matching it does not itself authorise sending a letter. No deployment, deposit, new scientific recipe or outreach is part of these recorded decisions.

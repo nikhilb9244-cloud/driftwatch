@@ -1,0 +1,23 @@
+{
+  "frozen_at": "2026-09-08T10:42:57.285144+00:00",
+  "status": "Frozen author-reported pre-execution thresholds; no claim of independent earlier preregistration",
+  "fraction": "1 + calibrated_semi_major_axis_error / recorded_event_semi_major_axis_change",
+  "fraction_pre_max": 0.25,
+  "fraction_post_min": 0.75,
+  "resolve_sigmas_min": 3.0,
+  "plateau_hours": 3.0,
+  "fractions_are_clipped": false,
+  "labels": {
+    "pre-burn re-epoched": "pre-manoeuvre-energy compatible",
+    "post-burn": "post-manoeuvre-energy compatible",
+    "mixed": "mixed",
+    "unresolved": "unresolved"
+  },
+  "interpretation": "Consistent with a solution retaining pre-manoeuvre orbital energy despite a post-manoeuvre epoch; does not identify the catalogue fitting procedure.",
+  "retrospective_calibration": "Existing four-window clean-set baseline, retained for the corrected retrospective analysis",
+  "locked_calibration": "Only eligible sets in the seven days before each burn, minimum three; specified in the separately frozen September protocol",
+  "source_hashes": {
+    "src/driftwatch/storm/precise.py": "1f3ef354129b5392d478c03d5be61c0114769d2c2afe34c34fd1adc1f5f7892d",
+    "src/driftwatch/storm/locked_experiment.py": "025fd1dacdebb271fe8d154e53b1aed77068354edc9eb89b36349a5287b1708d"
+  }
+}

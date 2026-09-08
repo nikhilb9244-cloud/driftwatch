@@ -450,7 +450,7 @@ def test_binned_growth_anchors_a_prior_exponent_at_the_longest_bin():
     assert "longest bin" in diagnostics["amplitude_from"]
     # The law passes through the longest bin exactly. Being steeper than the residuals grow,
     # it falls below the shorter bins, which is why the fit puts the shortest bin's measured
-    # consistency into the floor (see fit_supplemental_covariance).
+    # short-lead consistency into the fitted offset (see fit_supplemental_covariance).
     assert growth.sigma_km(np.array([0.16]), dt_floor_days=0.01)[0, 1] == pytest.approx(2.0 * 0.16**0.7, rel=1e-6)
     assert growth.sigma_km(np.array([0.04]), dt_floor_days=0.01)[0, 1] < 2.0 * 0.04**0.7
 

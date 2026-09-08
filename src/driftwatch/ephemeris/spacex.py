@@ -52,7 +52,7 @@ files; whether it is the fit's extrapolation or the file's own plan being wrong 
 satellite cannot be told without the next file's first states (``docs/spacex-ephemerides.md``).
 The patch was a hundredth of the error at the
 end of the horizon, and worse, layering SpaceX's own covariance on top of that trajectory
-replaced a roughly honest 22.8 km in-track sigma from the supplemental-consistency fit with
+replaced a 22.8 km in-track consistency sigma from the supplemental-consistency fit with
 a 3.8 km control box that describes a trajectory we were not propagating.
 
 So the states are stored and interpolated, and the fit leaves the chain entirely for the
@@ -93,8 +93,9 @@ The fit residual therefore applies **per event, not per object**:
 ``fit_rms_km`` on :class:`SpacexEphemerisCovariance` carries that residual and defaults to
 :data:`driftwatch.config.SPACEX_SGP4_FIT_RMS_KM`; ``0.0`` restores the as-published
 behaviour. The scalar is split across R, I and C in the shape of the base model's own
-measured floor, which is in-track dominated, because that is where an SGP4 fit to an
-ephemeris misses. Which events had a fit in their chain is read from the screening's own
+fitted short-lead consistency offset, which is in-track dominated in this sample.
+This is a component-allocation convention, not an absolute-accuracy calibration. Which events
+had a fit in their chain is read from the screening's own
 record -- the trajectory columns of the events table, via
 :func:`interpolated_times_from_events` -- rather than recomputed from a store that is
 refetched every eight hours.
@@ -1244,11 +1245,10 @@ class SpacexEphemerisCovariance:
     def _share_from_base(self) -> tuple[float, float, float]:
         """How to split CelesTrak's scalar fit residual across R, I and C.
 
-        The base model's own measured floor is the best answer available: it is the
-        version-to-version disagreement of the same fits at essentially no lead, so its shape
-        is the shape those fits miss in. Where the base has no floor to take a shape from --
-        an empirical model, or a supplemental table written before the floors were split --
-        the configured shape stands in.
+        The fitted short-lead consistency offset supplies the component proportions.
+        Its shape describes version-to-version disagreement, not absolute error.
+        Where the base has no component offsets (the legacy floor_km fields),
+        the configured shape stands in. Neither choice establishes calibration.
         """
         models = getattr(self.base, "models", None)
         if isinstance(models, dict):
