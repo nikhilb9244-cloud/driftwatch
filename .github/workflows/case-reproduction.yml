@@ -1,0 +1,46 @@
+name: Public case reproduction
+
+on:
+  push:
+    paths:
+      - docs/assets/cases/**
+      - src/driftwatch/case_bundle.py
+      - .github/workflows/case-reproduction.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reopen:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm a fresh clone and the expected public bundle hash
+        run: |
+          python - <<'PY'
+          import hashlib, json
+          from pathlib import Path
+          assert all(not Path(p).exists() for p in ('data', 'output', '.cache'))
+          record = json.loads(Path('docs/assets/cases/public-swarm-a.json').read_bytes())
+          assert hashlib.sha256(Path(record['path']).read_bytes()).hexdigest() == record['sha256']
+          PY
+      - uses: astral-sh/setup-uv@v5
+      - run: uv sync --frozen --no-dev --python 3.12.14
+      - name: Unpack into an empty directory outside the clone
+        run: uv run --frozen --no-dev python -m driftwatch.case_bundle unpack docs/assets/cases/public-swarm-a.zip "$RUNNER_TEMP/public-case"
+      - name: Install only the bundled source and dependency lock
+        working-directory: ${{ runner.temp }}/public-case
+        run: uv sync --frozen --no-dev --python 3.12.14
+      - name: Reproduce the decision from the bundle alone without fetching data
+        working-directory: ${{ runner.temp }}/public-case
+        env:
+          PYTHONPATH: ""
+          DRIFTWATCH_DATA_DIR: ${{ runner.temp }}/absent-case-data
+        run: uv run --frozen --no-dev python -m driftwatch.case_bundle verify . --report "$RUNNER_TEMP/case-reproduction.json"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: public-case-reproduction
+          path: ${{ runner.temp }}/case-reproduction.json
+          if-no-files-found: error

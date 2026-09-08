@@ -1,0 +1,36 @@
+{
+  "schema_version": "public-case-asset-v1",
+  "path": "docs/assets/cases/public-swarm-a.zip",
+  "sha256": "d5cf9b72bd3e12b16412a4922372aff5765aa6ffaf6d599ef8e42c447f1c19c2",
+  "bytes": 700888,
+  "case_sha256": "db0d7296ae676a67b6cfeffa4d6e0b664bdb43e2565e0037f8d25865e772b37a",
+  "local_verification": {
+    "case_sha256": "db0d7296ae676a67b6cfeffa4d6e0b664bdb43e2565e0037f8d25865e772b37a",
+    "reproduced": true,
+    "decision": {
+      "accepted": true,
+      "max_position_difference_km": 7.697422427244107e-06,
+      "max_velocity_difference_km_s": 8.576288718861792e-09,
+      "criterion_sha256": "4a93840b3738a86b6ba370500aa5a5c25f552c5a8ab3483012f5586c4de10a9d",
+      "limitations": [
+        "Public adapter demonstration; no customer has agreed or accepted this criterion.",
+        "The baseline is a TLE encoding of the same stored mean elements; it is not independent truth.",
+        "Agreement measures encoding and adapter behaviour, not orbit accuracy or operational suitability.",
+        "Single mission and element epoch; no transfer to other adapters or unsupported conventions.",
+        "No short-window dynamical validation or timing application is claimed.",
+        "Unknown provider creation and publication times remain unknown."
+      ]
+    },
+    "maximum_component_reproduction_errors": {
+      "baseline/r_teme_km": 0.0,
+      "baseline/v_teme_km_s": 0.0,
+      "candidate/r_teme_km": 0.0,
+      "candidate/v_teme_km_s": 0.0,
+      "differences/delta_r_teme_km": 0.0,
+      "differences/delta_v_teme_km_s": 0.0
+    },
+    "verification_os": "Windows",
+    "python": "3.12.14",
+    "external_data_used": false
+  }
+}
