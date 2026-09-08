@@ -2,7 +2,7 @@
 export const PUBLIC_CLAIMS = {
   "schema_version": "public-claims-v1",
   "evidence_object": "docs/assets/benchmark-v2.json",
-  "evidence_sha256": "f19c24451e65d8e0baf6b803f379380aab72146e5ef73687b818397bcb5609e5",
+  "evidence_sha256": "2ce3de079142db77447a144fd422e24ff4684d1a1bb0332c93325781b9e9e0db",
   "method_version": "benchmark-v2/truth-ric-covariance-v1",
   "claims": [
     {

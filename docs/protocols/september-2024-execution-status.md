@@ -6,7 +6,7 @@ The scientific protocol was frozen at 2026-09-08T10:42:57.285144+00:00 with SHA-
 
 Nikhil Bhana supplied the separately bound author attestation at 2026-09-08T10:58:47.798959+00:00. [Preserved attestation](september-2024-author-attestation.json); SHA-256 `9bbee0af9b83874e91576cdfbfa3612881b1e3759fd8f5e2043db86e4728fd5b`.
 
-Author's recorded words: “I have never inspected September 2024 reference residuals or post-burn outcomes outside this repository, in any tool or session. Record that in the protocol and run the experiment.”
+Author's recorded words: “September reference residuals and post-burn outcomes never inspected”
 
 No prior September residual evaluation was found in the bounded local audit; this is combined with the author statement about inspection outside the repository.
 

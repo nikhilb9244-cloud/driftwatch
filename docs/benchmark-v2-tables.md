@@ -9100,3 +9100,5 @@ Secondary horizons, component coverage and deletion checks for every population/
 | [MeerKAT measured primary-beam data release](https://doi.org/10.48479/wdb0-h061) | Measured Jones patterns; third-party data licence retained |
 | [SatChecker field-of-view API documentation](https://satchecker.readthedocs.io/en/latest/fov.html) | Context for the proposed metadata shape; no upstream acceptance is claimed |
 | [SatChecker accuracy and usage notes](https://satchecker.readthedocs.io/en/latest/notes.html) | Source-dependent limitations of satellite position estimates |
+
+The tables above preserve the published v2 measurements and original v2 provenance bindings. The dated v2.1 [correction ledger](assets/publication-assets-v2.1.json) records the distributable replacement hashes and release assets; original provenance hashes are not assertions that a scrubbed replacement has the same bytes. No table entry has changed.

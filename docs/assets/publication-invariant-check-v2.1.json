@@ -1,0 +1,9 @@
+{
+  "baseline_commit": "32a4655f653907ab52086f904cc7cb987459cc15",
+  "old_evidence_sha256": "f19c24451e65d8e0baf6b803f379380aab72146e5ef73687b818397bcb5609e5",
+  "new_evidence_sha256": "2ce3de079142db77447a144fd422e24ff4684d1a1bb0332c93325781b9e9e0db",
+  "table_count": 52,
+  "scalar_substitution_count": 107,
+  "diff_count": 0,
+  "differences": []
+}
