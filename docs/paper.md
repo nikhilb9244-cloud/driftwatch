@@ -6,7 +6,7 @@ ORCID: 0009-0003-2220-627X · nikhilb9244@gmail.com
 
 This version, v2, supersedes v1 at doi [10.5281/zenodo.22656992](https://doi.org/10.5281/zenodo.22656992). It corrects manoeuvre exclusions, horizon criteria and covariance coordinates, and adds the completed calendar replay and topocentric comparison while retaining the learned-propagator negative findings.
 
-Evidence object: [benchmark-v2.json](assets/benchmark-v2.json), SHA-256 `f19c24451e65d8e0baf6b803f379380aab72146e5ef73687b818397bcb5609e5`.
+Evidence object: [benchmark-v2.json](assets/benchmark-v2.json), SHA-256 `2ce3de079142db77447a144fd422e24ff4684d1a1bb0332c93325781b9e9e0db`.
 
 ## Abstract
 
@@ -158,6 +158,10 @@ The work uses public element sets from the US Space Force through Space-Track.or
 ## Data and code availability
 
 The [driftwatch repository](https://github.com/nikhilb9244-cloud/driftwatch) provides the code, evidence object, recorded tables and reproduction instructions. Release [paper-2026-09-v2](https://github.com/nikhilb9244-cloud/driftwatch/releases/tag/paper-2026-09-v2) freezes the paper and supporting repository state; the Zenodo version DOI is [10.5281/zenodo.22661809](https://doi.org/10.5281/zenodo.22661809). Code is distributed under the [MIT licence](https://github.com/nikhilb9244-cloud/driftwatch/blob/paper-2026-09-v2/LICENSE). Third-party inputs retain their source terms, and the code licence does not relicense them. Raw SpaceX ephemerides and ESA Kelvins inputs are not redistributed. Product identifiers, retained-file hashes, access limits and reconstruction commands are recorded in the [data-source record](data-sources.md), [complete tables](benchmark-v2-tables.md) and [rebuild instructions](publication-rebuild.md). Citation metadata is in [CITATION.cff](../CITATION.cff).
+
+<!-- BEGIN AVAILABILITY CORRECTION -->
+Availability correction - 2026-09-08. Release paper-2026-09-v2.1 supplies 24 project-generated files omitted from paper-2026-09-v2, together with the derived artefacts required for reconstruction and their hashes. The evidence object and affected supporting artefacts were scrubbed to remove local paths, account and machine identifiers, and execution traces; embedded third-party records were replaced by source identifiers and content hashes to avoid redistributing those records. The evidence object's SHA-256 changed from `f19c24451e65d8e0baf6b803f379380aab72146e5ef73687b818397bcb5609e5` to `2ce3de079142db77447a144fd422e24ff4684d1a1bb0332c93325781b9e9e0db`; the [correction ledger](assets/publication-assets-v2.1.json) records the original and replacement hashes for each supporting file. Provider inputs must be obtained from their sources and verified against the recorded hashes, following the [exact-snapshot recovery instructions](publication-rebuild.md). Every published table and substituted figure is unchanged; the invariant comparison reports 0 differences. The correction's version DOI is [pending assignment](#availability-correction).
+<!-- END AVAILABILITY CORRECTION -->
 
 ## References
 
