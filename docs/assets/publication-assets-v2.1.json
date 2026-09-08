@@ -3,9 +3,9 @@
   "release_tag": "paper-2026-09-v2.1",
   "repository_id": 1355986315,
   "bundle": {
-    "name": "derived-artefacts-sha256-2162fd9484e2f3660997951662bbc910b6d75063242fc50d3425f2d65c2f2a87.zip",
-    "sha256": "2162fd9484e2f3660997951662bbc910b6d75063242fc50d3425f2d65c2f2a87",
-    "bytes": 30469618
+    "name": "derived-artefacts-sha256-621b58ec0e45fb8099e0e3e667ce81a7919a37b2e2c640c283dcb7a9adc611bc.zip",
+    "sha256": "621b58ec0e45fb8099e0e3e667ce81a7919a37b2e2c640c283dcb7a9adc611bc",
+    "bytes": 30471065
   },
   "files": [
     {
@@ -51,8 +51,8 @@
     {
       "path": "data/radio/quiet-2024-04/crossings-gcn-36362-ep240414a.json",
       "original_sha256": "7fbe543648e10ade1b1e6fcf18f42e268894cc4aa793a8f2f6c59ca6d6620692",
-      "sha256": "09d2a724a651d6dd01f48c0b77d4907fe153968bad6640176b8ada9c336d1613",
-      "bytes": 30816,
+      "sha256": "876704b638b4cbb738fd7255969747a214121e37ba8b4a159a73dda4c95ae669",
+      "bytes": 30544,
       "class": "project-derived",
       "omitted_from_v2_tag": false
     },
@@ -75,8 +75,8 @@
     {
       "path": "data/radio/quiet-2024-04/period.json",
       "original_sha256": "16a1acb9e8f88985d4d22709f5e84e05c9ec5f8e373031c3503eca77869f359c",
-      "sha256": "d78f8b49aed699453965d3ce7bf3e1bad059efd8b5a748be8753c4e1abcb5cb4",
-      "bytes": 14714,
+      "sha256": "73434d373caffdec1ed71f18cfa96cf6acba48f9bfe4934c4ffa41a9edf9af3c",
+      "bytes": 14442,
       "class": "project-derived",
       "omitted_from_v2_tag": false
     },
@@ -1123,8 +1123,8 @@
     {
       "path": "data/validation/covariance-basis-correction-2026-09-08/benchmark-v2-original.json",
       "original_sha256": "56cb7bc2b79f3f4e0f251e9e0ce3045bcf6cb33a1f6d095612a8fee1fecf1848",
-      "sha256": "81d9adc9369c8beba8598e08da27708597c1482504862c142f012666349bd57e",
-      "bytes": 19529988,
+      "sha256": "fae020039d2ad58d1ab24998ca0564cd7829009d555eb5947fc198b56770ce9e",
+      "bytes": 19534266,
       "class": "project-derived",
       "omitted_from_v2_tag": false
     },
@@ -1187,8 +1187,8 @@
     {
       "path": "data/validation/dsgp4_evaluation.json",
       "original_sha256": "a5fb9dc785d49100c3edc25f7ba41aa1c979460fff4aa2269d54012174e29e67",
-      "sha256": "fa2f8db9326e5943a03bd74e0c5ebfc30bdce659fd00824a36ffc25fe33aea77",
-      "bytes": 863583,
+      "sha256": "95cb62308f7fed25ce071fde245ebe3b4ca75ef34ece4fbd5ccfede3db9a2e95",
+      "bytes": 867861,
       "class": "project-derived",
       "omitted_from_v2_tag": false
     },
@@ -1203,8 +1203,8 @@
     {
       "path": "data/validation/dsgp4_protocol.json",
       "original_sha256": "18f7accd7ddafff6448fe4d9b8c0e146ced36d52f44f496ac7b1343175a735c6",
-      "sha256": "18f7accd7ddafff6448fe4d9b8c0e146ced36d52f44f496ac7b1343175a735c6",
-      "bytes": 6248,
+      "sha256": "79cf052e776b35fe772bf410daced1c775ec5e65e562b3c76a027511e4e32199",
+      "bytes": 8314,
       "class": "project-derived",
       "omitted_from_v2_tag": false
     },
@@ -1730,8 +1730,8 @@
     {
       "path": "output/referee/source-before-metadata-correction/dsgp4_evaluation.json",
       "original_sha256": "047dbdaa322f4f5e2480a1e19d4380029bf30a70baaa429dcc1a866c67b8c502",
-      "sha256": "e41142826298d000c8ba1e174a6927ea31be2decf76368878d2f6c2b2e373093",
-      "bytes": 861289,
+      "sha256": "781eae36fd627c1b8f1d78ac211880f153ff9bb22f0c6f5c9e87d4989d19f951",
+      "bytes": 865567,
       "class": "project-derived",
       "omitted_from_v2_tag": true,
       "individual_asset": "output__referee__source-before-metadata-correction__dsgp4_evaluation.json"
@@ -1795,6 +1795,7 @@
     }
   ],
   "required_for_tests": [
+    "data/radio/measured-beam-provenance.json",
     "data/radio/track_benchmark_v2_complete/radio_track_cases.csv",
     "data/validation/covariance-basis-correction-2026-09-08/correction.json",
     "data/validation/covariance-basis-correction-2026-09-08/reference-bases.npz",

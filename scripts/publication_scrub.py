@@ -97,6 +97,18 @@ def scrub(value, *, workspace: Path, account_identifiers=(), location="", change
                     }
                 )
                 continue
+            if key == "intervals" and "source" in value and "arc_hours" in value:
+                result["interval_count"] = len(item)
+                result[key] = reference(str(value["source"]) + "#published-interval-inventory", item)
+                changes.append(
+                    {
+                        "pointer": pointer,
+                        "reason": "copied provider intervals replaced; derived count retained",
+                        "old_content_sha256": content_hash(item),
+                        "new_content_sha256": content_hash(result[key]),
+                    }
+                )
+                continue
             if key == "email":
                 result[key] = reference("docs/publication-metadata.json#/email", item)
                 changes.append(
@@ -125,6 +137,17 @@ def scrub(value, *, workspace: Path, account_identifiers=(), location="", change
                     {
                         "pointer": pointer,
                         "reason": "verbatim provider description replaced",
+                        "old_content_sha256": content_hash(item),
+                        "new_content_sha256": content_hash(result[key]),
+                    }
+                )
+                continue
+            if key == "source" and isinstance(item, str) and "observation_id" in value:
+                result[key] = reference("provider:public-observation/" + str(value["observation_id"]), item)
+                changes.append(
+                    {
+                        "pointer": pointer,
+                        "reason": "verbatim public observation description replaced",
                         "old_content_sha256": content_hash(item),
                         "new_content_sha256": content_hash(result[key]),
                     }

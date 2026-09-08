@@ -4,14 +4,14 @@
   "omitted_own_file_count": 24,
   "figure_diff_count": 0,
   "old_evidence_sha256": "f19c24451e65d8e0baf6b803f379380aab72146e5ef73687b818397bcb5609e5",
-  "new_evidence_sha256": "2ce3de079142db77447a144fd422e24ff4684d1a1bb0332c93325781b9e9e0db",
+  "new_evidence_sha256": "76c463a7a6e9728425f846aea7cc1fc44cbf0b316be9fdf4726a148505b7ba48",
   "version_doi": "pending assignment",
   "version_doi_url": "#availability-correction",
   "scrubbed_files": [
     {
       "path": "docs/assets/benchmark-v2.json",
       "old_sha256": "f19c24451e65d8e0baf6b803f379380aab72146e5ef73687b818397bcb5609e5",
-      "new_sha256": "2ce3de079142db77447a144fd422e24ff4684d1a1bb0332c93325781b9e9e0db"
+      "new_sha256": "76c463a7a6e9728425f846aea7cc1fc44cbf0b316be9fdf4726a148505b7ba48"
     },
     {
       "path": "data/radio/horizon.json",
@@ -31,12 +31,12 @@
     {
       "path": "data/radio/quiet-2024-04/crossings-gcn-36362-ep240414a.json",
       "old_sha256": "7fbe543648e10ade1b1e6fcf18f42e268894cc4aa793a8f2f6c59ca6d6620692",
-      "new_sha256": "09d2a724a651d6dd01f48c0b77d4907fe153968bad6640176b8ada9c336d1613"
+      "new_sha256": "876704b638b4cbb738fd7255969747a214121e37ba8b4a159a73dda4c95ae669"
     },
     {
       "path": "data/radio/quiet-2024-04/period.json",
       "old_sha256": "16a1acb9e8f88985d4d22709f5e84e05c9ec5f8e373031c3503eca77869f359c",
-      "new_sha256": "d78f8b49aed699453965d3ce7bf3e1bad059efd8b5a748be8753c4e1abcb5cb4"
+      "new_sha256": "73434d373caffdec1ed71f18cfa96cf6acba48f9bfe4934c4ffa41a9edf9af3c"
     },
     {
       "path": "data/radio/storm-2024-05/period.json",
@@ -61,12 +61,17 @@
     {
       "path": "data/validation/covariance-basis-correction-2026-09-08/benchmark-v2-original.json",
       "old_sha256": "56cb7bc2b79f3f4e0f251e9e0ce3045bcf6cb33a1f6d095612a8fee1fecf1848",
-      "new_sha256": "81d9adc9369c8beba8598e08da27708597c1482504862c142f012666349bd57e"
+      "new_sha256": "fae020039d2ad58d1ab24998ca0564cd7829009d555eb5947fc198b56770ce9e"
     },
     {
       "path": "data/validation/dsgp4_evaluation.json",
       "old_sha256": "a5fb9dc785d49100c3edc25f7ba41aa1c979460fff4aa2269d54012174e29e67",
-      "new_sha256": "fa2f8db9326e5943a03bd74e0c5ebfc30bdce659fd00824a36ffc25fe33aea77"
+      "new_sha256": "95cb62308f7fed25ce071fde245ebe3b4ca75ef34ece4fbd5ccfede3db9a2e95"
+    },
+    {
+      "path": "data/validation/dsgp4_protocol.json",
+      "old_sha256": "18f7accd7ddafff6448fe4d9b8c0e146ced36d52f44f496ac7b1343175a735c6",
+      "new_sha256": "79cf052e776b35fe772bf410daced1c775ec5e65e562b3c76a027511e4e32199"
     },
     {
       "path": "data/validation/locked-september-2024/first-data-access.json",
@@ -111,7 +116,7 @@
     {
       "path": "output/referee/source-before-metadata-correction/dsgp4_evaluation.json",
       "old_sha256": "047dbdaa322f4f5e2480a1e19d4380029bf30a70baaa429dcc1a866c67b8c502",
-      "new_sha256": "e41142826298d000c8ba1e174a6927ea31be2decf76368878d2f6c2b2e373093"
+      "new_sha256": "781eae36fd627c1b8f1d78ac211880f153ff9bb22f0c6f5c9e87d4989d19f951"
     }
   ]
 }

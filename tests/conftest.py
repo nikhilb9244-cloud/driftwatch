@@ -10,6 +10,19 @@ from sgp4.api import Satrec
 from sgp4.exporter import export_omm
 
 
+@pytest.fixture(scope="session")
+def publication_inputs():
+    """Restore and verify release artefacts for tests of stored publication data."""
+    import sys
+    from pathlib import Path
+
+    root = Path(__file__).resolve().parents[1]
+    sys.path.insert(0, str(root / "scripts"))
+    from publication_assets import restore_required
+
+    restore_required(root=root)
+
+
 @dataclass(frozen=True)
 class VerificationTLE:
     """One entry from SGP4-VER.TLE, whose line 2 carries start/stop/step minutes after column 69."""

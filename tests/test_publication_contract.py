@@ -17,10 +17,7 @@ import publication_text  # noqa: E402
 import render_paper_v2  # noqa: E402
 import render_public_claims  # noqa: E402
 
-
-@pytest.fixture(scope="module", autouse=True)
-def restore_publication_inputs():
-    publication_assets.restore_required(root=ROOT)
+pytestmark = pytest.mark.usefixtures("publication_inputs")
 
 
 def evidence():
@@ -46,6 +43,10 @@ def test_distributable_evidence_has_no_private_identifiers_or_embedded_provider_
         if isinstance(value, dict):
             assert "raw_path" not in value and "raw_file" not in value
             assert not {"NORAD_CAT_ID", "EPOCH"} <= value.keys()
+            if {"intervals", "source", "arc_hours"} <= value.keys():
+                assert set(value["intervals"]) == {"source_identifier", "content_sha256"}
+            if {"observation_id", "source"} <= value.keys():
+                assert set(value["source"]) == {"source_identifier", "content_sha256"}
             for key, item in value.items():
                 if key in {"site", "measured_metrics"} or (key == "manoeuvres_recorded" and item is not None):
                     assert set(item) == {"source_identifier", "content_sha256"}

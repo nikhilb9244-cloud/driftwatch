@@ -12,6 +12,8 @@ from astropy.utils import iers
 
 from driftwatch.radio import crossings, horizon, site
 
+pytestmark = pytest.mark.usefixtures("publication_inputs")
+
 
 def gaussian(x, y):
     return np.exp(-np.log(2) * (np.asarray(x) ** 2 + np.asarray(y) ** 2))

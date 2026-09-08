@@ -18,6 +18,7 @@ from driftwatch.radio import site as site_mod
 from driftwatch.radio.site import MEERKAT, RECEIVERS
 
 MU = 398600.8
+pytestmark = pytest.mark.usefixtures("publication_inputs")
 
 
 # --------------------------------------------------------------------------------------
