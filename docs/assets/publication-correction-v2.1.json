@@ -5,8 +5,8 @@
   "figure_diff_count": 0,
   "old_evidence_sha256": "f19c24451e65d8e0baf6b803f379380aab72146e5ef73687b818397bcb5609e5",
   "new_evidence_sha256": "76c463a7a6e9728425f846aea7cc1fc44cbf0b316be9fdf4726a148505b7ba48",
-  "version_doi": "pending assignment",
-  "version_doi_url": "#availability-correction",
+  "version_doi": "10.5281/zenodo.22665947",
+  "version_doi_url": "https://doi.org/10.5281/zenodo.22665947",
   "scrubbed_files": [
     {
       "path": "docs/assets/benchmark-v2.json",
