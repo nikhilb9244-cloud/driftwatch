@@ -1,0 +1,13 @@
+{
+  "schema_version": "public-claims-versions-v1",
+  "versions": [
+    {
+      "version": "v2",
+      "method_version": "benchmark-v2/truth-ric-covariance-v1",
+      "evidence_object": "docs/assets/benchmark-v2.json",
+      "evidence_sha256": "76c463a7a6e9728425f846aea7cc1fc44cbf0b316be9fdf4726a148505b7ba48",
+      "claims_manifest": "docs/assets/claims-v2.json",
+      "claims_sha256": "5ce13c49aac43cc5413249819cb92d6ce2a2a6e5a1bdefd0f7d1fe10848bc506"
+    }
+  ]
+}

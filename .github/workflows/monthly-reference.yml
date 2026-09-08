@@ -1,0 +1,73 @@
+name: Monthly reference comparison
+
+on:
+  schedule:
+    - cron: "43 4 12 * *"
+  workflow_dispatch:
+
+concurrency:
+  group: monthly-reference
+  cancel-in-progress: false
+
+permissions:
+  contents: write
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 360
+    env:
+      DRIFTWATCH_DATA_DIR: ${{ github.workspace }}/output/monthly-inputs
+      DRIFTWATCH_CONTACT: ${{ vars.DRIFTWATCH_CONTACT }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+      - name: Check out the immutable scientific method
+        uses: actions/checkout@v4
+        with:
+          ref: fedc1bc7f398edf6bbff4b8c066f95c8f2865cd9
+          path: .tmp/frozen-v2
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --project .tmp/frozen-v2 --frozen --no-dev
+      - name: Write protocols and determine orbit availability before residual access
+        run: uv run --project .tmp/frozen-v2 --frozen --no-dev python scripts/monthly_reference.py prepare --frozen-root .tmp/frozen-v2
+      - name: Retain protocols before scoring, including unsuccessful availability searches
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-protocols
+          path: docs/assets/monthly/*/*-*.json
+          if-no-files-found: error
+          retention-days: 90
+      - name: Compute the declared reference comparison
+        env:
+          SPACETRACK_USER: ${{ secrets.SPACETRACK_USER }}
+          SPACETRACK_PASS: ${{ secrets.SPACETRACK_PASS }}
+        run: |
+          if [ -f output/monthly/selected.json ]; then
+            uv run --project .tmp/frozen-v2 --frozen --no-dev python scripts/monthly_reference.py run --frozen-root .tmp/frozen-v2
+          else
+            echo "Newest available month is already recorded; no residuals recomputed."
+          fi
+      - name: Retain derived trials and the selected-population pointer
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: monthly-derived-results
+          path: output/monthly/
+          if-no-files-found: ignore
+          retention-days: 90
+      - name: Append protocols and completed claims without changing v2
+        if: always()
+        run: |
+          if [ -d docs/assets/monthly ]; then
+            git add docs/assets/monthly docs/assets/claims-versions.json
+            if ! git diff --cached --quiet; then
+              git -c user.name=Automation -c user.email=automation@invalid commit -m "Record monthly reference comparison"
+              git pull --rebase origin main
+              git push origin HEAD:main
+            fi
+          fi
