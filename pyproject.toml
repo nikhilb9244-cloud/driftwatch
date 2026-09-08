@@ -3,7 +3,7 @@ name = "driftwatch"
 version = "0.1.0"
 description = "Screens satellite conjunctions in low Earth orbit and shows how geomagnetic storms change collision risk."
 authors = [
-    { name = "Nikhil Pather", email = "deadarby555@gmail.com" }
+    { name = "Nikhil Bhana", email = "nikhilb9244@gmail.com" }
 ]
 requires-python = ">=3.11"
 dependencies = [
