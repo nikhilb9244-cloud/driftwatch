@@ -457,9 +457,9 @@ from its epoch, and the next set is not; how long after a burn the first set is 
 object, and the sets do not say why. Why a set issued a few hours after a burn is wrong by 19 to
 33 km on Sentinel-3B and SWOT and by 2 to 5 km on Sentinel-1A and CryoSat-2 is not ordered by
 cadence, by delay or by burn size, and that part of the 3B question stays open. The radio lane's
-per-object output and export now carry the time since the last detected manoeuvre and whether the
-set's likely fit arc spanned it, with this measurement as the stated consequence
-(`docs/radio-lane.md`).
+per-object output and export now carry the time since the last detected manoeuvre, whether the
+set's likely fit arc spanned it and, when the following set shows the jump, a retrospective mark
+on the earlier set, with the mechanism below as the stated consequence (`docs/radio-lane.md`).
 
 **The fit each set carries, checked 2026-09-08: the contrast is explained.** Each of the twelve first
 post-burn sets was put in the reconstructed orbit's convention (SGP4 over one revolution centred on

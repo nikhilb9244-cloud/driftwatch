@@ -86,9 +86,11 @@ approach to the boresight, the time, the element set's age, the cross-track angu
 and the along-track shift at that age and geometry, the two horizon labels, crossing and
 position, and, from the object's own element sets, the time since the last manoeuvre the
 set-jump detector finds, as a lower bound, with whether the set's likely fit arc, the benchmark's
-24-hour exclusion arc before its epoch, spanned it. The benchmark measured what such a set does
-(`docs/reference-benchmark.md`, the first element sets after a burn), and the export states it
-beside the flag. Both products are geometry.
+24-hour exclusion arc before its epoch, spanned it. The first set after a burn may be a pre-burn
+fit with its epoch advanced past the burn, which the set itself does not reveal, so when the
+following set shows the jump the earlier set is marked retrospectively. The benchmark measured
+what such a set does (`docs/reference-benchmark.md`, the first element sets after a burn), and
+the export states it beside the flag. Both products are geometry.
 
 ## The archive's route
 
@@ -192,20 +194,24 @@ page (`docs/radio-emissions.md`).
 Each observation's crossings are written in the shape of the IAU CPS SatChecker field-of-view
 response (`GET /fov/satellite-passes/`, synchronous form): `data.satellites` keyed by name and
 NORAD id, each with its `positions` carrying altitude, angle from the field centre, azimuth, time,
-right ascension, declination, Julian date, element-set epoch and range. Six fields are added to
+right ascension, declination, Julian date, element-set epoch and range. Seven fields are added to
 every position: `cross_track_uncertainty_deg` with `crossing_horizon`, `along_track_shift_s`
-with `position_horizon`, and `hours_since_manoeuvre` with `fit_arc_spanned_manoeuvre`. The last
-pair comes from the element-set jump detector on the object's own sets at or before its epoch: a
-lower bound on the time since the last detected burn, which lies between the two set epochs the
-crossing record names, and whether the set's likely fit arc, the benchmark's 24-hour exclusion
-arc, reaches it. The consequence of a spanned arc is stated once, under `post_manoeuvre`, as the
-benchmark measured it on twelve burns of six spacecraft in four windows, a split re-measured
-whenever a window is added: the first set issued within ten hours of a burn was wrong along track
-at four days by 2.3 to 33 km, the first set issued twelve hours or later by under 2.5 km, and the
-next set after every burn by under 5.3 km; the error is the part of the burn the set does not
-contain, and a set issued after a burn can still be a pre-burn fit with its epoch advanced
-(`docs/findings.md`, item 8). Those six fields are
-the whole of what this lane would offer upstream; everything else driftwatch writes sits beside
+with `position_horizon`, `hours_since_manoeuvre` with `fit_arc_spanned_manoeuvre`, and
+`next_set_shows_jump`. The manoeuvre fields come from the element-set jump detector on the
+object's own sets: a lower bound on the time since the last detected burn, which lies between
+the two set epochs the crossing record names; whether the set's likely fit arc, the benchmark's
+24-hour exclusion arc, reaches it; and, retrospectively, whether the set that follows shows a
+jump this set may omit. The consequence is stated once, under `post_manoeuvre`, as the mechanism
+the benchmark measured on twelve burns of six spacecraft in four windows, re-measured whenever a
+window is added (`docs/findings.md`, item 8): the first set after a detected burn may be a
+pre-burn fit with its epoch advanced past the burn, wrong along track by the part of the burn it
+omits, and this cannot be confirmed from the set itself; four of the twelve first post-burn sets
+were such fits and seven contained the burn; the first set after a burn was wrong at four days by
+2.3 to 33 km, 19 to 33 km on the four re-epoched sets, and the next set after every burn by under
+5.3 km; which sets are re-epoched differs by object, not by how soon after the burn they were
+issued. When the following set shows the jump, the earlier set is marked; on the catalogue as it
+stood at an observation start no following set exists yet, and the mark is null. Those seven
+fields are the whole of what this lane would offer upstream; everything else driftwatch writes sits beside
 `data` under its own keys. Positions through the beam are sampled every tenth of a second, because a low object
 crosses a half-degree beam in under a second. SatChecker itself is unchanged; it is a field-of-view
 predictor with orbit-source provenance, not a radio tool, and carries no per-object accuracy.
@@ -216,11 +222,11 @@ predictor with orbit-source provenance, not a radio tool, and carries no per-obj
 - Both horizons rest on the reference benchmark's fifteen spacecraft in five altitude bands over
   four weeks of element sets, each object scored against its own band. They are bounds at zenith
   range; a crossing at 30 degrees of elevation sees half the angle.
-- The manoeuvre fields rest on the element-set jump detector alone: a burn it misses, and any burn
-  after the object's newest set, go unreported, and a station-kept object may carry the flag on
-  every set. The consequence quoted is the benchmark's, measured on free-flying spacecraft at 700
-  to 950 km, twelve burns on six spacecraft in four windows, and re-measured whenever a window is
-  added.
+- The manoeuvre fields rest on the element-set jump detector alone: a burn it misses goes
+  unreported, a burn after the object's newest set is reported only retrospectively, once the
+  following set shows it, and a station-kept object may carry the flag on every set. The
+  consequence quoted is the benchmark's, measured on free-flying spacecraft at 700 to 950 km,
+  twelve burns on six spacecraft in four windows, and re-measured whenever a window is added.
 - The beam width is measured at L-band and scaled by wavelength; near the top of each band the
   holography measurements depart from the scaling.
 - Constellation counts include retired members. GPS shows 75 catalogued and up to 33 above ten

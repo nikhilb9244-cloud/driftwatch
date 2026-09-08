@@ -16,7 +16,9 @@ inside or outside. Objects outside the benchmark's population carry *no measured
 the reason for both. Each object also carries the time since the last manoeuvre the element-set
 jump detector finds in its own sets, as a lower bound, and whether the set's likely fit arc, the
 benchmark's exclusion arc before its epoch, spanned it: the benchmark measured what such a set
-does (the post-burn table on the reference page), and the export states it beside the flag.
+does (the post-burn table on the reference page), and the export states it beside the flag. The first
+set after a burn may be a pre-burn fit with its epoch advanced past the burn, which the set itself
+does not reveal; when the following set shows the jump, the earlier set is marked retrospectively.
 
 Both are geometry from public element sets. Nothing here is a received power, an occupancy or
 a sensitivity loss.
@@ -39,7 +41,7 @@ from collections.abc import Iterable, Iterator
 from dataclasses import asdict, dataclass, field
 from datetime import UTC, date, datetime, timedelta
 from pathlib import Path
-from typing import Any
+from typing import Any, NamedTuple
 
 import numpy as np
 import pandas as pd
@@ -345,6 +347,7 @@ class Crossing:
     hours_since_manoeuvre: float | None = None  # from the later of those to the crossing: a lower bound
     fit_arc_spanned_manoeuvre: bool | None = None  # the likely fit arc, FIT_ARC_HOURS before the epoch, reaches it
     manoeuvre_detection: str = "no detection"  # what was searched, and what it found
+    next_set_shows_jump: bool | None = None  # retrospective: the set after this one shows a jump it may omit
     samples: list[Sample] = field(default_factory=list)
 
     def record(self, with_samples: bool = True) -> dict[str, Any]:
@@ -385,35 +388,63 @@ def _object_emission(object_type: str, constellation: str | None, rx: site_mod.R
     return emissions.emission_status(constellation, rx)
 
 
+class ManoeuvreContext(NamedTuple):
+    """What the object's own element sets say about its last burn, for one crossing."""
+
+    between: list[str] | None  # the two set epochs the last detected burn lies between
+    hours_since: float | None  # from the later of those to the crossing: a lower bound
+    fit_arc_spanned: bool | None  # the set's likely fit arc, FIT_ARC_HOURS before its epoch, reaches the interval
+    next_set_shows_jump: bool | None  # retrospective: the set after this one shows a jump this one may omit
+    detection: str  # what was searched, and what it found
+
+
 def last_manoeuvre(
     own_sets: pd.DataFrame | None, epoch: pd.Timestamp, t_ca: pd.Timestamp, *, arc_hours: float = FIT_ARC_HOURS
-) -> tuple[list[str] | None, float | None, bool | None, str]:
-    """The last manoeuvre the set-jump detector finds in the object's own sets at or before ``epoch``.
+) -> ManoeuvreContext:
+    """The last manoeuvre the set-jump detector finds in the object's own sets at or before ``epoch``, and
+    whether the set that follows shows a jump the set at ``epoch`` may omit.
 
-    Returns the interval between the two sets either side of it (the sets do not say when inside
-    it the burn was), the hours from the interval's end to ``t_ca`` (a lower bound on the time
-    since the burn), whether the set's likely fit arc, ``arc_hours`` before its epoch, reaches the
-    interval, and a statement of what was searched. Only sets at or before the epoch are read, so
-    a burn after the newest set is invisible here, as it is to the set. ``epoch`` and ``t_ca`` are
-    naive UTC.
+    The interval is the one between the two sets either side of the burn (the sets do not say
+    when inside it the burn was); the hours since run from the interval's end to ``t_ca``, a
+    lower bound; the fit-arc flag says whether the set's likely fit arc, ``arc_hours`` before
+    its epoch, reaches the interval. Only sets at or before the epoch are read for those three.
+
+    The first set after a burn may be a pre-burn fit with its epoch advanced past the burn: it
+    then omits the burn and is wrong by the part it omits, and nothing in the set says so; the
+    jump appears only when a later set contains the burn. So ``next_set_shows_jump`` is
+    retrospective: the detector is run again over the sets at or before the epoch and the two
+    that follow, and the mark is true when the interval from this set to the next is flagged,
+    false when it is not, and null while no following set is held, which is the case on the
+    catalogue as it stood at an observation start. ``epoch`` and ``t_ca`` are naive UTC.
     """
     if own_sets is None or not len(own_sets):
-        return None, None, None, "no detection: no element-set history held"
-    epochs = pd.to_datetime(own_sets["epoch"], utc=True).dt.tz_convert(None)
-    own = own_sets[epochs <= epoch].sort_values("epoch").drop_duplicates("epoch", keep="last")
+        return ManoeuvreContext(None, None, None, None, "no detection: no element-set history held")
+    ordered = own_sets.assign(_e=pd.to_datetime(own_sets["epoch"], utc=True).dt.tz_convert(None))
+    ordered = ordered.sort_values("_e").drop_duplicates("_e", keep="last")
+    own = ordered[ordered["_e"] <= epoch]
+    following = ordered[ordered["_e"] > epoch].head(2)
     if len(own) < 2:
-        return None, None, None, "no detection: fewer than two element sets held at or before the epoch"
-    first = pd.to_datetime(own["epoch"].iloc[0], utc=True)
-    last = pd.to_datetime(own["epoch"].iloc[-1], utc=True)
+        return ManoeuvreContext(
+            None, None, None, None, "no detection: fewer than two element sets held at or before the epoch"
+        )
+    first, last = own["_e"].iloc[0], own["_e"].iloc[-1]
     searched = f"set-jump detector on {len(own)} sets from {first:%Y-%m-%d} to {last:%Y-%m-%d}"
-    intervals = precise.manoeuvre_intervals_from_sets(own)
+    intervals = precise.manoeuvre_intervals_from_sets(own.drop(columns="_e"))
+    next_shows: bool | None = None
+    tail = "; no following set held"
+    if len(following):
+        later = precise.manoeuvre_intervals_from_sets(pd.concat([own, following]).drop(columns="_e"))
+        next_shows = any(abs(lo - last) < pd.Timedelta(seconds=1) for lo, _ in later)
+        tail = "; the following set shows a jump" if next_shows else "; the following set shows no jump"
     if not intervals:
-        return None, None, False, f"{searched}: none found"
+        return ManoeuvreContext(None, None, False, next_shows, f"{searched}: none found{tail}")
     lo, hi = intervals[-1]
     spanned = bool(lo <= epoch and hi >= epoch - pd.Timedelta(hours=arc_hours))
     since_h = float((t_ca - hi).total_seconds() / 3600.0)
     between = [lo.isoformat() + "Z", hi.isoformat() + "Z"]
-    return between, since_h, spanned, f"{searched}: last found between {between[0]} and {between[1]}"
+    return ManoeuvreContext(
+        between, since_h, spanned, next_shows, f"{searched}: last found between {between[0]} and {between[1]}{tail}"
+    )
 
 
 class _Refiner:
@@ -638,7 +669,7 @@ def _describe(
     ra, dec = site_mod.sky_from_alt_az(site, lk.elevation_deg, lk.azimuth_deg, np.array([t_ca]))
     samples = _in_beam_samples(refiner, site, t_ca_s, range_km, obs.fwhm_deg / 2.0, t_end_s)
     status, detail = _object_emission(str(row["object_type"]), row["constellation"], obs.receiver)
-    between, since_h, spanned, detection = last_manoeuvre(own_sets, epoch.tz_convert(None), t_ca_dt.tz_convert(None))
+    context = last_manoeuvre(own_sets, epoch.tz_convert(None), t_ca_dt.tz_convert(None))
     return Crossing(
         norad_id=int(row["norad_id"]),
         name=str(row["name"]),
@@ -673,10 +704,11 @@ def _describe(
         benchmark_n_trials=unc.n_trials if unc else None,
         emission_status=status,
         emission_detail=detail,
-        manoeuvre_detected_between=between,
-        hours_since_manoeuvre=since_h,
-        fit_arc_spanned_manoeuvre=spanned,
-        manoeuvre_detection=detection,
+        manoeuvre_detected_between=context.between,
+        hours_since_manoeuvre=context.hours_since,
+        fit_arc_spanned_manoeuvre=context.fit_arc_spanned,
+        manoeuvre_detection=context.detection,
+        next_set_shows_jump=context.next_set_shows_jump,
         samples=samples,
     )
 

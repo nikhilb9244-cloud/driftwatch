@@ -390,9 +390,11 @@ def test_satchecker_export_has_the_documented_shape_and_the_added_fields():
     assert data["total_position_results"] == len(entry["positions"])
     # One set in the history: no manoeuvre detection is possible, and the export says so once, with the consequence.
     assert position["hours_since_manoeuvre"] is None and position["fit_arc_spanned_manoeuvre"] is None
+    assert position["next_set_shows_jump"] is None, "one set, nothing follows it"
+    assert "pre-burn fit with its epoch advanced" in payload[0]["post_manoeuvre"]["measured_consequence"]
     assert result.crossings[0].manoeuvre_detection.startswith("no detection")
     post = payload[0]["post_manoeuvre"]
-    assert post["arc_hours"] == 24.0 and "12 burns on 6 spacecraft" in post["measured_consequence"]
+    assert post["arc_hours"] == 24.0 and "twelve burns on six spacecraft" in post["measured_consequence"]
     assert any("fit_arc_spanned_manoeuvre" in line for line in payload[0]["limits"])
     text = report._crossings_table(result.crossings)[2]
     assert "| no detection |" in text
@@ -412,23 +414,28 @@ def test_the_last_detected_manoeuvre_is_reported_with_the_fit_arc_flag():
     sets = records_to_frame(records)
     t_ca = pd.Timestamp("2024-04-24T12:00:00")
 
-    between, since_h, spanned, text = crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-23T00:00:00"), t_ca)
-    assert between == ["2024-04-22T16:00:00Z", "2024-04-23T00:00:00Z"]
-    assert since_h == pytest.approx(36.0) and spanned is True
-    assert text.startswith("set-jump detector on 10 sets") and "last found between" in text
-    # Two sets later the 24-hour arc still reaches the interval; at 32 hours after its end it does not.
-    assert crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-23T16:00:00"), t_ca)[2] is True
-    between, since_h, spanned, _ = crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-24T08:00:00"), t_ca)
-    assert between[1] == "2024-04-23T00:00:00Z" and since_h == pytest.approx(36.0) and spanned is False
-    # Before the burn there is nothing to find; with one set there is no detection at all.
-    assert crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-22T16:00:00"), t_ca) == (
-        None,
-        None,
-        False,
-        "set-jump detector on 9 sets from 2024-04-20 to 2024-04-22: none found",
+    ctx = crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-23T00:00:00"), t_ca)
+    assert ctx.between == ["2024-04-22T16:00:00Z", "2024-04-23T00:00:00Z"]
+    assert ctx.hours_since == pytest.approx(36.0) and ctx.fit_arc_spanned is True
+    assert ctx.detection.startswith("set-jump detector on 10 sets") and "last found between" in ctx.detection
+    assert ctx.next_set_shows_jump is False, "this set contains the burn; the one after it shows no jump"
+    # The last pre-burn set is the one the following set convicts: the jump lies between it and the next.
+    before = crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-22T16:00:00"), t_ca)
+    assert before.between is None and before.fit_arc_spanned is False and before.next_set_shows_jump is True
+    assert before.detection == (
+        "set-jump detector on 9 sets from 2024-04-20 to 2024-04-22: none found; the following set shows a jump"
     )
-    assert crossings.last_manoeuvre(sets.iloc[:1], pd.Timestamp("2024-04-20T00:00:00"), t_ca)[2] is None
-    assert crossings.last_manoeuvre(None, pd.Timestamp("2024-04-20T00:00:00"), t_ca)[3].startswith("no detection")
+    # Two sets later the 24-hour arc still reaches the interval; at 32 hours after its end it does not.
+    assert crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-23T16:00:00"), t_ca).fit_arc_spanned is True
+    newest = crossings.last_manoeuvre(sets, pd.Timestamp("2024-04-24T08:00:00"), t_ca)
+    assert newest.between[1] == "2024-04-23T00:00:00Z" and newest.hours_since == pytest.approx(36.0)
+    assert newest.fit_arc_spanned is False
+    assert newest.next_set_shows_jump is None and newest.detection.endswith("; no following set held")
+    # With one set there is no detection at all.
+    assert crossings.last_manoeuvre(sets.iloc[:1], pd.Timestamp("2024-04-20T00:00:00"), t_ca).fit_arc_spanned is None
+    assert crossings.last_manoeuvre(None, pd.Timestamp("2024-04-20T00:00:00"), t_ca).detection.startswith(
+        "no detection"
+    )
 
 
 def test_period_report_states_population_products_and_limits():

@@ -6,14 +6,16 @@ satchecker.readthedocs.io): a list holding one object with ``data.satellites`` k
 ``"NAME (NORAD)"``, each with ``name``, ``norad_id`` and ``positions`` carrying ``altitude``,
 ``angle``, ``azimuth``, ``date_time``, ``dec``, ``julian_date``, ``ra``, ``tle_epoch`` and
 ``range_km``, plus ``total_position_results`` and ``total_satellites``, ``source`` and
-``version``. Six fields are added to every position: ``cross_track_uncertainty_deg`` and
+``version``. Seven fields are added to every position: ``cross_track_uncertainty_deg`` and
 ``crossing_horizon`` (the cross-track uncertainty at the set's age, and whether the crossing is
 inside the crossing horizon), ``along_track_shift_s`` and ``position_horizon`` (the along-track
 time shift, and whether the position at an instant is inside the position horizon), and
 ``hours_since_manoeuvre`` and ``fit_arc_spanned_manoeuvre`` (a lower bound on the time since the
 last manoeuvre the element-set jump detector finds in the object's own sets, and whether the
-set's likely fit arc reached it, with the benchmark's measured post-burn error stated once under
-``post_manoeuvre``). Those six are the whole of what this lane would offer upstream; everything
+set's likely fit arc reached it) and ``next_set_shows_jump`` (retrospective: whether the following set
+shows a jump this set may omit), with the benchmark's measured post-burn error and the mechanism
+stated once under ``post_manoeuvre``. Those seven are the whole of what this lane would offer
+upstream; everything
 else driftwatch adds sits under its own keys beside ``data`` and can be ignored by a SatChecker
 reader.
 """
@@ -48,25 +50,30 @@ ADDED_FIELDS = (
     "position_horizon",
     "hours_since_manoeuvre",
     "fit_arc_spanned_manoeuvre",
+    "next_set_shows_jump",
 )
 # The consequence of a spanned fit arc, as the reference benchmark measured it (docs/reference-benchmark.md, the
 # post-burn table, 2026-09-08). Quoted once in the export rather than per position.
 POST_MANOEUVRE_CONSEQUENCE = (
-    "In the reference benchmark (docs/reference-benchmark.md, the first element sets after a burn: 12 burns on 6 "
-    "spacecraft at 700 to 950 km in four windows of 2024, each burn placed by the orbit-step detector on the "
-    "reconstructed orbit), the first element set issued after a burn was wrong along track at four days by 2.3 to "
-    "33 km when it was issued within ten hours of the burn (19 to 33 km on four of those seven) and by 0.1 to "
-    "2.3 km when issued twelve hours or later; at one day by 0.6 to 9.6 km against 0.1 to 0.9; the second set "
-    "after every burn was within 5.3 km at four days; the error is the part of the burn the set does not contain, "
-    "and a set issued after a burn can still be a pre-burn fit with its epoch advanced. Twelve burns on six "
-    "spacecraft in four windows, re-measured whenever a window is added. Nothing is measured for station-kept "
-    "objects or debris."
+    "The first element set issued after a detected burn may be a pre-burn fit with its epoch advanced past the burn: "
+    "it then omits the burn and is wrong along track by the part of the burn it omits, growing with lead at three "
+    "halves of the mean motion times the omitted change in semi-major axis, and nothing in the set itself says which "
+    "kind it is. In the reference benchmark (docs/reference-benchmark.md, twelve burns on six spacecraft at 700 to "
+    "950 km in four windows of 2024, re-measured whenever a window is added) four of the twelve first post-burn sets "
+    "were pre-burn fits re-epoched past the burn and seven contained it; the first set after a burn was wrong along "
+    "track at four days by 2.3 to 33 km, 19 to 33 km on the four re-epoched sets, and the next set after every burn "
+    "by under 5.3 km. Which sets are re-epoched differs by object, not by how soon after the burn they were issued. "
+    "When the following set shows the jump, the earlier set is marked retrospectively (next_set_shows_jump); on the "
+    "catalogue as it stood at an observation start no following set exists yet and the mark is null. Nothing is "
+    "measured for station-kept objects or debris."
 )
 POST_MANOEUVRE_DETECTOR = (
     "the element-set jump detector on the object's own sets at or before the set's epoch, so a burn after the "
-    "newest set is invisible; the burn lies between the two set epochs reported in the crossing record, "
-    "hours_since_manoeuvre counts from the later of them, and fit_arc_spanned_manoeuvre is true when that "
-    "interval reaches into the arc_hours before the set's epoch"
+    "newest set is invisible at the time; the burn lies between the two set epochs reported in the crossing record, "
+    "hours_since_manoeuvre counts from the later of them, and fit_arc_spanned_manoeuvre is true when that interval "
+    "reaches into the arc_hours before the set's epoch. next_set_shows_jump is the retrospective mark: the detector "
+    "run again with the two sets that follow, true when the interval from this set to the next is flagged, false "
+    "when it is not, null while no following set is held"
 )
 SATCHECKER_FORMAT = (
     "IAU CPS SatChecker /fov/satellite-passes/ synchronous response "
@@ -88,12 +95,13 @@ EXPORT_LIMITS = [
     "table of docs/radio-horizon.md: near-circular, free-flying spacecraft with a public reconstructed orbit, "
     "in bands from 400 to 1400 km, each object scored against its own band's trials; nothing is measured for "
     "debris, eccentric orbits or station-kept objects through a burn.",
-    "hours_since_manoeuvre and fit_arc_spanned_manoeuvre come from the element-set jump detector on the object's "
-    "own sets at or before the set's epoch: a lower bound on the time since the last detected burn, and whether "
-    "the set's likely fit arc, the benchmark's 24-hour exclusion arc before its epoch, reaches that burn. Both "
-    "are null where fewer than two sets are held; a burn the detector misses, or one after the newest set, is "
-    "not reported. The consequence of a spanned arc is the benchmark's measured post-burn error, stated under "
-    "post_manoeuvre.",
+    "hours_since_manoeuvre, fit_arc_spanned_manoeuvre and next_set_shows_jump come from the element-set jump "
+    "detector on the object's own sets: a lower bound on the time since the last detected burn, whether the set's "
+    "likely fit arc, the benchmark's 24-hour exclusion arc before its epoch, reaches that burn, and, retrospectively, "
+    "whether the following set shows a jump this set may omit. The first two are null where fewer than two sets are "
+    "held at or before the epoch; the third is null while no following set is held. A burn the detector misses is "
+    "not reported. The consequence of a spanned arc or a jump shown by the next set is the benchmark's measured "
+    "post-burn error, stated under post_manoeuvre.",
     "Nothing here is a received power, an occupancy fraction or a sensitivity loss.",
 ]
 
@@ -130,6 +138,7 @@ def satchecker_export(
                     "position_horizon": c.position_horizon,
                     "hours_since_manoeuvre": c.hours_since_manoeuvre,
                     "fit_arc_spanned_manoeuvre": c.fit_arc_spanned_manoeuvre,
+                    "next_set_shows_jump": c.next_set_shows_jump,
                 }
             )
             n_positions += 1
@@ -247,6 +256,8 @@ def _crossings_table(crossings: list[Crossing]) -> list[str]:
         else:
             arc = "fit arc spans it" if c.fit_arc_spanned_manoeuvre else "fit arc clear"
             since = f"{c.hours_since_manoeuvre / 24:.1f} d or more, {arc}"
+        if c.next_set_shows_jump:
+            since += "; next set shows a jump"
         when = c.t_ca_utc[:19].replace("T", " ") + partial
         lines.append(
             f"| {c.name} ({c.norad_id}) | {kind} | {when} | {60 * c.separation_deg:.1f}' | {c.elevation_deg:.1f} deg "

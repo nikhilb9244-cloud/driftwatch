@@ -1,5 +1,5 @@
 {
- "built_at": "2026-09-08T00:05:13.793910+00:00",
+ "built_at": "2026-09-08T00:26:29.376662+00:00",
  "period": {
   "name": "quiet-2024-04",
   "label": "quiet week, 20 to 27 April 2024",
@@ -183,7 +183,8 @@
      "manoeuvre_detected_between": null,
      "hours_since_manoeuvre": null,
      "fit_arc_spanned_manoeuvre": false,
-     "manoeuvre_detection": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found"
+     "manoeuvre_detection": "set-jump detector on 15 sets from 2024-04-13 to 2024-04-23: none found; the following set shows no jump",
+     "next_set_shows_jump": false
     },
     {
      "norad_id": 39231,
@@ -222,7 +223,8 @@
      "manoeuvre_detected_between": null,
      "hours_since_manoeuvre": null,
      "fit_arc_spanned_manoeuvre": false,
-     "manoeuvre_detection": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found"
+     "manoeuvre_detection": "set-jump detector on 8 sets from 2024-04-13 to 2024-04-20: none found; the following set shows no jump",
+     "next_set_shows_jump": false
     }
    ]
   }

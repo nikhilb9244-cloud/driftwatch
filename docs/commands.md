@@ -157,7 +157,8 @@ What works today:
   the two products on the catalogue as it stood at each observation start -- constellation members
   above ten degrees, counted, and every object whose track passes inside the half-power radius,
   with its closest approach, element-set age, cross-track angular uncertainty, the two horizon labels,
-  and the time since the last detected manoeuvre with whether the set's likely fit arc spanned it --
+  the time since the last detected manoeuvre with whether the set's likely fit arc spanned it, and,
+  retrospectively, whether the following set shows a jump the set may omit --
   written as a report under `docs/radio/` and an export in the IAU CPS SatChecker field-of-view
   shape under `data/radio/`. Observations come from a CSV; `driftwatch radio archive <name>` writes
   one under `data/archive/sarao/` (ignored by the repository) from the SARAO archive's documented
