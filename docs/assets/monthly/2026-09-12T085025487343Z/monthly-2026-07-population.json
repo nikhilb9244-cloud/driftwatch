@@ -1,0 +1,145 @@
+{
+  "protocol": "docs/assets/monthly/2026-09-12T085025487343Z/monthly-2026-07-protocol.json",
+  "protocol_sha256": "9798c8144c16c4c67b0dba7d33a77538cc290d02fbce8f5f0a9ad901aa7c677c",
+  "coverage": {
+    "swarm-a": {
+      "state": "available",
+      "n_states": 345600,
+      "days_missing": []
+    },
+    "swarm-b": {
+      "state": "available",
+      "n_states": 345600,
+      "days_missing": []
+    },
+    "swarm-c": {
+      "state": "available",
+      "n_states": 345600,
+      "days_missing": []
+    },
+    "gracefo-c": {
+      "state": "available",
+      "n_states": 345600,
+      "days_missing": []
+    },
+    "gracefo-d": {
+      "state": "available",
+      "n_states": 345600,
+      "days_missing": []
+    },
+    "sentinel-1a": {
+      "state": "incomplete",
+      "n_states": 9361,
+      "days_missing": [
+        "2026-07-01",
+        "2026-07-02",
+        "2026-07-03",
+        "2026-07-04",
+        "2026-07-05",
+        "2026-07-06",
+        "2026-07-07",
+        "2026-07-08",
+        "2026-07-09",
+        "2026-07-10",
+        "2026-07-11",
+        "2026-07-12",
+        "2026-07-13",
+        "2026-07-14",
+        "2026-07-15",
+        "2026-07-16",
+        "2026-07-17",
+        "2026-07-18",
+        "2026-07-19",
+        "2026-07-20",
+        "2026-07-21",
+        "2026-07-22",
+        "2026-07-23",
+        "2026-07-24",
+        "2026-07-25",
+        "2026-07-26",
+        "2026-07-27",
+        "2026-07-28",
+        "2026-07-29",
+        "2026-07-30",
+        "2026-07-31",
+        "2026-08-01",
+        "2026-08-02",
+        "2026-08-03",
+        "2026-08-04",
+        "2026-08-05",
+        "2026-08-06",
+        "2026-08-07",
+        "2026-08-08"
+      ]
+    },
+    "cryosat-2": {
+      "state": "incomplete",
+      "n_states": 57600,
+      "days_missing": []
+    },
+    "saral": {
+      "state": "incomplete",
+      "n_states": 57600,
+      "days_missing": []
+    },
+    "sentinel-3a": {
+      "state": "incomplete",
+      "n_states": 57600,
+      "days_missing": []
+    },
+    "sentinel-3b": {
+      "state": "incomplete",
+      "n_states": 57600,
+      "days_missing": []
+    },
+    "swot": {
+      "state": "incomplete",
+      "n_states": 57600,
+      "days_missing": []
+    },
+    "hy-2c": {
+      "state": "incomplete",
+      "n_states": 43367,
+      "days_missing": [
+        "2026-07-06",
+        "2026-07-07",
+        "2026-07-08",
+        "2026-07-09",
+        "2026-07-10",
+        "2026-07-11",
+        "2026-07-12",
+        "2026-07-13",
+        "2026-07-14"
+      ]
+    },
+    "hy-2d": {
+      "state": "incomplete",
+      "n_states": 57600,
+      "days_missing": []
+    },
+    "jason-3": {
+      "state": "incomplete",
+      "n_states": 51294,
+      "days_missing": [
+        "2026-08-05",
+        "2026-08-06",
+        "2026-08-07",
+        "2026-08-08"
+      ]
+    },
+    "sentinel-6a": {
+      "state": "incomplete",
+      "n_states": 57600,
+      "days_missing": []
+    }
+  },
+  "population": [
+    "swarm-a",
+    "swarm-b",
+    "swarm-c",
+    "gracefo-c",
+    "gracefo-d"
+  ],
+  "version": "monthly-2026-07",
+  "status": "ready"
+}

@@ -8,6 +8,18 @@
       "evidence_sha256": "76c463a7a6e9728425f846aea7cc1fc44cbf0b316be9fdf4726a148505b7ba48",
       "claims_manifest": "docs/assets/claims-v2.json",
       "claims_sha256": "5ce13c49aac43cc5413249819cb92d6ce2a2a6e5a1bdefd0f7d1fe10848bc506"
+    },
+    {
+      "version": "monthly-2026-07",
+      "method_version": "benchmark-v2/truth-ric-covariance-v1",
+      "evidence_object": "docs/assets/monthly/monthly-2026-07/evidence.json",
+      "evidence_sha256": "c12c959c4f51016023e264945e36d09ffaa9d0a9436ac20d2a27e6ff3b689b54",
+      "claims_manifest": "docs/assets/monthly/monthly-2026-07/claims.json",
+      "claims_sha256": "d5ba07cdcf97d95c949ff9dc327f9d457a5646bab259b8158df615491a60b7be",
+      "tables": "docs/assets/monthly/monthly-2026-07/tables.md",
+      "tables_sha256": "558071dbc91463dabc4da435ab692bbb1183fddfff9f6fb9aecc76a17cfccfd3",
+      "protocol": "docs/assets/monthly/2026-09-12T085025487343Z/monthly-2026-07-protocol.json",
+      "protocol_sha256": "9798c8144c16c4c67b0dba7d33a77538cc290d02fbce8f5f0a9ad901aa7c677c"
     }
   ]
 }

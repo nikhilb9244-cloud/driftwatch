@@ -1,0 +1,60 @@
+{
+  "schema_version": "monthly-reference-protocol-v1",
+  "written_at": "2026-09-12T08:50:25.487343+00:00",
+  "month": "2026-07",
+  "method_version": "benchmark-v2/truth-ric-covariance-v1",
+  "method_commit": "fedc1bc7f398edf6bbff4b8c066f95c8f2865cd9",
+  "candidate_population": [
+    "swarm-a",
+    "swarm-b",
+    "swarm-c",
+    "gracefo-c",
+    "gracefo-d",
+    "sentinel-1a",
+    "cryosat-2",
+    "saral",
+    "sentinel-3a",
+    "sentinel-3b",
+    "swot",
+    "hy-2c",
+    "hy-2d",
+    "jason-3",
+    "sentinel-6a"
+  ],
+  "population_rule": "All named missions with reconstructed orbit coverage over the declared truth interval; availability is decided before residuals. Unknown provider availability is recorded separately.",
+  "window": {
+    "sets_from": "2026-07-01T00:00:00+00:00",
+    "sets_to_exclusive": "2026-08-01T00:00:00+00:00",
+    "truth_from": "2026-06-30T00:00:00+00:00",
+    "truth_to": "2026-08-08T01:00:00+00:00"
+  },
+  "endpoint": {
+    "component": "absolute in-track residual",
+    "quantile": 0.95,
+    "tolerance_km": 25.0,
+    "leads_hours": [
+      6,
+      12,
+      24,
+      36,
+      48,
+      72,
+      96,
+      120,
+      144,
+      168
+    ],
+    "rule": "inside_tolerance_count >= 0.95 * n_finite_usable_residuals"
+  },
+  "rules": {
+    "baseline": "unmodified SGP4; residual and transported covariance in truth RIC",
+    "covariance_history_days": 45,
+    "fit_cutoff": "2026-07-01T00:00:00+00:00",
+    "exclusions": "Frozen v2 gaps, SGP4 errors, manoeuvre records and tracking-arc rules; missing manoeuvre coverage fails the run rather than becoming a no-burn history.",
+    "summary": "Frozen empirical coverage, linear and inverted-CDF quantiles, complete planned lead grid, spacecraft and element-set deletion sensitivity; dependent trials remain descriptive.",
+    "censoring": "First failure, missing coverage and passing through the longest tested lead are distinct.",
+    "availability": "Epoch-based reconstruction; historical publication availability is not established.",
+    "scope": "Reference comparison only; no storm term, radio, learned model, SLR or recipe adoption.",
+    "selection": "Newest completed UTC calendar month with any eligible mission; search at most twelve months, fail if none. Never select on residuals or replace failed scoring cells."
+  }
+}

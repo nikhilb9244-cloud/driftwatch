@@ -1,0 +1,41 @@
+{
+  "schema_version": "public-claims-v1",
+  "version": "monthly-2026-07",
+  "method_version": "benchmark-v2/truth-ric-covariance-v1",
+  "evidence_object": "docs/assets/monthly/monthly-2026-07/evidence.json",
+  "evidence_sha256": "c12c959c4f51016023e264945e36d09ffaa9d0a9436ac20d2a27e6ff3b689b54",
+  "claims": [
+    {
+      "id": "horizon:400-600 km:2026-07",
+      "result_path": "results/by_band/400-600 km/2026-07",
+      "result_hash": "f225ffe9b12a88b3b53d1d178f1fd8f5b36e542a4bf20d49aa25246067052300",
+      "method_version": "benchmark-v2/truth-ric-covariance-v1",
+      "population": {
+        "missions": [
+          "gracefo-c",
+          "gracefo-d",
+          "swarm-a",
+          "swarm-b",
+          "swarm-c"
+        ],
+        "band": "400-600 km",
+        "window": "2026-07"
+      },
+      "denominator": {
+        "6": 538,
+        "12": 532,
+        "24": 524,
+        "36": 519,
+        "48": 512,
+        "72": 504,
+        "96": 494,
+        "120": 484,
+        "144": 476,
+        "168": 468
+      },
+      "reference_type": "reconstructed orbit",
+      "censoring_state": "threshold_failure",
+      "permitted_wording": "96 h pass / 120 h fail"
+    }
+  ]
+}
