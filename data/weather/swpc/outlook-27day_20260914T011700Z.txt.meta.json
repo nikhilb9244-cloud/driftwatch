@@ -1,0 +1,8 @@
+{
+  "product": "outlook-27day",
+  "url": "https://services.swpc.noaa.gov/text/27-day-outlook.txt",
+  "issued_at": "2026-09-14T01:17:00+00:00",
+  "issued_from": "product",
+  "fetched_at": "2026-09-14T12:48:10.194697+00:00",
+  "bytes": 1606
+}
