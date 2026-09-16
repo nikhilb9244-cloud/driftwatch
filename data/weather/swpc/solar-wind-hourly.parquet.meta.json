@@ -2,10 +2,10 @@
   "product": "solar-wind-hourly",
   "note": "Hourly means of the minute-cadence feed, with the Bz and speed extremes. The minute files listed here were summarised into this archive and deleted.",
   "keep_days": 7,
-  "rows": 251,
+  "rows": 275,
   "range": [
     "2026-08-29 00:00:00+00:00",
-    "2026-09-08 11:00:00+00:00"
+    "2026-09-09 11:00:00+00:00"
   ],
   "rolled": [
     {
@@ -37,6 +37,11 @@
       "file": "solar-wind_20260908T111300Z.json",
       "issued_at": "2026-09-08T11:13:00+00:00",
       "bytes": 1140274
+    },
+    {
+      "file": "solar-wind_20260909T111700Z.json",
+      "issued_at": "2026-09-09T11:17:00+00:00",
+      "bytes": 1143478
     }
   ]
 }
